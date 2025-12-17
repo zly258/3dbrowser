@@ -8,29 +8,27 @@
 ## 🌟 Features / 功能特性
 
 ### English
-- **3D Model Viewer**: Load and display various 3D model formats
+- **3D Model Viewer**: Load and display 3D model formats (LMB, GLB, IFC, 3D Tiles)
 - **Interactive Controls**: Rotate, zoom, and pan around 3D models
 - **Scene Management**: Organize and manage multiple 3D objects
 - **Properties Panel**: View and edit object properties in real-time
 - **Settings Panel**: Customize viewer settings and preferences
-- **Responsive Design**: Works on desktop and mobile devices
 
 ### 中文
-- **3D 模型查看器**: 加载和显示多种 3D 模型格式
+- **3D 模型查看器**: 加载和显示 3D 模型格式 (LMB, GLB, IFC, 3D Tiles)
 - **交互式控制**: 旋转、缩放和平移 3D 模型
 - **场景管理**: 组织和管​​理多个 3D 对象
 - **属性面板**: 实时查看和编辑对象属性
 - **设置面板**: 自定义查看器设置和偏好
-- **响应式设计**: 支持桌面和移动设备
 
 ## 🛠️ Tech Stack / 技术栈
 
 | Category / 类别 | Technologies / 技术 |
 |----------------|-------------------|
-| Frontend / 前端 | React 19, TypeScript |
+| Frontend / 前端 | React 18, TypeScript |
 | 3D Engine / 3D引擎 | Three.js |
 | Build Tool / 构建工具 | Vite |
-| 3D Formats / 3D格式 | Support for various 3D file formats / 支持多种3D文件格式 |
+| 3D Formats / 3D格式 | **LMB, GLB, IFC, 3D Tiles** / 支持3D文件格式 |
 | Styling / 样式 | CSS-in-JS with modern design / CSS-in-JS现代设计 |
 
 ## 📋 Prerequisites / 系统要求
@@ -52,20 +50,12 @@
    npm install
    ```
 
-3. Set up environment variables (if needed):
-   ```bash
-   # Copy the example environment file
-   cp .env.local.example .env.local
-   
-   # Edit .env.local and add your API keys if required
-   ```
-
-4. Start the development server:
+3. Start the development server:
    ```bash
    npm run dev
    ```
 
-5. Open your browser and navigate to `http://localhost:5173`
+4. Open your browser and navigate to `http://localhost:5173`
 
 ### 中文
 1. 克隆仓库：
@@ -79,20 +69,12 @@
    npm install
    ```
 
-3. 设置环境变量（如需要）：
-   ```bash
-   # 复制示例环境文件
-   cp .env.local.example .env.local
-   
-   # 编辑 .env.local 并添加所需的 API 密钥
-   ```
-
-4. 启动开发服务器：
+3. 启动开发服务器：
    ```bash
    npm run dev
    ```
 
-5. 打开浏览器并访问 `http://localhost:5173`
+4. 打开浏览器并访问 `http://localhost:5173`
 
 ## 📖 Available Scripts / 可用脚本
 
@@ -127,20 +109,6 @@
 └── vite.config.ts      # Vite configuration / Vite配置
 ```
 
-## 🖼️ Screenshots / 截图展示
-
-<div align="center">
-
-### Main Interface / 主界面
-![Main Interface](images/preview1.png)
-*3D Browser main interface with scene tree and properties panel / 3D浏览器主界面，包含场景树和属性面板*
-
-### 3D Model Viewing / 3D模型查看
-![3D Model](images/preview1.png)
-*Interactive 3D model viewing with camera controls / 交互式3D模型查看，支持相机控制*
-
-</div>
-
 ## 🎯 Key Components / 主要组件说明
 
 ### English
@@ -160,16 +128,24 @@
 ## 🔧 3D Features / 3D功能特性
 
 ### English
-- Support for multiple 3D model format loading
-- Camera controls (rotation, zoom, pan)
-- Real-time scene rendering and performance optimization
-- Object selection and interaction functionality
+- **Multi-format Support**: 3D format compatibility including:
+  - **LMB/LMBZ**: Custom compressed format optimized for this viewer
+  - **GLB/GLTF**: Web-optimized 3D format with PBR materials
+  - **IFC**: Industry Foundation Classes for BIM data
+  - **3D Tiles**: Large-scale 3D model format for web streaming
+- **Camera Controls**: Intuitive rotation, zoom, and pan operations
+- **Real-time Rendering**: Optimized scene rendering with performance monitoring
+- **Object Interaction**: Selection, transformation, and property editing
 
 ### 中文
-- 支持多种 3D 模型格式加载
-- 提供相机控制（旋转、缩放、平移）
-- 实时场景渲染和性能优化
-- 对象选择和交互功能
+- **多格式支持**: 3D格式兼容性，包括：
+  - **LMB/LMBZ**: 自定义压缩格式，针对本查看器优化
+  - **GLB/GLTF**: 网络优化的3D格式，支持PBR材质
+  - **IFC**: 工业基础类，支持BIM数据
+  - **3D Tiles**: 大规模3D模型格式，支持网络流式加载
+- **相机控制**: 直观的旋转、缩放和平移操作
+- **实时渲染**: 优化的场景渲染，支持性能监控
+- **对象交互**: 选择、变换和属性编辑
 
 ## 🤝 Contributing / 贡献指南
 
