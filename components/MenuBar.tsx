@@ -1,27 +1,30 @@
 
 
 import React, { useState } from "react";
-import { styles } from "../Styles";
-import { IconFile, IconFolder, IconConvert, IconClear, IconLang, IconFit, IconMesh, IconTiles, IconList, IconInfo, IconStats, IconSettings } from "../Icons";
+// Removed import { styles } from "../Styles";
+import { 
+    IconFile, IconFolder, IconExport, IconClear, IconFit, IconWireframe, IconList, IconInfo, IconMeasure, IconSettings,
+    IconPick, IconClip, IconExplode
+} from "../Icons";
 import { TFunc, Lang } from "../Locales";
 
-// --- Icons wrapper for Ribbon (svg scaling) ---
-const RibbonIcon = ({ children }: { children?: React.ReactNode }) => (
+// --- Icons wrapper for Ribbon ---
+const RibbonIcon = ({ children, styles }: { children?: React.ReactNode, styles: any }) => (
     <div style={styles.ribbonIconBox}>
         {React.isValidElement(children) 
-            ? React.cloneElement(children as React.ReactElement<any>, { width: 18, height: 18 }) 
+            ? React.cloneElement(children as React.ReactElement<any>, { width: 22, height: 22 }) 
             : children}
     </div>
 );
 
 // --- Components ---
-const RibbonTab = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
+const RibbonTab = ({ label, active, onClick, styles }: { label: string, active: boolean, onClick: () => void, styles: any }) => (
     <div style={{...styles.ribbonTab, ...(active ? styles.ribbonTabActive : {})}} onClick={onClick}>
         {label}
     </div>
 );
 
-const RibbonButton = ({ label, icon, onClick, active }: { label: string, icon: React.ReactNode, onClick: () => void, active?: boolean }) => {
+const RibbonButton = ({ label, icon, onClick, active, styles }: { label: string, icon: React.ReactNode, onClick: () => void, active?: boolean, styles: any }) => {
     const [hover, setHover] = useState(false);
     
     // Explicitly handle border style to avoid artifacts
@@ -31,7 +34,6 @@ const RibbonButton = ({ label, icon, onClick, active }: { label: string, icon: R
     } else if (hover) {
         Object.assign(baseStyle, styles.ribbonBtnHover);
     } else {
-        // Ensure reset
         baseStyle.backgroundColor = "transparent";
         baseStyle.borderColor = "transparent";
         baseStyle.color = styles.ribbonBtn.color;
@@ -42,38 +44,58 @@ const RibbonButton = ({ label, icon, onClick, active }: { label: string, icon: R
              onMouseEnter={() => setHover(true)}
              onMouseLeave={() => setHover(false)}
              onClick={onClick}
+             title={label}
         >
-            <RibbonIcon>{icon}</RibbonIcon>
+            <RibbonIcon styles={styles}>{icon}</RibbonIcon>
             <span style={styles.ribbonLabel}>{label}</span>
         </div>
     );
 };
 
-const ViewButton = ({ label, onClick }: { label: string, onClick: () => void }) => {
+// Text label for compact grid views
+const TextLabel = ({ text }: { text: string }) => (
+    <div style={{
+        width: '100%', height: '100%', 
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '11px', fontWeight: 'bold', lineHeight: 1, 
+        color: '#ccc', letterSpacing: '0.5px'
+    }}>
+        {text}
+    </div>
+);
+
+// Small button for compact grid views
+const ViewButton = ({ icon, onClick, title, styles }: { icon: React.ReactNode, onClick: () => void, title: string, styles: any }) => {
     const [hover, setHover] = useState(false);
     return (
         <div 
-            style={{...styles.ribbonBtnSmall, ...(hover ? { backgroundColor: '#4f4f4f' } : {})}}
+            style={{...styles.ribbonBtnSmall, width: '30px', ...(hover ? styles.ribbonBtnSmallHover : {})}}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
             onClick={onClick}
+            title={title}
         >
-            {label}
+            {icon}
         </div>
     )
 }
 
-const RibbonGroup = ({ children }: { children?: React.ReactNode }) => (
-    <div style={styles.ribbonGroup}>{children}</div>
+const RibbonGroup = ({ label, children, styles }: { label: string, children?: React.ReactNode, styles: any }) => (
+    <div style={styles.ribbonGroup}>
+        <div style={styles.ribbonGroupContent}>
+            {children}
+        </div>
+        <span style={styles.ribbonGroupLabel}>{label}</span>
+    </div>
 );
 
 interface MenuBarProps {
     t: TFunc;
-    activeMenu?: string | null; // Legacy prop, unused in ribbon
+    activeMenu?: string | null; 
     setActiveMenu?: (m: string | null) => void;
     handleOpenFiles: (e: any) => void;
     handleOpenFolder: (e: any) => void;
-    handleConvert: () => void; // Used for "Export" now
+    handleConvert: () => void; 
     handleView: (v: string) => void;
     handleClear: () => void;
     pickEnabled: boolean;
@@ -88,10 +110,13 @@ interface MenuBarProps {
     sceneMgr: any; 
     wireframe: boolean;
     setWireframe: (v: boolean) => void;
+    styles: any;
+    theme: any;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = (props) => {
-    const { t } = props;
+    const { t, styles } = props;
+    // Default to 'home' (Start)
     const [activeTab, setActiveTab] = useState("home");
 
     return (
@@ -99,10 +124,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
             {/* 1. Tabs */}
             <div style={styles.ribbonTabsRow}>
                 <div style={{fontWeight:'bold', color: '#fff', marginRight: 15, padding: '2px 8px', fontSize:12}}>{t("app_title")}</div>
-                <RibbonTab label={t("file")} active={activeTab === "home"} onClick={() => setActiveTab("home")} />
-                <RibbonTab label={t("view")} active={activeTab === "view"} onClick={() => setActiveTab("view")} />
-                <RibbonTab label={t("tools")} active={activeTab === "tools"} onClick={() => setActiveTab("tools")} />
-                <RibbonTab label={t("settings")} active={activeTab === "settings"} onClick={() => setActiveTab("settings")} />
+                <RibbonTab label={t("file")} active={activeTab === "home"} onClick={() => setActiveTab("home")} styles={styles} />
+                <RibbonTab label={t("view")} active={activeTab === "tools"} onClick={() => setActiveTab("tools")} styles={styles} />
                 <div style={{flex:1}}></div>
             </div>
 
@@ -111,82 +134,81 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                 
                 {activeTab === "home" && (
                     <>
-                        <RibbonGroup>
+                        {/* File Group */}
+                        <RibbonGroup label={t("grp_file")} styles={styles}>
                             <label style={{display:'flex', flexDirection:'column', height:'100%'}}>
-                                <RibbonButton label={t("menu_open_file")} icon={<IconFile />} onClick={() => {}} />
-                                <input type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf" onChange={props.handleOpenFiles} />
+                                <RibbonButton label={t("menu_open_file")} icon={<IconFile />} onClick={() => {}} styles={styles} />
+                                <input type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc" onChange={props.handleOpenFiles} />
                             </label>
                             <label style={{display:'flex', flexDirection:'column', height:'100%'}}>
-                                <RibbonButton label={t("menu_open_folder")} icon={<IconFolder />} onClick={() => {}} />
+                                <RibbonButton label={t("menu_open_folder")} icon={<IconFolder />} onClick={() => {}} styles={styles} />
                                 <input type="file" hidden {...({webkitdirectory: "", directory: ""} as any)} onChange={props.handleOpenFolder} />
                             </label>
-                        </RibbonGroup>
-                        <RibbonGroup>
-                            {/* Changed to Export and uses setActiveTool */}
-                            <RibbonButton 
+                             <RibbonButton 
                                 label={t("menu_export")} 
-                                icon={<IconConvert />} 
+                                icon={<IconExport />} 
                                 active={props.activeTool === 'export'}
                                 onClick={() => props.setActiveTool('export')} 
+                                styles={styles}
                             />
+                            <RibbonButton label={t("op_clear")} icon={<IconClear />} onClick={props.handleClear} styles={styles} />
                         </RibbonGroup>
-                        <RibbonGroup>
-                            <RibbonButton label={t("op_clear")} icon={<IconClear />} onClick={props.handleClear} />
-                        </RibbonGroup>
-                    </>
-                )}
+                        
+                        {/* View & Display (Moved from old View tab) */}
+                        <RibbonGroup label={t("grp_view")} styles={styles}>
+                            <RibbonButton label={t("menu_fit_view")} icon={<IconFit />} onClick={() => props.sceneMgr?.fitView()} styles={styles} />
+                            
+                            {/* Grid of small view buttons */}
+                            <div style={{display:'flex', gap: 2, padding:'0 4px'}}>
+                                <div style={{display:'flex', flexDirection:'column', gap: 2, justifyContent: 'center'}}>
+                                    <ViewButton title={t("view_top")} icon={<TextLabel text={t("btn_view_top")} />} onClick={() => props.handleView('top')} styles={styles} />
+                                    <ViewButton title={t("view_bottom")} icon={<TextLabel text={t("btn_view_bottom")} />} onClick={() => props.handleView('bottom')} styles={styles} />
+                                </div>
+                                <div style={{display:'flex', flexDirection:'column', gap: 2, justifyContent: 'center'}}>
+                                    <ViewButton title={t("view_front")} icon={<TextLabel text={t("btn_view_front")} />} onClick={() => props.handleView('front')} styles={styles} />
+                                    <ViewButton title={t("view_back")} icon={<TextLabel text={t("btn_view_back")} />} onClick={() => props.handleView('back')} styles={styles} />
+                                </div>
+                                <div style={{display:'flex', flexDirection:'column', gap: 2, justifyContent: 'center'}}>
+                                    <ViewButton title={t("view_left")} icon={<TextLabel text={t("btn_view_left")} />} onClick={() => props.handleView('left')} styles={styles} />
+                                    <ViewButton title={t("view_right")} icon={<TextLabel text={t("btn_view_right")} />} onClick={() => props.handleView('right')} styles={styles} />
+                                </div>
+                                <div style={{display:'flex', flexDirection:'column', gap: 2, justifyContent: 'center'}}>
+                                    <ViewButton title={t("view_se")} icon={<TextLabel text={t("btn_view_iso1")} />} onClick={() => props.handleView('se')} styles={styles} />
+                                    <ViewButton title={t("view_sw")} icon={<TextLabel text={t("btn_view_iso2")} />} onClick={() => props.handleView('sw')} styles={styles} />
+                                </div>
+                            </div>
 
-                {activeTab === "view" && (
-                    <>
-                        <RibbonGroup>
-                            <RibbonButton label={t("menu_fit_view")} icon={<IconFit />} onClick={() => props.sceneMgr?.fitView()} />
-                        </RibbonGroup>
-                        <RibbonGroup>
-                            <div style={{display:'flex', gap: 4}}>
-                                <div style={{display:'flex', flexDirection:'column', gap: 2}}>
-                                    <ViewButton label={t("view_top")} onClick={() => props.handleView('top')} />
-                                    <ViewButton label={t("view_bottom")} onClick={() => props.handleView('bottom')} />
-                                </div>
-                                <div style={{display:'flex', flexDirection:'column', gap: 2}}>
-                                    <ViewButton label={t("view_front")} onClick={() => props.handleView('front')} />
-                                    <ViewButton label={t("view_back")} onClick={() => props.handleView('back')} />
-                                </div>
-                                <div style={{display:'flex', flexDirection:'column', gap: 2}}>
-                                    <ViewButton label={t("view_left")} onClick={() => props.handleView('left')} />
-                                    <ViewButton label={t("view_right")} onClick={() => props.handleView('right')} />
-                                </div>
-                            </div>
-                        </RibbonGroup>
-                        <RibbonGroup>
-                            <div style={{display:'flex', gap: 4}}>
-                                <div style={{display:'flex', flexDirection:'column', gap: 2}}>
-                                    <ViewButton label={t("view_se")} onClick={() => props.handleView('se')} />
-                                    <ViewButton label={t("view_sw")} onClick={() => props.handleView('sw')} />
-                                </div>
-                                <div style={{display:'flex', flexDirection:'column', gap: 2}}>
-                                    <ViewButton label={t("view_ne")} onClick={() => props.handleView('ne')} />
-                                    <ViewButton label={t("view_nw")} onClick={() => props.handleView('nw')} />
-                                </div>
-                            </div>
-                        </RibbonGroup>
-                        <RibbonGroup>
-                             <RibbonButton 
+                            <RibbonButton 
                                 label={t("menu_wireframe")} 
-                                icon={<IconMesh />} 
+                                icon={<IconWireframe />} 
                                 active={props.wireframe}
                                 onClick={() => props.setWireframe(!props.wireframe)} 
+                                styles={styles}
                             />
                              <RibbonButton 
                                 label={t("interface_outline")} 
                                 icon={<IconList />} 
                                 active={props.showOutline}
                                 onClick={() => props.setShowOutline(!props.showOutline)} 
+                                styles={styles}
                             />
                             <RibbonButton 
                                 label={t("interface_props")} 
                                 icon={<IconInfo />} 
                                 active={props.showProps}
                                 onClick={() => props.setShowProps(!props.showProps)} 
+                                styles={styles}
+                            />
+                        </RibbonGroup>
+
+                        {/* System Settings */}
+                        <RibbonGroup label={t("grp_settings")} styles={styles}>
+                             <RibbonButton 
+                                label={t("settings")} 
+                                icon={<IconSettings />} 
+                                active={props.activeTool === 'settings'}
+                                onClick={() => props.setActiveTool('settings')} 
+                                styles={styles}
                             />
                         </RibbonGroup>
                     </>
@@ -194,46 +216,39 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
 
                 {activeTab === "tools" && (
                     <>
-                        <RibbonGroup>
+                        <RibbonGroup label={t("operation")} styles={styles}>
                              <RibbonButton 
                                 label={t("op_pick")} 
-                                icon={<IconMesh />} 
+                                icon={<IconPick />} 
                                 active={props.pickEnabled}
                                 onClick={() => props.setPickEnabled(!props.pickEnabled)} 
+                                styles={styles}
                             />
                         </RibbonGroup>
-                        <RibbonGroup>
+                        <RibbonGroup label={t("grp_tools")} styles={styles}>
                             <RibbonButton 
                                 label={t("tool_measure")} 
-                                icon={<IconStats />} 
+                                icon={<IconMeasure />} 
                                 active={props.activeTool === 'measure'}
                                 onClick={() => props.setActiveTool('measure')} 
+                                styles={styles}
                             />
                             <RibbonButton 
                                 label={t("tool_clip")} 
-                                icon={<IconTiles />} 
+                                icon={<IconClip />} 
                                 active={props.activeTool === 'clip'}
                                 onClick={() => props.setActiveTool('clip')} 
+                                styles={styles}
                             />
                             <RibbonButton 
                                 label={t("tool_explode")} 
-                                icon={<IconMesh />} 
+                                icon={<IconExplode />} 
                                 active={props.activeTool === 'explode'}
                                 onClick={() => props.setActiveTool('explode')} 
+                                styles={styles}
                             />
                         </RibbonGroup>
                     </>
-                )}
-                
-                {activeTab === "settings" && (
-                    <RibbonGroup>
-                        <RibbonButton 
-                            label={t("setting_general")} 
-                            icon={<IconSettings />} 
-                            active={props.activeTool === 'settings'}
-                            onClick={() => props.setActiveTool('settings')} 
-                        />
-                    </RibbonGroup>
                 )}
 
             </div>

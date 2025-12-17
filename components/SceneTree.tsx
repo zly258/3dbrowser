@@ -1,7 +1,6 @@
 
 
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { styles } from "../Styles";
 import { SceneManager } from "../SceneManager";
 import { IconTrash } from "../Icons";
 
@@ -65,9 +64,11 @@ interface SceneTreeProps {
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
     onDelete: (uuid: string) => void;
+    styles: any;
+    theme: any;
 }
 
-export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete }) => {
+export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, styles, theme }) => {
     const flatData = useMemo(() => flattenTree(treeRoot), [treeRoot]);
     const rowHeight = 24;
     const [scrollTop, setScrollTop] = useState(0);
@@ -150,7 +151,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                                     onClick={(e) => handleDelete(e, node.uuid)}
                                     style={{
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        width: 20, height: 20, cursor: 'pointer', color: '#ff6666',
+                                        width: 20, height: 20, cursor: 'pointer', color: theme.danger,
                                         marginLeft: 5
                                     }}
                                     title="Delete File"

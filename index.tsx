@@ -1,12 +1,12 @@
 
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./LoaderUtils";
 import { convertLMBTo3DTiles, createZip, exportGLB, exportLMB } from "./converter";
-import { styles, colors } from "./Styles";
+import { createStyles, createGlobalStyle, themes, ThemeColors } from "./Styles";
 import { getTranslation, Lang } from "./Locales";
 
 // Components
@@ -18,8 +18,18 @@ import { LoadingOverlay } from "./components/LoadingOverlay";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { ConfirmModal } from "./components/ConfirmModal";
 
+// --- Global Style Injector ---
+const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
+    <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme) }} />
+);
+
 // --- Main App ---
 const App = () => {
+    // Theme State
+    const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+    const theme = themes[themeMode];
+    const styles = useMemo(() => createStyles(theme), [themeMode]);
+
     // State
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
@@ -53,13 +63,15 @@ const App = () => {
     const [sceneSettings, setSceneSettings] = useState<SceneSettings>({
         ambientInt: 2.0,
         dirInt: 1.0,
-        bgColor: "#1e1e1e",
+        bgColor: theme.canvasBg,
         wireframe: false,
         progressive: true,
         hideRatio: 0.6,
-        progressiveThreshold: 3000,
+        progressiveThreshold: 15000,
         sse: 16,
-        maxMemory: 500
+        maxMemory: 500,
+        importAxisGLB: '+y',
+        importAxisIFC: '+z',
     });
 
     // Confirmation Modal State
@@ -77,6 +89,7 @@ const App = () => {
     const resizingRight = useRef(false);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
@@ -89,17 +102,15 @@ const App = () => {
         }
     }, [lang]);
 
-    // --- Resizing Logic ---
+    // --- Resizing Logic (Panels) ---
     useEffect(() => {
         const handleMove = (e: MouseEvent) => {
             if (resizingLeft.current) {
                 setLeftWidth(Math.max(150, Math.min(500, e.clientX)));
-                sceneMgr.current?.resize();
             }
             if (resizingRight.current) {
                 const newW = window.innerWidth - e.clientX;
                 setRightWidth(Math.max(200, Math.min(600, newW)));
-                sceneMgr.current?.resize();
             }
         };
         const handleUp = () => {
@@ -114,12 +125,37 @@ const App = () => {
         };
     }, []);
 
-    // Force resize when panels toggle
+    // --- Robust Viewport Resizing ---
+    // 1. ResizeObserver handles general div resizing
     useEffect(() => {
-        setTimeout(() => {
-            sceneMgr.current?.resize();
-        }, 50);
-    }, [showOutline, showProps, activeTool]);
+        if (!viewportRef.current || !sceneMgr.current) return;
+        
+        const observer = new ResizeObserver(() => {
+             sceneMgr.current?.resize();
+        });
+        
+        observer.observe(viewportRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // 2. Forced resize when layout state changes (Fixes "scene doesn't occupy remaining")
+    useEffect(() => {
+        if (sceneMgr.current) {
+            // Use requestAnimationFrame to ensure the DOM reflow has completed
+            requestAnimationFrame(() => {
+                sceneMgr.current?.resize();
+            });
+        }
+    }, [showOutline, showProps, leftWidth, rightWidth]);
+
+    // Update scene background when theme changes
+    useEffect(() => {
+        // If user hasn't manually overridden bg, follow theme
+        if (sceneSettings.bgColor === themes[themeMode === 'light' ? 'dark' : 'light'].canvasBg) {
+             const newBg = theme.canvasBg;
+             handleSettingsUpdate({ bgColor: newBg });
+        }
+    }, [themeMode]);
 
     // Tree Updates
     const updateTree = useCallback(() => {
@@ -228,25 +264,24 @@ const App = () => {
         
         const manager = new SceneManager(canvasRef.current);
         sceneMgr.current = manager;
+        // Initial setup
+        manager.updateSettings(sceneSettings);
+        manager.resize();
 
         // Hook for tiles updates
+        let debounceTimer: any;
         manager.onTilesUpdate = () => {
-            // Debounced tree update could go here if we wanted full tile structure
-            // For now, we rely on top-level updates or manual refresh for tile structure
-            // Actually, updateTree handles it if we call it
-            // Limit calls to avoid performance hit
-            // updateTree(); // Can be expensive on massive loads
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                 updateTree();
+            }, 500);
         };
-
-        const handleResize = () => manager.resize();
-        window.addEventListener("resize", handleResize);
 
         const statsInterval = setInterval(() => {
             if(manager) setStats(manager.getStats());
         }, 1000);
 
         return () => {
-            window.removeEventListener("resize", handleResize);
             clearInterval(statsInterval);
             manager.dispose();
         };
@@ -276,7 +311,11 @@ const App = () => {
                 return;
             }
             // Normal Selection
-            if(pickEnabled) handleSelect(mgr.pick(e.clientX, e.clientY));
+            if(pickEnabled) {
+                const intersect = mgr.pick(e.clientX, e.clientY);
+                // Always call handleSelect, pass null if no intersect to deselect
+                handleSelect(intersect ? intersect.object : null, intersect);
+            }
         };
 
         const handleMouseMove = (e: MouseEvent) => {
@@ -348,7 +387,7 @@ const App = () => {
 
     // --- Handlers ---
 
-    const handleSelect = (obj: any) => {
+    const handleSelect = async (obj: any, intersect?: THREE.Intersection | null) => {
         if (!sceneMgr.current) return;
         
         if (!obj) {
@@ -363,6 +402,7 @@ const App = () => {
         
         const basicProps: any = {};
         const geoProps: any = {};
+        const ifcProps: any = {};
 
         basicProps[t("prop_name")] = obj.name || "Unnamed";
         basicProps[t("prop_type")] = obj.type;
@@ -389,6 +429,36 @@ const App = () => {
             if (obj.isInstancedMesh) {
                  geoProps[t("prop_inst")] = obj.count.toLocaleString();
             }
+
+            // --- IFC Property Logic ---
+            if (obj.userData.isIFC || (obj.parent && obj.parent.userData.isIFC)) {
+                // If using new logic, userData is on mesh itself usually
+                const target = obj.userData.isIFC ? obj : obj.parent;
+                if (target && target.userData.ifcAPI && target.userData.modelID !== undefined) {
+                    const expressID = obj.userData.expressID;
+                    if (expressID) {
+                        try {
+                            // Using the raw API reference we stored
+                            const api = target.userData.ifcAPI;
+                            const modelID = target.userData.modelID;
+                            
+                            // Use custom property fetcher that resolves Psets
+                            const ifcMgr = target.userData.ifcManager;
+                            const props = await ifcMgr.getItemProperties(modelID, expressID);
+                            
+                            if (props) {
+                                // Flatten for display
+                                Object.keys(props).forEach(key => {
+                                    const val = props[key];
+                                    if (typeof val !== 'object' && val !== null && val !== undefined) {
+                                        ifcProps[key] = val.toString();
+                                    }
+                                });
+                            }
+                        } catch(e) { console.error("IFC Props Error", e); }
+                    }
+                }
+            }
         } else if (obj.userData.boundingBox) {
              const size = new THREE.Vector3();
              obj.userData.boundingBox.getSize(size);
@@ -396,10 +466,16 @@ const App = () => {
         }
 
         // Grouped Properties
-        setSelectedProps({
+        const finalProps: any = {
             [t("pg_basic")]: basicProps,
             [t("pg_geo")]: geoProps
-        });
+        };
+
+        if (Object.keys(ifcProps).length > 0) {
+            finalProps["IFC Properties"] = ifcProps;
+        }
+
+        setSelectedProps(finalProps);
     };
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -415,7 +491,8 @@ const App = () => {
                     setProgress(p);
                     if(msg) setStatus(msg);
                 }, 
-                t
+                t,
+                sceneSettings // Pass settings
             );
             sceneMgr.current.addModel(group);
             updateTree();
@@ -560,6 +637,7 @@ const App = () => {
 
     return (
         <div style={styles.container}>
+             <GlobalStyle theme={theme} />
              <MenuBar 
                 t={t}
                 handleOpenFiles={handleOpenFiles}
@@ -579,6 +657,8 @@ const App = () => {
                 sceneMgr={sceneMgr.current}
                 wireframe={sceneSettings.wireframe}
                 setWireframe={(v) => handleSettingsUpdate({wireframe: v})}
+                styles={styles}
+                theme={theme}
              />
 
              <div style={styles.workspace}>
@@ -593,6 +673,8 @@ const App = () => {
                             onSelect={(uuid, obj) => handleSelect(obj)}
                             onToggleVisibility={handleToggleVisibility}
                             onDelete={handleDeleteObject}
+                            styles={styles}
+                            theme={theme}
                          />
                      </div>
                  )}
@@ -601,16 +683,16 @@ const App = () => {
                      <div 
                          style={{
                              ...styles.resizeHandleHorizontal, 
-                             backgroundColor: resizingLeft.current ? colors.accent : colors.bg 
+                             backgroundColor: resizingLeft.current ? theme.accent : theme.bg 
                          }}
                          onMouseDown={(e) => { e.preventDefault(); resizingLeft.current = true; }}
-                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.accent}
-                         onMouseLeave={(e) => !resizingLeft.current && (e.currentTarget.style.backgroundColor = colors.bg)}
+                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.accent}
+                         onMouseLeave={(e) => !resizingLeft.current && (e.currentTarget.style.backgroundColor = theme.bg)}
                      />
                  )}
 
-                 <div style={styles.viewport}>
-                    <canvas ref={canvasRef} style={{width:'100%', height:'100%', outline:'none'}} />
+                 <div ref={viewportRef} style={styles.viewport}>
+                    <canvas ref={canvasRef} style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', outline: 'none'}} />
                     
                     {activeTool === 'measure' && (
                         <MeasurePanel 
@@ -626,6 +708,7 @@ const App = () => {
                                 setMeasureHistory([]);
                             }}
                             onClose={() => setActiveTool('none')}
+                            styles={styles} theme={theme}
                         />
                     )}
                     {activeTool === 'clip' && (
@@ -634,21 +717,23 @@ const App = () => {
                             clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
                             clipValues={clipValues} setClipValues={setClipValues}
                             clipActive={clipActive} setClipActive={setClipActive}
+                            styles={styles} theme={theme}
                         />
                     )}
                     {activeTool === 'explode' && (
                         <ExplodePanel 
                             t={t} onClose={() => setActiveTool('none')}
                             explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor}
+                            styles={styles} theme={theme}
                         />
                     )}
                     
-                    {/* NEW EXPORT PANEL */}
                     {activeTool === 'export' && (
                         <ExportPanel 
                             t={t} 
                             onClose={() => setActiveTool('none')}
                             onExport={handleExport}
+                            styles={styles} theme={theme}
                         />
                     )}
                     
@@ -661,6 +746,9 @@ const App = () => {
                             onUpdate={handleSettingsUpdate}
                             currentLang={lang}
                             setLang={setLang}
+                            themeMode={themeMode}
+                            setThemeMode={setThemeMode}
+                            styles={styles} theme={theme}
                         />
                     )}
 
@@ -672,26 +760,27 @@ const App = () => {
                         onConfirm={confirmAction}
                         onCancel={() => setConfirmState({...confirmState, isOpen: false})}
                         t={t}
+                        styles={styles} theme={theme}
                     />
                     
-                    <LoadingOverlay loading={loading} status={status} progress={progress} />
+                    <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
                  </div>
 
                  {showProps && (
                      <div 
                          style={{
                              ...styles.resizeHandleHorizontal,
-                             backgroundColor: resizingRight.current ? colors.accent : colors.bg 
+                             backgroundColor: resizingRight.current ? theme.accent : theme.bg 
                          }}
                          onMouseDown={(e) => { e.preventDefault(); resizingRight.current = true; }}
-                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.accent}
-                         onMouseLeave={(e) => !resizingRight.current && (e.currentTarget.style.backgroundColor = colors.bg)}
+                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.accent}
+                         onMouseLeave={(e) => !resizingRight.current && (e.currentTarget.style.backgroundColor = theme.bg)}
                      />
                  )}
 
                  {showProps && (
                      <div style={{...styles.resizablePanel, width: rightWidth}}>
-                        <PropertiesPanel t={t} selectedProps={selectedProps} />
+                        <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
                      </div>
                  )}
              </div>

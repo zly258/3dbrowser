@@ -14,6 +14,8 @@ interface MeasurementRecord {
     group: THREE.Group;
 }
 
+export type AxisOption = '+x'|'-x'|'+y'|'-y'|'+z'|'-z';
+
 export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
@@ -24,6 +26,9 @@ export interface SceneSettings {
     progressiveThreshold: number; // Minimum meshes to enable progressive loading
     sse: number;
     maxMemory: number;
+    // Import Settings (Applied on Load)
+    importAxisGLB: AxisOption;
+    importAxisIFC: AxisOption;
 }
 
 export class SceneManager {
@@ -65,7 +70,8 @@ export class SceneManager {
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
     
     // Optimization / Progressive Loading
-    isInteracting: boolean = false;
+    lastMoveTime: number = 0;
+    restoreDelay: number = 500; // ms to wait before showing meshes again
     allMeshes: THREE.Mesh[] = [];
     hiddenMeshes: THREE.Mesh[] = [];
     progressiveQueue: THREE.Mesh[] = [];
@@ -78,9 +84,11 @@ export class SceneManager {
         wireframe: false,
         progressive: true,
         hideRatio: 0.6,
-        progressiveThreshold: 3000,
+        progressiveThreshold: 15000, // Updated default
         sse: 16,
-        maxMemory: 500
+        maxMemory: 500,
+        importAxisGLB: '+y', // Standard for GLB
+        importAxisIFC: '+z', // Standard for IFC
     };
 
     // Assets
@@ -108,7 +116,10 @@ export class SceneManager {
             logarithmicDepthBuffer: true,
             precision: "highp"
         });
-        this.renderer.setSize(width, height);
+        // IMPORTANT: Initial size set. 
+        // We use setSize(w, h, false) in resize() to prevent inline styles from locking the size,
+        // allowing CSS (width: 100%, height: 100%) to handle the layout reflow.
+        this.renderer.setSize(width, height, false);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setClearColor(this.settings.bgColor);
         this.renderer.localClippingEnabled = true; 
@@ -150,13 +161,10 @@ export class SceneManager {
         this.controls.maxPolarAngle = Math.PI;
 
         // --- Interaction hooks for Progressive Loading ---
-        this.controls.addEventListener('start', () => {
-            this.isInteracting = true;
-            this.handleInteractionStart();
-        });
-        this.controls.addEventListener('end', () => {
-            this.isInteracting = false;
-            this.handleInteractionEnd();
+        // Use 'change' event to detect actual camera movement (rotation/zoom/pan)
+        // 'start' triggers on click even if no movement occurs, so we avoid it.
+        this.controls.addEventListener('change', () => {
+            this.handleCameraMove();
         });
         
         // Lights
@@ -196,7 +204,7 @@ export class SceneManager {
             size: 8, 
             sizeAttenuation: false, 
             map: this.dotTexture,
-            transparent: true,
+            transparent: true, 
             alphaTest: 0.5,
             depthTest: false 
         });
@@ -250,19 +258,31 @@ export class SceneManager {
         }
 
         // Force render if not busy
-        if (!this.isInteracting) this.renderer.render(this.scene, this.camera);
+        this.renderer.render(this.scene, this.camera);
     }
     
-    handleInteractionStart() {
-        // Use configurable threshold for progressive loading
-        if (!this.settings.progressive || this.allMeshes.length < this.settings.progressiveThreshold) return;
+    handleCameraMove() {
+        this.lastMoveTime = Date.now();
 
-        // Hide a subset of meshes to improve FPS during rotation
+        // If optimizations enabled and enough meshes
+        if (this.settings.progressive && this.allMeshes.length >= this.settings.progressiveThreshold) {
+            // Only hide if we aren't already hiding (to avoid re-looping every frame)
+            if (this.hiddenMeshes.length === 0) {
+                this.hideMeshes();
+            }
+        }
+    }
+
+    hideMeshes() {
+        // Clear restore queue if any
+        if (this.progressiveQueue.length > 0) {
+            this.hiddenMeshes.push(...this.progressiveQueue);
+            this.progressiveQueue = [];
+        }
+
         const ratio = this.settings.hideRatio; 
-        
-        this.hiddenMeshes = [];
-        
         let shouldHideCounter = 0;
+        
         for (let i = 0; i < this.allMeshes.length; i++) {
             shouldHideCounter += ratio;
             if (shouldHideCounter >= 1) {
@@ -274,14 +294,11 @@ export class SceneManager {
                 shouldHideCounter -= 1;
             }
         }
-        
-        this.progressiveQueue = [];
     }
 
-    handleInteractionEnd() {
-        // Ensure all hidden meshes are queued for restoration
+    restoreMeshes() {
+        // Move everything from hidden to queue
         if (this.hiddenMeshes.length > 0) {
-            // Append to queue, don't just overwrite if queue has pending
             this.progressiveQueue.push(...this.hiddenMeshes);
             this.hiddenMeshes = [];
         }
@@ -306,24 +323,25 @@ export class SceneManager {
     animate() {
         requestAnimationFrame(this.animate);
         
+        const now = Date.now();
+
+        // Check if we should restore meshes (debounce)
+        if (this.hiddenMeshes.length > 0 && (now - this.lastMoveTime > this.restoreDelay)) {
+            this.restoreMeshes();
+        }
+
+        // Process restore queue (staggered appearance)
+        if (this.progressiveQueue.length > 0) {
+             const batchSize = 1000; 
+             const batch = this.progressiveQueue.splice(0, batchSize);
+             for (const m of batch) {
+                 m.visible = true;
+             }
+        }
+        
         if (this.tilesRenderer) {
             this.camera.updateMatrixWorld();
             this.tilesRenderer.update();
-        }
-
-        // --- Progressive Restore Logic ---
-        if (!this.isInteracting) {
-            if (this.progressiveQueue.length > 0) {
-                 // Restore X meshes per frame
-                 const batchSize = 1000; 
-                 const batch = this.progressiveQueue.splice(0, batchSize);
-                 for (const m of batch) {
-                     m.visible = true;
-                 }
-            } else if (this.hiddenMeshes.length > 0) {
-                 // Safety net: if controls ended but queue is empty yet we still have hidden meshes
-                 this.handleInteractionEnd();
-            }
         }
 
         this.updateCameraClipping();
@@ -350,8 +368,11 @@ export class SceneManager {
         if (!this.canvas) return;
         const w = this.canvas.clientWidth;
         const h = this.canvas.clientHeight;
-        const aspect = w / h;
         
+        // Ensure size is positive
+        if (w === 0 || h === 0) return;
+
+        const aspect = w / h;
         const cam = this.camera;
         const frustumHeight = cam.top - cam.bottom;
         const newWidth = frustumHeight * aspect;
@@ -360,14 +381,26 @@ export class SceneManager {
         cam.right = newWidth / 2;
         cam.updateProjectionMatrix();
         
-        this.renderer.setSize(w, h);
+        // CRITICAL FIX: Pass false as third argument.
+        // updateStyle = false.
+        // This ensures Three.js doesn't overwrite the canvas inline styles (width/height px).
+        // It keeps the internal render resolution matching the clientWidth/Height,
+        // but lets CSS (width: 100%) handle the actual display size in the flex container.
+        this.renderer.setSize(w, h, false);
+        
+        // Force render on resize
+        this.renderer.render(this.scene, this.camera);
     }
 
     // Refresh the list of static meshes for optimization
     refreshMeshCache() {
         this.allMeshes = [];
+        this.hiddenMeshes = [];
+        this.progressiveQueue = [];
+        
         this.contentGroup.traverse((obj) => {
             if ((obj as THREE.Mesh).isMesh && !(obj as THREE.InstancedMesh).isInstancedMesh) {
+                // Only consider valid meshes
                 this.allMeshes.push(obj as THREE.Mesh);
             }
         });
@@ -396,6 +429,9 @@ export class SceneManager {
         this.sceneBounds = this.computeTotalBounds();
         this.initExplodeData();
         this.refreshMeshCache();
+        
+        // Apply current rotation setting immediately
+        this.updateSettings(this.settings);
     }
 
     addTileset(url: string) {
@@ -424,6 +460,9 @@ export class SceneManager {
 
         this.contentGroup.add(renderer.group);
         this.tilesRenderer = renderer;
+        
+        // Apply rotation if needed
+        this.updateSettings(this.settings);
         
         return renderer.group;
     }
@@ -484,9 +523,8 @@ export class SceneManager {
         }
     }
 
-    pick(clientX: number, clientY: number): THREE.Object3D | null {
-        const point = this.getRayIntersects(clientX, clientY);
-        return point ? point.object : null;
+    pick(clientX: number, clientY: number): THREE.Intersection | null {
+        return this.getRayIntersects(clientX, clientY);
     }
 
     getRayIntersects(clientX: number, clientY: number): THREE.Intersection | null {

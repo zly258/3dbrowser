@@ -1,7 +1,6 @@
 
 
 import React, { useState, useRef, useEffect } from "react";
-import { styles, colors } from "../Styles";
 import { IconClose, IconClear } from "../Icons";
 import { SceneManager, MeasureType } from "../SceneManager";
 import { TFunc } from "../Locales";
@@ -15,9 +14,11 @@ interface FloatingPanelProps {
     height?: number;
     x?: number;
     y?: number;
+    styles: any;
+    theme: any;
 }
 
-export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, children, width = 300, height = 200, x = 100, y = 100 }) => {
+export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, children, width = 300, height = 200, x = 100, y = 100, styles, theme }) => {
     const [pos, setPos] = useState({ x, y });
     const [size, setSize] = useState({ w: width, h: height });
     const isDragging = useRef(false);
@@ -89,7 +90,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
 };
 
 // --- Custom Dual Slider Component ---
-const DualRangeSlider = ({ min, max, value, onChange }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void }) => {
+const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void, theme: any }) => {
     const trackRef = useRef<HTMLDivElement>(null);
 
     const getPercentage = (val: number) => ((val - min) / (max - min)) * 100;
@@ -130,7 +131,7 @@ const DualRangeSlider = ({ min, max, value, onChange }: { min: number, max: numb
         }}>
             {/* Track Background */}
             <div style={{
-                position: 'absolute', width: '100%', height: '4px', background: '#444', borderRadius: '2px'
+                position: 'absolute', width: '100%', height: '4px', background: theme.border, borderRadius: '2px'
             }} />
 
             {/* Active Range */}
@@ -139,7 +140,7 @@ const DualRangeSlider = ({ min, max, value, onChange }: { min: number, max: numb
                 left: `${getPercentage(value[0])}%`,
                 width: `${getPercentage(value[1]) - getPercentage(value[0])}%`,
                 height: '4px',
-                background: colors.accent,
+                background: theme.accent,
                 opacity: 0.8
             }} />
 
@@ -148,8 +149,8 @@ const DualRangeSlider = ({ min, max, value, onChange }: { min: number, max: numb
                 onMouseDown={handleMouseDown(0)}
                 style={{
                     position: 'absolute', left: `calc(${getPercentage(value[0])}% - 6px)`,
-                    width: 12, height: 12, background: '#fff', borderRadius: '50%', cursor: 'ew-resize',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.5)', zIndex: 2
+                    width: 12, height: 12, background: theme.textLight, borderRadius: '50%', cursor: 'ew-resize',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.5)', zIndex: 2, border: '1px solid #aaa'
                 }}
             />
 
@@ -158,8 +159,8 @@ const DualRangeSlider = ({ min, max, value, onChange }: { min: number, max: numb
                 onMouseDown={handleMouseDown(1)}
                 style={{
                     position: 'absolute', left: `calc(${getPercentage(value[1])}% - 6px)`,
-                    width: 12, height: 12, background: '#fff', borderRadius: '50%', cursor: 'ew-resize',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.5)', zIndex: 2
+                    width: 12, height: 12, background: theme.textLight, borderRadius: '50%', cursor: 'ew-resize',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.5)', zIndex: 2, border: '1px solid #aaa'
                 }}
             />
         </div>
@@ -176,10 +177,12 @@ export const MeasurePanel = ({
     measureHistory,
     onDelete,
     onClear,
-    onClose 
+    onClose,
+    styles,
+    theme
 }: any) => {
     return (
-        <FloatingPanel title={t("measure_title")} onClose={onClose} width={280} height={350}>
+        <FloatingPanel title={t("measure_title")} onClose={onClose} width={280} height={350} styles={styles} theme={theme}>
             <div style={{marginBottom: 10, display:'flex', gap:5}}>
                 <button style={{...styles.btn, ...(measureType === 'dist' ? styles.btnActive : {})}} 
                         onClick={() => { setMeasureType('dist'); sceneMgr?.startMeasurement('dist'); }}>
@@ -195,37 +198,37 @@ export const MeasurePanel = ({
                 </button>
             </div>
             
-            <div style={{fontSize:11, color:'#aaa', marginBottom: 10, minHeight: 16}}>
+            <div style={{fontSize:11, color: theme.textMuted, marginBottom: 10, minHeight: 16}}>
                 {measureType === 'dist' && t("measure_instruct_dist")}
                 {measureType === 'angle' && t("measure_instruct_angle")}
                 {measureType === 'coord' && t("measure_instruct_coord")}
             </div>
 
             <div style={{
-                border: `1px solid ${colors.border}`, 
+                border: `1px solid ${theme.border}`, 
                 borderRadius: 4, 
-                backgroundColor: '#1a1a1a', 
+                backgroundColor: theme.bg, 
                 height: 180, 
                 overflowY: 'auto',
                 marginBottom: 10
             }}>
                 {measureHistory.length === 0 ? (
-                    <div style={{padding: 20, textAlign: 'center', color: '#555', fontSize: 12}}>
+                    <div style={{padding: 20, textAlign: 'center', color: theme.textMuted, fontSize: 12}}>
                         {t("no_measurements")}
                     </div>
                 ) : (
                     measureHistory.map((item: any) => (
                         <div key={item.id} style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '6px 8px', borderBottom: '1px solid #333', fontSize: 12
+                            padding: '6px 8px', borderBottom: `1px solid ${theme.border}`, fontSize: 12
                         }}>
                             <div style={{display:'flex', flexDirection:'column'}}>
-                                <span style={{color: '#888', fontSize: 10}}>
+                                <span style={{color: theme.textMuted, fontSize: 10}}>
                                     {item.type === 'dist' ? t("measure_dist") : 
                                      item.type === 'angle' ? t("measure_angle") : 
                                      item.type === 'coord' ? t("measure_coord") : item.type}
                                 </span>
-                                <span style={{color: '#eee'}}>{item.val}</span>
+                                <span style={{color: theme.text}}>{item.val}</span>
                             </div>
                             <div style={{cursor: 'pointer', opacity: 0.7}} onClick={() => onDelete(item.id)}>
                                 <IconClose width={14} height={14} />
@@ -235,17 +238,17 @@ export const MeasurePanel = ({
                 )}
             </div>
             
-            <button style={{...styles.btn, width: '100%', backgroundColor: colors.danger, border: 'none'}} onClick={onClear}>
+            <button style={{...styles.btn, width: '100%', backgroundColor: theme.danger, color:'white', borderColor: theme.danger}} onClick={onClear}>
                 {t("measure_clear")}
             </button>
         </FloatingPanel>
     );
 };
 
-export const ClipPanel = ({ t, sceneMgr, onClose, clipEnabled, setClipEnabled, clipValues, setClipValues, clipActive, setClipActive }: any) => {
+export const ClipPanel = ({ t, sceneMgr, onClose, clipEnabled, setClipEnabled, clipValues, setClipValues, clipActive, setClipActive, styles, theme }: any) => {
     const SliderRow = ({ axis, label }: { axis: 'x'|'y'|'z', label: string }) => (
         <div style={{display:'flex', alignItems:'center', marginBottom: 12, height: 24}}>
-             <label style={{display:'flex', alignItems:'center', gap: 6, cursor: 'pointer', width: 60, fontSize:12, color:'#aaa'}}>
+             <label style={{display:'flex', alignItems:'center', gap: 6, cursor: 'pointer', width: 60, fontSize:12, color: theme.textMuted}}>
                 <input type="checkbox" checked={clipActive[axis]} onChange={(e) => setClipActive({...clipActive, [axis]: e.target.checked})}/>
                 {label}
             </label>
@@ -253,18 +256,19 @@ export const ClipPanel = ({ t, sceneMgr, onClose, clipEnabled, setClipEnabled, c
                 <DualRangeSlider 
                     min={0} max={100} 
                     value={clipValues[axis]} 
-                    onChange={(val) => setClipValues({...clipValues, [axis]: val})} 
+                    onChange={(val) => setClipValues({...clipValues, [axis]: val})}
+                    theme={theme}
                 />
             </div>
-            <span style={{width: 70, textAlign:'right', fontSize: 10, color:'#ccc'}}>
+            <span style={{width: 70, textAlign:'right', fontSize: 10, color: theme.textMuted}}>
                 {Math.round(clipValues[axis][0])}% - {Math.round(clipValues[axis][1])}%
             </span>
         </div>
     );
 
     return (
-        <FloatingPanel title={t("clip_title")} onClose={onClose} width={320} height={200}>
-             <div style={{marginBottom: 15, paddingBottom: 10, borderBottom: `1px solid ${colors.border}`}}>
+        <FloatingPanel title={t("clip_title")} onClose={onClose} width={320} height={200} styles={styles} theme={theme}>
+             <div style={{marginBottom: 15, paddingBottom: 10, borderBottom: `1px solid ${theme.border}`}}>
                 <label style={{cursor:'pointer', display:'flex', alignItems:'center', fontWeight:'bold', fontSize:12}}>
                     <input type="checkbox" checked={clipEnabled} onChange={(e) => setClipEnabled(e.target.checked)} style={{marginRight:8}}/>
                     {t("clip_enable")}
@@ -279,8 +283,8 @@ export const ClipPanel = ({ t, sceneMgr, onClose, clipEnabled, setClipEnabled, c
     );
 };
 
-export const ExplodePanel = ({ t, onClose, explodeFactor, setExplodeFactor }: any) => (
-    <FloatingPanel title={t("explode_title")} onClose={onClose} width={260} height={140}>
+export const ExplodePanel = ({ t, onClose, explodeFactor, setExplodeFactor, styles, theme }: any) => (
+    <FloatingPanel title={t("explode_title")} onClose={onClose} width={260} height={140} styles={styles} theme={theme}>
         <div style={styles.sliderRow}>
             <span style={styles.sliderLabel}>{t("explode_factor")}</span>
             <input style={styles.rangeSlider} type="range" min="0" max="100" value={explodeFactor} onChange={(e) => setExplodeFactor(parseInt(e.target.value))} />
@@ -292,39 +296,39 @@ export const ExplodePanel = ({ t, onClose, explodeFactor, setExplodeFactor }: an
     </FloatingPanel>
 );
 
-export const ExportPanel = ({ t, onClose, onExport }: { t: TFunc, onClose: () => void, onExport: (format: string) => void }) => {
+export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     const [format, setFormat] = useState('glb');
     
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={300} height={260}>
+        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={280} styles={styles} theme={theme}>
             <div style={{padding: '0 10px'}}>
-                <div style={{marginBottom: 10, fontSize:12, color:'#aaa'}}>{t("export_format")}:</div>
+                <div style={{marginBottom: 10, fontSize:12, color: theme.textMuted}}>{t("export_format")}:</div>
                 
-                <label style={{display:'flex', alignItems:'center', padding: '8px', cursor:'pointer', borderBottom: '1px solid #333'}}>
+                <label style={{display:'flex', alignItems:'center', padding: '8px', cursor:'pointer', borderBottom: `1px solid ${theme.border}`}}>
                     <input type="radio" name="exportFmt" checked={format === 'glb'} onChange={() => setFormat('glb')} style={{marginRight: 10}}/>
                     <div>
-                        <div style={{color:'white', fontWeight:'bold'}}>GLB</div>
-                        <div style={{fontSize:10, color:'#888'}}>{t("export_glb")}</div>
+                        <div style={{color: theme.text, fontWeight:'bold'}}>GLB</div>
+                        <div style={{fontSize:10, color: theme.textMuted}}>{t("export_glb")}</div>
                     </div>
                 </label>
                 
-                <label style={{display:'flex', alignItems:'center', padding: '8px', cursor:'pointer', borderBottom: '1px solid #333'}}>
+                <label style={{display:'flex', alignItems:'center', padding: '8px', cursor:'pointer', borderBottom: `1px solid ${theme.border}`}}>
                     <input type="radio" name="exportFmt" checked={format === 'lmb'} onChange={() => setFormat('lmb')} style={{marginRight: 10}}/>
                     <div>
-                        <div style={{color:'white', fontWeight:'bold'}}>LMB</div>
-                        <div style={{fontSize:10, color:'#888'}}>{t("export_lmb")}</div>
+                        <div style={{color: theme.text, fontWeight:'bold'}}>LMB</div>
+                        <div style={{fontSize:10, color: theme.textMuted}}>{t("export_lmb")}</div>
                     </div>
                 </label>
                 
                 <label style={{display:'flex', alignItems:'center', padding: '8px', cursor:'pointer', marginBottom: 15}}>
                     <input type="radio" name="exportFmt" checked={format === '3dtiles'} onChange={() => setFormat('3dtiles')} style={{marginRight: 10}}/>
                     <div>
-                        <div style={{color:'white', fontWeight:'bold'}}>3D Tiles</div>
-                        <div style={{fontSize:10, color:'#888'}}>{t("export_3dtiles")}</div>
+                        <div style={{color: theme.text, fontWeight:'bold'}}>3D Tiles</div>
+                        <div style={{fontSize:10, color: theme.textMuted}}>{t("export_3dtiles")}</div>
                     </div>
                 </label>
                 
-                <button style={{...styles.btn, width: '100%', backgroundColor: colors.accent, padding:'8px 0'}} onClick={() => onExport(format)}>
+                <button style={{...styles.btn, width: '100%', backgroundColor: theme.accent, color:'white', borderColor: theme.accent, padding:'8px 0'}} onClick={() => onExport(format)}>
                     {t("export_btn")}
                 </button>
             </div>

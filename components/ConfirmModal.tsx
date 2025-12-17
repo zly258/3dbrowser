@@ -1,6 +1,6 @@
 
+
 import React from "react";
-import { styles, colors } from "../Styles";
 import { IconClose } from "../Icons";
 import { TFunc } from "../Locales";
 
@@ -11,9 +11,11 @@ interface ConfirmModalProps {
     onConfirm: () => void;
     onCancel: () => void;
     t: TFunc;
+    styles: any;
+    theme: any;
 }
 
-export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onConfirm, onCancel, t }) => {
+export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onConfirm, onCancel, t, styles, theme }) => {
     if (!isOpen) return null;
 
     return (
@@ -24,11 +26,11 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                     <div onClick={onCancel} style={{ cursor: 'pointer' }}><IconClose /></div>
                 </div>
                 
-                <div style={{padding: '20px', color: '#eee', fontSize: '13px', lineHeight: '1.5'}}>
+                <div style={{padding: '20px', color: theme.text, fontSize: '13px', lineHeight: '1.5'}}>
                     {message}
                 </div>
 
-                <div style={{padding: '15px 20px', borderTop: `1px solid ${colors.border}`, display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
+                <div style={{padding: '15px 20px', borderTop: `1px solid ${theme.border}`, display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
                      <button 
                         style={{...styles.btn, backgroundColor: 'transparent', flex: '0 0 auto', width: '80px'}} 
                         onClick={onCancel}
@@ -36,7 +38,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                         {t("btn_cancel")}
                     </button>
                     <button 
-                        style={{...styles.btn, backgroundColor: colors.danger, border: 'none', flex: '0 0 auto', width: '80px'}} 
+                        style={{...styles.btn, backgroundColor: theme.danger, borderColor: theme.danger, color: 'white', flex: '0 0 auto', width: '80px'}} 
                         onClick={onConfirm}
                     >
                         {t("btn_confirm")}

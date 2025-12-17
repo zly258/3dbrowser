@@ -1,19 +1,13 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Converter Studio</title>
+    <title>3DBrowser</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background: #1e1e1e; color: #d4d4d4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #root { width: 100vw; height: 100vh; }
-        
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #252526; }
-        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
-        
         button:focus { outline: 1px solid #007acc; }
     </style>
     <script type="importmap">
@@ -28,7 +22,8 @@
     "3d-tiles-renderer": "https://esm.sh/3d-tiles-renderer@0.3.31?external=three",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "web-ifc": "https://esm.sh/web-ifc@0.0.53?target=esnext&external=fs,path"
   }
 }
 </script>
