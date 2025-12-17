@@ -2,24 +2,32 @@
 
 <div align="center">
   <img src="images/preview1.png" alt="3D Browser Preview" width="800" />
-  <p><em>Modern 3D model viewer built with React and Three.js / 基于React和Three.js构建的现代化3D模型查看器</em></p>
+  <p><em>Professional 3D model viewer with ribbon interface / 专业级3D模型查看器，带功能区界面</em></p>
 </div>
 
 ## 🌟 Features / 功能特性
 
 ### English
-- **3D Model Viewer**: Load and display 3D model formats (LMB, GLB, IFC, 3D Tiles)
-- **Interactive Controls**: Rotate, zoom, and pan around 3D models
-- **Scene Management**: Organize and manage multiple 3D objects
-- **Properties Panel**: View and edit object properties in real-time
-- **Settings Panel**: Customize viewer settings and preferences
+- **Ribbon Interface**: Modern ribbon-style UI similar to professional CAD software
+- **Multi-format Support**: Load and display 3D model formats (LMB, GLB, IFC)
+- **3D Tiles Streaming**: Support for large-scale 3D Tiles format
+- **Measurement Tools**: Distance, angle, and coordinate measurement
+- **Sectioning Tools**: Clipping planes for model inspection
+- **Explode View**: Model explosion for better visualization
+- **Export Functionality**: Export to LMB, GLB, and 3D Tiles formats
+- **Bilingual Support**: English and Chinese language support
+- **Theme Support**: Dark and light theme options
 
 ### 中文
-- **3D 模型查看器**: 加载和显示 3D 模型格式 (LMB, GLB, IFC, 3D Tiles)
-- **交互式控制**: 旋转、缩放和平移 3D 模型
-- **场景管理**: 组织和管​​理多个 3D 对象
-- **属性面板**: 实时查看和编辑对象属性
-- **设置面板**: 自定义查看器设置和偏好
+- **功能区界面**: 类似专业CAD软件的现代功能区界面
+- **多格式支持**: 加载和显示 3D 模型格式 (LMB, GLB, IFC)
+- **3D Tiles流式加载**: 支持大规模3D Tiles格式
+- **测量工具**: 距离、角度和坐标测量
+- **剖切工具**: 剖切平面用于模型检查
+- **爆炸视图**: 模型爆炸显示，便于观察
+- **导出功能**: 导出为LMB、GLB和3D Tiles格式
+- **双语支持**: 支持英文和中文界面
+- **主题支持**: 深色和浅色主题选项
 
 ## 🛠️ Tech Stack / 技术栈
 
@@ -88,64 +96,82 @@
 
 ```
 3dbrowser/
-├── components/          # React components / React组件
+├── components/              # React components / React组件
 │   ├── ConfirmModal.tsx     # Confirmation modal / 确认模态框
 │   ├── LoadingOverlay.tsx   # Loading overlay / 加载遮罩
-│   ├── MenuBar.tsx          # Menu bar / 菜单栏
+│   ├── MenuBar.tsx          # Ribbon-style menu bar / 功能区菜单栏
 │   ├── PropertiesPanel.tsx  # Properties panel / 属性面板
 │   ├── SceneTree.tsx        # Scene tree / 场景树
 │   ├── SettingsPanel.tsx    # Settings panel / 设置面板
-│   └── ToolPanels.tsx       # Tool panels / 工具面板
-├── images/              # Screenshots and preview images / 截图和预览图片
-│   ├── preview1.png         # Main application preview / 主应用预览
-│   └── ...
-├── public/              # Static assets / 静态资源
-├── src/                 # Source code / 源代码
-│   ├── index.tsx        # Main application entry / 主应用入口
-│   ├── SceneManager.ts  # 3D scene management / 3D场景管理
-│   └── ...
-├── package.json         # Project configuration / 项目配置
-├── tsconfig.json       # TypeScript configuration / TypeScript配置
-└── vite.config.ts      # Vite configuration / Vite配置
+│   └── ToolPanels.tsx       # Tool panels (measure, clip, explode, export) / 工具面板
+├── images/                  # Screenshots and preview images / 截图和预览图片
+│   └── preview1.png         # Main application preview / 主应用预览
+├── Icons.tsx               # Icon components / 图标组件
+├── LoaderUtils.ts          # 3D model loading utilities / 3D模型加载工具
+├── Locales.ts              # Internationalization / 国际化支持
+├── SceneManager.ts         # 3D scene management / 3D场景管理
+├── Styles.ts               # CSS-in-JS styling / CSS-in-JS样式
+├── converter.ts            # Format conversion utilities / 格式转换工具
+├── index.html              # HTML entry point / HTML入口文件
+├── index.tsx               # Main React application / 主React应用
+├── lmbLoader.ts            # Custom LMB format loader / 自定义LMB格式加载器
+├── metadata.json           # Application metadata / 应用元数据
+├── package.json            # Project configuration / 项目配置
+├── tsconfig.json           # TypeScript configuration / TypeScript配置
+└── vite.config.ts          # Vite configuration / Vite配置
 ```
 
-## 🎯 Key Components / 主要组件说明
+## 🎯 Core Components / 核心组件说明
 
 ### English
-- **SceneManager.ts**: Responsible for 3D scene creation, management, and rendering
-- **MenuBar.tsx**: Provides main navigation and operation menu
-- **PropertiesPanel.tsx**: Displays and edits selected object properties
-- **SceneTree.tsx**: Shows hierarchical structure of all objects in the scene
-- **SettingsPanel.tsx**: Application settings and preference configuration
+- **SceneManager.ts**: Core 3D engine handling scene management, rendering, and camera controls
+- **MenuBar.tsx**: Ribbon-style interface with file operations and tool access
+- **ToolPanels.tsx**: Measurement, clipping, explode view, and export tools
+- **SceneTree.tsx**: Hierarchical view of scene objects with selection support
+- **PropertiesPanel.tsx**: Object properties and measurement results display
+- **SettingsPanel.tsx**: Application settings including lighting, themes, and language
 
 ### 中文
-- **SceneManager.ts**: 负责 3D 场景的创建、管理和渲染
-- **MenuBar.tsx**: 提供应用的主要导航和操作菜单
-- **PropertiesPanel.tsx**: 显示和编辑选中对象的属性
-- **SceneTree.tsx**: 展示场景中所有对象的层级结构
-- **SettingsPanel.tsx**: 应用设置和偏好配置
+- **SceneManager.ts**: 核心3D引擎，负责场景管理、渲染和相机控制
+- **MenuBar.tsx**: 功能区界面，提供文件操作和工具访问
+- **ToolPanels.tsx**: 测量、剖切、爆炸视图和导出工具
+- **SceneTree.tsx**: 场景对象层级视图，支持对象选择
+- **PropertiesPanel.tsx**: 对象属性和测量结果显示
+- **SettingsPanel.tsx**: 应用设置，包括光照、主题和语言
 
-## 🔧 3D Features / 3D功能特性
+## 🔧 Advanced Features / 高级功能
 
 ### English
-- **Multi-format Support**: 3D format compatibility including:
-  - **LMB/LMBZ**: Custom compressed format optimized for this viewer
-  - **GLB/GLTF**: Web-optimized 3D format with PBR materials
-  - **IFC**: Industry Foundation Classes for BIM data
-  - **3D Tiles**: Large-scale 3D model format for web streaming
-- **Camera Controls**: Intuitive rotation, zoom, and pan operations
-- **Real-time Rendering**: Optimized scene rendering with performance monitoring
-- **Object Interaction**: Selection, transformation, and property editing
+- **Ribbon Interface**: Professional CAD-style interface with tabbed navigation
+- **Measurement Tools**: 
+  - Distance measurement between points
+  - Angle measurement with 3-point selection
+  - Coordinate display for any point in the scene
+- **Sectioning Tools**: Dynamic clipping planes on X, Y, and Z axes
+- **Explode View**: Interactive model explosion for better part visualization
+- **Export Capabilities**: 
+  - GLB format for standard 3D model exchange
+  - LMB format with custom compression
+  - 3D Tiles format for large-scale web streaming
+- **Performance Optimization**: Progressive loading and memory management for large models
+- **Internationalization**: Full bilingual support (English/Chinese)
+- **Theme System**: Dark and light theme options
 
 ### 中文
-- **多格式支持**: 3D格式兼容性，包括：
-  - **LMB/LMBZ**: 自定义压缩格式，针对本查看器优化
-  - **GLB/GLTF**: 网络优化的3D格式，支持PBR材质
-  - **IFC**: 工业基础类，支持BIM数据
-  - **3D Tiles**: 大规模3D模型格式，支持网络流式加载
-- **相机控制**: 直观的旋转、缩放和平移操作
-- **实时渲染**: 优化的场景渲染，支持性能监控
-- **对象交互**: 选择、变换和属性编辑
+- **功能区界面**: 专业CAD风格界面，支持选项卡导航
+- **测量工具**: 
+  - 点对点距离测量
+  - 三点角度测量
+  - 场景内任意点坐标显示
+- **剖切工具**: X、Y、Z轴动态剖切平面
+- **爆炸视图**: 交互式模型爆炸，便于零件观察
+- **导出功能**: 
+  - GLB格式用于标准3D模型交换
+  - LMB格式支持自定义压缩
+  - 3D Tiles格式用于大规模网络流式加载
+- **性能优化**: 大模型渐进式加载和内存管理
+- **国际化**: 完整双语支持（英文/中文）
+- **主题系统**: 深色和浅色主题选项
 
 ## 🤝 Contributing / 贡献指南
 
@@ -163,19 +189,23 @@
 4. 推送到分支：`git push origin feature/新功能`
 5. 提交 Pull Request
 
-## 📝 Development Tips / 开发建议
+## 📝 Development Notes / 开发说明
 
 ### English
-- Use TypeScript for type safety
-- Follow React Hooks best practices
-- Maintain Three.js scene optimization and performance
-- Use responsive design for multi-device compatibility
+- **Architecture**: React 18 + TypeScript + Three.js with functional components
+- **State Management**: React hooks for local state management
+- **3D Engine**: Three.js with custom loaders and optimizations
+- **Styling**: CSS-in-JS approach with theme support
+- **Build System**: Vite for fast development and production builds
+- **Performance**: Progressive loading and memory management for large 3D models
 
 ### 中文
-- 使用 TypeScript 确保类型安全
-- 遵循 React Hooks 最佳实践
-- 保持 Three.js 场景的优化和性能
-- 使用响应式设计确保多设备兼容
+- **架构**: React 18 + TypeScript + Three.js，使用函数式组件
+- **状态管理**: React hooks进行本地状态管理
+- **3D引擎**: Three.js，包含自定义加载器和优化
+- **样式**: CSS-in-JS方法，支持主题切换
+- **构建系统**: Vite用于快速开发和生产构建
+- **性能**: 大3D模型渐进式加载和内存管理
 
 ## 📄 License / 许可证
 
