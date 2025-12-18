@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TilesRenderer } from "3d-tiles-renderer";
-import { calculateGeometryMemory } from "./converter";
+import { calculateGeometryMemory } from "./utils/converter";
 
 export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 
@@ -22,11 +22,11 @@ export interface SceneSettings {
     bgColor: string;
     wireframe: boolean;
     progressive: boolean;
-    hideRatio: number; // 0 to 1
-    progressiveThreshold: number; // Minimum meshes to enable progressive loading
+    hideRatio: number; // 0到1的隐藏比例
+    progressiveThreshold: number; // 启用渐进式加载的最小网格数量
     sse: number;
     maxMemory: number;
-    // Import Settings (Applied on Load)
+    // 导入设置（加载时应用）
     importAxisGLB: AxisOption;
     importAxisIFC: AxisOption;
 }
@@ -38,45 +38,45 @@ export class SceneManager {
     camera: THREE.OrthographicCamera;
     controls: OrbitControls;
     
-    // Groups
+    // 组
     contentGroup: THREE.Group; 
     helpersGroup: THREE.Group;
     measureGroup: THREE.Group;
     
-    // Lights
+    // 灯光
     ambientLight: THREE.AmbientLight;
     dirLight: THREE.DirectionalLight;
     backLight: THREE.DirectionalLight;
 
-    // References
+    // 引用
     tilesRenderer: TilesRenderer | null = null;
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh; 
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
-    // Measurement State
+    // 测量状态
     measureType: MeasureType = 'none';
     currentMeasurePoints: THREE.Vector3[] = [];
     previewLine: THREE.Line | null = null;
     tempMarker: THREE.Points; 
     measureRecords: Map<string, MeasurementRecord> = new Map();
     
-    // Clipping State
+    // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
     
-    // Explode State
+    // 爆炸状态
     explodeData: Map<string, { originalPos: THREE.Vector3, direction: THREE.Vector3 }> = new Map();
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
     
-    // Optimization / Progressive Loading
+    // 优化/渐进式加载
     lastMoveTime: number = 0;
-    restoreDelay: number = 500; // ms to wait before showing meshes again
+    restoreDelay: number = 500; // 显示网格前等待的毫秒数
     allMeshes: THREE.Mesh[] = [];
     hiddenMeshes: THREE.Mesh[] = [];
     progressiveQueue: THREE.Mesh[] = [];
     
-    // Settings
+    // 设置
     settings: SceneSettings = {
         ambientInt: 2.0,
         dirInt: 1.0,
@@ -84,20 +84,20 @@ export class SceneManager {
         wireframe: false,
         progressive: true,
         hideRatio: 0.6,
-        progressiveThreshold: 15000, // Updated default
+        progressiveThreshold: 15000, // 更新后的默认值
         sse: 16,
         maxMemory: 500,
-        importAxisGLB: '+y', // Standard for GLB
-        importAxisIFC: '+z', // Standard for IFC
+        importAxisGLB: '+y', // GLB标准
+        importAxisIFC: '+z', // IFC标准
     };
 
-    // Assets
+    // 资源
     dotTexture: THREE.Texture;
     
-    // Cache
+    // 缓存
     sceneBounds: THREE.Box3 = new THREE.Box3();
     
-    // Callback
+    // 回调
     onTilesUpdate?: () => void;
 
     constructor(canvas: HTMLCanvasElement) {
@@ -105,10 +105,10 @@ export class SceneManager {
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
 
-        // Generate a simple circular sprite texture for Points
+        // 为点生成简单的圆形精灵纹理
         this.dotTexture = this.createCircleTexture();
 
-        // Renderer
+        // 渲染器
         this.renderer = new THREE.WebGLRenderer({
             canvas,
             antialias: true,
@@ -116,18 +116,18 @@ export class SceneManager {
             logarithmicDepthBuffer: true,
             precision: "highp"
         });
-        // IMPORTANT: Initial size set. 
-        // We use setSize(w, h, false) in resize() to prevent inline styles from locking the size,
-        // allowing CSS (width: 100%, height: 100%) to handle the layout reflow.
+        // 重要：设置初始大小
+        // 在resize()中使用setSize(w, h, false)来防止内联样式锁定大小，
+        // 允许CSS（width: 100%, height: 100%）处理布局重排
         this.renderer.setSize(width, height, false);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setClearColor(this.settings.bgColor);
         this.renderer.localClippingEnabled = true; 
         
-        // Scene
+        // 场景
         this.scene = new THREE.Scene();
         
-        // Groups
+        // 组
         this.contentGroup = new THREE.Group();
         this.contentGroup.name = "Content";
         this.scene.add(this.contentGroup);
@@ -140,7 +140,7 @@ export class SceneManager {
         this.measureGroup.name = "Measure";
         this.scene.add(this.measureGroup);
 
-        // Camera
+        // 相机
         const frustumSize = 100;
         const aspect = width / height;
         this.camera = new THREE.OrthographicCamera(
@@ -154,20 +154,20 @@ export class SceneManager {
         this.camera.position.set(1000, 1000, 1000);
         this.camera.lookAt(0, 0, 0);
 
-        // Controls
+        // 控制器
         this.controls = new OrbitControls(this.camera, canvas);
         this.controls.enableDamping = false;
         this.controls.screenSpacePanning = true;
         this.controls.maxPolarAngle = Math.PI;
 
-        // --- Interaction hooks for Progressive Loading ---
-        // Use 'change' event to detect actual camera movement (rotation/zoom/pan)
-        // 'start' triggers on click even if no movement occurs, so we avoid it.
+        // --- 渐进式加载的交互钩子 ---
+        // 使用'change'事件来检测实际的相机移动（旋转/缩放/平移）
+        // 'start'在点击时触发即使没有移动发生，所以我们避免使用它
         this.controls.addEventListener('change', () => {
             this.handleCameraMove();
         });
         
-        // Lights
+        // 灯光
         this.ambientLight = new THREE.AmbientLight(0xffffff, this.settings.ambientInt); 
         this.scene.add(this.ambientLight);
         this.dirLight = new THREE.DirectionalLight(0xffffff, this.settings.dirInt);
@@ -177,7 +177,7 @@ export class SceneManager {
         this.backLight.position.set(-50, -50, -10);
         this.scene.add(this.backLight);
 
-        // Selection Helpers
+        // 选择辅助器
         const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
         this.selectionBox = new THREE.Box3Helper(box, new THREE.Color(0xffff00));
         this.selectionBox.visible = false;
@@ -196,7 +196,7 @@ export class SceneManager {
         this.highlightMesh.renderOrder = 999;
         this.helpersGroup.add(this.highlightMesh);
 
-        // Measurement Helpers (Points)
+        // 测量辅助器（点）
         const markerGeo = new THREE.BufferGeometry();
         markerGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
         const markerMat = new THREE.PointsMaterial({ 
@@ -214,10 +214,10 @@ export class SceneManager {
         this.tempMarker.renderOrder = 1000;
         this.helpersGroup.add(this.tempMarker);
 
-        // Clipping Setup
+        // 裁剪设置
         this.setupClipping();
 
-        // Raycasting
+        // 射线投射
         this.raycaster = new THREE.Raycaster();
         this.raycaster.params.Points.threshold = 10; 
 
@@ -230,14 +230,14 @@ export class SceneManager {
     updateSettings(newSettings: Partial<SceneSettings>) {
         this.settings = { ...this.settings, ...newSettings };
 
-        // Apply Lighting
+        // 应用光照
         this.ambientLight.intensity = this.settings.ambientInt;
         this.dirLight.intensity = this.settings.dirInt;
 
-        // Apply BG
+        // 应用背景
         this.renderer.setClearColor(this.settings.bgColor);
 
-        // Apply Wireframe Mode (Global Override)
+        // 应用线框模式（全局覆盖）
         if (this.settings.wireframe) {
             this.scene.overrideMaterial = new THREE.MeshBasicMaterial({ 
                 color: 0xcccccc, 
@@ -249,24 +249,24 @@ export class SceneManager {
             this.scene.overrideMaterial = null;
         }
 
-        // Apply Tiles Config
+        // 应用瓦片配置
         if (this.tilesRenderer) {
             this.tilesRenderer.errorTarget = this.settings.sse;
             this.tilesRenderer.lruCache.maxSize = this.settings.maxMemory * 1024 * 1024;
-            // Force tiles renderer to re-evaluate
+            // 强制瓦片渲染器重新评估
             this.tilesRenderer.setCamera(this.camera);
         }
 
-        // Force render if not busy
+        // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
     }
     
     handleCameraMove() {
         this.lastMoveTime = Date.now();
 
-        // If optimizations enabled and enough meshes
+        // 如果启用了优化且有足够的网格
         if (this.settings.progressive && this.allMeshes.length >= this.settings.progressiveThreshold) {
-            // Only hide if we aren't already hiding (to avoid re-looping every frame)
+            // 只有在还没有隐藏时才隐藏（避免每帧都重新循环）
             if (this.hiddenMeshes.length === 0) {
                 this.hideMeshes();
             }
@@ -274,7 +274,7 @@ export class SceneManager {
     }
 
     hideMeshes() {
-        // Clear restore queue if any
+        // 清除恢复队列（如果有的话）
         if (this.progressiveQueue.length > 0) {
             this.hiddenMeshes.push(...this.progressiveQueue);
             this.progressiveQueue = [];
@@ -297,7 +297,7 @@ export class SceneManager {
     }
 
     restoreMeshes() {
-        // Move everything from hidden to queue
+        // 将所有隐藏的对象移到队列中
         if (this.hiddenMeshes.length > 0) {
             this.progressiveQueue.push(...this.hiddenMeshes);
             this.hiddenMeshes = [];
@@ -325,12 +325,12 @@ export class SceneManager {
         
         const now = Date.now();
 
-        // Check if we should restore meshes (debounce)
+        // 检查是否应该恢复网格（防抖）
         if (this.hiddenMeshes.length > 0 && (now - this.lastMoveTime > this.restoreDelay)) {
             this.restoreMeshes();
         }
 
-        // Process restore queue (staggered appearance)
+        // 处理恢复队列（分阶段显示）
         if (this.progressiveQueue.length > 0) {
              const batchSize = 1000; 
              const batch = this.progressiveQueue.splice(0, batchSize);
@@ -369,7 +369,7 @@ export class SceneManager {
         const w = this.canvas.clientWidth;
         const h = this.canvas.clientHeight;
         
-        // Ensure size is positive
+        // 确保大小为正数
         if (w === 0 || h === 0) return;
 
         const aspect = w / h;
@@ -381,18 +381,18 @@ export class SceneManager {
         cam.right = newWidth / 2;
         cam.updateProjectionMatrix();
         
-        // CRITICAL FIX: Pass false as third argument.
-        // updateStyle = false.
-        // This ensures Three.js doesn't overwrite the canvas inline styles (width/height px).
-        // It keeps the internal render resolution matching the clientWidth/Height,
-        // but lets CSS (width: 100%) handle the actual display size in the flex container.
+        // 关键修复：将第三个参数传递为false。
+        // updateStyle = false。
+        // 这确保Three.js不会覆盖画布的内联样式（宽度/高度像素）。
+        // 它保持内部渲染分辨率与clientWidth/Height匹配，
+        // 但让CSS（宽度：100%）处理弹性容器中的实际显示大小。
         this.renderer.setSize(w, h, false);
         
-        // Force render on resize
+        // 调整大小时强制渲染
         this.renderer.render(this.scene, this.camera);
     }
 
-    // Refresh the list of static meshes for optimization
+    // 刷新静态网格列表以进行优化
     refreshMeshCache() {
         this.allMeshes = [];
         this.hiddenMeshes = [];
@@ -400,7 +400,7 @@ export class SceneManager {
         
         this.contentGroup.traverse((obj) => {
             if ((obj as THREE.Mesh).isMesh && !(obj as THREE.InstancedMesh).isInstancedMesh) {
-                // Only consider valid meshes
+                // 只考虑有效的网格
                 this.allMeshes.push(obj as THREE.Mesh);
             }
         });
@@ -425,12 +425,12 @@ export class SceneManager {
 
         this.contentGroup.add(object);
         
-        // Cache bounds for camera logic
+        // 为相机逻辑缓存边界
         this.sceneBounds = this.computeTotalBounds();
         this.initExplodeData();
         this.refreshMeshCache();
         
-        // Apply current rotation setting immediately
+        // 立即应用当前旋转设置
         this.updateSettings(this.settings);
     }
 
@@ -443,14 +443,14 @@ export class SceneManager {
         const renderer = new TilesRenderer(url);
         renderer.setCamera(this.camera);
         renderer.setResolutionFromRenderer(this.camera, this.renderer);
-        // Removed hardcoded rotation to rely on tileset.json configuration
+        // 移除硬编码旋转，依赖tileset.json配置
         renderer.group.name = "3D Tileset";
 
-        // Dynamic Settings from current config
+        // 从当前配置动态设置
         renderer.errorTarget = this.settings.sse;
         renderer.lruCache.maxSize = this.settings.maxMemory * 1024 * 1024;
 
-        // Hooks for Tree Update
+        // 树更新的钩子
         (renderer as any).onLoadTile = (tile: any) => {
             if (this.onTilesUpdate) this.onTilesUpdate();
         };
@@ -461,7 +461,7 @@ export class SceneManager {
         this.contentGroup.add(renderer.group);
         this.tilesRenderer = renderer;
         
-        // Apply rotation if needed
+        // 如果需要，应用旋转
         this.updateSettings(this.settings);
         
         return renderer.group;
@@ -679,7 +679,7 @@ export class SceneManager {
         this.currentMeasurePoints.push(point);
         this.addMarker(point, this.measureGroup); 
 
-        // Check completion
+        // 检查完成状态
         if (this.measureType === 'dist' && this.currentMeasurePoints.length === 2) {
             return this.finalizeMeasurement();
         } else if (this.measureType === 'angle' && this.currentMeasurePoints.length === 3) {
@@ -824,7 +824,7 @@ export class SceneManager {
             this.previewLine = null;
         }
         this.tempMarker.visible = false;
-        // Clean up
+        // 清理
         for (let i = this.measureGroup.children.length - 1; i >= 0; i--) {
             const child = this.measureGroup.children[i];
             if (!child.name.startsWith("measure_") && child !== this.previewLine) {

@@ -1,5 +1,3 @@
-
-
 export type Lang = 'zh' | 'en';
 export type TFunc = (key: string) => string;
 
@@ -28,15 +26,15 @@ const resources: Record<Lang, Record<string, string>> = {
         view_sw: "SW Iso",
         view_ne: "NE Iso",
         view_nw: "NW Iso",
-        // Short labels for buttons
+        // 按钮的短标签
         btn_view_top: "Top",
         btn_view_bottom: "Btm",
         btn_view_front: "Frt",
         btn_view_back: "Bck",
         btn_view_left: "Lft",
         btn_view_right: "Rgt",
-        btn_view_iso1: "IsoL", // Left Axis
-        btn_view_iso2: "IsoR", // Right Axis
+        btn_view_iso1: "IsoL", // 左轴
+        btn_view_iso2: "IsoR", // 右轴
         
         operation: "Operation",
         op_pick: "Pick",
@@ -75,7 +73,7 @@ const resources: Record<Lang, Record<string, string>> = {
         delete_item: "Delete Item",
         btn_confirm: "Confirm",
         btn_cancel: "Cancel",
-        // Properties
+        // 属性
         pg_basic: "Basic Information",
         pg_geo: "Geometry",
         prop_name: "Name",
@@ -86,7 +84,7 @@ const resources: Record<Lang, Record<string, string>> = {
         prop_inst: "Instances",
         prop_vert: "Vertices",
         prop_tri: "Triangles",
-        // Measure
+        // 测量
         measure_title: "Measurement Tool",
         measure_type: "Type",
         measure_dist: "Distance",
@@ -97,25 +95,25 @@ const resources: Record<Lang, Record<string, string>> = {
         measure_instruct_angle: "Click 3 points (Start-Vertex-End).",
         measure_instruct_coord: "Click any point to get coordinates.",
         measure_clear: "Clear",
-        // Clip
+        // 裁剪
         clip_title: "Sectioning Tool",
         clip_enable: "Enable Clipping",
         clip_x: "X Axis",
         clip_y: "Y Axis",
         clip_z: "Z Axis",
         clip_invert: "Invert",
-        // Explode
+        // 爆炸
         explode_title: "Model Explode",
         explode_factor: "Factor",
         explode_reset: "Reset",
-        // Export
+        // 导出
         export_title: "Export Scene",
         export_format: "Format",
         export_glb: "GLB (Standard)",
         export_lmb: "LMB (Custom Compressed)",
         export_3dtiles: "3D Tiles (Web)",
         export_btn: "Export",
-        // Settings
+        // 设置
         st_lighting: "Lighting",
         st_ambient: "Ambient Int.",
         st_dir: "Direct Int.",
@@ -154,7 +152,7 @@ const resources: Record<Lang, Record<string, string>> = {
         menu_open_folder: "打开目录",
         convert: "导出",
         menu_export: "导出场景",
-        view: "工具", // Renamed
+        view: "工具", // 重命名
         menu_fit_view: "充满视图",
         menu_wireframe: "线框模式",
         view_top: "顶视图",
@@ -167,7 +165,7 @@ const resources: Record<Lang, Record<string, string>> = {
         view_sw: "西南轴测",
         view_ne: "东北轴测",
         view_nw: "西北轴测",
-        // Short labels for buttons
+        // 按钮的短标签
         btn_view_top: "顶视",
         btn_view_bottom: "底视",
         btn_view_front: "前视",

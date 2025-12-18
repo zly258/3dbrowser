@@ -4,10 +4,10 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./SceneManager";
-import { loadModelFiles, parseTilesetFromFolder } from "./LoaderUtils";
-import { convertLMBTo3DTiles, createZip, exportGLB, exportLMB } from "./converter";
-import { createStyles, createGlobalStyle, themes, ThemeColors } from "./Styles";
-import { getTranslation, Lang } from "./Locales";
+import { loadModelFiles, parseTilesetFromFolder } from "./loader/LoaderUtils";
+import { convertLMBTo3DTiles, createZip, exportGLB, exportLMB } from "./utils/converter";
+import { createStyles, createGlobalStyle, themes, ThemeColors } from "./theme/Styles";
+import { getTranslation, Lang } from "./utils/Locales";
 
 // Components
 import { MenuBar } from "./components/MenuBar";

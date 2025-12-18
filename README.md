@@ -107,14 +107,17 @@
 ├── images/                  # Screenshots and preview images / 截图和预览图片
 │   └── preview1.png         # Main application preview / 主应用预览
 ├── Icons.tsx               # Icon components / 图标组件
-├── LoaderUtils.ts          # 3D model loading utilities / 3D模型加载工具
-├── Locales.ts              # Internationalization / 国际化支持
+├── loader/                 # 3D model loading utilities / 3D模型加载工具
+│   ├── LoaderUtils.ts      # Main loader utilities / 主加载工具
+│   └── lmbLoader.ts        # Custom LMB format loader / 自定义LMB格式加载器
+├── utils/                  # Utility functions / 工具函数
+│   ├── Locales.ts          # Internationalization / 国际化支持
+│   └── converter.ts        # Format conversion utilities / 格式转换工具
+├── theme/                  # Theme and styling / 主题和样式
+│   └── Styles.ts           # CSS-in-JS styling / CSS-in-JS样式
 ├── SceneManager.ts         # 3D scene management / 3D场景管理
-├── Styles.ts               # CSS-in-JS styling / CSS-in-JS样式
-├── converter.ts            # Format conversion utilities / 格式转换工具
 ├── index.html              # HTML entry point / HTML入口文件
 ├── index.tsx               # Main React application / 主React应用
-├── lmbLoader.ts            # Custom LMB format loader / 自定义LMB格式加载器
 ├── metadata.json           # Application metadata / 应用元数据
 ├── package.json            # Project configuration / 项目配置
 ├── tsconfig.json           # TypeScript configuration / TypeScript配置

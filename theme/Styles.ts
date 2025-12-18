@@ -1,5 +1,3 @@
-
-
 export interface ThemeColors {
     bg: string;
     panelBg: string;
@@ -16,7 +14,7 @@ export interface ThemeColors {
     success: string;
     warning: string;
     danger: string;
-    canvasBg: string; // Default canvas background
+    canvasBg: string; // 默认画布背景
 }
 
 export const themes: Record<'dark' | 'light', ThemeColors> = {
@@ -43,7 +41,7 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
         panelBg: "#ffffff",
         headerBg: "#e0e0e0",
         ribbonTabBg: "#e0e0e0",
-        ribbonActiveBg: "#f3f3f3", // Slightly darker than panel to distinguish
+        ribbonActiveBg: "#f3f3f3", // 比面板稍暗以区分
         border: "#cccccc",
         text: "#333333",
         textLight: "#000000",
@@ -58,7 +56,7 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
     }
 };
 
-// Deprecated: default export for backward compatibility if needed, but we use createStyles now
+// 已弃用：为向后兼容而提供的默认导出，但我们现在使用createStyles
 export const colors = themes.dark;
 
 export const createGlobalStyle = (theme: ThemeColors) => `
@@ -70,10 +68,10 @@ export const createGlobalStyle = (theme: ThemeColors) => `
 `;
 
 export const createStyles = (theme: ThemeColors) => ({
-    // Desktop / Shared
+    // 桌面/共享
     container: { display: "flex", flexDirection: "column" as const, height: "100vh", backgroundColor: theme.bg, color: theme.text, fontFamily: "Segoe UI, sans-serif", fontSize: "12px", userSelect: "none" as const, overflow: "hidden" },
     
-    // Ribbon Styles
+    // 功能区样式
     ribbonContainer: { display: "flex", flexDirection: "column" as const, backgroundColor: theme.ribbonActiveBg, borderBottom: `1px solid ${theme.border}`, flexShrink: 0 },
     ribbonTabsRow: { display: "flex", backgroundColor: theme.ribbonTabBg, height: "24px", alignItems: "flex-end", paddingLeft: "8px", borderBottom: `1px solid ${theme.border}` },
     ribbonTab: { 
@@ -94,11 +92,11 @@ export const createStyles = (theme: ThemeColors) => ({
         color: theme.textLight,
         fontWeight: "bold",
         border: `1px solid ${theme.border}`,
-        borderBottom: `1px solid ${theme.ribbonActiveBg}`, // Blend with toolbar
+        borderBottom: `1px solid ${theme.ribbonActiveBg}`, // 与工具栏融合
     },
-    // Ribbon Toolbar increased to 80px to accommodate bottom labels
+    // 功能区工具栏增加到80px以适应底部标签
     ribbonToolbar: { height: "80px", display: "flex", alignItems: "center", padding: "2px 4px", gap: "2px", overflowX: "auto" as const },
-    // Ribbon Group with vertical layout for label
+    // 功能区组采用垂直布局以容纳标签
     ribbonGroup: { 
         display: "flex", 
         flexDirection: "column" as const, 
@@ -124,7 +122,7 @@ export const createStyles = (theme: ThemeColors) => ({
         whiteSpace: "nowrap" as const
     },
     
-    // Ribbon Buttons
+    // 功能区按钮
     ribbonBtn: { 
         display: "flex", 
         flexDirection: "column" as const, 
@@ -142,9 +140,9 @@ export const createStyles = (theme: ThemeColors) => ({
     ribbonBtnHover: { backgroundColor: theme.itemHover, borderColor: theme.border },
     ribbonBtnActive: { backgroundColor: theme.accent, borderColor: theme.accent, color: "white" },
     ribbonIconBox: { width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center" },
-    ribbonLabel: { fontSize: "11px", textAlign: "center" as const, lineHeight: "1.1", maxWidth: "80px", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" },
+    ribbonLabel: { fontSize: "11px", textAlign: "center" as const, lineHeight: "1.1", maxWidth: "80px", overflow: "hidden", whiteSpace: "nowrap" as const, textOverflow: "ellipsis" },
     
-    // Small Ribbon Button (Grid/Row layout)
+    // 小型功能区按钮（网格/行布局）
     ribbonBtnSmall: {
         display: "flex",
         alignItems: "center",
@@ -160,13 +158,13 @@ export const createStyles = (theme: ThemeColors) => ({
     },
     ribbonBtnSmallHover: { backgroundColor: theme.itemHover, border: `1px solid ${theme.border}` },
 
-    // Workspace & Resizable Panels
+    // 工作区和可调整大小的面板
     workspace: { display: "flex", flex: 1, overflow: "hidden", position: "relative" as const },
     
-    // Panel base styles (width controlled by inline style)
+    // 面板基础样式（宽度由内联样式控制）
     resizablePanel: { backgroundColor: theme.panelBg, display: "flex", flexDirection: "column" as const, flexShrink: 0, position: "relative" as const, color: theme.text },
     
-    // Resize Handles
+    // 调整大小手柄
     resizeHandleHorizontal: {
         width: "4px",
         cursor: "col-resize",
@@ -213,7 +211,7 @@ export const createStyles = (theme: ThemeColors) => ({
         textOverflow: "ellipsis"
     },
     
-    // Properties List
+    // 属性列表
     list: {
         flex: 1,
         overflowY: "auto" as const,
@@ -252,21 +250,21 @@ export const createStyles = (theme: ThemeColors) => ({
         cursor: "text"
     },
 
-    // Fixed Viewport to ensure it consumes available space
+    // 固定视口以确保其占用可用空间
     viewport: { 
         flex: 1, 
         position: "relative" as const, 
         backgroundColor: "#111", 
         overflow: "hidden",
-        minWidth: 0, // CRITICAL for flex containers
+        minWidth: 0, // 对弹性容器至关重要
         minHeight: 0
     },
     statusBar: { height: "24px", backgroundColor: theme.accent, color: "white", display: "flex", alignItems: "center", padding: "0 12px", justifyContent: "space-between", fontSize: "12px", flexShrink: 0 },
     
-    // Components
+    // 组件
     panelHeader: { padding: "8px 12px", fontWeight: "600", borderBottom: `1px solid ${theme.border}`, backgroundColor: theme.headerBg, textTransform: "uppercase" as const, fontSize: "11px", letterSpacing: "0.5px", color: theme.textLight, display: "flex", justifyContent: "space-between", alignItems: "center", height: "30px", boxSizing: "border-box" as const },
     
-    // Floating Panel
+    // 浮动面板
     floatingPanel: {
         position: 'absolute' as const,
         backgroundColor: theme.panelBg,
@@ -309,7 +307,7 @@ export const createStyles = (theme: ThemeColors) => ({
         zIndex: 10
     },
 
-    // Modal Styles
+    // 模态框样式
     modalOverlay: {
         position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -329,7 +327,7 @@ export const createStyles = (theme: ThemeColors) => ({
         color: theme.text
     },
 
-    // UI Elements
+    // UI元素
     btn: {
         backgroundColor: theme.headerBg,
         color: theme.text,
@@ -347,7 +345,7 @@ export const createStyles = (theme: ThemeColors) => ({
         color: "white"
     },
     
-    // Loading
+    // 加载
     overlay: {
         position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: 'rgba(30,30,30,0.6)',
@@ -375,7 +373,7 @@ export const createStyles = (theme: ThemeColors) => ({
         transition: 'width 0.2s ease-out'
     },
 
-    // Slider
+    // 滑块
     sliderRow: {
         display: 'flex',
         alignItems: 'center',

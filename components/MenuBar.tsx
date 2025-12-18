@@ -6,7 +6,7 @@ import {
     IconFile, IconFolder, IconExport, IconClear, IconFit, IconWireframe, IconList, IconInfo, IconMeasure, IconSettings,
     IconPick, IconClip, IconExplode
 } from "../Icons";
-import { TFunc, Lang } from "../Locales";
+import { TFunc, Lang } from "../utils/Locales";
 
 // --- Icons wrapper for Ribbon ---
 const RibbonIcon = ({ children, styles }: { children?: React.ReactNode, styles: any }) => (

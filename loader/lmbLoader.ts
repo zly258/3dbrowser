@@ -1,9 +1,8 @@
-
 import * as THREE from "three";
 import { Loader, FileLoader, LoadingManager } from "three";
 import pako from "pako";
 
-// --- Utility Functions ---
+// --- 工具函数 --
 
 export const setMaterialProperties = (material: THREE.Material) => {
   if (!material) return;
@@ -136,7 +135,7 @@ export const composeMatrixByMatrix3 = (matrix: Float32Array, position: Float32Ar
 };
 
 
-// --- Loader Class ---
+// --- 加载器类 --
 
 export class LMBLoader extends Loader {
   manager: LoadingManager;
@@ -198,19 +197,19 @@ export class LMBLoader extends Loader {
       offset += 4;
     }
 
-    // Create Root Node
+    // 创建根节点
     const root = new THREE.Group();
     root.name = "LMB_Root";
     
-    // Position root at header position. 
-    // We rely on LoaderUtils to recenter this later at container level.
+    // 将根节点定位到头部位置
+    // 我们依赖LoaderUtils稍后在容器级别重新居中
     if (!isNaN(position[0])) {
          root.position.set(position[0], position[1], position[2]);
     }
 
-    // Materials
+    // 材质
     const materials = colors.map((color) => {
-      // Phong is stable for CAD colors
+      // Phong材质对CAD颜色很稳定
       const material = new THREE.MeshPhongMaterial({
         color: new THREE.Color(parseColor(color)),
         side: THREE.DoubleSide,
@@ -232,10 +231,10 @@ export class LMBLoader extends Loader {
       geometry.setAttribute("normal", new THREE.Float32BufferAttribute(node.normals, 3));
       geometry.setIndex(new THREE.Uint32BufferAttribute(node.indices, 1));
       
-      // Compute bounds immediately for safety
+      // 立即计算边界以确保安全
       geometry.computeBoundingBox();
 
-      // Use node name if available
+      // 使用节点名称（如果可用）
       const nodeName = node.name && node.name.length > 0 ? node.name : `Node_${i}`;
 
       if (node.instances.length > 0) {
@@ -275,7 +274,7 @@ export class LMBLoader extends Loader {
   }
 
   parseNode(buffer: ArrayBuffer, view: DataView, offset: number) {
-    // Name
+    // 名称
     const nameLength = view.getUint16(offset, true);
     offset += 2;
 
@@ -284,7 +283,7 @@ export class LMBLoader extends Loader {
 
     while (offset % 4 !== 0) offset++;
 
-    // Transform
+    // 变换
     const matrix = new Float32Array(9);
     for (let i = 0; i < 9; i++) {
       matrix[i] = view.getFloat32(offset, true);
@@ -331,7 +330,7 @@ export class LMBLoader extends Loader {
 
     while (offset % 4 !== 0) offset++;
 
-    // Normals
+    // 法线
     const normalCount = vertexCount;
     const normals = new Float32Array(normalCount * 3);
     for (let i = 0; i < normalCount; i++) {
@@ -368,11 +367,11 @@ export class LMBLoader extends Loader {
       while (offset % 4 !== 0) offset++;
     }
 
-    // Color Index
+    // 颜色索引
     const colorIndex = view.getUint32(offset, true);
     offset += 4;
 
-    // Instances
+    // 实例
     const instanceCount = view.getUint32(offset, true);
     offset += 4;
 

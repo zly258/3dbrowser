@@ -1,15 +1,13 @@
-
-
 import * as THREE from "three";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 
-// --- EXISTING 3D TILES LOGIC ---
+// --- 现有3D瓦片逻辑 --
 interface OctreeItem {
-  id: string; // geometry_uuid + material_uuid
+  id: string; // 几何体_uuid + 材质_uuid
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
-  matrix: THREE.Matrix4; // World matrix
+  matrix: THREE.Matrix4; // 世界矩阵
   center: THREE.Vector3;
 }
 
@@ -41,15 +39,15 @@ export function calculateGeometryMemory(geometry: THREE.BufferGeometry): number 
     return bytes / (1024 * 1024);
 }
 
-// Collect all renderable items from the root object
+// 从根对象收集所有可渲染项
 function collectItems(root: THREE.Object3D): OctreeItem[] {
   const items: OctreeItem[] = [];
   const _v3 = new THREE.Vector3();
   const _m4 = new THREE.Matrix4();
 
-  // Root is likely centered (offset applied), so updateMatrixWorld ensures
-  // we capture the visual state (centered at origin).
-  // This is good for GLB precision.
+  // 根对象可能已居中（应用了偏移），所以updateMatrixWorld确保
+  // 我们捕获视觉状态（在原点居中）。
+  // 这对GLB精度有好处。
   root.updateMatrixWorld(true);
 
   root.traverse((obj) => {
@@ -192,14 +190,14 @@ export async function convertLMBTo3DTiles(
   
   if (totalItems === 0) throw new Error("No meshes found in scene");
 
-  // Determine global offset from root user data
+  // 从根用户数据确定全局偏移
   const globalOffset = new THREE.Vector3(0, 0, 0);
   if (root.userData.originalCenter) {
       globalOffset.copy(root.userData.originalCenter);
-      console.log("Using global offset for tileset transform:", globalOffset);
+      console.log("使用全局偏移进行瓦片集变换:", globalOffset);
   }
 
-  // Dynamic config
+  // 动态配置
   let maxItemsPerNode = 2000;
   if (totalItems < 5000) maxItemsPerNode = 5000;
   else if (totalItems > 100000) maxItemsPerNode = 4000;
@@ -215,7 +213,7 @@ export async function convertLMBTo3DTiles(
   for (const item of items) {
     bounds.expandByPoint(item.center);
   }
-  // Bounds buffering
+  // 边界缓冲
   bounds.min.subScalar(1);
   bounds.max.addScalar(1);
 
@@ -236,7 +234,7 @@ export async function convertLMBTo3DTiles(
   onProgress(`预计生成 ${tileCount} 个瓦片...`);
 
   const processNode = async (node: OctreeNode, path: string): Promise<any> => {
-    // Standard bounding box in tile content space (local/centered)
+    // 瓦片内容空间中的标准边界框（局部/居中）
     const boundingVolume = {
       box: [
         (node.bounds.min.x + node.bounds.max.x) / 2,
@@ -290,7 +288,7 @@ export async function convertLMBTo3DTiles(
   onProgress("开始生成 GLB 瓦片...");
   const rootTile = await processNode(octree, "root");
 
-  // Create the transform matrix to place the model back in world coordinates
+  // 创建变换矩阵将模型放回世界坐标
   const transform = [
       1, 0, 0, 0,
       0, 1, 0, 0,
@@ -303,8 +301,8 @@ export async function convertLMBTo3DTiles(
   const tileset = {
     asset: {
       version: "1.1",
-      // Important: GLTFExporter exports in Y-up by default. 
-      // We set "Y" here so 3d-tiles-renderer rotates it to Z-up automatically.
+      // 重要提示：GLTFExporter默认导出为Y轴向上。
+      // 我们在这里设置"Y"，这样3d-tiles-renderer会自动将其旋转到Z轴向上。
       gltfUpAxis: "Y" 
     },
     geometricError: 1000,
@@ -340,23 +338,23 @@ export async function exportGLB(root: THREE.Object3D): Promise<Blob> {
     });
 }
 
-// Custom LMB Exporter implementation
-// This mirrors the LMB Loader structure:
-// Header: Pos(3f), ColorCount(u32), NodeCount(u32)
-// Colors: u32[]
-// Nodes: Name, Matrix(9f), Pos(3f), BaseVert(3f), VertScale(3f), VertCount(u32), Vertices(compressed), Normals(compressed), Indices, ColorIdx, InstCount, Instances...
+// 自定义LMB导出器实现
+// 这镜像了LMB加载器结构：
+// 头部：位置(3f)，颜色数量(u32)，节点数量(u32)
+// 颜色：u32[]
+// 节点：名称，矩阵(9f)，位置(3f)，基础顶点(3f)，顶点缩放(3f)，顶点数量(u32)，顶点(压缩)，法线(压缩)，索引，颜色索引，实例数量，实例...
 
 export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) => void): Promise<Blob> {
-    onProgress("Preparing LMB export...");
+    onProgress("准备LMB导出...");
     
-    // 1. Flatten meshes
+    // 1. 展平网格
     const meshes: THREE.Mesh[] = [];
     const colors: number[] = [];
     const colorMap = new Map<string, number>();
 
     root.updateMatrixWorld(true);
     
-    // Global center handling
+    // 全局中心处理
     const globalOffset = new THREE.Vector3(0,0,0);
     if(root.userData.originalCenter) globalOffset.copy(root.userData.originalCenter);
 
@@ -375,10 +373,10 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
     const parts: ArrayBuffer[] = [];
     const textEncoder = new TextEncoder();
 
-    // 2. Header
+    // 2. 头部
     const header = new ArrayBuffer(4 * 3 + 4 + 4);
     const headerView = new DataView(header);
-    // Position (using global offset to restore original position)
+    // 位置（使用全局偏移来恢复原始位置）
     headerView.setFloat32(0, globalOffset.x, true);
     headerView.setFloat32(4, globalOffset.y, true);
     headerView.setFloat32(8, globalOffset.z, true);
@@ -386,11 +384,11 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
     headerView.setUint32(16, meshes.length, true);
     parts.push(header);
 
-    // 3. Colors
+    // 3. 颜色
     const colorsBuffer = new ArrayBuffer(colors.length * 4);
     const colorsView = new DataView(colorsBuffer);
     for(let i=0; i<colors.length; i++) {
-        // LMB stores color as (r<<16)|(g<<8)|b. THREE.Color.getHex() does exactly that.
+        // LMB存储颜色为(r<<16)|(g<<8)|b。THREE.Color.getHex()正好做这个。
         colorsView.setUint32(i * 4, colors[i], true);
     }
     parts.push(colorsBuffer);
@@ -408,43 +406,43 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const normAttr = geo.getAttribute('normal');
         const indexAttr = geo.index;
         
-        // Name
+        // 名称
         const nameBytes = textEncoder.encode(mesh.name || `Node_${i}`);
         const nameLen = new ArrayBuffer(2);
         new DataView(nameLen).setUint16(0, nameBytes.length, true);
         parts.push(nameLen);
         parts.push(nameBytes.buffer);
         
-        // Padding
+        // 填充
         const paddingLen = (4 - ((2 + nameBytes.length) % 4)) % 4;
         if(paddingLen > 0) parts.push(new Uint8Array(paddingLen).buffer);
 
-        // Transform (Matrix 3x3) + Position
-        // Decomposition is needed if the mesh has rotation/scale in matrixWorld
-        // But LMB stores a 3x3 matrix and a position. 
-        // We will store rotation*scale in 3x3, and position in 3f.
+        // 变换（矩阵3x3）+ 位置
+        // 如果mesh的matrixWorld中有旋转/缩放，需要分解
+        // 但LMB存储3x3矩阵和位置。
+        // 我们将旋转*缩放存储在3x3中，位置存储在3f中。
         const m = mesh.matrixWorld;
         const e = m.elements;
-        // matrixWorld is col-major: 0,1,2 (x axis), 4,5,6 (y axis), 8,9,10 (z axis), 12,13,14 (pos)
-        // LMB Loader expects 9 floats for matrix. 
+        // matrixWorld是列优先：0,1,2（x轴），4,5,6（y轴），8,9,10（z轴），12,13,14（位置）
+        // LMB加载器期望矩阵有9个浮点数。
         const matBuf = new ArrayBuffer(9 * 4);
         const matView = new DataView(matBuf);
-        // We write rotation/scale matrix
+        // 我们写入旋转/缩放矩阵
         const indices = [0,1,2, 4,5,6, 8,9,10];
         for(let k=0; k<9; k++) matView.setFloat32(k*4, e[indices[k]], true);
         parts.push(matBuf);
 
         const posBuf = new ArrayBuffer(3 * 4);
         const posView = new DataView(posBuf);
-        // Write position relative to root. Since we moved container to origin, matrixWorld position is local to scene.
-        // We already wrote globalOffset in header.
+        // 写入相对于根的位置。由于我们将容器移动到原点，matrixWorld位置相对于场景是局部的。
+        // 我们已经在头部写入了globalOffset。
         posView.setFloat32(0, e[12], true);
         posView.setFloat32(4, e[13], true);
         posView.setFloat32(8, e[14], true);
         parts.push(posBuf);
 
-        // Compression Params calculation
-        // Compute bounding box of vertices to determine base and scale
+        // 压缩参数计算
+        // 计算顶点边界框以确定基础和缩放
         let minX=Infinity, minY=Infinity, minZ=Infinity;
         let maxX=-Infinity, maxY=-Infinity, maxZ=-Infinity;
         
@@ -456,7 +454,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
             if(x>maxX) maxX=x; if(y>maxY) maxY=y; if(z>maxZ) maxZ=z;
         }
         
-        // Handle flat geometry
+        // 处理平面几何
         if(maxX === minX) maxX += 0.001;
         if(maxY === minY) maxY += 0.001;
         if(maxZ === minZ) maxZ += 0.001;
@@ -465,93 +463,93 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const rangeY = (maxY - minY);
         const rangeZ = (maxZ - minZ);
         
-        // We want to map [min, max] to int16 range roughly.
-        // Loader logic: rx = baseX + qX / scaleX  => qX = (rx - baseX) * scaleX
-        // If we map min->-32000 and max->32000
-        // Center it. 
+        // 我们想要将[min, max]大致映射到int16范围。
+        // 加载器逻辑：rx = baseX + qX / scaleX  => qX = (rx - baseX) * scaleX
+        // 如果我们映射min->-32000和max->32000
+        // 居中它。
         const baseX = (minX + maxX) / 2;
         const baseY = (minY + maxY) / 2;
         const baseZ = (minZ + maxZ) / 2;
         
-        // qX range is approx +/- (range/2) * scale. We want this to be ~32767.
-        // scale = 32767 / (range/2)
+        // qX范围大约是+/- (范围/2) * 缩放。我们希望这大约是32767。
+        // 缩放 = 32767 / (范围/2)
         const scaleX = 32767.0 / (rangeX * 0.5);
         const scaleY = 32767.0 / (rangeY * 0.5);
         const scaleZ = 32767.0 / (rangeZ * 0.5);
 
         const compressionBuf = new ArrayBuffer(6 * 4);
         const compView = new DataView(compressionBuf);
-        // BaseVertex
+        // 基础顶点
         compView.setFloat32(0, baseX, true);
         compView.setFloat32(4, baseY, true);
         compView.setFloat32(8, baseZ, true);
-        // Scale
+        // 缩放
         compView.setFloat32(12, scaleX, true);
         compView.setFloat32(16, scaleY, true);
         compView.setFloat32(20, scaleZ, true);
         parts.push(compressionBuf);
 
-        // Vertices
+        // 顶点
         const vertCount = posAttr.count;
         const countBuf = new ArrayBuffer(4);
         new DataView(countBuf).setUint32(0, vertCount, true);
         parts.push(countBuf);
         
-        // Vertices Data (Int16)
-        // First vertex is stored as float in Loader? 
-        // Loader: "vertices[0] = baseVertex[0]... for i=0 to count-1... getInt16"
-        // Wait, loader reads baseVertex (float) then reads count-1 vertices?
-        // Let's check loader:
+        // 顶点数据（Int16）
+        // 第一个顶点作为浮点数存储在加载器中？
+        // 加载器："vertices[0] = baseVertex[0]... for i=0 to count-1... getInt16"
+        // 等等，加载器读取baseVertex（浮点数）然后读取count-1个顶点？
+        // 让我们检查加载器：
         // const vertices = new Float32Array(vertexCount * 3);
         // vertices[0] = baseVertex[0] ...
-        // loop i=0 to vertexCount-2 (actually count-1 iterations)
-        // This implies the First Vertex in the buffer IS baseVertex? 
-        // No. "vertices[0] = baseVertex[0]". 
-        // It uses `baseVertex` from header as the FIRST vertex of the mesh.
-        // The loop fills vertices[1] to end.
-        // This means the FIRST vertex in `posAttr` MUST BE stored in `baseVertex` slot?
-        // NO, the loader logic seems to imply `baseVertex` IS the first vertex.
-        // "const baseVertex = new Float32Array(3) ... read 3 floats"
+        // 循环i=0到vertexCount-2（实际上是count-1次迭代）
+        // 这暗示缓冲区中的第一个顶点IS baseVertex？
+        // 不。"vertices[0] = baseVertex[0]"。
+        // 它使用头部中的`baseVertex`作为网格的第一个顶点。
+        // 循环填充vertices[1]到末尾。
+        // 这意味着`posAttr`中的第一个顶点必须存储在`baseVertex`槽中？
+        // 不，加载器逻辑似乎暗示`baseVertex`是第一个顶点。
+        // "const baseVertex = new Float32Array(3) ... 读取3个浮点数"
         // "vertices[0] = baseVertex[0]"
-        // So effectively, we must overwrite the computed center-based BaseVertex with the ACTUAL first vertex?
-        // IF we do that, we lose the centering for quantization efficiency.
-        // BUT we must follow the loader spec.
+        // 所以我们必须用实际的第一个顶点覆盖计算的中心基础BaseVertex？
+        // 如果我们这样做，我们会失去量化的中心效率。
+        // 但我们必须遵循加载器规范。
         
-        // RE-READ LOADER CAREFULLY:
-        // const baseVertex = ... read floats
-        // const vertexScale = ... read floats
+        // 仔细重新阅读加载器：
+        // const baseVertex = ... 读取浮点数
+        // const vertexScale = ... 读取浮点数
         // const vertexCount ...
         // vertices[0] = baseVertex ...
-        // loop i=0; i < vertexCount - 1
-        // packed = read 3 * int16
-        // {rx, ry, rz} = decompress(baseVertex, vertexScale, packed)
+        // 循环i=0; i < vertexCount - 1
+        // packed = 读取3 * int16
+        // {rx, ry, rz} = 解压缩(baseVertex, vertexScale, packed)
         // vertices[i+1] = rx...
         
-        // SO: 
-        // 1. The first vertex in geometry is stored as floats in "BaseVertex" field.
-        // 2. Subsequent vertices are stored as Int16 deltas/compressed relative to that first vertex?
-        // decompress: `rx = baseX + qX / scaleX`.
-        // Yes, it's relative to the BaseVertex (First Vertex).
+        // 所以：
+        // 1. 几何体中的第一个顶点作为浮点数存储在"BaseVertex"字段中。
+        // 2. 后续顶点作为Int16增量/压缩存储，相对于那个第一个顶点？
+        // 解压缩：`rx = baseX + qX / scaleX`。
+        // 是的，它是相对于BaseVertex（第一个顶点）的。
         
-        // Adjusted Logic:
+        // 调整后的逻辑：
         const firstX = posAttr.getX(0);
         const firstY = posAttr.getY(0);
         const firstZ = posAttr.getZ(0);
         
-        // Re-write BaseVertex slot in compressionBuf to be First Vertex
+        // 在compressionBuf中重新写入BaseVertex槽位为第一个顶点
         compView.setFloat32(0, firstX, true);
         compView.setFloat32(4, firstY, true);
         compView.setFloat32(8, firstZ, true);
         
-        // Recalculate Scale based on First Vertex being the anchor
-        // qX = (x - firstX) * scaleX.
-        // Max delta = Max(x) - firstX. Min delta = Min(x) - firstX.
-        // range is roughly same, but offset differs.
+        // 基于第一个顶点作为锚点重新计算缩放
+        // qX = (x - firstX) * scaleX。
+        // 最大增量 = Max(x) - firstX。最小增量 = Min(x) - firstX。
+        // 范围大致相同，但偏移不同。
         const maxDeltaX = Math.max(Math.abs(maxX - firstX), Math.abs(minX - firstX));
         const maxDeltaY = Math.max(Math.abs(maxY - firstY), Math.abs(minY - firstY));
         const maxDeltaZ = Math.max(Math.abs(maxZ - firstZ), Math.abs(minZ - firstZ));
         
-        // We need maxDelta * scale <= 32767
+        // 我们需要 maxDelta * scale <= 32767
         const finalScaleX = maxDeltaX > 0.0001 ? 32767.0 / maxDeltaX : 1;
         const finalScaleY = maxDeltaY > 0.0001 ? 32767.0 / maxDeltaY : 1;
         const finalScaleZ = maxDeltaZ > 0.0001 ? 32767.0 / maxDeltaZ : 1;
@@ -560,8 +558,8 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         compView.setFloat32(16, finalScaleY, true);
         compView.setFloat32(20, finalScaleZ, true);
 
-        // Write Compressed Vertices (Skipping the first one)
-        const vertDataSize = (vertCount - 1) * 6; // 3 * 2 bytes
+        // 写入压缩顶点（跳过第一个）
+        const vertDataSize = (vertCount - 1) * 6; // 3 * 2 字节
         const vertBuf = new ArrayBuffer(vertDataSize > 0 ? vertDataSize : 0);
         if (vertDataSize > 0) {
             const vView = new DataView(vertBuf);
@@ -570,7 +568,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
                 const y = posAttr.getY(k);
                 const z = posAttr.getZ(k);
                 
-                // q = (val - base) * scale
+                // q = (x - firstX) * scaleX
                 const qx = Math.round((x - firstX) * finalScaleX);
                 const qy = Math.round((y - firstY) * finalScaleY);
                 const qz = Math.round((z - firstZ) * finalScaleZ);
@@ -580,81 +578,79 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
                 vView.setInt16(offset+2, qy, true);
                 vView.setInt16(offset+4, qz, true);
             }
-            parts.push(vertBuf);
         }
+        parts.push(vertBuf);
 
-        // Padding
-        if (vertDataSize % 4 !== 0) {
-             const pad = 4 - (vertDataSize % 4);
-             parts.push(new Uint8Array(pad).buffer);
-        }
-
-        // Normals (Compressed)
-        // 32 bit int per normal. 10 bits each component.
+        // 法线
+        // 加载器期望每个顶点一个法线
         const normBuf = new ArrayBuffer(vertCount * 4);
         const normView = new DataView(normBuf);
         for(let k=0; k<vertCount; k++) {
-             let nx = normAttr ? normAttr.getX(k) : 0;
-             let ny = normAttr ? normAttr.getY(k) : 0;
-             let nz = normAttr ? normAttr.getZ(k) : 1;
-             
-             // Normalize to be safe
-             const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
-             if(len>0) { nx/=len; ny/=len; nz/=len; }
-             
-             // Loader: x = (packed >> 20) & 0x3ff. 
-             // maps 0..511 -> 0..511. 512..1023 -> -512..-1.
-             // Encode: round(n * 511). Mask 0x3FF.
-             const ix = Math.round(nx * 511) & 0x3FF;
-             const iy = Math.round(ny * 511) & 0x3FF;
-             const iz = Math.round(nz * 511) & 0x3FF;
-             
-             const packed = (ix << 20) | (iy << 10) | iz;
-             normView.setUint32(k*4, packed, true);
+            let nx = 0, ny = 0, nz = 1;
+            if(normAttr) {
+                nx = normAttr.getX(k);
+                ny = normAttr.getY(k);
+                nz = normAttr.getZ(k);
+            }
+            // 打包法线（加载器逻辑）
+            // decodeNormal逻辑：packed = ((x+1)*511/2)<<20 | ((y+1)*511/2)<<10 | ((z+1)*511/2)
+            // x,y,z在[-1,1]范围内
+            const packNormal = (x:number, y:number, z:number) => {
+                const bias = (v:number) => Math.max(0, Math.min(1023, Math.round((v + 1) * 511)));
+                return (bias(x) << 20) | (bias(y) << 10) | bias(z);
+            };
+            normView.setUint32(k*4, packNormal(nx, ny, nz), true);
         }
         parts.push(normBuf);
 
-        // Indices
-        const idxCount = indexAttr ? indexAttr.count : 0;
-        const idxCountBuf = new ArrayBuffer(4);
-        new DataView(idxCountBuf).setUint32(0, idxCount, true);
-        parts.push(idxCountBuf);
-
-        if (idxCount > 0) {
-            // Determine size based on vertex count, same as Loader logic
-            let bpe = 4;
-            if (vertCount <= 255) bpe = 1;
-            else if (vertCount <= 65535) bpe = 2;
-            
-            const idxBuf = new ArrayBuffer(idxCount * bpe);
-            const idxView = new DataView(idxBuf);
-            for(let k=0; k<idxCount; k++) {
-                const val = indexAttr!.getX(k);
-                if(bpe===1) idxView.setUint8(k, val);
-                else if(bpe===2) idxView.setUint16(k*bpe, val, true);
-                else idxView.setUint32(k*bpe, val, true);
+        // 索引
+        const indexCount = indexAttr ? indexAttr.count : vertCount;
+        const indexSize = vertCount <= 255 ? 1 : vertCount <= 65535 ? 2 : 4;
+        const indexBuf = new ArrayBuffer(indexCount * indexSize);
+        const idxView = new DataView(indexBuf);
+        
+        if(indexAttr) {
+            for(let k=0; k<indexCount; k++) {
+                const idx = indexAttr.getX(k);
+                if(indexSize === 1) idxView.setUint8(k, idx);
+                else if(indexSize === 2) idxView.setUint16(k*2, idx, true);
+                else idxView.setUint32(k*4, idx, true);
             }
-            parts.push(idxBuf);
-            
-            // Padding
-            const byteSize = idxCount * bpe;
-            if(byteSize % 4 !== 0) parts.push(new Uint8Array(4 - (byteSize % 4)).buffer);
+        } else {
+            // 没有索引缓冲区，使用顺序的
+            for(let k=0; k<indexCount; k++) {
+                if(indexSize === 1) idxView.setUint8(k, k);
+                else if(indexSize === 2) idxView.setUint16(k*2, k, true);
+                else idxView.setUint32(k*4, k, true);
+            }
         }
+        parts.push(indexBuf);
 
-        // Color Index
-        const colorHex = (mesh.material as THREE.MeshStandardMaterial).color.getHex().toString();
-        const cIdx = colorMap.get(colorHex) || 0;
-        const cIdxBuf = new ArrayBuffer(4);
-        new DataView(cIdxBuf).setUint32(0, cIdx, true);
-        parts.push(cIdxBuf);
+        // 颜色索引
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        const hex = mat.color ? mat.color.getHex() : 0xffffff;
+        const colorIdx = colorMap.get(hex.toString()) || 0;
+        const colorIdxBuf = new ArrayBuffer(4);
+        new DataView(colorIdxBuf).setUint32(0, colorIdx, true);
+        parts.push(colorIdxBuf);
 
-        // Instance Count (Exporting as flat mesh for now, so 0 instances)
-        // If we wanted to support instances we would need to group by geometry UUID first.
-        const instCountBuf = new ArrayBuffer(4);
-        new DataView(instCountBuf).setUint32(0, 0, true);
-        parts.push(instCountBuf);
+        // 实例（现在为0）
+        const instBuf = new ArrayBuffer(4);
+        new DataView(instBuf).setUint32(0, 0, true);
+        parts.push(instBuf);
     }
-    
-    onProgress("Building final LMB file...");
-    return new Blob(parts, { type: 'application/octet-stream' });
+
+    onProgress("完成LMB文件...");
+
+    // 组合所有部分
+    const totalSize = parts.reduce((sum, buf) => sum + buf.byteLength, 0);
+    const finalBuffer = new ArrayBuffer(totalSize);
+    const finalView = new Uint8Array(finalBuffer);
+    let offset = 0;
+    for(const buf of parts) {
+        finalView.set(new Uint8Array(buf), offset);
+        offset += buf.byteLength;
+    }
+
+    return new Blob([finalBuffer], { type: 'application/octet-stream' });
 }

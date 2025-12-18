@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { IconClose, IconClear } from "../Icons";
 import { SceneManager, MeasureType } from "../SceneManager";
-import { TFunc } from "../Locales";
+import { TFunc } from "../utils/Locales";
 
 // --- Generic Floating Panel ---
 interface FloatingPanelProps {

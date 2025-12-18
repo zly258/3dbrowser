@@ -1,11 +1,9 @@
-
-
 import * as THREE from "three";
 import { LMBLoader } from "./lmbLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import * as WebIFC from "web-ifc";
-import { TFunc } from "./Locales";
-import { SceneSettings, AxisOption } from "./SceneManager";
+import { TFunc } from "../utils/Locales";
+import { SceneSettings, AxisOption } from "../SceneManager";
 
 export interface LoadedItem {
     name: string;
@@ -16,33 +14,33 @@ export interface LoadedItem {
 
 export type ProgressCallback = (percent: number, msg?: string) => void;
 
-// Helper to correct Up-Axis to Y-Up
+// 辅助函数：纠正上轴到Y轴向上
 const applyUpAxisCorrection = (object: THREE.Object3D, sourceAxis: AxisOption) => {
-    // We assume Target is +Y Up (Three.js standard)
+    // 我们假设目标是+Y轴向上（Three.js标准）
     const q = new THREE.Quaternion();
     
     switch (sourceAxis) {
         case '+x':
-            // +X is up. We want X -> Y. Rotate +90 around Z.
+            // +X向上。我们需要X -> Y。绕Z轴旋转+90度。
             q.setFromAxisAngle(new THREE.Vector3(0,0,1), Math.PI/2);
             break;
         case '-x':
-            // -X is up. We want -X -> Y. Rotate -90 around Z.
+            // -X向上。我们需要-X -> Y。绕Z轴旋转-90度。
             q.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI/2);
             break;
         case '+y':
-            // Already Y up.
+            // 已经是Y轴向上。
             return;
         case '-y':
-            // -Y is up. Rotate 180 around X.
+            // -Y向上。绕X轴旋转180度。
             q.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI);
             break;
         case '+z':
-            // +Z is up (Standard Engineering). Rotate -90 around X (Right Hand).
+            // +Z向上（标准工程坐标）。绕X轴旋转-90度（右手坐标系）。
             q.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
             break;
         case '-z':
-            // -Z is up. Rotate +90 around X.
+            // -Z向上。绕X轴旋转+90度。
             q.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI/2);
             break;
     }
@@ -50,9 +48,9 @@ const applyUpAxisCorrection = (object: THREE.Object3D, sourceAxis: AxisOption) =
     object.applyQuaternion(q);
 };
 
-// --- Custom Raw Web-IFC Loading Logic ---
+// --- 自定义原始Web-IFC加载逻辑 ---
 
-// Helper: Basic Colors for IFC Types (since we aren't using the heavy standard processor)
+// 辅助函数：IFC类型的基本颜色（因为我们没有使用重量级的标准处理器）
 const getIfcColor = (typeName: string) => {
     switch (typeName) {
         case 'IFCWALL': return 0xEEEEEE;
@@ -67,18 +65,18 @@ const getIfcColor = (typeName: string) => {
     }
 };
 
-const IFCRELDEFINESBYPROPERTIES = 4061202542; // WEBIFC.IFCRELDEFINESBYPROPERTIES is usually constant, but safe to fetch by string name if possible or use numeric const if strict.
-// Note: WebIFC exports enums, but here we assume direct access. Let's use string based GetLineIDsWithType which handles it.
+// WebIFC.IFCRELDEFINESBYPROPERTIES 枚举值，用于获取属性定义关系
+const IFCRELDEFINESBYPROPERTIES = WebIFC.IFCRELDEFINESBYPROPERTIES;
 
 const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Promise<THREE.Group> => {
     const api = new WebIFC.IfcAPI();
     
-    // Point to the CDN used in importmap
+    // 指向importmap中使用的CDN
     api.SetWasmPath("https://unpkg.com/web-ifc@0.0.53/", true);
     
     await api.Init();
 
-    // Fetch file data using FileLoader for progress events
+    // 使用FileLoader获取文件数据以支持进度事件
     const loader = new THREE.FileLoader();
     loader.setResponseType('arraybuffer');
     
@@ -88,7 +86,7 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
             (data) => resolve(data as ArrayBuffer),
             (event) => {
                 if (event.total > 0) {
-                    // Map 0-100% download progress to 0-30% of total load time estimate
+                    // 将0-100%的下载进度映射到总加载时间估计的0-30%
                     const percent = (event.loaded / event.total) * 100 * 0.3;
                     onProgress(percent, `${t("reading")}... ${Math.round((event.loaded / event.total) * 100)}%`);
                 }
@@ -101,20 +99,20 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
 
     onProgress(30, t("analyzing"));
     
-    // Open Model
+    // 打开模型
     const modelID = api.OpenModel(data);
     
     const rootGroup = new THREE.Group();
-    rootGroup.name = "IFC Model";
+    rootGroup.name = "IFC模型";
     
-    // 1. Build Property Map (Object ID -> [PropertySet ID, ...])
-    // This allows fast property lookup on click without iterating all relations every time
+    // 1. 构建属性映射（对象ID -> [属性集ID, ...]）
+    // 这允许在点击时快速查找属性，无需每次都迭代所有关系
     const propertyMap = new Map<number, number[]>();
     
     try {
-        // Get all lines of type IFCRELDEFINESBYPROPERTIES
-        // We use the numeric ID for IFCRELDEFINESBYPROPERTIES if available in the enum, or just scan
-        // Since we don't have the full enum imported, we trust GetLineIDsWithType
+        // 获取所有IFCRELDEFINESBYPROPERTIES类型的行
+        // 我们使用IFCRELDEFINESBYPROPERTIES的数字ID（如果在枚举中可用），或者直接扫描
+        // 由于没有导入完整的枚举，我们信任GetLineIDsWithType
         const relID = WebIFC.IFCRELDEFINESBYPROPERTIES; 
         const lines = api.GetLineIDsWithType(modelID, relID);
         const size = lines.size();
@@ -123,8 +121,8 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
             const id = lines.get(i);
             const rel = api.GetLine(modelID, id);
             
-            // rel.RelatedObjects is an array of IDs (or single Ref depending on schema, usually Array)
-            // rel.RelatingPropertyDefinition is the Pset ID
+            // rel.RelatedObjects是ID数组（或根据模式可能是单个引用，通常是数组）
+            // rel.RelatingPropertyDefinition是属性集ID
             
             if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
                 const psetID = rel.RelatingPropertyDefinition?.value;
@@ -138,10 +136,10 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
             }
         }
     } catch(e) {
-        console.warn("Could not build property map", e);
+        console.warn("无法构建属性映射", e);
     }
 
-    // Attach custom property manager
+    // 附加自定义属性管理器
     rootGroup.userData.isIFC = true;
     rootGroup.userData.ifcAPI = api;
     rootGroup.userData.modelID = modelID;
@@ -161,26 +159,26 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
                 }
             } catch(e) {}
 
-            // 2. Resolve Property Sets
+            // 2. 解析属性集
             const psetIDs = propertyMap.get(expressID);
             if (psetIDs) {
                 for (const psetID of psetIDs) {
                     try {
                         const pset = api.GetLine(modelID, psetID);
                         if (pset && pset.HasProperties) {
-                            // pset.HasProperties is array of Property IDs
+                            // pset.HasProperties是属性ID数组
                             for (const propRef of pset.HasProperties) {
                                 const propID = propRef.value;
                                 const prop = api.GetLine(modelID, propID);
                                 
-                                // Handle IfcPropertySingleValue
+                                // 处理IfcPropertySingleValue
                                 if (prop && prop.Name && prop.NominalValue) {
                                     const key = prop.Name.value;
                                     const val = prop.NominalValue.value; 
-                                    // Sometimes value is label, or bool, or number.
-                                    // WebIFC returns object like { type: 1, value: "..." } or just raw value
+                                    // 有时值是标签、布尔值或数字。
+                                    // WebIFC返回类似{ type: 1, value: "..." }的对象或原始值
                                     
-                                    // Simple flatten
+                                    // 简单展平
                                     result[key] = val; 
                                 }
                             }
@@ -196,8 +194,8 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
         }
     };
 
-    // Iterate meshes
-    onProgress(40, t("converting"));
+    // 迭代网格
+    onProgress(40, t("转换中"));
     
     let meshCount = 0;
     
@@ -248,13 +246,13 @@ const loadIFC = async (url: string, onProgress: ProgressCallback, t: TFunc): Pro
             geometry.setAttribute('normal', new THREE.BufferAttribute(normFloats, 3));
             geometry.setIndex(new THREE.BufferAttribute(indices, 1));
             
-            // Store ExpressID on geometry for picking logic if needed
+            // 在几何体上存储ExpressID以供选择逻辑使用
             geometry.userData = { expressID };
 
             const transform = placedGeom.flatTransformation; 
             dummyMatrix.fromArray(transform);
             
-            // Determine color from color in placedGeom
+            // 从placedGeom中的颜色确定材质颜色
             const color = placedGeom.color; // {x, y, z, w}
             let material;
             if (color) {
@@ -287,15 +285,15 @@ export const loadModelFiles = async (
     files: FileList | File[], 
     onProgress: ProgressCallback, 
     t: TFunc,
-    settings: SceneSettings // Pass current settings to read Axis Config
+    settings: SceneSettings // 传递当前设置以读取轴配置
 ): Promise<THREE.Group> => {
-    // We create a wrapper group that will hold the loaded models.
+    // 我们创建一个包装器组来保存加载的模型。
     const container = new THREE.Group();
     container.name = "ImportedModels";
 
     const totalFiles = files.length;
 
-    // 1. Load all files
+    // 1. 加载所有文件
     for (let i = 0; i < totalFiles; i++) {
         const file = files[i];
         const ext = file.name.split('.').pop()?.toLowerCase();
@@ -306,57 +304,57 @@ export const loadModelFiles = async (
 
         const updateFileProgress = (p: number, msg?: string) => {
             const safeP = isNaN(p) ? 0 : Math.min(1, Math.max(0, p));
-            // If sub-loader provides message, use it, else default
+            // 如果子加载器提供消息，则使用它，否则使用默认值
             const status = msg || `${t("reading")} ${file.name}`;
-            // Adjust local progress to global weight
+            // 调整本地进度到全局权重
             onProgress(Math.round(fileBaseProgress + (safeP * fileWeight / 100)), status);
         };
         
         updateFileProgress(0);
 
         let object: THREE.Object3D | null = null;
-        // Determine which axis setting to use
+        // 确定使用哪个轴设置
         let axisSetting: AxisOption = '+y';
 
         try {
-            if (ext === 'lmb' || ext === 'lmbz') {
-                const loader = new LMBLoader();
-                object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
-                axisSetting = '+y'; // LMB is usually Y-up native from Three.js
-            } else if (ext === 'glb' || ext === 'gltf') {
-                const loader = new GLTFLoader();
-                const gltf = await new Promise<any>((resolve, reject) => {
-                    loader.load(url, resolve, (e) => {
-                        if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-                        else updateFileProgress(50); 
-                    }, reject);
-                });
-                object = gltf.scene;
-                axisSetting = settings.importAxisGLB;
-            } else if (ext === 'ifc') {
-                object = await loadIFC(url, updateFileProgress, t);
-                axisSetting = settings.importAxisIFC;
-            }
+                if (ext === 'lmb' || ext === 'lmbz') {
+                    const loader = new LMBLoader();
+                    object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
+                    axisSetting = '+y'; // LMB通常是Three.js原生的Y轴向上
+                } else if (ext === 'glb' || ext === 'gltf') {
+                    const loader = new GLTFLoader();
+                    const gltf = await new Promise<any>((resolve, reject) => {
+                        loader.load(url, resolve, (e) => {
+                            if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
+                            else updateFileProgress(50); 
+                        }, reject);
+                    });
+                    object = gltf.scene;
+                    axisSetting = settings.importAxisGLB;
+                } else if (ext === 'ifc') {
+                    object = await loadIFC(url, updateFileProgress, t);
+                    axisSetting = settings.importAxisIFC;
+                }
 
-            if (object) {
-                object.name = file.name;
-                
-                // Apply Axis Correction
-                applyUpAxisCorrection(object, axisSetting);
+                if (object) {
+                    object.name = file.name;
+                    
+                    // 应用轴向校正
+                    applyUpAxisCorrection(object, axisSetting);
 
-                container.add(object);
+                    container.add(object);
+                }
+            } catch(e) {
+                console.error(`加载${file.name}失败`, e);
+            } finally {
+                URL.revokeObjectURL(url);
             }
-        } catch(e) {
-            console.error(`Failed to load ${file.name}`, e);
-        } finally {
-            URL.revokeObjectURL(url);
-        }
     }
     
     onProgress(100, t("analyzing"));
 
-    // 2. Calculate World Bounds for the entire container
-    // We do this to find the "Global Center" of the loaded data.
+    // 2. 计算整个容器的世界边界
+    // 这样做是为了找到加载数据的"全局中心"。
     container.updateMatrixWorld(true);
     const totalBox = new THREE.Box3();
     let hasContent = false;
@@ -367,29 +365,29 @@ export const loadModelFiles = async (
         if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
             
-            // OPTIMIZATION: Re-enable frustum culling.
+            // 优化：重新启用视锥体剔除
             mesh.frustumCulled = true;
 
             if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
             if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
             
             if (mesh.geometry.boundingBox) {
-                // Handle InstancedMesh bounds
+                // 处理实例化网格边界
                 if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
                     const im = mesh as THREE.InstancedMesh;
                     const count = im.count;
-                    // Sample instances to get an approximate bound without freezing UI on massive models
+                    // 采样实例以获得近似边界，避免在大型模型上冻结UI
                     const step = Math.max(1, Math.floor(count / 1000));
                     
                     for(let k=0; k<count; k+=step) {
                          im.getMatrixAt(k, tempMat);
-                         // Convert local instance -> World
+                         // 将局部实例转换为世界坐标
                          tempMat.premultiply(im.matrixWorld);
                          const box = mesh.geometry.boundingBox.clone().applyMatrix4(tempMat);
                          totalBox.union(box);
                     }
                 } 
-                // Handle Standard Mesh
+                // 处理标准网格
                 else {
                     const box = mesh.geometry.boundingBox.clone();
                     box.applyMatrix4(mesh.matrixWorld);
@@ -400,27 +398,27 @@ export const loadModelFiles = async (
         }
     });
 
-    // 3. Center the Model (Root Shift)
-    // Instead of modifying internal geometry (which breaks hierarchy/messy), 
-    // we simply move the CONTAINER to the negative center.
+    // 3. 居中模型（根偏移）
+    // 而不是修改内部几何体（这会破坏层级结构/混乱），
+    // 我们只需将容器移动到负中心。
     if (hasContent && !totalBox.isEmpty()) {
         const center = totalBox.getCenter(new THREE.Vector3());
         
-        console.log("Global Center found at:", center);
+        console.log("在以下位置找到全局中心：", center);
         
         if (center.lengthSq() > 100) { 
-             // Store the offset so we can save it later (for export)
+             // 存储偏移量以便稍后保存（用于导出）
              container.userData.originalCenter = center.clone();
              
-             // Move the container to (0,0,0) relative to the Scene
-             // This keeps all internal parent/child relationships intact.
-             // Three.js handles the chained transforms.
+             // 将容器相对于场景移动到(0,0,0)
+             // 这保持了所有内部父子关系的完整性。
+             // Three.js处理链式变换。
              container.position.copy(center).negate();
              
-             // Force update matrix so the new position takes effect immediately
+             // 强制更新矩阵，使新位置立即生效
              container.updateMatrixWorld(true);
              
-             // Update the bounding box stored on userData to represent the NEW centered state
+             // 更新存储在userData上的边界框，以表示新的居中状态
              const centeredBox = totalBox.clone().translate(container.position);
              container.userData.boundingBox = centeredBox;
         } else {
@@ -432,7 +430,7 @@ export const loadModelFiles = async (
 };
 
 export const parseTilesetFromFolder = async (files: FileList, onProgress: ProgressCallback, t: TFunc): Promise<string | null> => {
-    onProgress(10, t("analyzing"));
+    onProgress(10, t("分析中"));
     
     const fileMap = new Map<string, Blob>();
     let tilesetKey = "";
@@ -454,10 +452,10 @@ export const parseTilesetFromFolder = async (files: FileList, onProgress: Progre
     if (!tilesetKey && fileMap.has("tileset.json")) tilesetKey = "tileset.json";
 
     if (!tilesetKey) {
-        throw new Error("tileset.json not found in the selected folder");
+        throw new Error("在所选文件夹中未找到tileset.json");
     }
 
-    onProgress(50, t("reading"));
+    onProgress(50, t("读取中"));
 
     const blobUrlMap = new Map<string, string>();
     fileMap.forEach((blob, path) => {
@@ -479,7 +477,7 @@ export const parseTilesetFromFolder = async (files: FileList, onProgress: Progre
     };
     replaceUris(json.root);
 
-    onProgress(100, t("success"));
+    onProgress(100, t("成功"));
     const blob = new Blob([JSON.stringify(json)], { type: "application/json" });
     return URL.createObjectURL(blob);
 };

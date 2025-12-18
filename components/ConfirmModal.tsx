@@ -2,7 +2,7 @@
 
 import React from "react";
 import { IconClose } from "../Icons";
-import { TFunc } from "../Locales";
+import { TFunc } from "../utils/Locales";
 
 interface ConfirmModalProps {
     isOpen: boolean;

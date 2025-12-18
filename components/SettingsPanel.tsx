@@ -2,7 +2,7 @@
 
 import React from "react";
 import { IconClose } from "../Icons";
-import { TFunc, Lang } from "../Locales";
+import { TFunc, Lang } from "../utils/Locales";
 import { SceneSettings, AxisOption } from "../SceneManager";
 
 interface SettingsModalProps {
