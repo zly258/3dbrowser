@@ -1,9 +1,14 @@
+/**
+ * 本地化翻译资源
+ * 包含中英文双语支持
+ */
 export type Lang = 'zh' | 'en';
 export type TFunc = (key: string) => string;
 
 const resources: Record<Lang, Record<string, string>> = {
     en: {
         app_title: "3D Model Viewer",
+        main_tab: "Main", 
         file: "Start", 
         grp_file: "File",
         grp_view: "View & Display",
@@ -22,10 +27,10 @@ const resources: Record<Lang, Record<string, string>> = {
         view_back: "Back",
         view_left: "Left",
         view_right: "Right",
-        view_se: "SE Iso",
-        view_sw: "SW Iso",
-        view_ne: "NE Iso",
-        view_nw: "NW Iso",
+        view_se: "Southeast",
+        view_sw: "Southwest",
+        view_ne: "Northeast",
+        view_nw: "Northwest",
         // 按钮的短标签
         btn_view_top: "Top",
         btn_view_bottom: "Btm",
@@ -33,8 +38,10 @@ const resources: Record<Lang, Record<string, string>> = {
         btn_view_back: "Bck",
         btn_view_left: "Lft",
         btn_view_right: "Rgt",
-        btn_view_iso1: "IsoL", // 左轴
-        btn_view_iso2: "IsoR", // 右轴
+        btn_view_iso1: "SE", // 东南
+        btn_view_iso2: "SW", // 西南
+        btn_view_iso3: "NE", // 东北
+        btn_view_iso4: "NW", // 西北
         
         operation: "Operation",
         op_pick: "Pick",
@@ -143,6 +150,7 @@ const resources: Record<Lang, Record<string, string>> = {
     },
     zh: {
         app_title: "3D模型浏览器",
+        main_tab: "主界面", 
         file: "开始", 
         grp_file: "文件",
         grp_view: "视图与显示",
@@ -161,10 +169,10 @@ const resources: Record<Lang, Record<string, string>> = {
         view_back: "后视图",
         view_left: "左视图",
         view_right: "右视图",
-        view_se: "东南轴测",
-        view_sw: "西南轴测",
-        view_ne: "东北轴测",
-        view_nw: "西北轴测",
+        view_se: "东南",
+        view_sw: "西南",
+        view_ne: "东北",
+        view_nw: "西北",
         // 按钮的短标签
         btn_view_top: "顶视",
         btn_view_bottom: "底视",
@@ -172,8 +180,10 @@ const resources: Record<Lang, Record<string, string>> = {
         btn_view_back: "后视",
         btn_view_left: "左视",
         btn_view_right: "右视",
-        btn_view_iso1: "左轴",
-        btn_view_iso2: "右轴",
+        btn_view_iso1: "东南",
+        btn_view_iso2: "西南",
+        btn_view_iso3: "东北",
+        btn_view_iso4: "西北",
 
         operation: "操作",
         op_pick: "点选模式",

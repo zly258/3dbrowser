@@ -5,8 +5,8 @@ import React, { useState } from "react";
 import { 
     IconFile, IconFolder, IconExport, IconClear, IconFit, IconWireframe, IconList, IconInfo, IconMeasure, IconSettings,
     IconPick, IconClip, IconExplode
-} from "../Icons";
-import { TFunc, Lang } from "../utils/Locales";
+} from "../theme/Icons";
+import { TFunc, Lang } from "../theme/Locales";
 
 // --- Icons wrapper for Ribbon ---
 const RibbonIcon = ({ children, styles }: { children?: React.ReactNode, styles: any }) => (
@@ -124,8 +124,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
             {/* 1. Tabs */}
             <div style={styles.ribbonTabsRow}>
                 <div style={{fontWeight:'bold', color: '#fff', marginRight: 15, padding: '2px 8px', fontSize:12}}>{t("app_title")}</div>
-                <RibbonTab label={t("file")} active={activeTab === "home"} onClick={() => setActiveTab("home")} styles={styles} />
-                <RibbonTab label={t("view")} active={activeTab === "tools"} onClick={() => setActiveTab("tools")} styles={styles} />
+                <RibbonTab label={t("main_tab")} active={activeTab === "home"} onClick={() => setActiveTab("home")} styles={styles} />
                 <div style={{flex:1}}></div>
             </div>
 
@@ -176,6 +175,10 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                                     <ViewButton title={t("view_se")} icon={<TextLabel text={t("btn_view_iso1")} />} onClick={() => props.handleView('se')} styles={styles} />
                                     <ViewButton title={t("view_sw")} icon={<TextLabel text={t("btn_view_iso2")} />} onClick={() => props.handleView('sw')} styles={styles} />
                                 </div>
+                                <div style={{display:'flex', flexDirection:'column', gap: 2, justifyContent: 'center'}}>
+                                    <ViewButton title={t("view_ne")} icon={<TextLabel text={t("btn_view_iso3")} />} onClick={() => props.handleView('ne')} styles={styles} />
+                                    <ViewButton title={t("view_nw")} icon={<TextLabel text={t("btn_view_iso4")} />} onClick={() => props.handleView('nw')} styles={styles} />
+                                </div>
                             </div>
 
                             <RibbonButton 
@@ -201,22 +204,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                             />
                         </RibbonGroup>
 
-                        {/* System Settings */}
-                        <RibbonGroup label={t("grp_settings")} styles={styles}>
-                             <RibbonButton 
-                                label={t("settings")} 
-                                icon={<IconSettings />} 
-                                active={props.activeTool === 'settings'}
-                                onClick={() => props.setActiveTool('settings')} 
-                                styles={styles}
-                            />
-                        </RibbonGroup>
-                    </>
-                )}
-
-                {activeTab === "tools" && (
-                    <>
-                        <RibbonGroup label={t("operation")} styles={styles}>
+                        {/* Tools and Operations */}
+                        <RibbonGroup label={t("grp_tools")} styles={styles}>
                              <RibbonButton 
                                 label={t("op_pick")} 
                                 icon={<IconPick />} 
@@ -224,8 +213,6 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                                 onClick={() => props.setPickEnabled(!props.pickEnabled)} 
                                 styles={styles}
                             />
-                        </RibbonGroup>
-                        <RibbonGroup label={t("grp_tools")} styles={styles}>
                             <RibbonButton 
                                 label={t("tool_measure")} 
                                 icon={<IconMeasure />} 
@@ -245,6 +232,17 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                                 icon={<IconExplode />} 
                                 active={props.activeTool === 'explode'}
                                 onClick={() => props.setActiveTool('explode')} 
+                                styles={styles}
+                            />
+                        </RibbonGroup>
+
+                        {/* System Settings */}
+                        <RibbonGroup label={t("grp_settings")} styles={styles}>
+                             <RibbonButton 
+                                label={t("settings")} 
+                                icon={<IconSettings />} 
+                                active={props.activeTool === 'settings'}
+                                onClick={() => props.setActiveTool('settings')} 
                                 styles={styles}
                             />
                         </RibbonGroup>
