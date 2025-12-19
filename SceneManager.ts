@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TilesRenderer } from "3d-tiles-renderer";
-import { calculateGeometryMemory } from "./utils/converter";
+import { calculateGeometryMemory } from "./src/utils/octree";
 
 export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 

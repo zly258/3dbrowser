@@ -17,6 +17,8 @@
 - **Export Functionality**: Export to LMB, GLB, and 3D Tiles formats
 - **Bilingual Support**: English and Chinese language support
 - **Theme Support**: Dark and light theme options
+- **Modular Architecture**: Clear directory structure for easy maintenance and extension
+- **Optimized View Labels**: Support for southeast, southwest, northeast, northwest perspectives
 
 ### 中文
 - **功能区界面**: 类似专业CAD软件的现代功能区界面
@@ -28,6 +30,8 @@
 - **导出功能**: 导出为LMB、GLB和3D Tiles格式
 - **双语支持**: 支持英文和中文界面
 - **主题支持**: 深色和浅色主题选项
+- **模块化架构**: 清晰的目录结构，便于维护和扩展
+- **优化视图标签**: 支持东南、西南、东北、西北等视角
 
 ## 🛠️ Tech Stack / 技术栈
 
@@ -96,51 +100,61 @@
 
 ```
 3dbrowser/
-├── components/              # React components / React组件
-│   ├── ConfirmModal.tsx     # Confirmation modal / 确认模态框
-│   ├── LoadingOverlay.tsx   # Loading overlay / 加载遮罩
-│   ├── MenuBar.tsx          # Ribbon-style menu bar / 功能区菜单栏
-│   ├── PropertiesPanel.tsx  # Properties panel / 属性面板
-│   ├── SceneTree.tsx        # Scene tree / 场景树
-│   ├── SettingsPanel.tsx    # Settings panel / 设置面板
-│   └── ToolPanels.tsx       # Tool panels (measure, clip, explode, export) / 工具面板
-├── images/                  # Screenshots and preview images / 截图和预览图片
-│   └── preview1.png         # Main application preview / 主应用预览
-├── Icons.tsx               # Icon components / 图标组件
-├── loader/                 # 3D model loading utilities / 3D模型加载工具
-│   ├── LoaderUtils.ts      # Main loader utilities / 主加载工具
-│   └── lmbLoader.ts        # Custom LMB format loader / 自定义LMB格式加载器
-├── utils/                  # Utility functions / 工具函数
-│   ├── Locales.ts          # Internationalization / 国际化支持
-│   └── converter.ts        # Format conversion utilities / 格式转换工具
-├── theme/                  # Theme and styling / 主题和样式
-│   └── Styles.ts           # CSS-in-JS styling / CSS-in-JS样式
-├── SceneManager.ts         # 3D scene management / 3D场景管理
-├── index.html              # HTML entry point / HTML入口文件
-├── index.tsx               # Main React application / 主React应用
-├── metadata.json           # Application metadata / 应用元数据
-├── package.json            # Project configuration / 项目配置
-├── tsconfig.json           # TypeScript configuration / TypeScript配置
-└── vite.config.ts          # Vite configuration / Vite配置
+├── src/                    # Source code directory / 源代码目录
+│   ├── components/         # React components / React组件
+│   │   ├── ConfirmModal.tsx     # Confirmation modal / 确认模态框
+│   │   ├── LoadingOverlay.tsx   # Loading overlay / 加载遮罩
+│   │   ├── MenuBar.tsx          # Ribbon-style menu bar / 功能区菜单栏
+│   │   ├── PropertiesPanel.tsx  # Properties panel / 属性面板
+│   │   ├── SceneTree.tsx        # Scene tree / 场景树
+│   │   ├── SettingsPanel.tsx    # Settings panel / 设置面板
+│   │   └── ToolPanels.tsx       # Tool panels (measure, clip, explode, export) / 工具面板
+│   ├── loader/            # 3D model loading utilities / 3D模型加载工具
+│   │   ├── LoaderUtils.ts       # Main loader utilities / 主加载工具
+│   │   ├── IFCLoader.ts         # IFC format loader / IFC格式加载器
+│   │   └── lmbLoader.ts         # Custom LMB format loader / 自定义LMB格式加载器
+│   ├── theme/             # Theme and styling / 主题和样式
+│   │   ├── Styles.ts           # CSS-in-JS styling / CSS-in-JS样式
+│   │   └── Icons.tsx          # Icon components / 图标组件
+│   └── utils/             # Utility functions / 工具函数
+│       ├── Locales.ts          # Internationalization / 国际化支持
+│       ├── converter.ts        # Format conversion utilities / 格式转换工具
+│       ├── octree.ts           # Octree spatial partitioning / 八叉树空间分割
+│       ├── threeDTiles.ts      # 3D Tiles conversion / 3D瓦片转换
+│       ├── exportGLB.ts        # GLB format export / GLB格式导出
+│       └── exportLMB.ts        # LMB format export / LMB格式导出
+├── images/                # Screenshots and preview images / 截图和预览图片
+│   └── preview1.png       # Main application preview / 主应用预览
+├── SceneManager.ts        # 3D scene management / 3D场景管理
+├── index.html             # HTML entry point / HTML入口文件
+├── index.tsx              # Main React application / 主React应用
+├── metadata.json          # Application metadata / 应用元数据
+├── package.json           # Project configuration / 项目配置
+├── tsconfig.json          # TypeScript configuration / TypeScript配置
+└── vite.config.ts         # Vite configuration / Vite配置
 ```
 
 ## 🎯 Core Components / 核心组件说明
 
 ### English
 - **SceneManager.ts**: Core 3D engine handling scene management, rendering, and camera controls
-- **MenuBar.tsx**: Ribbon-style interface with file operations and tool access
-- **ToolPanels.tsx**: Measurement, clipping, explode view, and export tools
-- **SceneTree.tsx**: Hierarchical view of scene objects with selection support
-- **PropertiesPanel.tsx**: Object properties and measurement results display
-- **SettingsPanel.tsx**: Application settings including lighting, themes, and language
+- **src/components/MenuBar.tsx**: Ribbon-style interface with file operations and tool access
+- **src/components/ToolPanels.tsx**: Measurement, clipping, explode view, and export tools
+- **src/components/SceneTree.tsx**: Hierarchical view of scene objects with selection support
+- **src/components/PropertiesPanel.tsx**: Object properties and measurement results display
+- **src/components/SettingsPanel.tsx**: Application settings including lighting, themes, and language
+- **src/loader/IFCLoader.ts**: Independent IFC format loader module
+- **src/utils/**: Modular utility functions including converters, exporters, and localization
 
 ### 中文
 - **SceneManager.ts**: 核心3D引擎，负责场景管理、渲染和相机控制
-- **MenuBar.tsx**: 功能区界面，提供文件操作和工具访问
-- **ToolPanels.tsx**: 测量、剖切、爆炸视图和导出工具
-- **SceneTree.tsx**: 场景对象层级视图，支持对象选择
-- **PropertiesPanel.tsx**: 对象属性和测量结果显示
-- **SettingsPanel.tsx**: 应用设置，包括光照、主题和语言
+- **src/components/MenuBar.tsx**: 功能区界面，提供文件操作和工具访问
+- **src/components/ToolPanels.tsx**: 测量、剖切、爆炸视图和导出工具
+- **src/components/SceneTree.tsx**: 场景对象层级视图，支持对象选择
+- **src/components/PropertiesPanel.tsx**: 对象属性和测量结果显示
+- **src/components/SettingsPanel.tsx**: 应用设置，包括光照、主题和语言
+- **src/loader/IFCLoader.ts**: 独立的IFC格式加载器模块
+- **src/utils/**: 模块化工具函数，包括转换器、导出器和本地化功能
 
 ## 🔧 Advanced Features / 高级功能
 
@@ -195,20 +209,28 @@
 ## 📝 Development Notes / 开发说明
 
 ### English
-- **Architecture**: React 18 + TypeScript + Three.js with functional components
+- **Architecture**: React 18 + TypeScript + Three.js with modular component structure
 - **State Management**: React hooks for local state management
 - **3D Engine**: Three.js with custom loaders and optimizations
-- **Styling**: CSS-in-JS approach with theme support
+- **Styling**: CSS-in-JS approach with theme support (dark/light themes)
 - **Build System**: Vite for fast development and production builds
 - **Performance**: Progressive loading and memory management for large 3D models
+- **Modular Structure**: Organized into components, loader, theme, and utils directories
+- **Code Comments**: All comments are written in Chinese for better maintainability
+- **Internationalization**: Full bilingual support (English/Chinese) with dynamic switching
+- **View System**: Enhanced with 8-directional camera perspectives (top, bottom, front, back, left, right, southeast, southwest, northeast, northwest)
 
 ### 中文
-- **架构**: React 18 + TypeScript + Three.js，使用函数式组件
+- **架构**: React 18 + TypeScript + Three.js，模块化组件结构
 - **状态管理**: React hooks进行本地状态管理
 - **3D引擎**: Three.js，包含自定义加载器和优化
-- **样式**: CSS-in-JS方法，支持主题切换
+- **样式**: CSS-in-JS方法，支持主题切换（深色/浅色主题）
 - **构建系统**: Vite用于快速开发和生产构建
 - **性能**: 大3D模型渐进式加载和内存管理
+- **模块化结构**: 分为components、loader、theme和utils目录
+- **代码注释**: 所有注释使用中文，便于维护
+- **国际化**: 完整双语支持（英文/中文），支持动态切换
+- **视图系统**: 增强的8方向相机视角（上下前后左右东南西南东北西北）
 
 ## 📄 License / 许可证
 

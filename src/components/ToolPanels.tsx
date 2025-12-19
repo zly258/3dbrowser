@@ -1,9 +1,9 @@
 
 
 import React, { useState, useRef, useEffect } from "react";
-import { IconClose, IconClear } from "../Icons";
-import { SceneManager, MeasureType } from "../SceneManager";
-import { TFunc } from "../utils/Locales";
+import { IconClose, IconClear } from "../theme/Icons";
+import { SceneManager, MeasureType } from "../../../SceneManager";
+import { TFunc } from "../theme/Locales";
 
 // --- Generic Floating Panel ---
 interface FloatingPanelProps {

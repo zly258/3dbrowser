@@ -1,22 +1,23 @@
-
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./SceneManager";
-import { loadModelFiles, parseTilesetFromFolder } from "./loader/LoaderUtils";
-import { convertLMBTo3DTiles, createZip, exportGLB, exportLMB } from "./utils/converter";
-import { createStyles, createGlobalStyle, themes, ThemeColors } from "./theme/Styles";
-import { getTranslation, Lang } from "./utils/Locales";
+import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
+import { convertLMBTo3DTiles, createZip } from "./src/utils/threeDTiles";
+import { exportGLB } from "./src/utils/exportGLB";
+import { exportLMB } from "./src/utils/exportLMB";
+import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
+import { Icons } from "./src/theme/Icons";
+import { getTranslation, Lang } from "./src/theme/Locales";
 
 // Components
-import { MenuBar } from "./components/MenuBar";
-import { SceneTree, buildTree } from "./components/SceneTree";
-import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel } from "./components/ToolPanels";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { LoadingOverlay } from "./components/LoadingOverlay";
-import { PropertiesPanel } from "./components/PropertiesPanel";
-import { ConfirmModal } from "./components/ConfirmModal";
+import { MenuBar } from "./src/components/MenuBar";
+import { SceneTree, buildTree } from "./src/components/SceneTree";
+import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel } from "./src/components/ToolPanels";
+import { SettingsPanel } from "./src/components/SettingsPanel";
+import { LoadingOverlay } from "./src/components/LoadingOverlay";
+import { PropertiesPanel } from "./src/components/PropertiesPanel";
+import { ConfirmModal } from "./src/components/ConfirmModal";
 
 // --- Global Style Injector ---
 const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
