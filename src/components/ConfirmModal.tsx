@@ -1,5 +1,3 @@
-
-
 import React from "react";
 import { IconClose } from "../theme/Icons";
 import { TFunc } from "../theme/Locales";

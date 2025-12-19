@@ -1,5 +1,3 @@
-
-
 import React from "react";
 
 export const IconFile = (props: React.SVGProps<SVGSVGElement>) => (

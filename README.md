@@ -8,8 +8,8 @@
 ## 🌟 Features / 功能特性
 
 ### English
-- **Ribbon Interface**: Modern ribbon-style UI similar to professional CAD software
-- **Multi-format Support**: Load and display 3D model formats (LMB, GLB, IFC)
+ - **Ribbon Interface**: Modern ribbon-style UI similar to professional CAD software
+ - **Multi-format Support**: Load and display 3D model formats (IFC, GLB/GLTF, 3D Tiles, FBX, OBJ, LMB)
 - **3D Tiles Streaming**: Support for large-scale 3D Tiles format
 - **Measurement Tools**: Distance, angle, and coordinate measurement
 - **Sectioning Tools**: Clipping planes for model inspection
@@ -21,8 +21,8 @@
 - **Optimized View Labels**: Support for southeast, southwest, northeast, northwest perspectives
 
 ### 中文
-- **功能区界面**: 类似专业CAD软件的现代功能区界面
-- **多格式支持**: 加载和显示 3D 模型格式 (LMB, GLB, IFC)
+ - **功能区界面**: 类似专业CAD软件的现代功能区界面
+ - **多格式支持**: 加载和显示 3D 模型格式（IFC、GLB/GLTF、3D Tiles、FBX、OBJ、LMB）
 - **3D Tiles流式加载**: 支持大规模3D Tiles格式
 - **测量工具**: 距离、角度和坐标测量
 - **剖切工具**: 剖切平面用于模型检查
@@ -40,7 +40,7 @@
 | Frontend / 前端 | React 18, TypeScript |
 | 3D Engine / 3D引擎 | Three.js |
 | Build Tool / 构建工具 | Vite |
-| 3D Formats / 3D格式 | **LMB, GLB, IFC, 3D Tiles** / 支持3D文件格式 |
+| 3D Formats / 3D格式 | **IFC, GLB/GLTF, 3D Tiles, FBX, OBJ, LMB** / 支持多种3D文件格式 |
 | Styling / 样式 | CSS-in-JS with modern design / CSS-in-JS现代设计 |
 
 ## 📋 Prerequisites / 系统要求
@@ -125,7 +125,7 @@
 │       └── exportLMB.ts        # LMB format export / LMB格式导出
 ├── images/                # Screenshots and preview images / 截图和预览图片
 │   └── preview1.png       # Main application preview / 主应用预览
-├── SceneManager.ts        # 3D scene management / 3D场景管理
+├── src/utils/SceneManager.ts # 3D scene management / 3D场景管理
 ├── index.html             # HTML entry point / HTML入口文件
 ├── index.tsx              # Main React application / 主React应用
 ├── metadata.json          # Application metadata / 应用元数据
@@ -137,7 +137,7 @@
 ## 🎯 Core Components / 核心组件说明
 
 ### English
-- **SceneManager.ts**: Core 3D engine handling scene management, rendering, and camera controls
+- **src/utils/SceneManager.ts**: Core 3D engine handling scene management, rendering, and camera controls
 - **src/components/MenuBar.tsx**: Ribbon-style interface with file operations and tool access
 - **src/components/ToolPanels.tsx**: Measurement, clipping, explode view, and export tools
 - **src/components/SceneTree.tsx**: Hierarchical view of scene objects with selection support
@@ -147,7 +147,7 @@
 - **src/utils/**: Modular utility functions including converters, exporters, and localization
 
 ### 中文
-- **SceneManager.ts**: 核心3D引擎，负责场景管理、渲染和相机控制
+- **src/utils/SceneManager.ts**: 核心3D引擎，负责场景管理、渲染和相机控制
 - **src/components/MenuBar.tsx**: 功能区界面，提供文件操作和工具访问
 - **src/components/ToolPanels.tsx**: 测量、剖切、爆炸视图和导出工具
 - **src/components/SceneTree.tsx**: 场景对象层级视图，支持对象选择

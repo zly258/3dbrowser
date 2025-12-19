@@ -150,7 +150,7 @@ const resources: Record<Lang, Record<string, string>> = {
     },
     zh: {
         app_title: "3D模型浏览器",
-        main_tab: "主界面", 
+        main_tab: "开始", 
         file: "开始", 
         grp_file: "文件",
         grp_view: "视图与显示",

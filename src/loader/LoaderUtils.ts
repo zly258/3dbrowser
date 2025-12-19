@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { LMBLoader } from "./lmbLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { TFunc } from "../theme/Locales";
-import { SceneSettings, AxisOption } from "../../../SceneManager";
+import { SceneSettings, AxisOption } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
 
 export interface LoadedItem {
