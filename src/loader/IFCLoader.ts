@@ -2,24 +2,6 @@ import * as THREE from "three";
 import * as WebIFC from "web-ifc";
 import { ProgressCallback, TFunc } from "../theme/Locales";
 
-// 辅助函数：IFC类型的基本颜色（因为我们没有使用重量级的标准处理器）
-const getIfcColor = (typeName: string) => {
-    switch (typeName) {
-        case 'IFCWALL': return 0xEEEEEE;
-        case 'IFCWALLSTANDARDCASE': return 0xEEEEEE;
-        case 'IFCSLAB': return 0xAAAAAA;
-        case 'IFCWINDOW': return 0x88CCFF;
-        case 'IFCDOOR': return 0x8B4513;
-        case 'IFCBEAM': return 0x666666;
-        case 'IFCCOLUMN': return 0x666666;
-        case 'IFCROOF': return 0x8B0000;
-        default: return 0xCCCCCC;
-    }
-};
-
-// WebIFC.IFCRELDEFINESBYPROPERTIES 枚举值，用于获取属性定义关系
-const IFCRELDEFINESBYPROPERTIES = WebIFC.IFCRELDEFINESBYPROPERTIES;
-
 export const loadIFC = async (
     url: string, 
     onProgress: ProgressCallback, 
@@ -163,6 +145,7 @@ export const loadIFC = async (
     onProgress(50, t("building_geometry"));
     
     let meshCount = 0;
+    let expectedTotal = 0;
     
     const materials: Record<string, THREE.MeshStandardMaterial> = {};
     const getMaterial = (color: number, opacity: number = 1) => {
@@ -182,6 +165,7 @@ export const loadIFC = async (
 
     api.StreamAllMeshes(modelID, (flatMesh: WebIFC.FlatMesh) => {
         const size = flatMesh.geometries.size();
+        expectedTotal += size;
         for (let i = 0; i < size; i++) {
             const placedGeom = flatMesh.geometries.get(i);
             const expressID = flatMesh.expressID;
@@ -237,6 +221,12 @@ export const loadIFC = async (
             
             rootGroup.add(mesh);
             meshCount++;
+            
+            if (expectedTotal > 0) {
+                const ratio = Math.min(1, meshCount / expectedTotal);
+                const p = 50 + Math.floor(ratio * 45);
+                onProgress(p, t("building_geometry"));
+            }
         }
     });
 

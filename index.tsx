@@ -10,7 +10,7 @@ import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/them
 import { Icons } from "./src/theme/Icons";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
-// Components
+// 组件
 import { MenuBar } from "./src/components/MenuBar";
 import { SceneTree, buildTree } from "./src/components/SceneTree";
 import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel } from "./src/components/ToolPanels";
@@ -19,12 +19,12 @@ import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
 
-// --- Global Style Injector ---
+// --- 全局样式注入 ---
 const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
     <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme) }} />
 );
 
-// --- Main App ---
+// --- 主应用 ---
 const App = () => {
     // Theme State
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
@@ -73,6 +73,10 @@ const App = () => {
         maxMemory: 500,
         importAxisGLB: '+y',
         importAxisIFC: '+z',
+        applySceneMaterial: false,
+        matColor: "#cccccc",
+        metalness: 0.0,
+        roughness: 1.0,
     });
 
     // Confirmation Modal State
@@ -92,6 +96,7 @@ const App = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
+    const visibilityDebounce = useRef<any>(null);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
@@ -103,7 +108,7 @@ const App = () => {
         }
     }, [lang]);
 
-    // --- Resizing Logic (Panels) ---
+    // --- 面板尺寸调整逻辑 ---
     useEffect(() => {
         const handleMove = (e: MouseEvent) => {
             if (resizingLeft.current) {
@@ -126,8 +131,8 @@ const App = () => {
         };
     }, []);
 
-    // --- Robust Viewport Resizing ---
-    // 1. ResizeObserver handles general div resizing
+    // --- 视口稳健自适应 ---
+    // 1. 使用 ResizeObserver 处理容器尺寸变化
     useEffect(() => {
         if (!viewportRef.current || !sceneMgr.current) return;
         
@@ -139,7 +144,7 @@ const App = () => {
         return () => observer.disconnect();
     }, []);
 
-    // 2. Forced resize when layout state changes (Fixes "scene doesn't occupy remaining")
+    // 2. 当布局状态变化时强制触发一次 resize（修复“场景未占满剩余空间”的问题）
     useEffect(() => {
         if (sceneMgr.current) {
             // Use requestAnimationFrame to ensure the DOM reflow has completed
@@ -149,7 +154,7 @@ const App = () => {
         }
     }, [showOutline, showProps, leftWidth, rightWidth]);
 
-    // Update scene background when theme changes
+    // 当主题变化时更新场景背景色
     useEffect(() => {
         // If user hasn't manually overridden bg, follow theme
         if (sceneSettings.bgColor === themes[themeMode === 'light' ? 'dark' : 'light'].canvasBg) {
@@ -158,7 +163,7 @@ const App = () => {
         }
     }, [themeMode]);
 
-    // Tree Updates
+    // 树结构更新
     const updateTree = useCallback(() => {
         if (!sceneMgr.current) return;
         const content = sceneMgr.current.contentGroup;
@@ -195,18 +200,21 @@ const App = () => {
 
         if (targetObj) processObject(targetObj);
 
-        setTreeRoot(prev => {
-            const updateNode = (nodes: any[]): any[] => {
-                return nodes.map(n => {
-                    const shouldUpdate = affectedUuids.has(n.uuid);
-                    let newChildren = n.children;
-                    if (n.children.length > 0) newChildren = updateNode(n.children);
-                    if (shouldUpdate) return { ...n, visible, children: newChildren };
-                    return { ...n, children: newChildren };
-                });
-            };
-            return updateNode(prev);
-        });
+        if (visibilityDebounce.current) clearTimeout(visibilityDebounce.current);
+        visibilityDebounce.current = setTimeout(() => {
+            setTreeRoot(prev => {
+                const updateNode = (nodes: any[]): any[] => {
+                    return nodes.map(n => {
+                        const shouldUpdate = affectedUuids.has(n.uuid);
+                        let newChildren = n.children;
+                        if (n.children.length > 0) newChildren = updateNode(n.children);
+                        if (shouldUpdate) return { ...n, visible, children: newChildren };
+                        return { ...n, children: newChildren };
+                    });
+                };
+                return updateNode(prev);
+            });
+        }, 120);
     };
 
     const handleDeleteObject = (uuid: string) => {
@@ -269,7 +277,7 @@ const App = () => {
         manager.updateSettings(sceneSettings);
         manager.resize();
 
-        // Hook for tiles updates
+        // 监听瓦片更新（防抖刷新树）
         let debounceTimer: any;
         manager.onTilesUpdate = () => {
             if (debounceTimer) clearTimeout(debounceTimer);
@@ -288,7 +296,7 @@ const App = () => {
         };
     }, []); 
 
-    // --- Logic Hooks ---
+    // --- 逻辑事件挂钩 ---
 
     useEffect(() => {
         const mgr = sceneMgr.current;
@@ -298,23 +306,24 @@ const App = () => {
         if (!canvas) return;
 
         const handleClick = (e: MouseEvent) => {
-            // Measure click
+            // 测量点击
             if (activeTool === 'measure' && measureType !== 'none') {
                 const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
                 if (intersect) {
                     const record = mgr.addMeasurePoint(intersect.point);
                     if (record) {
-                        // Measurement finished for this segment
+                        // 当前段测量完成
                         const localizedRecord = {...record, type: (t as any)[`measure_${record.type}`] || record.type };
                         setMeasureHistory(prev => [localizedRecord, ...prev]);
                     }
                 }
                 return;
             }
-            // Normal Selection
-            if(pickEnabled) {
+        };
+
+        const handleDblClick = (e: MouseEvent) => {
+            if (activeTool !== 'measure' && pickEnabled) {
                 const intersect = mgr.pick(e.clientX, e.clientY);
-                // Always call handleSelect, pass null if no intersect to deselect
                 handleSelect(intersect ? intersect.object : null, intersect);
             }
         };
@@ -324,19 +333,20 @@ const App = () => {
                 mgr.updateMeasureHover(e.clientX, e.clientY);
                 return;
             }
-            mgr.highlightObject(selectedUuid);
         };
 
         canvas.addEventListener("click", handleClick);
+        canvas.addEventListener("dblclick", handleDblClick);
         canvas.addEventListener("mousemove", handleMouseMove);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
+            canvas.removeEventListener("dblclick", handleDblClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
         };
     }, [pickEnabled, selectedUuid, activeTool, measureType, t]);
 
-    // Tool Sync
+    // 工具状态同步
     useEffect(() => {
         const mgr = sceneMgr.current;
         if (!mgr) return;
@@ -356,7 +366,7 @@ const App = () => {
         }
     }, [activeTool]);
 
-    // Settings Sync
+    // 设置同步
     const handleSettingsUpdate = (newSettings: Partial<SceneSettings>) => {
         const merged = { ...sceneSettings, ...newSettings };
         setSceneSettings(merged);
@@ -365,7 +375,7 @@ const App = () => {
         }
     };
 
-    // Clipping Update
+    // 剖切参数更新
     useEffect(() => {
         if (activeTool === 'clip' && sceneMgr.current) {
             sceneMgr.current.setClippingEnabled(clipEnabled);
@@ -378,7 +388,7 @@ const App = () => {
         }
     }, [clipEnabled, clipValues, clipActive, activeTool]);
 
-    // Explode Update
+    // 爆炸参数更新
     useEffect(() => {
         if (activeTool === 'explode' && sceneMgr.current) {
             sceneMgr.current.setExplodeFactor(explodeFactor / 100);
@@ -386,7 +396,7 @@ const App = () => {
     }, [explodeFactor, activeTool]);
 
 
-    // --- Handlers ---
+    // --- 处理函数 ---
 
     const handleSelect = async (obj: any, intersect?: THREE.Intersection | null) => {
         if (!sceneMgr.current) return;
@@ -431,24 +441,24 @@ const App = () => {
                  geoProps[t("prop_inst")] = obj.count.toLocaleString();
             }
 
-            // --- IFC Property Logic ---
+            // --- IFC 属性获取逻辑 ---
             if (obj.userData.isIFC || (obj.parent && obj.parent.userData.isIFC)) {
-                // If using new logic, userData is on mesh itself usually
+                // 若使用新逻辑，通常 userData 在网格对象上
                 const target = obj.userData.isIFC ? obj : obj.parent;
                 if (target && target.userData.ifcAPI && target.userData.modelID !== undefined) {
                     const expressID = obj.userData.expressID;
                     if (expressID) {
                         try {
-                            // Using the raw API reference we stored
+                            // 使用之前存储的原始 API 引用
                             const api = target.userData.ifcAPI;
                             const modelID = target.userData.modelID;
                             
-                            // Use custom property fetcher that resolves Psets
+                            // 使用自定义属性获取器解析属性集
                             const ifcMgr = target.userData.ifcManager;
                             const props = await ifcMgr.getItemProperties(modelID, expressID);
                             
                             if (props) {
-                                // Flatten for display
+                                // 扁平化以供展示
                                 Object.keys(props).forEach(key => {
                                     const val = props[key];
                                     if (typeof val !== 'object' && val !== null && val !== undefined) {
@@ -466,7 +476,7 @@ const App = () => {
              geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
         }
 
-        // Grouped Properties
+        // 属性分组
         const finalProps: any = {
             [t("pg_basic")]: basicProps,
             [t("pg_geo")]: geoProps
