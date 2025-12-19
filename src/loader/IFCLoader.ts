@@ -64,6 +64,23 @@ export const loadIFC = async (
     // 1. 构建属性映射（对象ID -> [属性集ID, ...]）
     // 这允许在点击时快速查找属性，无需每次都迭代所有关系
     const propertyMap = new Map<number, number[]>();
+    // 预先收集有效的属性集与属性ID，避免非法ID导致Abort
+    const validPsetIDs = new Set<number>();
+    const validPropIDs = new Set<number>();
+    try {
+        const psets = api.GetLineIDsWithType(modelID, WebIFC.IFCPROPERTYSET);
+        const psize = psets.size();
+        for (let i = 0; i < psize; i++) validPsetIDs.add(psets.get(i));
+    } catch(e) {
+        console.warn("无法获取IFCPROPERTYSET列表", e);
+    }
+    try {
+        const props = api.GetLineIDsWithType(modelID, WebIFC.IFCPROPERTY);
+        const prsize = props.size();
+        for (let i = 0; i < prsize; i++) validPropIDs.add(props.get(i));
+    } catch(e) {
+        console.warn("无法获取IFCPROPERTY列表", e);
+    }
     
     try {
         // 获取所有IFCRELDEFINESBYPROPERTIES类型的行
@@ -82,7 +99,8 @@ export const loadIFC = async (
             
             if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
                 const psetID = rel.RelatingPropertyDefinition?.value;
-                if (psetID) {
+                // 仅记录有效的IFCPROPERTYSET
+                if (psetID && validPsetIDs.has(psetID)) {
                     rel.RelatedObjects.forEach((objRef: any) => {
                         const objID = objRef.value;
                         if (!propertyMap.has(objID)) propertyMap.set(objID, []);
@@ -109,12 +127,17 @@ export const loadIFC = async (
             
             for (const psetID of psetIDs) {
                 try {
+                    // 跳过无效的属性集ID
+                    if (!validPsetIDs.has(psetID)) continue;
                     const pset = api.GetLine(modelID, psetID);
                     
                     // 如果pset有属性，读取它们
-                    if (pset.HasProperties) {
-                        for (const propRef of pset.HasProperties) {
-                            const prop = api.GetLine(modelID, propRef.value);
+                    const propsArr = Array.isArray(pset.HasProperties) ? pset.HasProperties : [];
+                    if (propsArr.length > 0) {
+                        for (const propRef of propsArr) {
+                            const pid = propRef?.value;
+                            if (!pid || !validPropIDs.has(pid)) continue;
+                            const prop = api.GetLine(modelID, pid);
                             
                             // 检查是否是IFCPROPERTYSET里的IFCPROPERTY
                             if (prop.Name && prop.NominalValue) {

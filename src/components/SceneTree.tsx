@@ -1,7 +1,5 @@
-
-
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { SceneManager } from "../../../SceneManager";
+import { SceneManager } from "../utils/SceneManager";
 import { IconTrash } from "../theme/Icons";
 
 interface TreeNode {

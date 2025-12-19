@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { createRoot } from "react-dom/client";
-import { SceneManager, MeasureType, SceneSettings } from "./SceneManager";
+import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
-import { convertLMBTo3DTiles, createZip } from "./src/utils/threeDTiles";
+import { convertLMBTo3DTiles } from "./src/utils/threeDTiles";
 import { exportGLB } from "./src/utils/exportGLB";
 import { exportLMB } from "./src/utils/exportLMB";
 import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
@@ -548,46 +548,35 @@ const App = () => {
                 let filename = `export.${format}`;
 
                 if (format === '3dtiles') {
-                     // 3D Tiles Logic
-                     let dirHandle: any = null;
-                     let useFileSystem = false;
-                     try {
+                    // 强制选择输出目录并直接写入
+                    // @ts-ignore
+                    if (!window.showDirectoryPicker) {
+                        alert(t("select_output"));
+                        throw new Error("Browser does not support directory picker");
+                    }
+                    // @ts-ignore
+                    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+                    const filesMap = await convertLMBTo3DTiles(models, (msg) => {
+                        setStatus(msg);
+                        if (msg.includes('%')) {
+                            const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
+                            setProgress(p);
+                        }
+                    });
+                    setStatus(t("writing"));
+                    let writeCount = 0;
+                    for (const [name, b] of filesMap) {
                         // @ts-ignore
-                        if (window.showDirectoryPicker) {
-                            // @ts-ignore
-                            dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-                            useFileSystem = true;
-                        }
-                     } catch(e) {} // Cancelled
-
-                     const filesMap = await convertLMBTo3DTiles(models, (msg) => {
-                         setStatus(msg);
-                         if (msg.includes('%')) {
-                             const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
-                             setProgress(p);
-                         }
-                     });
-
-                     if (useFileSystem && dirHandle) {
-                        setStatus(t("writing"));
-                        let writeCount = 0;
-                        for (const [name, b] of filesMap) {
-                            // @ts-ignore
-                            const fileHandle = await dirHandle.getFileHandle(name, { create: true });
-                            // @ts-ignore
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(b);
-                            await writable.close();
-                            writeCount++;
-                            if (writeCount % 5 === 0) setProgress(Math.floor((writeCount / filesMap.size) * 100));
-                        }
-                        alert(t("success"));
-                        return; // Done
-                     } else {
-                        setStatus(t("zipping"));
-                        blob = await createZip(filesMap);
-                        filename = "3dtiles_export.zip";
-                     }
+                        const fileHandle = await dirHandle.getFileHandle(name, { create: true });
+                        // @ts-ignore
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(b);
+                        await writable.close();
+                        writeCount++;
+                        if (writeCount % 5 === 0) setProgress(Math.floor((writeCount / filesMap.size) * 100));
+                    }
+                    alert(t("success"));
+                    return;
                 } else if (format === 'glb') {
                     blob = await exportGLB(models);
                 } else if (format === 'lmb') {

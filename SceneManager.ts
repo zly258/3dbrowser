@@ -1,5 +1,3 @@
-
-
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TilesRenderer } from "3d-tiles-renderer";
