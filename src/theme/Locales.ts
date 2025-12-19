@@ -140,6 +140,11 @@ const resources: Record<Lang, Record<string, string>> = {
         st_theme: "Theme",
         theme_dark: "Dark",
         theme_light: "Light",
+        scene_material: "Scene Material",
+        scene_material_apply: "Apply Material Override",
+        scene_material_color: "Base Color",
+        scene_material_metalness: "Metalness",
+        scene_material_roughness: "Roughness",
         // Axis Options
         axis_px: "+X",
         axis_nx: "-X",
@@ -282,6 +287,11 @@ const resources: Record<Lang, Record<string, string>> = {
         st_theme: "界面主题",
         theme_dark: "深色",
         theme_light: "浅色",
+        scene_material: "场景材质",
+        scene_material_apply: "启用统一材质",
+        scene_material_color: "基础颜色",
+        scene_material_metalness: "金属度",
+        scene_material_roughness: "粗糙度",
         // Axis
         axis_px: "+X",
         axis_nx: "-X",
