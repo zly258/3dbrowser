@@ -90,31 +90,49 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
 // --- Custom Dual Slider Component ---
 const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void, theme: any }) => {
     const trackRef = useRef<HTMLDivElement>(null);
+    const isDraggingRef = useRef(false);
+    const animationFrameRef = useRef<number>();
 
     const getPercentage = (val: number) => ((val - min) / (max - min)) * 100;
 
     const handleMouseDown = (index: 0 | 1) => (e: React.MouseEvent) => {
         e.preventDefault();
+        isDraggingRef.current = true;
+        
         const startX = e.clientX;
         const startVal = value[index];
-        const trackWidth = trackRef.current?.getBoundingClientRect().width || 1;
+        const trackRect = trackRef.current?.getBoundingClientRect();
+        const trackWidth = trackRect?.width || 1;
 
         const onMove = (moveEvent: MouseEvent) => {
-            const dx = moveEvent.clientX - startX;
-            const diff = (dx / trackWidth) * (max - min);
-            let newVal = startVal + diff;
-            newVal = Math.max(min, Math.min(max, newVal));
-
-            const nextValue: [number, number] = [...value];
-            if (index === 0) {
-                nextValue[0] = Math.min(newVal, value[1]);
-            } else {
-                nextValue[1] = Math.max(newVal, value[0]);
+            if (!isDraggingRef.current) return;
+            
+            // 使用 requestAnimationFrame 优化性能，避免卡顿
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
             }
-            onChange(nextValue);
+            
+            animationFrameRef.current = requestAnimationFrame(() => {
+                const dx = moveEvent.clientX - startX;
+                const diff = (dx / trackWidth) * (max - min);
+                let newVal = startVal + diff;
+                newVal = Math.max(min, Math.min(max, newVal));
+
+                const nextValue: [number, number] = [...value];
+                if (index === 0) {
+                    nextValue[0] = Math.min(newVal, value[1]);
+                } else {
+                    nextValue[1] = Math.max(newVal, value[0]);
+                }
+                onChange(nextValue);
+            });
         };
 
         const onUp = () => {
+            isDraggingRef.current = false;
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
             document.removeEventListener("mousemove", onMove);
             document.removeEventListener("mouseup", onUp);
         };
@@ -125,7 +143,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
 
     return (
         <div ref={trackRef} style={{
-            position: 'relative', width: '100%', height: '16px', display: 'flex', alignItems: 'center', cursor: 'pointer'
+            position: 'relative', width: '100%', height: '16px', display: 'flex', alignItems: 'center'
         }}>
             {/* Track Background */}
             <div style={{
@@ -139,6 +157,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
                 width: `${getPercentage(value[1]) - getPercentage(value[0])}%`,
                 height: '4px',
                 background: theme.accent,
+                borderRadius: '2px',
                 opacity: 0.8
             }} />
 
@@ -147,8 +166,8 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
                 onMouseDown={handleMouseDown(0)}
                 style={{
                     position: 'absolute', left: `calc(${getPercentage(value[0])}% - 6px)`,
-                    width: 12, height: 12, background: theme.textLight, borderRadius: '50%', cursor: 'ew-resize',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.5)', zIndex: 2, border: '1px solid #aaa'
+                    width: 12, height: 12, background: theme.accent, borderRadius: '50%', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)', zIndex: 2, border: `2px solid ${theme.panelBg}`
                 }}
             />
 
@@ -157,8 +176,8 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
                 onMouseDown={handleMouseDown(1)}
                 style={{
                     position: 'absolute', left: `calc(${getPercentage(value[1])}% - 6px)`,
-                    width: 12, height: 12, background: theme.textLight, borderRadius: '50%', cursor: 'ew-resize',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.5)', zIndex: 2, border: '1px solid #aaa'
+                    width: 12, height: 12, background: theme.accent, borderRadius: '50%', 
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)', zIndex: 2, border: `2px solid ${theme.panelBg}`
                 }}
             />
         </div>
@@ -247,8 +266,7 @@ export const ClipPanel = ({ t, sceneMgr, onClose, clipEnabled, setClipEnabled, c
     const SliderRow = ({ axis, label }: { axis: 'x'|'y'|'z', label: string }) => (
         <div style={{display:'flex', alignItems:'center', marginBottom: 12, height: 24}}>
              <label style={{display:'flex', alignItems:'center', gap: 6, cursor: 'pointer', width: 60, fontSize:12, color: theme.textMuted}}>
-                <input type="checkbox" checked={clipActive[axis]} onChange={(e) => setClipActive({...clipActive, [axis]: e.target.checked})}/>
-                {label}
+                <input style={styles.checkbox} type="checkbox" checked={clipActive[axis]} onChange={(e) => setClipActive({...clipActive, [axis]: e.target.checked})}/><span style={{marginLeft:6}}>{label}</span>
             </label>
             <div style={{flex: 1, padding: '0 8px'}}>
                 <DualRangeSlider 
@@ -268,7 +286,7 @@ export const ClipPanel = ({ t, sceneMgr, onClose, clipEnabled, setClipEnabled, c
         <FloatingPanel title={t("clip_title")} onClose={onClose} width={320} height={200} styles={styles} theme={theme}>
              <div style={{marginBottom: 15, paddingBottom: 10, borderBottom: `1px solid ${theme.border}`}}>
                 <label style={{cursor:'pointer', display:'flex', alignItems:'center', fontWeight:'bold', fontSize:12}}>
-                    <input type="checkbox" checked={clipEnabled} onChange={(e) => setClipEnabled(e.target.checked)} style={{marginRight:8}}/>
+                    <input style={styles.checkbox} type="checkbox" checked={clipEnabled} onChange={(e) => setClipEnabled(e.target.checked)} />
                     {t("clip_enable")}
                 </label>
              </div>
@@ -285,7 +303,7 @@ export const ExplodePanel = ({ t, onClose, explodeFactor, setExplodeFactor, styl
     <FloatingPanel title={t("explode_title")} onClose={onClose} width={260} height={140} styles={styles} theme={theme}>
         <div style={styles.sliderRow}>
             <span style={styles.sliderLabel}>{t("explode_factor")}</span>
-            <input style={styles.rangeSlider} type="range" min="0" max="100" value={explodeFactor} onChange={(e) => setExplodeFactor(parseInt(e.target.value))} />
+            <input style={{...styles.rangeSlider, ...styles.rangeSliderThumb}} type="range" min="0" max="100" value={explodeFactor} onChange={(e) => setExplodeFactor(parseInt(e.target.value))} />
             <span style={{fontSize:11, width:24}}>{explodeFactor}%</span>
         </div>
         <button style={{...styles.btn, marginTop:10}} onClick={() => setExplodeFactor(0)}>
