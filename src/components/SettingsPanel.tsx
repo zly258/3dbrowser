@@ -108,27 +108,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                                 style={{width: 100}}/>
                         </Row>
                     </Section>
-
-                    <Section title={t("scene_material")} theme={theme}>
-                        <Row label={t("scene_material_apply")} theme={theme}>
-                            <input type="checkbox" checked={settings.applySceneMaterial} onChange={(e) => onUpdate({applySceneMaterial: e.target.checked})} />
-                        </Row>
-                        <Row label={t("scene_material_color")} theme={theme}>
-                            <input type="color" value={settings.matColor} onChange={(e) => onUpdate({matColor: e.target.value})} />
-                        </Row>
-                        <Row label={`${t("scene_material_metalness")} (${settings.metalness.toFixed(2)})`} theme={theme}>
-                            <input type="range" min="0" max="1" step="0.01" 
-                                value={settings.metalness} 
-                                onChange={(e) => onUpdate({metalness: parseFloat(e.target.value)})} 
-                                style={{width: 120}}/>
-                        </Row>
-                        <Row label={`${t("scene_material_roughness")} (${settings.roughness.toFixed(2)})`} theme={theme}>
-                            <input type="range" min="0" max="1" step="0.01" 
-                                value={settings.roughness} 
-                                onChange={(e) => onUpdate({roughness: parseFloat(e.target.value)})} 
-                                style={{width: 120}}/>
-                        </Row>
-                    </Section>
                     
                     <Section title={t("st_opt")} theme={theme}>
                         <Row label={t("st_opt_progressive")} theme={theme}>

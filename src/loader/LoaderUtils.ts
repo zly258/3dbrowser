@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { LMBLoader } from "./lmbLoader";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { TFunc } from "../theme/Locales";
 import { SceneSettings, AxisOption } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
@@ -72,7 +72,7 @@ export const loadModelFiles = async (
         const fileWeight = 100 / totalFiles;
 
         const updateFileProgress = (p: number, msg?: string) => {
-            const safeP = isNaN(p) ? 0 : Math.min(1, Math.max(0, p));
+            const safeP = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
             // 如果子加载器提供消息，则使用它，否则使用默认值
             const status = msg || `${t("reading")} ${file.name}`;
             // 调整本地进度到全局权重

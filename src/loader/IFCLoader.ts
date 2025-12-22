@@ -7,13 +7,17 @@ export const loadIFC = async (
     onProgress: ProgressCallback, 
     t: TFunc
 ): Promise<THREE.Group> => {
-    const api = new WebIFC.IfcAPI();
+    // 初始化web-ifc API
+    const ifcApi = new WebIFC.IfcAPI();
     
-    // 指向importmap中使用的CDN
-    api.SetWasmPath("https://unpkg.com/web-ifc@0.0.53/", true);
+    // 设置WASM路径为public目录
+    ifcApi.SetWasmPath('/');
     
-    await api.Init();
-
+    await ifcApi.Init();
+    
+    // 声明静态变量用于进度显示
+    let staticDownloadCounter = 0;
+    
     // 使用FileLoader获取文件数据以支持进度事件
     const loader = new THREE.FileLoader();
     loader.setResponseType('arraybuffer');
@@ -24,9 +28,13 @@ export const loadIFC = async (
             (data) => resolve(data as ArrayBuffer),
             (event) => {
                 if (event.total > 0) {
-                    // 将0-100%的下载进度映射到总加载时间估计的0-30%
-                    const percent = (event.loaded / event.total) * 100 * 0.3;
-                    onProgress(percent, `${t("reading")}... ${Math.round((event.loaded / event.total) * 100)}%`);
+                    const downloadPercent = (event.loaded / event.total) * 100;
+                    // 下载阶段显示实际下载进度，不限制在40%
+                    onProgress(downloadPercent, `${t("reading")}... ${Math.round(downloadPercent)}%`);
+                } else {
+                    // 如果无法获取total，使用递增方式
+                    staticDownloadCounter = (staticDownloadCounter || 0) + 5;
+                    onProgress(Math.min(35, staticDownloadCounter), `${t("reading")}...`);
                 }
             },
             reject
@@ -37,105 +45,240 @@ export const loadIFC = async (
 
     onProgress(30, t("analyzing"));
     
-    // 打开模型
-    const modelID = api.OpenModel(data);
+    // 打开模型 - 传入配置对象
+    const modelID = ifcApi.OpenModel(data, {
+        COORDINATE_TO_ORIGIN: true,
+        USE_FAST_BOOLEANS: true
+    });
     
     const rootGroup = new THREE.Group();
     rootGroup.name = "IFC模型";
     
-    // 1. 构建属性映射（对象ID -> [属性集ID, ...]）
-    // 这允许在点击时快速查找属性，无需每次都迭代所有关系
-    const propertyMap = new Map<number, number[]>();
-    // 预先收集有效的属性集与属性ID，避免非法ID导致Abort
-    const validPsetIDs = new Set<number>();
-    const validPropIDs = new Set<number>();
-    try {
-        const psets = api.GetLineIDsWithType(modelID, WebIFC.IFCPROPERTYSET);
-        const psize = psets.size();
-        for (let i = 0; i < psize; i++) validPsetIDs.add(psets.get(i));
-    } catch(e) {
-        console.warn("无法获取IFCPROPERTYSET列表", e);
-    }
-    try {
-        const props = api.GetLineIDsWithType(modelID, WebIFC.IFCPROPERTY);
-        const prsize = props.size();
-        for (let i = 0; i < prsize; i++) validPropIDs.add(props.get(i));
-    } catch(e) {
-        console.warn("无法获取IFCPROPERTY列表", e);
-    }
-    
-    try {
-        // 获取所有IFCRELDEFINESBYPROPERTIES类型的行
-        // 我们使用IFCRELDEFINESBYPROPERTIES的数字ID（如果在枚举中可用），或者直接扫描
-        // 由于没有导入完整的枚举，我们信任GetLineIDsWithType
-        const relID = WebIFC.IFCRELDEFINESBYPROPERTIES; 
-        const lines = api.GetLineIDsWithType(modelID, relID);
-        const size = lines.size();
-        
-        for (let i = 0; i < size; i++) {
-            const id = lines.get(i);
-            const rel = api.GetLine(modelID, id);
-            
-            // rel.RelatedObjects是ID数组（或根据模式可能是单个引用，通常是数组）
-            // rel.RelatingPropertyDefinition是属性集ID
-            
-            if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
-                const psetID = rel.RelatingPropertyDefinition?.value;
-                // 仅记录有效的IFCPROPERTYSET
-                if (psetID && validPsetIDs.has(psetID)) {
-                    rel.RelatedObjects.forEach((objRef: any) => {
-                        const objID = objRef.value;
-                        if (!propertyMap.has(objID)) propertyMap.set(objID, []);
-                        propertyMap.get(objID)!.push(psetID);
-                    });
-                }
-            }
-        }
-    } catch(e) {
-        console.warn("无法构建属性映射", e);
-    }
-
-    // 附加自定义属性管理器
+    // 附加IFC相关的元数据
     rootGroup.userData.isIFC = true;
-    rootGroup.userData.ifcAPI = api;
+    rootGroup.userData.ifcAPI = ifcApi;
     rootGroup.userData.modelID = modelID;
     
+    // 创建增强的属性管理器
     rootGroup.userData.ifcManager = {
         getItemProperties: async (id: number, expressID: number) => {
             const result: any = {};
             
-            // 获取对象的属性集ID列表
-            const psetIDs = propertyMap.get(expressID) || [];
-            
-            for (const psetID of psetIDs) {
+            try {
+                // 1. 获取对象的基本属性
+                const line = ifcApi.GetLine(modelID, expressID);
+                if (line) {
+                    Object.keys(line).forEach(key => {
+                        if (['type', 'ID'].includes(key)) return;
+                        
+                        let value = line[key];
+                        if (typeof value === 'object' && value !== null) {
+                            if (value.value !== undefined) {
+                                value = value.value;
+                            } else if (Array.isArray(value)) {
+                                value = value.map(item => 
+                                    item && item.value ? item.value : item
+                                ).join(', ');
+                            }
+                        }
+                        
+                        if (value !== null && value !== undefined && value !== '') {
+                            result[key] = value;
+                        }
+                    });
+                }
+                
+                // 2. 获取属性集 - 使用更高效的方式
                 try {
-                    // 跳过无效的属性集ID
-                    if (!validPsetIDs.has(psetID)) continue;
-                    const pset = api.GetLine(modelID, psetID);
+                    // 获取与当前对象关联的所有属性关系
+                    const propertyRelations = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELDEFINESBYPROPERTIES);
+                    const relSize = propertyRelations.size();
                     
-                    // 如果pset有属性，读取它们
-                    const propsArr = Array.isArray(pset.HasProperties) ? pset.HasProperties : [];
-                    if (propsArr.length > 0) {
-                        for (const propRef of propsArr) {
-                            const pid = propRef?.value;
-                            if (!pid || !validPropIDs.has(pid)) continue;
-                            const prop = api.GetLine(modelID, pid);
+                    for (let i = 0; i < relSize; i++) {
+                        const relID = propertyRelations.get(i);
+                        const rel = ifcApi.GetLine(modelID, relID);
+                        
+                        if (rel && rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
+                            const relatesToCurrent = rel.RelatedObjects.some((objRef: any) => 
+                                objRef.value === expressID
+                            );
                             
-                            // 检查是否是IFCPROPERTYSET里的IFCPROPERTY
-                            if (prop.Name && prop.NominalValue) {
-                                const name = prop.Name.value;
-                                let value = prop.NominalValue;
+                            if (relatesToCurrent && rel.RelatingPropertyDefinition) {
+                                const psetID = rel.RelatingPropertyDefinition.value;
+                                const pset = ifcApi.GetLine(modelID, psetID);
                                 
-                                // WebIFC返回类似{ type: 1, value: "..." }的对象或原始值
-                                const actualValue = typeof value === 'object' && value !== null ? value.value : value;
-                                
-                                result[name] = actualValue;
+                                if (pset && pset.is_a === 'IFCPROPERTYSET') {
+                                    const psetName = pset.Name ? pset.Name.value : `属性集_${psetID}`;
+                                    
+                                    // 处理普通属性
+                                    if (pset.HasProperties && Array.isArray(pset.HasProperties)) {
+                                        for (const propRef of pset.HasProperties) {
+                                            if (propRef && propRef.value) {
+                                                try {
+                                                    const prop = ifcApi.GetLine(modelID, propRef.value);
+                                                    if (prop && prop.is_a === 'IFCPROPERTY' && prop.Name && prop.NominalValue !== undefined) {
+                                                        const propName = prop.Name.value;
+                                                        let propValue = prop.NominalValue;
+                                                        
+                                                        if (typeof propValue === 'object' && propValue !== null && propValue.value !== undefined) {
+                                                            propValue = propValue.value;
+                                                        }
+                                                        
+                                                        result[`${psetName}.${propName}`] = propValue;
+                                                    }
+                                                } catch (e) {
+                                                    console.warn(`读取属性 ${propRef.value} 失败`, e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 处理数量属性
+                                    if (pset.Quantities && Array.isArray(pset.Quantities)) {
+                                        for (const quantRef of pset.Quantities) {
+                                            if (quantRef && quantRef.value) {
+                                                try {
+                                                    const quantity = ifcApi.GetLine(modelID, quantRef.value);
+                                                    if (quantity && quantity.Name && quantity.Name.value) {
+                                                        const quantName = quantity.Name.value;
+                                                        let quantValue = '';
+                                                        
+                                                        // 尝试获取不同类型的数量值
+                                                        if (quantity.LengthValue && quantity.LengthValue.value !== undefined) {
+                                                            quantValue = quantity.LengthValue.value;
+                                                        } else if (quantity.AreaValue && quantity.AreaValue.value !== undefined) {
+                                                            quantValue = quantity.AreaValue.value;
+                                                        } else if (quantity.VolumeValue && quantity.VolumeValue.value !== undefined) {
+                                                            quantValue = quantity.VolumeValue.value;
+                                                        } else if (quantity.Value && quantity.Value.value !== undefined) {
+                                                            quantValue = quantity.Value.value;
+                                                        }
+                                                        
+                                                        result[`${psetName}.数量.${quantName}`] = quantValue;
+                                                    }
+                                                } catch (e) {
+                                                    console.warn(`读取数量属性 ${quantRef.value} 失败`, e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                } catch(e) {
-                    console.warn(`读取属性集 ${psetID} 失败`, e);
+                } catch (e) {
+                    console.warn(`获取属性集失败`, e);
                 }
+                
+                // 3. 获取类型属性
+                try {
+                    const typeRelations = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELDEFINESBYTYPE);
+                    const typeSize = typeRelations.size();
+                    
+                    for (let i = 0; i < typeSize; i++) {
+                        const relID = typeRelations.get(i);
+                        const rel = ifcApi.GetLine(modelID, relID);
+                        
+                        if (rel && rel.RelatingType && rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
+                            const relatesToCurrent = rel.RelatedObjects.some((objRef: any) => 
+                                objRef.value === expressID
+                            );
+                            
+                            if (relatesToCurrent) {
+                                const typeId = rel.RelatingType.value;
+                                const typeObj = ifcApi.GetLine(modelID, typeId);
+                                
+                                if (typeObj) {
+                                    const typeName = typeObj.Name ? typeObj.Name.value : typeObj.is_a || `类型_${typeId}`;
+                                    result[`类型.${typeName}`] = typeObj.is_a || typeName;
+                                    
+                                    // 获取类型对象的额外属性
+                                    Object.keys(typeObj).forEach(key => {
+                                        if (['type', 'ID', 'Name', 'is_a'].includes(key)) return;
+                                        
+                                        let value = typeObj[key];
+                                        if (typeof value === 'object' && value !== null) {
+                                            if (value.value !== undefined) {
+                                                value = value.value;
+                                            }
+                                        }
+                                        
+                                        if (value !== null && value !== undefined && value !== '') {
+                                            result[`类型.${typeName}.${key}`] = value;
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`获取类型属性失败`, e);
+                }
+                
+                // 4. 获取材料信息
+                try {
+                    const materialRelations = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELASSIGNSTOPRODUCT);
+                    const matSize = materialRelations.size();
+                    
+                    for (let i = 0; i < matSize; i++) {
+                        const relID = materialRelations.get(i);
+                        const rel = ifcApi.GetLine(modelID, relID);
+                        
+                        if (rel && rel.RelatingMaterial && rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
+                            const relatesToCurrent = rel.RelatedObjects.some((objRef: any) => 
+                                objRef.value === expressID
+                            );
+                            
+                            if (relatesToCurrent) {
+                                const materialId = rel.RelatingMaterial.value;
+                                const material = ifcApi.GetLine(modelID, materialId);
+                                
+                                if (material) {
+                                    const materialName = material.Name ? material.Name.value : `材料_${materialId}`;
+                                    result[`材料.${materialName}`] = material.is_a || materialName;
+                                    
+                                    if (material.Description && material.Description.value) {
+                                        result[`材料.${materialName}.描述`] = material.Description.value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`获取材料信息失败`, e);
+                }
+                
+                // 5. 获取空间结构信息
+                try {
+                    const spatialRelations = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELCONTAINEDINSPATIALSTRUCTURE);
+                    const spatialSize = spatialRelations.size();
+                    
+                    for (let i = 0; i < spatialSize; i++) {
+                        const relID = spatialRelations.get(i);
+                        const rel = ifcApi.GetLine(modelID, relID);
+                        
+                        if (rel && rel.RelatingStructure && rel.RelatedElements && Array.isArray(rel.RelatedElements)) {
+                            const relatesToCurrent = rel.RelatedElements.some((elemRef: any) => 
+                                elemRef.value === expressID
+                            );
+                            
+                            if (relatesToCurrent) {
+                                const structureId = rel.RelatingStructure.value;
+                                const structure = ifcApi.GetLine(modelID, structureId);
+                                
+                                if (structure && structure.Name) {
+                                    const structureName = structure.Name.value;
+                                    result[`空间结构.${structureName}`] = structure.is_a || structureName;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`获取空间结构信息失败`, e);
+                }
+                
+            } catch (e) {
+                console.error(`获取IFC属性时发生错误`, e);
             }
             
             return result;
@@ -147,6 +290,7 @@ export const loadIFC = async (
     let meshCount = 0;
     let expectedTotal = 0;
     
+    // 材料缓存
     const materials: Record<string, THREE.MeshStandardMaterial> = {};
     const getMaterial = (color: number, opacity: number = 1) => {
         const key = `${color}-${opacity}`;
@@ -163,7 +307,7 @@ export const loadIFC = async (
 
     const dummyMatrix = new THREE.Matrix4();
 
-    api.StreamAllMeshes(modelID, (flatMesh: WebIFC.FlatMesh) => {
+    ifcApi.StreamAllMeshes(modelID, (flatMesh: WebIFC.FlatMesh) => {
         const size = flatMesh.geometries.size();
         expectedTotal += size;
         for (let i = 0; i < size; i++) {
@@ -171,10 +315,10 @@ export const loadIFC = async (
             const expressID = flatMesh.expressID;
             
             const geomID = placedGeom.geometryExpressID;
-            const meshData = api.GetGeometry(modelID, geomID);
+            const meshData = ifcApi.GetGeometry(modelID, geomID);
             
-            const verts = api.GetVertexArray(meshData.GetVertexData(), meshData.GetVertexDataSize());
-            const indices = api.GetIndexArray(meshData.GetIndexData(), meshData.GetIndexDataSize());
+            const verts = ifcApi.GetVertexArray(meshData.GetVertexData(), meshData.GetVertexDataSize());
+            const indices = ifcApi.GetIndexArray(meshData.GetIndexData(), meshData.GetIndexDataSize());
             
             const geometry = new THREE.BufferGeometry();
             
