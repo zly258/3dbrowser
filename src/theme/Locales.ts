@@ -4,6 +4,7 @@
  */
 export type Lang = 'zh' | 'en';
 export type TFunc = (key: string) => string;
+export type ProgressCallback = (percent: number, msg?: string) => void;
 
 const resources: Record<Lang, Record<string, string>> = {
     en: {

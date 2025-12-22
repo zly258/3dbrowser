@@ -7,7 +7,6 @@ import { convertLMBTo3DTiles } from "./src/utils/threeDTiles";
 import { exportGLB } from "./src/utils/exportGLB";
 import { exportLMB } from "./src/utils/exportLMB";
 import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
-import { Icons } from "./src/theme/Icons";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
@@ -55,10 +54,30 @@ const App = () => {
     const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
     const [explodeFactor, setExplodeFactor] = useState(0);
 
-    // Toolbar State
-    const [pickEnabled, setPickEnabled] = useState(false);
-    const [showOutline, setShowOutline] = useState(true);
-    const [showProps, setShowProps] = useState(true);
+    // Toolbar State - 从localStorage恢复状态
+    const [pickEnabled, setPickEnabled] = useState(() => {
+        try {
+            return localStorage.getItem('3dbrowser_pickEnabled') === 'true';
+        } catch {
+            return false;
+        }
+    });
+    const [showOutline, setShowOutline] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_showOutline');
+            return saved !== null ? saved === 'true' : true;
+        } catch {
+            return true;
+        }
+    });
+    const [showProps, setShowProps] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_showProps');
+            return saved !== null ? saved === 'true' : true;
+        } catch {
+            return true;
+        }
+    });
 
     // Settings State (mirrors SceneManager)
     const [sceneSettings, setSceneSettings] = useState<SceneSettings>({
@@ -73,10 +92,6 @@ const App = () => {
         maxMemory: 500,
         importAxisGLB: '+y',
         importAxisIFC: '+z',
-        applySceneMaterial: false,
-        matColor: "#cccccc",
-        metalness: 0.0,
-        roughness: 1.0,
     });
 
     // Confirmation Modal State
@@ -162,6 +177,31 @@ const App = () => {
              handleSettingsUpdate({ bgColor: newBg });
         }
     }, [themeMode]);
+
+    // 界面状态保存
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_pickEnabled', String(pickEnabled));
+        } catch (e) {
+            console.warn('无法保存pickEnabled状态', e);
+        }
+    }, [pickEnabled]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_showOutline', String(showOutline));
+        } catch (e) {
+            console.warn('无法保存showOutline状态', e);
+        }
+    }, [showOutline]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_showProps', String(showProps));
+        } catch (e) {
+            console.warn('无法保存showProps状态', e);
+        }
+    }, [showProps]);
 
     // 树结构更新
     const updateTree = useCallback(() => {
@@ -351,6 +391,7 @@ const App = () => {
         const mgr = sceneMgr.current;
         if (!mgr) return;
 
+        // 清理非当前工具的状态
         if (activeTool !== 'measure') {
             mgr.clearMeasurementPreview();
             setMeasureType('none');
@@ -453,18 +494,13 @@ const App = () => {
                             const api = target.userData.ifcAPI;
                             const modelID = target.userData.modelID;
                             
-                            // 使用自定义属性获取器解析属性集
+                            // 使用自定义属性获取器解析属性（新的扁平化格式）
                             const ifcMgr = target.userData.ifcManager;
-                            const props = await ifcMgr.getItemProperties(modelID, expressID);
-                            
-                            if (props) {
-                                // 扁平化以供展示
-                                Object.keys(props).forEach(key => {
-                                    const val = props[key];
-                                    if (typeof val !== 'object' && val !== null && val !== undefined) {
-                                        ifcProps[key] = val.toString();
-                                    }
-                                });
+                            const flatProps = await ifcMgr.getItemProperties(modelID, expressID);
+                           
+                            if (flatProps) {
+                                // 直接合并所有IFC属性到ifcProps变量（扁平化格式）
+                                Object.assign(ifcProps, flatProps);
                             }
                         } catch(e) { console.error("IFC Props Error", e); }
                     }

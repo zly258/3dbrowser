@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TilesRenderer } from "3d-tiles-renderer";
 import { calculateGeometryMemory } from "./octree";
 
@@ -19,10 +19,6 @@ export interface SceneSettings {
     dirInt: number;
     bgColor: string;
     wireframe: boolean;
-    applySceneMaterial: boolean;
-    matColor: string;
-    metalness: number;
-    roughness: number;
     progressive: boolean;
     hideRatio: number; // 0到1的隐藏比例
     progressiveThreshold: number; // 启用渐进式加载的最小网格数量
@@ -84,10 +80,6 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         wireframe: false,
-        applySceneMaterial: false,
-        matColor: "#cccccc",
-        metalness: 0.0,
-        roughness: 1.0,
         progressive: true,
         hideRatio: 0.6,
         progressiveThreshold: 15000, // 更新后的默认值
@@ -250,13 +242,6 @@ export class SceneManager {
                 wireframe: true,
                 transparent: true,
                 opacity: 0.3
-            });
-        } else if (this.settings.applySceneMaterial) {
-            this.scene.overrideMaterial = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(this.settings.matColor),
-                metalness: this.settings.metalness,
-                roughness: this.settings.roughness,
-                side: THREE.DoubleSide
             });
         } else {
             this.scene.overrideMaterial = null;
@@ -454,8 +439,6 @@ export class SceneManager {
         const renderer = new TilesRenderer(url);
         renderer.setCamera(this.camera);
         renderer.setResolutionFromRenderer(this.camera, this.renderer);
-        // 移除硬编码旋转，依赖 tileset.json 配置
-        renderer.group.name = "3D Tileset";
 
         // 从当前配置动态设置
         renderer.errorTarget = this.settings.sse;

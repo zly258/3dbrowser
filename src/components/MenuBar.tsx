@@ -215,21 +215,21 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                                 label={t("tool_measure")} 
                                 icon={<IconMeasure />} 
                                 active={props.activeTool === 'measure'}
-                                onClick={() => props.setActiveTool('measure')} 
+                                onClick={() => props.setActiveTool(props.activeTool === 'measure' ? 'none' : 'measure')} 
                                 styles={styles}
                             />
                             <RibbonButton 
                                 label={t("tool_clip")} 
                                 icon={<IconClip />} 
                                 active={props.activeTool === 'clip'}
-                                onClick={() => props.setActiveTool('clip')} 
+                                onClick={() => props.setActiveTool(props.activeTool === 'clip' ? 'none' : 'clip')} 
                                 styles={styles}
                             />
                             <RibbonButton 
                                 label={t("tool_explode")} 
                                 icon={<IconExplode />} 
                                 active={props.activeTool === 'explode'}
-                                onClick={() => props.setActiveTool('explode')} 
+                                onClick={() => props.setActiveTool(props.activeTool === 'explode' ? 'none' : 'explode')} 
                                 styles={styles}
                             />
                         </RibbonGroup>
