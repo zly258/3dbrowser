@@ -1,7 +1,7 @@
 # 3D Browser / 3D 浏览器
 
 <div align="center">
-  <img src="images/preview1.png" alt="3D Browser Preview" width="800" />
+  <h1>Professional 3D Model Viewer</h1>
   <p><em>Professional 3D model viewer with ribbon interface / 专业级3D模型查看器，带功能区界面</em></p>
 </div>
 
@@ -123,8 +123,7 @@
 │       ├── threeDTiles.ts      # 3D Tiles conversion / 3D瓦片转换
 │       ├── exportGLB.ts        # GLB format export / GLB格式导出
 │       └── exportLMB.ts        # LMB format export / LMB格式导出
-├── images/                # Screenshots and preview images / 截图和预览图片
-│   └── preview1.png       # Main application preview / 主应用预览
+
 ├── src/utils/SceneManager.ts # 3D scene management / 3D场景管理
 ├── index.html             # HTML entry point / HTML入口文件
 ├── index.tsx              # Main React application / 主React应用
