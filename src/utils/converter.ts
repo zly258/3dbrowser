@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import JSZip from "https://esm.sh/jszip@3.10.1";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 
 // --- 现有3D瓦片逻辑 --
@@ -315,13 +314,6 @@ export async function convertLMBTo3DTiles(
   return fileBlobs;
 }
 
-export async function createZip(files: Map<string, Blob>): Promise<Blob> {
-    const zip = new JSZip();
-    files.forEach((blob, name) => zip.file(name, blob));
-    return zip.generateAsync({ type: "blob" });
-}
-
-// --- NEW EXPORT FUNCTIONS ---
 
 export async function exportGLB(root: THREE.Object3D): Promise<Blob> {
     const exporter = new GLTFExporter();
@@ -471,7 +463,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const baseY = (minY + maxY) / 2;
         const baseZ = (minZ + maxZ) / 2;
         
-        // qX范围大约是+/- (范围/2) * 缩放。我们希望这大约是32767。
+        // qX范围大约是+/- (范围/2) * 缩放。我们希望这大约为32767。
         // 缩放 = 32767 / (范围/2)
         const scaleX = 32767.0 / (rangeX * 0.5);
         const scaleY = 32767.0 / (rangeY * 0.5);
@@ -494,44 +486,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const countBuf = new ArrayBuffer(4);
         new DataView(countBuf).setUint32(0, vertCount, true);
         parts.push(countBuf);
-        
-        // 顶点数据（Int16）
-        // 第一个顶点作为浮点数存储在加载器中？
-        // 加载器："vertices[0] = baseVertex[0]... for i=0 to count-1... getInt16"
-        // 等等，加载器读取baseVertex（浮点数）然后读取count-1个顶点？
-        // 让我们检查加载器：
-        // const vertices = new Float32Array(vertexCount * 3);
-        // vertices[0] = baseVertex[0] ...
-        // 循环i=0到vertexCount-2（实际上是count-1次迭代）
-        // 这暗示缓冲区中的第一个顶点IS baseVertex？
-        // 不。"vertices[0] = baseVertex[0]"。
-        // 它使用头部中的`baseVertex`作为网格的第一个顶点。
-        // 循环填充vertices[1]到末尾。
-        // 这意味着`posAttr`中的第一个顶点必须存储在`baseVertex`槽中？
-        // 不，加载器逻辑似乎暗示`baseVertex`是第一个顶点。
-        // "const baseVertex = new Float32Array(3) ... 读取3个浮点数"
-        // "vertices[0] = baseVertex[0]"
-        // 所以我们必须用实际的第一个顶点覆盖计算的中心基础BaseVertex？
-        // 如果我们这样做，我们会失去量化的中心效率。
-        // 但我们必须遵循加载器规范。
-        
-        // 仔细重新阅读加载器：
-        // const baseVertex = ... 读取浮点数
-        // const vertexScale = ... 读取浮点数
-        // const vertexCount ...
-        // vertices[0] = baseVertex ...
-        // 循环i=0; i < vertexCount - 1
-        // packed = 读取3 * int16
-        // {rx, ry, rz} = 解压缩(baseVertex, vertexScale, packed)
-        // vertices[i+1] = rx...
-        
-        // 所以：
-        // 1. 几何体中的第一个顶点作为浮点数存储在"BaseVertex"字段中。
-        // 2. 后续顶点作为Int16增量/压缩存储，相对于那个第一个顶点？
-        // 解压缩：`rx = baseX + qX / scaleX`。
-        // 是的，它是相对于BaseVertex（第一个顶点）的。
-        
-        // 调整后的逻辑：
+     
         const firstX = posAttr.getX(0);
         const firstY = posAttr.getY(0);
         const firstZ = posAttr.getZ(0);

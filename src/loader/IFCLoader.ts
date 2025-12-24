@@ -32,7 +32,7 @@ export const loadIFC = async (
                     // 下载阶段显示实际下载进度，不限制在40%
                     onProgress(downloadPercent, `${t("reading")}... ${Math.round(downloadPercent)}%`);
                 } else {
-                    // 如果无法获取total，使用递增方式
+                    // 如果无法获取总量，使用递增方式
                     staticDownloadCounter = (staticDownloadCounter || 0) + 5;
                     onProgress(Math.min(35, staticDownloadCounter), `${t("reading")}...`);
                 }
@@ -70,7 +70,7 @@ export const loadIFC = async (
             const id = lines.get(i);
             const rel = ifcApi.GetLine(modelID, id);
             
-            // rel.RelatedObjects是ID数组（或单个引用，通常是数组）
+            // rel.RelatedObjects是ID数组（或单个引用，通常为数组）
             // rel.RelatingPropertyDefinition是属性集ID
             
             if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {

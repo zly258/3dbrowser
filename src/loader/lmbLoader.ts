@@ -209,7 +209,7 @@ export class LMBLoader extends Loader {
 
     // 材质
     const materials = colors.map((color) => {
-      // Phong材质对CAD颜色很稳定
+      // Phong材质对CAD颜色表现稳定
       const material = new THREE.MeshPhongMaterial({
         color: new THREE.Color(parseColor(color)),
         side: THREE.DoubleSide,
@@ -308,7 +308,7 @@ export class LMBLoader extends Loader {
       offset += 4;
     }
 
-    // Vertices
+    // 顶点
     const vertexCount = view.getUint32(offset, true);
     offset += 4;
 
@@ -345,7 +345,7 @@ export class LMBLoader extends Loader {
 
     while (offset % 4 !== 0) offset++;
 
-    // Indices
+    // 索引
     const indexCount = view.getUint32(offset, true);
     offset += 4;
 

@@ -25,28 +25,28 @@ const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
 
 // --- 主应用 ---
 const App = () => {
-    // Theme State
+    // 主题状态
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
     const theme = themes[themeMode];
     const styles = useMemo(() => createStyles(theme), [themeMode]);
 
-    // State
+    // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
     const [selectedProps, setSelectedProps] = useState<any>(null);
     const [lang, setLang] = useState<Lang>('zh');
-    // Initialize status using the default language 'zh'
+    // 使用默认语言'zh'初始化状态
     const [status, setStatus] = useState(getTranslation('zh', 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
     
-    // Tools State
+    // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'explode' | 'settings' | 'export'>('none');
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
-    // Store history: { id, type, val }
+    // 存储历史记录: { id, type, val }
     const [measureHistory, setMeasureHistory] = useState<any[]>([]);
 
     const [clipEnabled, setClipEnabled] = useState(false);

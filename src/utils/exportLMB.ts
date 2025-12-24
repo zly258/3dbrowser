@@ -133,7 +133,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const baseY = (minY + maxY) / 2;
         const baseZ = (minZ + maxZ) / 2;
         
-        // qX范围大约是+/- (范围/2) * 缩放。我们希望这大约是32767。
+        // qX范围大约是+/- (范围/2) * 缩放。我们希望这大约为32767。
         // 缩放 = 32767 / (范围/2)
         const scaleX = 32767.0 / (rangeX * 0.5);
         const scaleY = 32767.0 / (rangeY * 0.5);

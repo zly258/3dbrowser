@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import JSZip from "https://esm.sh/jszip@3.10.1";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { OctreeNode, OctreeConfig, collectItems, buildOctree, createSceneFromItems } from "./octree";
 
@@ -143,15 +142,4 @@ export async function convertLMBTo3DTiles(
   fileBlobs.set("tileset.json", new Blob([tilesetJson], { type: "application/json" }));
 
   return fileBlobs;
-}
-
-/**
- * 创建一个包含多个文件的ZIP压缩包
- * @param files 包含文件名称和Blob的Map
- * @returns ZIP文件的Blob
- */
-export async function createZip(files: Map<string, Blob>): Promise<Blob> {
-  const zip = new JSZip();
-  files.forEach((blob, name) => zip.file(name, blob));
-  return zip.generateAsync({ type: "blob" });
 }

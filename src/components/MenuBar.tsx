@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-// Removed import { styles } from "../Styles";
+// 移除导入 { styles } from "../Styles"
 import { 
     IconFile, IconFolder, IconExport, IconClear, IconFit, IconWireframe, IconList, IconInfo, IconMeasure, IconSettings,
     IconPick, IconClip, IconExplode
 } from "../theme/Icons";
 import { TFunc, Lang } from "../theme/Locales";
 
-// --- Icons wrapper for Ribbon ---
+// --- 功能区图标包装器 ---
 const RibbonIcon = ({ children, styles }: { children?: React.ReactNode, styles: any }) => (
     <div style={styles.ribbonIconBox}>
         {React.isValidElement(children) 
@@ -25,7 +25,7 @@ const RibbonTab = ({ label, active, onClick, styles }: { label: string, active: 
 const RibbonButton = ({ label, icon, onClick, active, styles }: { label: string, icon: React.ReactNode, onClick: () => void, active?: boolean, styles: any }) => {
     const [hover, setHover] = useState(false);
     
-    // Explicitly handle border style to avoid artifacts
+    // 显式处理边框样式以避免渲染瑕疵
     const baseStyle: React.CSSProperties = { ...styles.ribbonBtn };
     if (active) {
         Object.assign(baseStyle, styles.ribbonBtnActive);
@@ -50,7 +50,7 @@ const RibbonButton = ({ label, icon, onClick, active, styles }: { label: string,
     );
 };
 
-// Text label for compact grid views
+// 紧凑网格视图的文本标签
 const TextLabel = ({ text }: { text: string }) => (
     <div style={{
         width: '100%', height: '100%', 
@@ -62,7 +62,7 @@ const TextLabel = ({ text }: { text: string }) => (
     </div>
 );
 
-// Small button for compact grid views
+// 紧凑网格视图的小按钮
 const ViewButton = ({ icon, onClick, title, styles }: { icon: React.ReactNode, onClick: () => void, title: string, styles: any }) => {
     const [hover, setHover] = useState(false);
     return (

@@ -56,7 +56,7 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
     }
 };
 
-// 已弃用：为向后兼容而提供的默认导出，但我们现在使用createStyles
+// 已弃用：为保持向后兼容而提供的默认导出，但现在我们使用createStyles
 export const colors = themes.dark;
 
 export const createGlobalStyle = (theme: ThemeColors) => `

@@ -3,7 +3,7 @@ import { IconClose, IconClear } from "../theme/Icons";
 import { SceneManager, MeasureType } from "../utils/SceneManager";
 import { TFunc } from "../theme/Locales";
 
-// --- Generic Floating Panel ---
+// --- 通用浮动面板 ---
 interface FloatingPanelProps {
     title: string;
     onClose: () => void;
@@ -32,7 +32,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
                 const dy = e.clientY - dragStart.current.y;
                 let newX = startPos.current.x + dx;
                 let newY = startPos.current.y + dy;
-                // Boundaries
+                // 边界
                 newX = Math.max(0, Math.min(window.innerWidth - size.w, newX));
                 newY = Math.max(30, Math.min(window.innerHeight - size.h, newY)); 
 
@@ -87,7 +87,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
     );
 };
 
-// --- Custom Dual Slider Component ---
+// --- 自定义双滑块组件 ---
 const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void, theme: any }) => {
     const trackRef = useRef<HTMLDivElement>(null);
     const isDraggingRef = useRef(false);
@@ -184,7 +184,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
     );
 };
 
-// --- Specific Tools ---
+// --- 特定工具 ---
 
 export const MeasurePanel = ({ 
     t, 

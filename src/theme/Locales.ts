@@ -32,7 +32,7 @@ const resources: Record<Lang, Record<string, string>> = {
         view_sw: "Southwest",
         view_ne: "Northeast",
         view_nw: "Northwest",
-        // 按钮的短标签
+        // 按钮的简写标签
         btn_view_top: "Top",
         btn_view_bottom: "Btm",
         btn_view_front: "Frt",
@@ -146,7 +146,7 @@ const resources: Record<Lang, Record<string, string>> = {
         scene_material_color: "Base Color",
         scene_material_metalness: "Metalness",
         scene_material_roughness: "Roughness",
-        // Axis Options
+        // 轴向选项
         axis_px: "+X",
         axis_nx: "-X",
         axis_py: "+Y",
@@ -179,7 +179,7 @@ const resources: Record<Lang, Record<string, string>> = {
         view_sw: "西南",
         view_ne: "东北",
         view_nw: "西北",
-        // 按钮的短标签
+        // 按钮的简写标签
         btn_view_top: "顶视",
         btn_view_bottom: "底视",
         btn_view_front: "前视",
@@ -228,7 +228,7 @@ const resources: Record<Lang, Record<string, string>> = {
         delete_item: "删除模型",
         btn_confirm: "确定",
         btn_cancel: "取消",
-        // Properties
+        // 属性
         pg_basic: "基本信息",
         pg_geo: "几何信息",
         prop_name: "名称",
@@ -239,7 +239,7 @@ const resources: Record<Lang, Record<string, string>> = {
         prop_inst: "实例数",
         prop_vert: "顶点数",
         prop_tri: "面数",
-        // Measure
+        // 测量
         measure_title: "测量面板",
         measure_type: "测量类型",
         measure_dist: "长度测量",
@@ -250,25 +250,25 @@ const resources: Record<Lang, Record<string, string>> = {
         measure_instruct_angle: "请点击三个点测量角度 (起点-顶点-终点)。",
         measure_instruct_coord: "点击任意位置获取世界坐标。",
         measure_clear: "清除测量",
-        // Clip
+        // 剖切
         clip_title: "剖切面板",
         clip_enable: "开启剖切",
         clip_x: "X 轴",
         clip_y: "Y 轴",
         clip_z: "Z 轴",
         clip_invert: "反向",
-        // Explode
+        // 爆炸
         explode_title: "模型爆炸",
         explode_factor: "爆炸程度",
         explode_reset: "重置",
-        // Export
+        // 导出
         export_title: "导出场景",
         export_format: "导出格式",
         export_glb: "GLB (标准通用)",
         export_lmb: "LMB (自定义压缩)",
         export_3dtiles: "3D Tiles (Web大模型)",
         export_btn: "开始导出",
-        // Settings
+        // 设置
         st_lighting: "场景光照",
         st_ambient: "环境光强度",
         st_dir: "直射光强度",
@@ -293,7 +293,7 @@ const resources: Record<Lang, Record<string, string>> = {
         scene_material_color: "基础颜色",
         scene_material_metalness: "金属度",
         scene_material_roughness: "粗糙度",
-        // Axis
+        // 轴向
         axis_px: "+X",
         axis_nx: "-X",
         axis_py: "+Y",

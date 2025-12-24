@@ -14,12 +14,12 @@ interface TreeNode {
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
-    // Detect TilesRenderer. It is usually a Group, but has 'tilesRenderer' in user data or we passed the group returned by renderer
-    // In our SceneManager, we name it "3D Tileset"
+    // 检测TilesRenderer。通常是一个Group，但在用户数据中有'tilesRenderer'属性，或者是我们传递的渲染器返回的组
+    // 在我们的SceneManager中，我们将其命名为"3D Tileset"
     
-    // Check if it's the tileset wrapper
+    // 检查是否为瓦片集包装器
     let isTiles = object.name === "3D Tileset"; 
-    // Or check for tilesRenderer property if available on object (depends on version)
+    // 或者检查对象上是否有tilesRenderer属性（取决于版本）
     
     const isMesh = object.isMesh;
     
@@ -29,12 +29,12 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
         type: isTiles ? 'TILES' : isMesh ? 'MESH' : 'GROUP',
         depth,
         children: [],
-        expanded: depth < 2, // Expand first couple levels by default
+        expanded: depth < 2, // 默认展开前几层
         visible: object.visible !== false,
         object
     };
 
-    // Filter out internal helpers from the tree
+    // 从树中过滤掉内部辅助对象
     if (object.children && object.children.length > 0) {
         node.children = object.children
             .filter((c: any) => c.name !== "Helpers" && c.name !== "Measure")
@@ -73,7 +73,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
     const containerRef = useRef<HTMLDivElement>(null);
     const [containerHeight, setContainerHeight] = useState(400);
 
-    // State to track hover for delete button
+    // 用于跟踪删除按钮悬停状态的状态
     const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
 
     useEffect(() => {

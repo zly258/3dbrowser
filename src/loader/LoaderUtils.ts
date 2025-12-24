@@ -89,7 +89,7 @@ export const loadModelFiles = async (
                 if (ext === 'lmb' || ext === 'lmbz') {
                     const loader = new LMBLoader();
                     object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
-                    axisSetting = '+y'; // LMB通常是Three.js原生的Y轴向上
+                    axisSetting = '+y'; // LMB通常使用Three.js原生的Y轴向上
                 } else if (ext === 'glb' || ext === 'gltf') {
                     const loader = new GLTFLoader();
                     const gltf = await new Promise<any>((resolve, reject) => {
