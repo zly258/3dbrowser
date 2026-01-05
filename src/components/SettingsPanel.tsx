@@ -1,3 +1,4 @@
+
 import React from "react";
 import { IconClose } from "../theme/Icons";
 import { TFunc, Lang } from "../theme/Locales";
@@ -12,6 +13,8 @@ interface SettingsModalProps {
     setLang: (l: Lang) => void;
     themeMode: 'dark' | 'light';
     setThemeMode: (m: 'dark' | 'light') => void;
+    showStats: boolean;
+    setShowStats: (v: boolean) => void;
     styles: any;
     theme: any;
 }
@@ -36,7 +39,7 @@ const Row = ({ label, children, theme }: { label: string, children?: React.React
 
 const AxisSelector = ({ value, onChange, theme, t }: { value: string, onChange: (v: AxisOption) => void, theme: any, t: TFunc }) => (
     <select 
-        style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:2}}
+        style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
         value={value}
         onChange={(e) => onChange(e.target.value as AxisOption)}
     >
@@ -49,7 +52,7 @@ const AxisSelector = ({ value, onChange, theme, t }: { value: string, onChange: 
     </select>
 );
 
-export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, styles, theme }) => {
+export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, showStats, setShowStats, styles, theme }) => {
     return (
         <div style={styles.modalOverlay}>
             <div style={styles.modalContent}>
@@ -62,7 +65,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                     <Section title={t("setting_general")} theme={theme}>
                         <Row label={t("st_lang")} theme={theme}>
                             <select 
-                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:2}}
+                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
                                 value={currentLang}
                                 onChange={(e) => setLang(e.target.value as Lang)}
                             >
@@ -72,7 +75,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                         </Row>
                         <Row label={t("st_theme")} theme={theme}>
                             <select 
-                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:2}}
+                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
                                 value={themeMode}
                                 onChange={(e) => setThemeMode(e.target.value as 'dark' | 'light')}
                             >
@@ -82,6 +85,9 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                         </Row>
                         <Row label={t("st_bg")} theme={theme}>
                             <input type="color" value={settings.bgColor} onChange={(e) => onUpdate({bgColor: e.target.value})} />
+                        </Row>
+                        <Row label={t("st_monitor")} theme={theme}>
+                             <input type="checkbox" checked={showStats} onChange={(e) => setShowStats(e.target.checked)} style={{accentColor: theme.accent}} />
                         </Row>
                     </Section>
 
@@ -108,7 +114,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                                 style={{width: 100}}/>
                         </Row>
                     </Section>
-                    
+
                     <Section title={t("st_opt")} theme={theme}>
                         <Row label={t("st_opt_progressive")} theme={theme}>
                             <input type="checkbox" checked={settings.progressive} onChange={(e) => onUpdate({progressive: e.target.checked})} />
@@ -125,7 +131,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                                     <input type="number" 
                                         value={settings.progressiveThreshold} 
                                         onChange={(e) => onUpdate({progressiveThreshold: parseInt(e.target.value)})} 
-                                        style={{width: 80, background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`}}
+                                        style={{width: 80, background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius:6}}
                                     />
                                 </Row>
                             </>
@@ -143,7 +149,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                             <input type="number" 
                                 value={settings.maxMemory} 
                                 onChange={(e) => onUpdate({maxMemory: parseInt(e.target.value)})} 
-                                style={{width: 60, background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`}}/>
+                                style={{width: 60, background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius:6}}/>
                         </Row>
                     </Section>
                 </div>
