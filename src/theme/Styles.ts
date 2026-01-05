@@ -1,9 +1,8 @@
+
 export interface ThemeColors {
     bg: string;
     panelBg: string;
     headerBg: string;
-    ribbonTabBg: string;
-    ribbonActiveBg: string;
     border: string;
     text: string;
     textLight: string;
@@ -14,190 +13,230 @@ export interface ThemeColors {
     success: string;
     warning: string;
     danger: string;
-    canvasBg: string; // 默认画布背景
+    canvasBg: string;
+    shadow: string;
 }
 
 export const themes: Record<'dark' | 'light', ThemeColors> = {
     dark: {
-        bg: "#1e1e1e",
-        panelBg: "#252526",
-        headerBg: "#2d2d30",
-        ribbonTabBg: "#2d2d30",
-        ribbonActiveBg: "#252526",
-        border: "#3e3e42",
-        text: "#cccccc",
-        textLight: "#ffffff",
-        textMuted: "#888888",
-        accent: "#007acc",
-        highlight: "#2a2d2e",
-        itemHover: "#3e3e40",
-        success: "#4ec9b0",
-        warning: "#ce9178",
-        danger: "#f14c4c",
-        canvasBg: "#1e1e1e"
+        bg: "#121212",
+        panelBg: "#1E1E1E",
+        headerBg: "#2C2C2C",
+        border: "#333333",
+        text: "#E0E0E0",
+        textLight: "#FFFFFF",
+        textMuted: "#A0A0A0",
+        accent: "#64B5F6", 
+        highlight: "#2C2C2C",
+        itemHover: "rgba(255, 255, 255, 0.08)",
+        success: "#81C784",
+        warning: "#FFB74D",
+        danger: "#E57373",
+        canvasBg: "#121212",
+        shadow: "rgba(0, 0, 0, 0.5)"
     },
     light: {
-        bg: "#f3f3f3",
-        panelBg: "#ffffff",
-        headerBg: "#e0e0e0",
-        ribbonTabBg: "#e0e0e0",
-        ribbonActiveBg: "#f3f3f3", // 比面板稍暗以区分
-        border: "#cccccc",
+        bg: "#F0F2F5",
+        panelBg: "#FFFFFF",
+        headerBg: "#FFFFFF",
+        border: "#E0E0E0",
         text: "#333333",
         textLight: "#000000",
-        textMuted: "#666666",
-        accent: "#007acc",
-        highlight: "#e8e8e8",
-        itemHover: "#f0f0f0",
-        success: "#2da042",
-        warning: "#b8860b",
-        danger: "#d9534f",
-        canvasBg: "#dcdcdc"
+        textMuted: "#757575",
+        accent: "#1976D2",
+        highlight: "#F5F5F5",
+        itemHover: "rgba(0, 0, 0, 0.04)",
+        success: "#388E3C",
+        warning: "#F57C00",
+        danger: "#D32F2F",
+        canvasBg: "#E8E8E8",
+        shadow: "rgba(0, 0, 0, 0.12)"
     }
 };
 
-// 已弃用：为保持向后兼容而提供的默认导出，但现在我们使用createStyles
-export const colors = themes.dark;
-
 export const createGlobalStyle = (theme: ThemeColors) => `
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: ${theme.bg}; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: ${theme.border}; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: ${theme.textMuted}; }
-    body { background-color: ${theme.bg}; color: ${theme.text}; }
+    body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: 'Roboto', 'Segoe UI', sans-serif; }
+    * { box-sizing: border-box; }
+    
+    /* Remove default checkbox border/appearance and use accent color */
+    input[type="checkbox"] {
+        accent-color: ${theme.accent};
+        cursor: pointer;
+        outline: none;
+        border: 1px solid ${theme.border};
+        border-radius: 4px;
+        width: 14px;
+        height: 14px;
+        appearance: none;
+        -webkit-appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    input[type="checkbox"]:checked {
+        background-color: ${theme.accent};
+        border-color: ${theme.accent};
+    }
+    input[type="checkbox"]:checked::after {
+        content: '';
+        width: 4px;
+        height: 8px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg) translate(-1px, -1px);
+    }
+    input[type="checkbox"]:focus {
+        outline: none;
+        box-shadow: none;
+    }
+    /* Enforce pointer cursor on range inputs */
+    input[type="range"] {
+        cursor: pointer;
+    }
 `;
 
 export const createStyles = (theme: ThemeColors) => ({
-    // 桌面/共享
-    container: { display: "flex", flexDirection: "column" as const, height: "100vh", backgroundColor: theme.bg, color: theme.text, fontFamily: "Segoe UI, sans-serif", fontSize: "12px", userSelect: "none" as const, overflow: "hidden" },
+    // Desktop / Shared
+    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "13px", userSelect: "none" as const, overflow: "hidden" },
     
-    // 功能区样式
-    ribbonContainer: { display: "flex", flexDirection: "column" as const, backgroundColor: theme.ribbonActiveBg, borderBottom: `1px solid ${theme.border}`, flexShrink: 0 },
-    ribbonTabsRow: { display: "flex", backgroundColor: theme.ribbonTabBg, height: "24px", alignItems: "flex-end", paddingLeft: "8px", borderBottom: `1px solid ${theme.border}` },
-    ribbonTab: { 
-        padding: "3px 12px", 
-        cursor: "pointer", 
-        borderTopLeftRadius: "4px", 
-        borderTopRightRadius: "4px", 
-        marginRight: "2px", 
-        fontSize: "11px",
-        border: "1px solid transparent",
-        borderBottom: "none",
-        color: theme.textMuted,
-        marginBottom: "-1px",
-        zIndex: 1
+    // Viewport
+    viewport: { 
+        position: "absolute" as const, 
+        top: 0, left: 0, right: 0, bottom: 0, 
+        backgroundColor: theme.canvasBg, 
+        overflow: "hidden",
+        zIndex: 0
     },
-    ribbonTabActive: { 
-        backgroundColor: theme.ribbonActiveBg, 
-        color: theme.textLight,
-        fontWeight: "bold",
-        border: `1px solid ${theme.border}`,
-        borderBottom: `1px solid ${theme.ribbonActiveBg}`, // 与工具栏融合
-    },
-    // 功能区工具栏增加到80px以适应底部标签
-    ribbonToolbar: { height: "80px", display: "flex", alignItems: "center", padding: "2px 4px", gap: "2px", overflowX: "auto" as const },
-    // 功能区组采用垂直布局以容纳标签
-    ribbonGroup: { 
-        display: "flex", 
-        flexDirection: "column" as const, 
-        height: "100%", 
-        paddingRight: "4px", 
-        borderRight: `1px solid ${theme.border}`, 
-        marginRight: "2px", 
-        justifyContent: "space-between" 
-    },
-    ribbonGroupContent: {
+
+    // Bottom Toolbar - Compact Material Design
+    toolbarContainer: {
+        position: "absolute" as const,
+        bottom: "24px",
+        left: "50%",
+        transform: "translateX(-50%)",
         display: "flex",
-        flex: 1,
         alignItems: "center",
-        gap: "1px"
-    },
-    ribbonGroupLabel: { 
-        display: "block", 
-        textAlign: "center" as const, 
-        fontSize: "10px", 
-        color: theme.textMuted, 
-        paddingBottom: "2px",
-        width: "100%",
-        whiteSpace: "nowrap" as const
+        backgroundColor: theme.panelBg,
+        padding: "4px 6px", 
+        borderRadius: "14px", 
+        boxShadow: `0 4px 20px ${theme.shadow}`,
+        gap: "2px",
+        zIndex: 1000,
+        border: `1px solid ${theme.border}`,
     },
     
-    // 功能区按钮
-    ribbonBtn: { 
-        display: "flex", 
-        flexDirection: "column" as const, 
-        alignItems: "center", 
-        justifyContent: "center", 
-        height: "54px", 
-        minWidth: "42px", 
-        padding: "2px 4px", 
-        cursor: "pointer", 
-        borderRadius: "3px", 
-        border: "1px solid transparent",
-        color: theme.text,
-        gap: "4px"
+    toolbarDivider: {
+        width: "1px",
+        height: "18px",
+        backgroundColor: theme.border,
+        margin: "0 2px"
     },
-    ribbonBtnHover: { backgroundColor: theme.itemHover, borderColor: theme.border },
-    ribbonBtnActive: { backgroundColor: theme.accent, borderColor: theme.accent, color: "white" },
-    ribbonIconBox: { width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center" },
-    ribbonLabel: { fontSize: "11px", textAlign: "center" as const, lineHeight: "1.1", maxWidth: "80px", overflow: "hidden", whiteSpace: "nowrap" as const, textOverflow: "ellipsis" },
-    
-    // 小型功能区按钮（网格/行布局）
-    ribbonBtnSmall: {
+
+    toolbarBtn: {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        minWidth: "24px", 
-        height: "24px",
-        padding: "2px",
+        width: "36px",
+        height: "36px",
+        borderRadius: "8px", 
         cursor: "pointer",
-        borderRadius: "2px",
-        backgroundColor: "transparent",
         color: theme.textMuted,
-        border: "1px solid transparent"
+        backgroundColor: "transparent",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        border: "none", 
+        outline: "none",
+        position: "relative" as const
     },
-    ribbonBtnSmallHover: { backgroundColor: theme.itemHover, border: `1px solid ${theme.border}` },
-
-    // 工作区和可调整大小的面板
-    workspace: { display: "flex", flex: 1, overflow: "hidden", position: "relative" as const },
-    
-    // 面板基础样式（宽度由内联样式控制）
-    resizablePanel: { backgroundColor: theme.panelBg, display: "flex", flexDirection: "column" as const, flexShrink: 0, position: "relative" as const, color: theme.text },
-    
-    // 调整大小手柄
-    resizeHandleHorizontal: {
-        width: "4px",
-        cursor: "col-resize",
-        backgroundColor: theme.bg,
-        zIndex: 10,
-        transition: "background-color 0.2s",
-        flexShrink: 0
+    toolbarBtnHover: {
+        backgroundColor: theme.itemHover,
+        color: theme.text,
+        transform: "translateY(-1px)",
     },
-    resizeHandleHover: { backgroundColor: theme.accent },
+    toolbarBtnActive: {
+        backgroundColor: `${theme.accent}15`, 
+        color: theme.accent,
+    },
     
-    treeContainer: {
+    // Floating Panels
+    floatingPanel: {
+        position: 'absolute' as const,
+        backgroundColor: theme.panelBg,
+        border: `1px solid ${theme.border}`,
+        boxShadow: `0 8px 30px ${theme.shadow}`,
+        borderRadius: "12px",
+        display: "flex",
+        flexDirection: "column" as const,
+        zIndex: 200,
+        minWidth: '220px',
+        minHeight: '120px',
+        overflow: 'hidden',
+        color: theme.text,
+        transition: "box-shadow 0.2s",
+    },
+    floatingHeader: {
+        padding: "10px 14px",
+        backgroundColor: theme.panelBg, 
+        borderBottom: `1px solid ${theme.border}`,
+        cursor: "move",
+        fontWeight: "600",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        userSelect: "none" as const,
+        fontSize: "13px",
+        color: theme.text,
+        letterSpacing: "0.2px"
+    },
+    floatingContent: {
+        padding: "0", 
+        overflowY: "auto" as const,
         flex: 1,
+        position: "relative" as const,
+        display: 'flex',            
+        flexDirection: 'column' as const 
+    },
+    resizeHandle: {
+        position: 'absolute' as const,
+        bottom: 0,
+        right: 0,
+        width: '16px',
+        height: '16px',
+        cursor: 'se-resize',
+        zIndex: 10,
+        background: 'transparent'
+    },
+
+    // Tree Styles
+    treeContainer: {
+        flex: 1,              
+        height: "100%",       
         overflowY: "auto" as const,
         overflowX: "hidden" as const,
-        paddingBottom: "10px"
+        padding: "4px 0"
     },
     treeNode: {
         display: "flex",
         alignItems: "center",
-        height: "24px",
+        height: "30px",
         cursor: "pointer",
         whiteSpace: "nowrap" as const,
-        fontSize: "12px",
+        fontSize: "13px",
         color: theme.text,
-        transition: "background-color 0.1s"
+        transition: "background-color 0.1s ease",
+        paddingRight: "8px"
     },
     treeNodeSelected: {
-        backgroundColor: theme.itemHover,
-        color: theme.textLight,
-        fontWeight: 'bold'
+        backgroundColor: `${theme.accent}15`, 
+        color: theme.accent,
+        fontWeight: '500',
+        borderLeft: `3px solid ${theme.accent}`
     },
     expander: {
-        width: "16px",
+        width: "24px",
         height: "100%",
         display: "flex",
         alignItems: "center",
@@ -210,8 +249,8 @@ export const createStyles = (theme: ThemeColors) => ({
         overflow: "hidden",
         textOverflow: "ellipsis"
     },
-    
-    // 属性列表
+
+    // Properties
     list: {
         flex: 1,
         overflowY: "auto" as const,
@@ -219,174 +258,187 @@ export const createStyles = (theme: ThemeColors) => ({
         userSelect: "text" as const
     },
     propGroupTitle: {
-        backgroundColor: theme.headerBg,
-        padding: "4px 12px",
-        fontWeight: "bold" as const,
-        fontSize: "11px",
-        color: theme.textLight,
-        borderTop: `1px solid ${theme.border}`,
+        backgroundColor: theme.bg, 
+        padding: "8px 16px", 
+        fontWeight: "600" as const,
+        fontSize: "12px",
+        color: theme.text,
         borderBottom: `1px solid ${theme.border}`,
-        marginTop: "0px"
+        borderTop: `1px solid ${theme.border}`,
+        marginTop: "-1px",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        userSelect: "none" as const,
+        transition: "background-color 0.2s"
     },
     propRow: {
         display: "flex",
-        padding: "4px 12px",
+        padding: "6px 16px",
         borderBottom: `1px solid ${theme.border}`,
-        alignItems: "center"
+        alignItems: "center",
+        fontSize: "12px",
+        gap: "8px"
     },
     propKey: {
-        width: "40%",
+        width: "35%",
         color: theme.textMuted,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap" as const
     },
     propValue: {
-        width: "60%",
+        width: "65%",
         color: theme.text,
         whiteSpace: "nowrap" as const,
         overflow: "hidden",
         textOverflow: "ellipsis",
         cursor: "text"
     },
-
-    // 固定视口以确保其占用可用空间
-    viewport: { 
-        flex: 1, 
-        position: "relative" as const, 
-        backgroundColor: "#111", 
-        overflow: "hidden",
-        minWidth: 0, // 对弹性容器至关重要
-        minHeight: 0
-    },
-    statusBar: { height: "24px", backgroundColor: theme.accent, color: "white", display: "flex", alignItems: "center", padding: "0 12px", justifyContent: "space-between", fontSize: "12px", flexShrink: 0 },
     
-    // 组件
-    panelHeader: { padding: "8px 12px", fontWeight: "600", borderBottom: `1px solid ${theme.border}`, backgroundColor: theme.headerBg, textTransform: "uppercase" as const, fontSize: "11px", letterSpacing: "0.5px", color: theme.textLight, display: "flex", justifyContent: "space-between", alignItems: "center", height: "30px", boxSizing: "border-box" as const },
-    
-    // 浮动面板
-    floatingPanel: {
-        position: 'absolute' as const,
-        backgroundColor: theme.panelBg,
+    // UI Elements
+    btn: {
+        backgroundColor: theme.bg,
+        color: theme.text,
         border: `1px solid ${theme.border}`,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
-        borderRadius: "4px",
-        display: "flex",
-        flexDirection: "column" as const,
-        zIndex: 200,
-        minWidth: '200px',
-        minHeight: '100px',
-        overflow: 'hidden',
-        color: theme.text
+        padding: "8px 16px",
+        cursor: "pointer",
+        borderRadius: "8px",
+        fontSize: "12px",
+        fontWeight: "500",
+        transition: "all 0.2s",
+        outline: "none",
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    floatingHeader: {
-        padding: "6px 8px",
-        backgroundColor: theme.headerBg,
-        borderBottom: `1px solid ${theme.border}`,
-        cursor: "move",
-        fontWeight: "600",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        userSelect: "none" as const,
-        fontSize: "11px",
-        color: theme.textLight
+    btnActive: {
+        backgroundColor: theme.accent,
+        color: "white",
+        borderColor: theme.accent,
+        boxShadow: `0 2px 6px ${theme.shadow}`
     },
-    floatingContent: {
-        padding: "10px",
-        overflowY: "auto" as const,
-        flex: 1
+    
+    // View Grid Button
+    viewGridBtn: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.bg,
+        border: `1px solid ${theme.border}`,
+        borderRadius: '8px',
+        padding: '8px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        color: theme.text,
+        fontSize: '11px',
+        fontWeight: '500',
+        height: '60px',
+        gap: '4px'
     },
-    resizeHandle: {
-        position: 'absolute' as const,
-        bottom: 0,
-        right: 0,
-        width: '16px',
-        height: '16px',
-        cursor: 'se-resize',
-        zIndex: 10
-    },
-
-    // 模态框样式
+    
+    // Modal Overlay
     modalOverlay: {
         position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        backdropFilter: 'blur(2px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1000
+        zIndex: 2000
     },
     modalContent: {
         backgroundColor: theme.panelBg,
         border: `1px solid ${theme.border}`,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-        borderRadius: "4px",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
+        borderRadius: "12px", 
         display: "flex",
         flexDirection: "column" as const,
         width: '400px',
-        height: '500px',
+        maxHeight: '80vh',
         overflow: 'hidden',
         color: theme.text
     },
 
-    // UI元素
-    btn: {
-        backgroundColor: theme.headerBg,
-        color: theme.text,
-        border: `1px solid ${theme.border}`,
-        padding: "6px 12px",
-        cursor: "pointer",
-        borderRadius: "2px",
-        fontSize: "12px",
-        transition: "background-color 0.1s",
-        outline: "none"
-    },
-    btnActive: {
-        backgroundColor: theme.accent,
-        borderColor: theme.accent,
-        color: "white"
-    },
-    
-    // 加载
+    // Loading
     overlay: {
         position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(30,30,30,0.6)',
+        backgroundColor: 'rgba(255,255,255,0.8)', 
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 50
+        zIndex: 3000
     },
     progressBox: {
-        width: '300px',
+        width: '320px',
         backgroundColor: theme.panelBg,
-        padding: '20px',
-        borderRadius: '4px',
+        padding: '24px',
+        borderRadius: '12px', 
         border: `1px solid ${theme.border}`,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.1)',
         color: theme.text
     },
     progressBarContainer: {
         height: '4px',
-        backgroundColor: theme.border,
+        backgroundColor: theme.bg,
         borderRadius: '2px',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        marginTop: '16px'
     },
     progressBarFill: {
         height: '100%',
         backgroundColor: theme.accent,
         transition: 'width 0.2s ease-out'
     },
-
-    // 滑块
+    
+    // Slider
     sliderRow: {
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        marginBottom: '10px'
+        gap: '12px',
+        marginBottom: '12px'
     },
     sliderLabel: {
-        fontSize: '11px',
+        fontSize: '12px',
         color: theme.textMuted,
-        width: '60px'
+        width: '70px'
     },
     rangeSlider: {
         flex: 1,
-        cursor: 'pointer'
+        cursor: 'pointer', // Ensure simple slider has pointer
+        accentColor: theme.accent
+    },
+    
+    // Stats HUD (Top Center)
+    statsOverlay: {
+        position: "absolute" as const,
+        top: "12px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        backgroundColor: theme.panelBg, 
+        color: theme.text, 
+        display: "flex",
+        flexDirection: "row" as const,
+        alignItems: "center",
+        gap: "12px", 
+        padding: "6px 16px", 
+        fontSize: "12px", 
+        zIndex: 100,
+        pointerEvents: "none" as const,
+        borderRadius: "20px", 
+        border: `1px solid ${theme.border}`,
+        boxShadow: `0 4px 12px ${theme.shadow}`,
+    },
+    statsRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        whiteSpace: 'nowrap' as const
+    },
+    statsDivider: {
+        width: "1px",
+        height: "12px",
+        backgroundColor: theme.border
     }
 });
+
+// Deprecated: Default export for backward compatibility, but now we use createStyles
+export const colors = themes.dark;

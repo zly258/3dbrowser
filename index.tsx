@@ -3,16 +3,14 @@ import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
-import { convertLMBTo3DTiles } from "./src/utils/threeDTiles";
-import { exportGLB } from "./src/utils/exportGLB";
-import { exportLMB } from "./src/utils/exportLMB";
+import { convertLMBTo3DTiles, createZip, exportGLB, exportLMB } from "./src/utils/converter";
 import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
 import { MenuBar } from "./src/components/MenuBar";
 import { SceneTree, buildTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel, ViewsPanel, FloatingPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
@@ -25,24 +23,39 @@ const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
 
 // --- 主应用 ---
 const App = () => {
-    // 主题状态
-    const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+    // 主题状态 - 从localStorage恢复
+    const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_themeMode');
+            return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+        } catch {
+            return 'dark';
+        }
+    });
     const theme = themes[themeMode];
     const styles = useMemo(() => createStyles(theme), [themeMode]);
+
+    // 语言状态 - 从localStorage恢复
+    const [lang, setLang] = useState<Lang>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_lang');
+            return (saved === 'zh' || saved === 'en') ? saved : 'zh';
+        } catch {
+            return 'zh';
+        }
+    });
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
     const [selectedProps, setSelectedProps] = useState<any>(null);
-    const [lang, setLang] = useState<Lang>('zh');
-    // 使用默认语言'zh'初始化状态
-    const [status, setStatus] = useState(getTranslation('zh', 'ready'));
+    const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'explode' | 'settings' | 'export'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'explode' | 'settings' | 'export' | 'views'>('none');
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
@@ -62,6 +75,14 @@ const App = () => {
             return false;
         }
     });
+    const [showStats, setShowStats] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_showStats');
+            return saved !== null ? saved === 'true' : true;
+        } catch {
+            return true;
+        }
+    });
     const [showOutline, setShowOutline] = useState(() => {
         try {
             const saved = localStorage.getItem('3dbrowser_showOutline');
@@ -79,19 +100,40 @@ const App = () => {
         }
     });
 
-    // Settings State (mirrors SceneManager)
-    const [sceneSettings, setSceneSettings] = useState<SceneSettings>({
-        ambientInt: 2.0,
-        dirInt: 1.0,
-        bgColor: theme.canvasBg,
-        wireframe: false,
-        progressive: true,
-        hideRatio: 0.6,
-        progressiveThreshold: 15000,
-        sse: 16,
-        maxMemory: 500,
-        importAxisGLB: '+y',
-        importAxisIFC: '+z',
+    // Settings State (mirrors SceneManager) - 从localStorage恢复
+    const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_sceneSettings');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return {
+                    ambientInt: typeof parsed.ambientInt === 'number' ? parsed.ambientInt : 2.0,
+                    dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
+                    bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
+                    wireframe: typeof parsed.wireframe === 'boolean' ? parsed.wireframe : false,
+                    progressive: typeof parsed.progressive === 'boolean' ? parsed.progressive : true,
+                    hideRatio: typeof parsed.hideRatio === 'number' ? parsed.hideRatio : 0.6,
+                    progressiveThreshold: typeof parsed.progressiveThreshold === 'number' ? parsed.progressiveThreshold : 15000,
+                    sse: typeof parsed.sse === 'number' ? parsed.sse : 16,
+                    maxMemory: typeof parsed.maxMemory === 'number' ? parsed.maxMemory : 500,
+                    importAxisGLB: typeof parsed.importAxisGLB === 'string' ? parsed.importAxisGLB : '+y',
+                    importAxisIFC: typeof parsed.importAxisIFC === 'string' ? parsed.importAxisIFC : '+z',
+                };
+            }
+        } catch (e) { console.error("Failed to load sceneSettings", e); }
+        return {
+            ambientInt: 2.0,
+            dirInt: 1.0,
+            bgColor: theme.canvasBg,
+            wireframe: false,
+            progressive: true,
+            hideRatio: 0.6,
+            progressiveThreshold: 15000,
+            sse: 16,
+            maxMemory: 500,
+            importAxisGLB: '+y',
+            importAxisIFC: '+z',
+        };
     });
 
     // Confirmation Modal State
@@ -114,6 +156,26 @@ const App = () => {
     const visibilityDebounce = useRef<any>(null);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
+
+    // 持久化主题和语言设置
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_themeMode', themeMode);
+        } catch (e) { console.error("Failed to save themeMode", e); }
+    }, [themeMode]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_lang', lang);
+        } catch (e) { console.error("Failed to save lang", e); }
+    }, [lang]);
+
+    // 持久化场景设置
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_sceneSettings', JSON.stringify(sceneSettings));
+        } catch (e) { console.error("Failed to save sceneSettings", e); }
+    }, [sceneSettings]);
 
     // Update status when lang changes if status is "Ready" (or equivalent)
     useEffect(() => {
@@ -186,6 +248,14 @@ const App = () => {
             console.warn('无法保存pickEnabled状态', e);
         }
     }, [pickEnabled]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_showStats', String(showStats));
+        } catch (e) {
+            console.warn('无法保存showStats状态', e);
+        }
+    }, [showStats]);
 
     useEffect(() => {
         try {
@@ -359,10 +429,7 @@ const App = () => {
                 }
                 return;
             }
-        };
-
-        const handleDblClick = (e: MouseEvent) => {
-            if (activeTool !== 'measure' && pickEnabled) {
+            if(pickEnabled) {
                 const intersect = mgr.pick(e.clientX, e.clientY);
                 handleSelect(intersect ? intersect.object : null, intersect);
             }
@@ -373,18 +440,17 @@ const App = () => {
                 mgr.updateMeasureHover(e.clientX, e.clientY);
                 return;
             }
+            mgr.highlightObject(selectedUuid);
         };
 
         canvas.addEventListener("click", handleClick);
-        canvas.addEventListener("dblclick", handleDblClick);
         canvas.addEventListener("mousemove", handleMouseMove);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
-            canvas.removeEventListener("dblclick", handleDblClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
         };
-    }, [pickEnabled, selectedUuid, activeTool, measureType, t]);
+    }, [pickEnabled, selectedUuid, activeTool, measureType]);
 
     // 工具状态同步
     useEffect(() => {
@@ -674,11 +740,119 @@ const App = () => {
     return (
         <div style={styles.container}>
              <GlobalStyle theme={theme} />
+
+             {/* Fullscreen Viewport */}
+             <div ref={viewportRef} style={styles.viewport}>
+                <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
+                
+                {/* Stats HUD (Top Center) - Single Line Pill */}
+                {showStats && (
+                    <div style={styles.statsOverlay}>
+                        <div style={styles.statsRow}>
+                            <span style={{color: theme.textMuted}}>{t("monitor_meshes")}:</span>
+                            <span style={{fontWeight: 600}}>{stats.meshes}</span>
+                        </div>
+                        <div style={styles.statsDivider}></div>
+                        <div style={styles.statsRow}>
+                            <span style={{color: theme.textMuted}}>{t("monitor_faces")}:</span>
+                            <span style={{fontWeight: 600}}>{(stats.faces/1000).toFixed(1)}k</span>
+                        </div>
+                        <div style={styles.statsDivider}></div>
+                        <div style={styles.statsRow}>
+                            <span style={{color: theme.textMuted}}>{t("monitor_mem")}:</span>
+                            <span style={{fontWeight: 600}}>{stats.memory} MB</span>
+                        </div>
+                        <div style={styles.statsDivider}></div>
+                        <div style={styles.statsRow}>
+                            <span style={{color: theme.textMuted}}>{t("monitor_calls")}:</span>
+                            <span style={{fontWeight: 600}}>{stats.drawCalls}</span>
+                        </div>
+                    </div>
+                )}
+
+                <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
+             </div>
+
+             {/* Floating Panels Layer */}
+             
+             {showOutline && (
+                 <FloatingPanel title={t("interface_outline")} onClose={() => setShowOutline(false)} width={280} height={400} x={20} y={70} resizable={true} styles={styles} theme={theme} storageId="panel_outline">
+                     <SceneTree 
+                        sceneMgr={sceneMgr.current} 
+                        treeRoot={treeRoot} 
+                        setTreeRoot={setTreeRoot} 
+                        selectedUuid={selectedUuid}
+                        onSelect={(uuid, obj) => handleSelect(obj)}
+                        onToggleVisibility={handleToggleVisibility}
+                        onDelete={handleDeleteObject}
+                        styles={styles}
+                        theme={theme}
+                     />
+                 </FloatingPanel>
+             )}
+
+             {showProps && (
+                 <FloatingPanel title={t("interface_props")} onClose={() => setShowProps(false)} width={300} height={400} x={window.innerWidth - 320} y={70} resizable={true} styles={styles} theme={theme} storageId="panel_props">
+                    <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
+                 </FloatingPanel>
+             )}
+
+             {activeTool === 'measure' && (
+                <MeasurePanel 
+                    t={t} sceneMgr={sceneMgr.current} 
+                    measureType={measureType} setMeasureType={setMeasureType}
+                    measureHistory={measureHistory}
+                    onDelete={(id: string) => { sceneMgr.current?.removeMeasurement(id); setMeasureHistory(prev => prev.filter(i => i.id !== id)); }}
+                    onClear={() => { sceneMgr.current?.clearAllMeasurements(); setMeasureHistory([]); }}
+                    onClose={() => setActiveTool('none')}
+                    styles={styles} theme={theme}
+                />
+             )}
+
+             {activeTool === 'clip' && (
+                <ClipPanel 
+                    t={t} sceneMgr={sceneMgr.current} onClose={() => setActiveTool('none')}
+                    clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
+                    clipValues={clipValues} setClipValues={setClipValues}
+                    clipActive={clipActive} setClipActive={setClipActive}
+                    styles={styles} theme={theme}
+                />
+             )}
+
+             {activeTool === 'explode' && (
+                <ExplodePanel t={t} onClose={() => setActiveTool('none')} explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor} styles={styles} theme={theme} />
+             )}
+
+             {activeTool === 'export' && (
+                <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} styles={styles} theme={theme} />
+             )}
+
+             {activeTool === 'views' && (
+                 <ViewsPanel t={t} onClose={() => setActiveTool('none')} handleView={handleView} styles={styles} theme={theme} />
+             )}
+
+             {activeTool === 'settings' && (
+                <SettingsPanel 
+                    t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
+                    currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
+                    showStats={showStats} setShowStats={setShowStats}
+                    styles={styles} theme={theme}
+                />
+             )}
+
+             <ConfirmModal 
+                isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message}
+                onConfirm={() => { confirmState.action(); setConfirmState({...confirmState, isOpen: false}); }}
+                onCancel={() => setConfirmState({...confirmState, isOpen: false})}
+                t={t} styles={styles} theme={theme}
+             />
+
+             {/* Bottom Dock Toolbar */}
              <MenuBar 
                 t={t}
                 handleOpenFiles={handleOpenFiles}
                 handleOpenFolder={handleOpenFolder}
-                handleConvert={() => {}} // Deprecated, handled via activeTool
+                handleConvert={() => {}} 
                 handleView={handleView}
                 handleClear={handleClear}
                 pickEnabled={pickEnabled}
@@ -696,139 +870,6 @@ const App = () => {
                 styles={styles}
                 theme={theme}
              />
-
-             <div style={styles.workspace}>
-                 {showOutline && (
-                     <div style={{...styles.resizablePanel, width: leftWidth}}>
-                         <div style={styles.panelHeader}>{t("interface_outline")}</div>
-                         <SceneTree 
-                            sceneMgr={sceneMgr.current} 
-                            treeRoot={treeRoot} 
-                            setTreeRoot={setTreeRoot} 
-                            selectedUuid={selectedUuid}
-                            onSelect={(uuid, obj) => handleSelect(obj)}
-                            onToggleVisibility={handleToggleVisibility}
-                            onDelete={handleDeleteObject}
-                            styles={styles}
-                            theme={theme}
-                         />
-                     </div>
-                 )}
-                 
-                 {showOutline && (
-                     <div 
-                         style={{
-                             ...styles.resizeHandleHorizontal, 
-                             backgroundColor: resizingLeft.current ? theme.accent : theme.bg 
-                         }}
-                         onMouseDown={(e) => { e.preventDefault(); resizingLeft.current = true; }}
-                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.accent}
-                         onMouseLeave={(e) => !resizingLeft.current && (e.currentTarget.style.backgroundColor = theme.bg)}
-                     />
-                 )}
-
-                 <div ref={viewportRef} style={styles.viewport}>
-                    <canvas ref={canvasRef} style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', outline: 'none'}} />
-                    
-                    {activeTool === 'measure' && (
-                        <MeasurePanel 
-                            t={t} sceneMgr={sceneMgr.current} 
-                            measureType={measureType} setMeasureType={setMeasureType}
-                            measureHistory={measureHistory}
-                            onDelete={(id: string) => {
-                                sceneMgr.current?.removeMeasurement(id);
-                                setMeasureHistory(prev => prev.filter(i => i.id !== id));
-                            }}
-                            onClear={() => {
-                                sceneMgr.current?.clearAllMeasurements();
-                                setMeasureHistory([]);
-                            }}
-                            onClose={() => setActiveTool('none')}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    {activeTool === 'clip' && (
-                        <ClipPanel 
-                            t={t} sceneMgr={sceneMgr.current} onClose={() => setActiveTool('none')}
-                            clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
-                            clipValues={clipValues} setClipValues={setClipValues}
-                            clipActive={clipActive} setClipActive={setClipActive}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    {activeTool === 'explode' && (
-                        <ExplodePanel 
-                            t={t} onClose={() => setActiveTool('none')}
-                            explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    
-                    {activeTool === 'export' && (
-                        <ExportPanel 
-                            t={t} 
-                            onClose={() => setActiveTool('none')}
-                            onExport={handleExport}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    
-                    {/* Settings Modal - renders on top due to z-index */}
-                    {activeTool === 'settings' && (
-                        <SettingsPanel 
-                            t={t} 
-                            onClose={() => setActiveTool('none')}
-                            settings={sceneSettings}
-                            onUpdate={handleSettingsUpdate}
-                            currentLang={lang}
-                            setLang={setLang}
-                            themeMode={themeMode}
-                            setThemeMode={setThemeMode}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-
-                    {/* CONFIRM MODAL */}
-                    <ConfirmModal 
-                        isOpen={confirmState.isOpen}
-                        title={confirmState.title}
-                        message={confirmState.message}
-                        onConfirm={confirmAction}
-                        onCancel={() => setConfirmState({...confirmState, isOpen: false})}
-                        t={t}
-                        styles={styles} theme={theme}
-                    />
-                    
-                    <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
-                 </div>
-
-                 {showProps && (
-                     <div 
-                         style={{
-                             ...styles.resizeHandleHorizontal,
-                             backgroundColor: resizingRight.current ? theme.accent : theme.bg 
-                         }}
-                         onMouseDown={(e) => { e.preventDefault(); resizingRight.current = true; }}
-                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.accent}
-                         onMouseLeave={(e) => !resizingRight.current && (e.currentTarget.style.backgroundColor = theme.bg)}
-                     />
-                 )}
-
-                 {showProps && (
-                     <div style={{...styles.resizablePanel, width: rightWidth}}>
-                        <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
-                     </div>
-                 )}
-             </div>
-
-             <div style={styles.statusBar}>
-                 <div style={{display:'flex', gap: 15}}><span>{status}</span></div>
-                 <div style={{display:'flex', gap: 15}}>
-                    <span>{t("meshes")}: {stats.meshes}</span>
-                    <span>{t("memory")}: {stats.memory} MB</span>
-                    <span>{t("draw_calls")}: {stats.drawCalls}</span>
-                 </div>
-             </div>
         </div>
     );
 };
