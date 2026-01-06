@@ -278,29 +278,41 @@ const App = () => {
     const updateTree = useCallback(() => {
         if (!sceneMgr.current) return;
         
-        // 使用 SceneManager 中维护的结构树
         const root = sceneMgr.current.structureRoot;
         if (!root) {
             setTreeRoot([]);
             return;
         }
 
-        // 将 StructureTreeNode 转换为 SceneTree 需要的 TreeNode 格式
-        const convertNode = (node: any, depth = 0): any => {
+        const convertNode = (node: any, depth = 0, isFileNode = false): any => {
             return {
                 uuid: node.id,
                 name: node.name,
                 type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
                 depth,
-                children: (node.children || []).map((c: any) => convertNode(c, depth + 1)),
-                expanded: depth < 2,
+                children: isFileNode ? [] : (node.children || []).map((c: any) => convertNode(c, depth + 1)),
+                expanded: depth < 1,
                 visible: node.visible !== false,
-                object: node // 这里的 object 引用 StructureTreeNode
+                object: node,
+                isFileNode
             };
         };
 
-        setTreeRoot([convertNode(root)]);
-    }, []);
+        // 只显示 Root 的子节点，从而移除 Root 和 ImportedModels 这一层
+        const roots: any[] = [];
+        (root.children || []).forEach((c: any) => {
+            if (c.name === "ImportedModels" || c.name === "Tilesets") {
+                // 如果是这两个容器，则将其子节点作为顶级节点，从而移除容器层
+                (c.children || []).forEach((child: any) => {
+                    roots.push(convertNode(child, 0, true));
+                });
+            } else {
+                roots.push(convertNode(c, 0, true));
+            }
+        });
+        
+        setTreeRoot(roots);
+    }, [])
 
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
@@ -608,7 +620,7 @@ const App = () => {
 
             // 处理其他模型文件 (glb, ifc, etc.)
             if (otherFiles.length > 0) {
-                const group = await loadModelFiles(
+                const loadedObjects = await loadModelFiles(
                     otherFiles, 
                     (p, msg) => {
                         setProgress(p);
@@ -617,7 +629,9 @@ const App = () => {
                     t,
                     sceneSettings // Pass settings
                 );
-                sceneMgr.current.addModel(group);
+                for (const obj of loadedObjects) {
+                    await sceneMgr.current.addModel(obj);
+                }
             }
             
             updateTree();
@@ -660,7 +674,6 @@ const App = () => {
         if (!sceneMgr.current) return;
         
         const content = sceneMgr.current.contentGroup;
-        const models = content.getObjectByName("ImportedModels");
         
         // NBIM 导出直接由 SceneManager 处理
         if (format === 'nbim') {
@@ -682,7 +695,13 @@ const App = () => {
             return;
         }
 
-        if (!models || models.children.length === 0) { alert(t("no_models")); return; }
+        // 收集所有原始模型进行导出（非优化组）
+        const modelsToExport = content.children.filter(c => !c.userData.isOptimizedGroup && c.name !== "TilesRenderer");
+        if (modelsToExport.length === 0) { alert(t("no_models")); return; }
+
+        // 创建一个临时组用于导出，包含所有要导出的模型
+        const exportGroup = new THREE.Group();
+        modelsToExport.forEach(m => exportGroup.add(m.clone()));
         
         setLoading(true);
         setProgress(0);
@@ -703,7 +722,7 @@ const App = () => {
                     }
                     // @ts-ignore
                     const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-                    const filesMap = await convertLMBTo3DTiles(models, (msg) => {
+                    const filesMap = await convertLMBTo3DTiles(exportGroup, (msg) => {
                         setStatus(msg);
                         if (msg.includes('%')) {
                             const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
@@ -725,9 +744,9 @@ const App = () => {
                     alert(t("success"));
                     return;
                 } else if (format === 'glb') {
-                    blob = await exportGLB(models);
+                    blob = await exportGLB(exportGroup);
                 } else if (format === 'lmb') {
-                    blob = await exportLMB(models, (msg) => setStatus(msg));
+                    blob = await exportLMB(exportGroup, (msg) => setStatus(msg));
                 }
 
                 if (blob) {

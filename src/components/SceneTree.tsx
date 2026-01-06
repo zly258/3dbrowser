@@ -11,6 +11,7 @@ interface TreeNode {
     expanded: boolean;
     visible: boolean;
     object: any;
+    isFileNode?: boolean;
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
@@ -151,8 +152,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                             
                             <div style={styles.nodeLabel}>{node.name}</div>
 
-                            {/* Delete button for top-level nodes (files) */}
-                            {node.depth > 0 && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
+                            {/* Delete button for file nodes */}
+                            {node.isFileNode && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
                                 <div 
                                     onClick={(e) => handleDelete(e, node.uuid)}
                                     style={{

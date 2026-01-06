@@ -63,7 +63,7 @@ export class SceneManager {
     backLight: THREE.DirectionalLight;
 
     // 结构树
-    structureRoot: StructureTreeNode | null = null;
+    structureRoot: StructureTreeNode = { id: 'root', name: 'Root', type: 'Group', children: [] };
     private componentCounter = 0;
     private nodeMap = new Map<string, StructureTreeNode>();
 
@@ -111,6 +111,7 @@ export class SceneManager {
     
     // 缓存
     sceneBounds: THREE.Box3 = new THREE.Box3();
+    precomputedBounds: THREE.Box3 = new THREE.Box3(); // 预计算的包围盒
     
     // 渐进式加载状态 (对齐 refs)
     private chunks: any[] = [];
@@ -471,11 +472,14 @@ export class SceneManager {
         // 1. 构建场景树结构
         if (onProgress) onProgress(5, "正在构建场景树...");
         const modelRoot = this.buildSceneGraph(object);
-        if (!this.structureRoot) {
-            this.structureRoot = modelRoot;
-        } else {
-            if (!this.structureRoot.children) this.structureRoot.children = [];
-            this.structureRoot.children.push(modelRoot);
+        if (!this.structureRoot.children) this.structureRoot.children = [];
+        this.structureRoot.children.push(modelRoot);
+
+        // 预计算包围盒
+        const modelBox = new THREE.Box3().setFromObject(object);
+        if (!modelBox.isEmpty()) {
+            this.precomputedBounds.union(modelBox);
+            this.sceneBounds.copy(this.precomputedBounds);
         }
 
         // 2. 纹理优化 & 组件映射
@@ -703,6 +707,17 @@ export class SceneManager {
 
         this.contentGroup.add(renderer.group);
         this.tilesRenderer = renderer;
+
+        // 添加到结构树
+        const tilesNode: StructureTreeNode = {
+            id: (renderer.group as any).uuid,
+            name: "3D Tileset",
+            type: 'Group',
+            children: []
+        };
+        if (!this.structureRoot.children) this.structureRoot.children = [];
+        this.structureRoot.children.push(tilesNode);
+        this.nodeMap.set(tilesNode.id, tilesNode);
         
         // 如需，应用当前设置
         this.updateSettings(this.settings);
@@ -1009,20 +1024,17 @@ export class SceneManager {
                 new THREE.Vector3(manifest.globalBounds.min.x, manifest.globalBounds.min.y, manifest.globalBounds.min.z),
                 new THREE.Vector3(manifest.globalBounds.max.x, manifest.globalBounds.max.y, manifest.globalBounds.max.z)
             );
-            if (this.sceneBounds.isEmpty()) {
-                this.sceneBounds.copy(newBounds);
+            if (this.precomputedBounds.isEmpty()) {
+                this.precomputedBounds.copy(newBounds);
             } else {
-                this.sceneBounds.union(newBounds);
+                this.precomputedBounds.union(newBounds);
             }
+            this.sceneBounds.copy(this.precomputedBounds);
         }
         
         const modelRoot = manifest.structureTree;
-        if (!this.structureRoot) {
-            this.structureRoot = modelRoot;
-        } else {
-            if (!this.structureRoot.children) this.structureRoot.children = [];
-            this.structureRoot.children.push(modelRoot);
-        }
+        if (!this.structureRoot.children) this.structureRoot.children = [];
+        this.structureRoot.children.push(modelRoot);
 
         const rootId = modelRoot?.id || fileId;
         
@@ -1095,8 +1107,9 @@ export class SceneManager {
         this.explodeData.clear();
         this.optimizedMapping.clear();
         this.sceneBounds.makeEmpty();
+        this.precomputedBounds.makeEmpty();
         this.nbimFiles.clear();
-        this.structureRoot = null;
+        this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
         this.nodeMap.clear();
         this.chunks = [];
         this.componentMap.clear();
@@ -1314,7 +1327,13 @@ export class SceneManager {
 
     fitView(keepOrientation = false) {
         this.contentGroup.updateMatrixWorld(true);
-        const box = this.computeTotalBounds();
+        let box = this.computeTotalBounds();
+        
+        // 关键改进：如果计算出的包围盒为空（可能模型还没加载完），使用预计算的包围盒
+        if (box.isEmpty() && !this.precomputedBounds.isEmpty()) {
+            box = this.precomputedBounds.clone();
+        }
+
         this.sceneBounds = box.clone(); 
         this.fitBox(box, !keepOrientation);
     }
