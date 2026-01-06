@@ -139,6 +139,7 @@ export const composeMatrixByMatrix3 = (matrix: Float32Array, position: Float32Ar
 
 export class LMBLoader extends Loader {
   manager: LoadingManager;
+  private static expressIdCounter = 1000000; // LMB 使用较大的起始值以避免与 IFC 冲突
 
   constructor(manager?: LoadingManager) {
     super(manager);
@@ -236,6 +237,7 @@ export class LMBLoader extends Loader {
 
       // 使用节点名称（如果可用）
       const nodeName = node.name && node.name.length > 0 ? node.name : `Node_${i}`;
+      const expressID = LMBLoader.expressIdCounter++;
 
       if (node.instances.length > 0) {
         const instancedMesh = new THREE.InstancedMesh(
@@ -244,6 +246,7 @@ export class LMBLoader extends Loader {
           node.instances.length + 1
         );
         instancedMesh.name = nodeName;
+        instancedMesh.userData.expressID = expressID;
         
         const nodeMatrix = composeMatrixByMatrix3(node.matrix, node.position);
         instancedMesh.setMatrixAt(0, nodeMatrix);
@@ -259,6 +262,7 @@ export class LMBLoader extends Loader {
       } else {
         const mesh = new THREE.Mesh(geometry, materials[node.colorIndex]);
         mesh.name = nodeName;
+        mesh.userData.expressID = expressID;
 
         const matrix = composeMatrixByMatrix3(node.matrix, node.position);
         mesh.applyMatrix4(matrix);

@@ -161,7 +161,12 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
             <div style={{...styles.floatingHeader, cursor: movable ? 'move' : 'default'}} onMouseDown={onHeaderDown}>
                 <span>{title}</span>
                 {onClose && (
-                    <div onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}>
+                    <div 
+                        onClick={(e) => { e.stopPropagation(); onClose(); }} 
+                        style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
                         <IconClose width={20} height={20} />
                     </div>
                 )}
@@ -254,8 +259,8 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
 
 export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory, onDelete, onClear, onClose, styles, theme }: any) => {
     return (
-        <FloatingPanel title={t("measure_title")} onClose={onClose} width={280} height={360} resizable={false} styles={styles} theme={theme} storageId="tool_measure">
-            <div style={{padding: 12}}>
+        <FloatingPanel title={t("measure_title")} onClose={onClose} width={450} height={600} resizable={true} styles={styles} theme={theme} storageId="tool_measure">
+            <div style={{padding: 12, display: 'flex', flexDirection: 'column', height: '100%'}}>
                 <div style={{marginBottom: 12, display:'flex', gap:8}}>
                     <button style={{...styles.btn, flex:1, ...(measureType === 'dist' ? styles.btnActive : {})}} 
                             onClick={() => { setMeasureType('dist'); sceneMgr?.startMeasurement('dist'); }}>
@@ -281,7 +286,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
                     border: `1px solid ${theme.border}`, 
                     borderRadius: 8, 
                     backgroundColor: theme.bg, 
-                    height: 180, 
+                    flex: 1, 
                     overflowY: 'auto',
                     marginBottom: 10
                 }}>
@@ -303,8 +308,8 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
                                     </span>
                                     <span style={{color: theme.text, fontFamily: 'monospace'}}>{item.val}</span>
                                 </div>
-                                <div style={{cursor: 'pointer', opacity: 0.7, color: theme.danger}} onClick={() => onDelete(item.id)}>
-                                    <IconClose width={14} height={14} />
+                                <div style={{cursor: 'pointer', opacity: 0.7, color: theme.danger, padding: 4, borderRadius: 4}} onClick={() => onDelete(item.id)}>
+                                    <IconClose width={18} height={18} />
                                 </div>
                             </div>
                         ))
@@ -387,7 +392,8 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
                 {[
                     {id: 'glb', label: 'GLB', desc: t("export_glb")},
                     {id: 'lmb', label: 'LMB', desc: t("export_lmb")},
-                    {id: '3dtiles', label: '3D Tiles', desc: t("export_3dtiles")}
+                    {id: '3dtiles', label: '3D Tiles', desc: t("export_3dtiles")},
+                    {id: 'nbim', label: 'NBIM', desc: t("export_nbim")}
                 ].map(opt => (
                     <label key={opt.id} style={{
                         display:'flex', alignItems:'center', padding: '10px', cursor:'pointer', 

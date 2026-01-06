@@ -58,7 +58,14 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
             <div style={styles.modalContent}>
                 <div style={styles.floatingHeader}>
                     <span>{t("settings")}</span>
-                    <div onClick={onClose} style={{ cursor: 'pointer' }}><IconClose /></div>
+                    <div 
+                        onClick={onClose} 
+                        style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                        <IconClose width={20} height={20} />
+                    </div>
                 </div>
                 
                 <div style={{padding: 20, overflowY: 'auto', flex: 1}}>
@@ -113,29 +120,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                                 onChange={(e) => onUpdate({dirInt: parseFloat(e.target.value)})} 
                                 style={{width: 100}}/>
                         </Row>
-                    </Section>
-
-                    <Section title={t("st_opt")} theme={theme}>
-                        <Row label={t("st_opt_progressive")} theme={theme}>
-                            <input type="checkbox" checked={settings.progressive} onChange={(e) => onUpdate({progressive: e.target.checked})} />
-                        </Row>
-                        {settings.progressive && (
-                            <>
-                                <Row label={`${t("st_opt_ratio")} (${Math.round(settings.hideRatio * 100)}%)`} theme={theme}>
-                                    <input type="range" min="0.1" max="0.9" step="0.1" 
-                                        value={settings.hideRatio} 
-                                        onChange={(e) => onUpdate({hideRatio: parseFloat(e.target.value)})} 
-                                        style={{width: 100}}/>
-                                </Row>
-                                <Row label={t("st_opt_threshold")} theme={theme}>
-                                    <input type="number" 
-                                        value={settings.progressiveThreshold} 
-                                        onChange={(e) => onUpdate({progressiveThreshold: parseInt(e.target.value)})} 
-                                        style={{width: 80, background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius:6}}
-                                    />
-                                </Row>
-                            </>
-                        )}
                     </Section>
                     
                     <Section title={t("st_tiles")} theme={theme}>

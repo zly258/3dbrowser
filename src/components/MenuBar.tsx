@@ -71,7 +71,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
             <ToolbarButton label={t("menu_open_file")} icon={<IconFile />} onClick={() => fileInputRef.current?.click()} styles={styles} />
             <input 
                 ref={fileInputRef} 
-                type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc" 
+                type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim" 
                 onChange={props.handleOpenFiles} 
             />
             

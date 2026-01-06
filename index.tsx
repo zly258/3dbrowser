@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
-import { convertLMBTo3DTiles, createZip, exportGLB, exportLMB } from "./src/utils/converter";
+import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
 import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
@@ -15,6 +15,7 @@ import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
+import { IconClose } from "./src/theme/Icons";
 
 // --- 全局样式注入 ---
 const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
@@ -276,90 +277,63 @@ const App = () => {
     // 树结构更新
     const updateTree = useCallback(() => {
         if (!sceneMgr.current) return;
-        const content = sceneMgr.current.contentGroup;
         
-        let roots: any[] = [];
-        // Flatten "ImportedModels" wrapper to show the actual RootNodes
-        const imported = content.getObjectByName("ImportedModels");
-        if (imported) {
-             roots = [...roots, ...imported.children.map(c => buildTree(c))];
+        // 使用 SceneManager 中维护的结构树
+        const root = sceneMgr.current.structureRoot;
+        if (!root) {
+            setTreeRoot([]);
+            return;
         }
 
-        content.children.forEach(c => {
-             if (c.name !== "ImportedModels") {
-                 roots.push(buildTree(c));
-             }
-        });
+        // 将 StructureTreeNode 转换为 SceneTree 需要的 TreeNode 格式
+        const convertNode = (node: any, depth = 0): any => {
+            return {
+                uuid: node.id,
+                name: node.name,
+                type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
+                depth,
+                children: (node.children || []).map((c: any) => convertNode(c, depth + 1)),
+                expanded: depth < 2,
+                visible: node.visible !== false,
+                object: node // 这里的 object 引用 StructureTreeNode
+            };
+        };
 
-        setTreeRoot(roots);
+        setTreeRoot([convertNode(root)]);
     }, []);
 
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
         
-        const targetObj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-        const affectedUuids = new Set<string>();
-        
-        const processObject = (obj: THREE.Object3D) => {
-            obj.visible = visible;
-            affectedUuids.add(obj.uuid);
-            obj.children.forEach(child => {
-                if(child.name !== "Helpers") processObject(child);
-            });
-        };
+        sceneMgr.current.setObjectVisibility(uuid, visible);
 
-        if (targetObj) processObject(targetObj);
-
-        if (visibilityDebounce.current) clearTimeout(visibilityDebounce.current);
-        visibilityDebounce.current = setTimeout(() => {
-            setTreeRoot(prev => {
-                const updateNode = (nodes: any[]): any[] => {
-                    return nodes.map(n => {
-                        const shouldUpdate = affectedUuids.has(n.uuid);
-                        let newChildren = n.children;
-                        if (n.children.length > 0) newChildren = updateNode(n.children);
-                        if (shouldUpdate) return { ...n, visible, children: newChildren };
-                        return { ...n, children: newChildren };
-                    });
-                };
-                return updateNode(prev);
-            });
-        }, 120);
+        // 使用 updateTree 同步最新的结构树状态
+        updateTree();
     };
 
     const handleDeleteObject = (uuid: string) => {
         if (!sceneMgr.current) return;
         
         const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-        if (obj) {
-            const name = obj.name || "Item";
+        const node = sceneMgr.current.nodeMap.get(uuid);
+
+        if (obj || node) {
+            const name = (obj as any)?.name || (node as any)?.name || "Item";
             
             setConfirmState({
                 isOpen: true,
                 title: t("delete_item"),
                 message: `${t("confirm_delete")} "${name}"?`,
                 action: () => {
-                    // Traverse and dispose resources to prevent memory leaks
-                    obj.traverse((child: any) => {
-                        if (child.isMesh) {
-                            if (child.geometry) child.geometry.dispose();
-                            if (child.material) {
-                                if (Array.isArray(child.material)) child.material.forEach((m:any) => m.dispose());
-                                else child.material.dispose();
-                            }
-                        }
-                        if (child.isTilesRenderer) {
-                             child.dispose();
-                        }
-                    });
+                    // Use SceneManager's removeObject for clean removal
+                    // SceneManager 内部会处理资源释放和结构树同步
+                    sceneMgr.current?.removeObject(uuid);
 
                     // If it's the tiles renderer logic wrapped
                     if (sceneMgr.current?.tilesRenderer && sceneMgr.current.tilesRenderer.group === obj) {
                         sceneMgr.current.tilesRenderer.dispose();
                         sceneMgr.current.tilesRenderer = null;
                     }
-
-                    obj.removeFromParent();
                     
                     // If selected, deselect
                     if (selectedUuid === uuid) {
@@ -370,8 +344,6 @@ const App = () => {
 
                     // Refresh tree
                     updateTree();
-                    // Refresh optimization cache in SceneManager
-                    sceneMgr.current?.refreshMeshCache();
                 }
             });
         }
@@ -430,8 +402,8 @@ const App = () => {
                 return;
             }
             if(pickEnabled) {
-                const intersect = mgr.pick(e.clientX, e.clientY);
-                handleSelect(intersect ? intersect.object : null, intersect);
+                const result = mgr.pick(e.clientX, e.clientY);
+                handleSelect(result ? result.object : null, result ? result.intersect : null);
             }
         };
 
@@ -515,66 +487,87 @@ const App = () => {
             return;
         }
 
-        setSelectedUuid(obj.uuid);
-        sceneMgr.current.highlightObject(obj.uuid);
+        // 统一处理 UUID (兼容 Object3D 和 StructureTreeNode)
+        const uuid = obj.uuid || obj.id;
+        if (!uuid) return;
+
+        setSelectedUuid(uuid);
+        sceneMgr.current.highlightObject(uuid);
         
+        // 尝试获取真实的 Object3D 以获得更多几何信息
+        let realObj = obj instanceof THREE.Object3D ? obj : sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
+        
+        // 如果还是没找到，可能是优化后的对象，尝试从 SceneManager 获取
+        if (!realObj && sceneMgr.current) {
+            // 如果是 NBIM 模式，可能只能得到一个代理对象
+            // 我们在 getRayIntersects 中已经处理了代理对象的创建
+        }
+
+        const target = realObj || obj; // 优先使用真实对象，否则使用传入的对象（可能是 StructureTreeNode）
+
         const basicProps: any = {};
         const geoProps: any = {};
         const ifcProps: any = {};
 
-        basicProps[t("prop_name")] = obj.name || "Unnamed";
-        basicProps[t("prop_type")] = obj.type;
-        basicProps[t("prop_id")] = obj.uuid.substring(0, 8) + "..."; 
+        basicProps[t("prop_name")] = target.name || "Unnamed";
+        basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
+        basicProps[t("prop_id")] = uuid.substring(0, 8) + "..."; 
         
-        const worldPos = new THREE.Vector3();
-        obj.getWorldPosition(worldPos);
-        geoProps[t("prop_pos")] = `${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}`;
+        if (target.getWorldPosition) {
+            const worldPos = new THREE.Vector3();
+            target.getWorldPosition(worldPos);
+            geoProps[t("prop_pos")] = `${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}`;
+        }
         
-        if (obj.isMesh) {
-             const box = new THREE.Box3().setFromObject(obj);
-             const size = new THREE.Vector3();
-             box.getSize(size);
-             geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
-             
-             if (obj.geometry) {
-                geoProps[t("prop_vert")] = (obj.geometry.attributes.position?.count || 0).toLocaleString();
-                if(obj.geometry.index) {
-                    geoProps[t("prop_tri")] = (obj.geometry.index.count / 3).toLocaleString();
-                } else {
-                     geoProps[t("prop_tri")] = ((obj.geometry.attributes.position?.count || 0) / 3).toLocaleString();
+        if (target.isMesh || target.type === 'Mesh') {
+             // 几何信息
+             if (target instanceof THREE.Mesh) {
+                const box = new THREE.Box3().setFromObject(target);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
+                
+                if (target.geometry) {
+                    geoProps[t("prop_vert")] = (target.geometry.attributes.position?.count || 0).toLocaleString();
+                    if(target.geometry.index) {
+                        geoProps[t("prop_tri")] = (target.geometry.index.count / 3).toLocaleString();
+                    } else {
+                        geoProps[t("prop_tri")] = ((target.geometry.attributes.position?.count || 0) / 3).toLocaleString();
+                    }
                 }
-            }
-            if (obj.isInstancedMesh) {
-                 geoProps[t("prop_inst")] = obj.count.toLocaleString();
-            }
+             } else if (target.userData?.boundingBox) {
+                const size = new THREE.Vector3();
+                target.userData.boundingBox.getSize(size);
+                geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
+             }
+             
+             if (target.isInstancedMesh) {
+                 geoProps[t("prop_inst")] = target.count.toLocaleString();
+             }
 
             // --- IFC 属性获取逻辑 ---
-            if (obj.userData.isIFC || (obj.parent && obj.parent.userData.isIFC)) {
-                // 若使用新逻辑，通常 userData 在网格对象上
-                const target = obj.userData.isIFC ? obj : obj.parent;
-                if (target && target.userData.ifcAPI && target.userData.modelID !== undefined) {
-                    const expressID = obj.userData.expressID;
+            // 检查 userData 或 parent.userData
+            const userData = target.userData || {};
+            const parentUserData = target.parent?.userData || {};
+
+            if (userData.isIFC || parentUserData.isIFC) {
+                const ifcTarget = userData.isIFC ? target : target.parent;
+                if (ifcTarget && ifcTarget.userData.ifcAPI && ifcTarget.userData.modelID !== undefined) {
+                    const expressID = userData.expressID;
                     if (expressID) {
                         try {
-                            // 使用之前存储的原始 API 引用
-                            const api = target.userData.ifcAPI;
-                            const modelID = target.userData.modelID;
-                            
-                            // 使用自定义属性获取器解析属性（新的扁平化格式）
-                            const ifcMgr = target.userData.ifcManager;
-                            const flatProps = await ifcMgr.getItemProperties(modelID, expressID);
-                           
+                            const ifcMgr = ifcTarget.userData.ifcManager;
+                            const flatProps = await ifcMgr.getItemProperties(ifcTarget.userData.modelID, expressID);
                             if (flatProps) {
-                                // 直接合并所有IFC属性到ifcProps变量（扁平化格式）
                                 Object.assign(ifcProps, flatProps);
                             }
                         } catch(e) { console.error("IFC Props Error", e); }
                     }
                 }
             }
-        } else if (obj.userData.boundingBox) {
+        } else if (target.userData?.boundingBox) {
              const size = new THREE.Vector3();
-             obj.userData.boundingBox.getSize(size);
+             target.userData.boundingBox.getSize(size);
              geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
         }
 
@@ -593,25 +586,44 @@ const App = () => {
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length || !sceneMgr.current) return;
+        const files = Array.from(e.target.files) as File[];
         setLoading(true);
         setStatus(t("loading"));
         setProgress(0);
         
         try {
-            const group = await loadModelFiles(
-                Array.from(e.target.files), 
-                (p, msg) => {
-                    setProgress(p);
-                    if(msg) setStatus(msg);
-                }, 
-                t,
-                sceneSettings // Pass settings
-            );
-            sceneMgr.current.addModel(group);
+            // 分离 nbim 和其他文件
+            const nbimFiles = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
+            const otherFiles = files.filter(f => !f.name.toLowerCase().endsWith('.nbim'));
+
+            // 处理 nbim 文件
+            for (const file of nbimFiles) {
+                if (sceneMgr.current) {
+                    await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
+                        setProgress(p);
+                        if(msg) setStatus(msg);
+                    });
+                }
+            }
+
+            // 处理其他模型文件 (glb, ifc, etc.)
+            if (otherFiles.length > 0) {
+                const group = await loadModelFiles(
+                    otherFiles, 
+                    (p, msg) => {
+                        setProgress(p);
+                        if(msg) setStatus(msg);
+                    }, 
+                    t,
+                    sceneSettings // Pass settings
+                );
+                sceneMgr.current.addModel(group);
+            }
+            
             updateTree();
             setStatus(t("success"));
             setTimeout(() => sceneMgr.current?.fitView(), 100);
-        } catch (err) { 
+        } catch (err) {
             console.error(err); 
             setStatus(t("failed")); 
         } finally { 
@@ -646,7 +658,30 @@ const App = () => {
     // New unified Export Handler
     const handleExport = async (format: string) => {
         if (!sceneMgr.current) return;
-        const models = sceneMgr.current.contentGroup.getObjectByName("ImportedModels");
+        
+        const content = sceneMgr.current.contentGroup;
+        const models = content.getObjectByName("ImportedModels");
+        
+        // NBIM 导出直接由 SceneManager 处理
+        if (format === 'nbim') {
+            if (content.children.length === 0) { alert(t("no_models")); return; }
+            setLoading(true);
+            setStatus(t("processing") + "...");
+            setActiveTool('none');
+            setTimeout(async () => {
+                try {
+                    await sceneMgr.current?.exportNbim();
+                    setStatus(t("success"));
+                } catch (e) {
+                    console.error(e);
+                    setStatus(t("failed") + ": " + (e as Error).message);
+                } finally {
+                    setLoading(false);
+                }
+            }, 100);
+            return;
+        }
+
         if (!models || models.children.length === 0) { alert(t("no_models")); return; }
         
         setLoading(true);
@@ -741,104 +776,186 @@ const App = () => {
         <div style={styles.container}>
              <GlobalStyle theme={theme} />
 
-             {/* Fullscreen Viewport */}
-             <div ref={viewportRef} style={styles.viewport}>
-                <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
+             {/* Main Content Area: Flex Row */}
+             <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
                 
-                {/* Stats HUD (Top Center) - Single Line Pill */}
-                {showStats && (
-                    <div style={styles.statsOverlay}>
-                        <div style={styles.statsRow}>
-                            <span style={{color: theme.textMuted}}>{t("monitor_meshes")}:</span>
-                            <span style={{fontWeight: 600}}>{stats.meshes}</span>
+                {/* Left Sidebar: Outline */}
+                {showOutline && (
+                    <div style={{ 
+                        width: `${leftWidth}px`, 
+                        backgroundColor: theme.panelBg, 
+                        borderRight: `1px solid ${theme.border}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        zIndex: 10,
+                        position: 'relative'
+                    }}>
+                        <div style={{ 
+                            padding: '12px 16px', 
+                            borderBottom: `1px solid ${theme.border}`, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            fontWeight: '600'
+                        }}>
+                            <span>{t("interface_outline")}</span>
+                            <div 
+                                onClick={() => setShowOutline(false)} 
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                <IconClose width={20} height={20} />
+                            </div>
                         </div>
-                        <div style={styles.statsDivider}></div>
-                        <div style={styles.statsRow}>
-                            <span style={{color: theme.textMuted}}>{t("monitor_faces")}:</span>
-                            <span style={{fontWeight: 600}}>{(stats.faces/1000).toFixed(1)}k</span>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <SceneTree 
+                                sceneMgr={sceneMgr.current} 
+                                treeRoot={treeRoot} 
+                                setTreeRoot={setTreeRoot} 
+                                selectedUuid={selectedUuid}
+                                onSelect={(uuid, obj) => handleSelect(obj)}
+                                onToggleVisibility={handleToggleVisibility}
+                                onDelete={handleDeleteObject}
+                                styles={styles}
+                                theme={theme}
+                            />
                         </div>
-                        <div style={styles.statsDivider}></div>
-                        <div style={styles.statsRow}>
-                            <span style={{color: theme.textMuted}}>{t("monitor_mem")}:</span>
-                            <span style={{fontWeight: 600}}>{stats.memory} MB</span>
-                        </div>
-                        <div style={styles.statsDivider}></div>
-                        <div style={styles.statsRow}>
-                            <span style={{color: theme.textMuted}}>{t("monitor_calls")}:</span>
-                            <span style={{fontWeight: 600}}>{stats.drawCalls}</span>
-                        </div>
+                        {/* Resize handle */}
+                        <div 
+                            onMouseDown={() => resizingLeft.current = true}
+                            style={{ 
+                                position: 'absolute', right: -2, top: 0, bottom: 0, width: 4, 
+                                cursor: 'col-resize', zIndex: 20 
+                            }} 
+                        />
                     </div>
                 )}
 
-                <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
+                {/* Center Viewport */}
+                <div ref={viewportRef} style={{ 
+                    flex: 1, 
+                    position: 'relative', 
+                    backgroundColor: theme.canvasBg,
+                    overflow: 'hidden'
+                }}>
+                    <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
+                    
+                    {/* Stats HUD (Top Center) */}
+                    {showStats && (
+                        <div style={styles.statsOverlay}>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_meshes")}:</span>
+                                <span style={{fontWeight: 600}}>{stats.meshes}</span>
+                            </div>
+                            <div style={styles.statsDivider}></div>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_faces")}:</span>
+                                <span style={{fontWeight: 600}}>{(stats.faces/1000).toFixed(1)}k</span>
+                            </div>
+                            <div style={styles.statsDivider}></div>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_mem")}:</span>
+                                <span style={{fontWeight: 600}}>{stats.memory} MB</span>
+                            </div>
+                            <div style={styles.statsDivider}></div>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_calls")}:</span>
+                                <span style={{fontWeight: 600}}>{stats.drawCalls}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
+
+                    {/* Overlay Panels for Tools */}
+                    {activeTool === 'measure' && (
+                        <MeasurePanel 
+                            t={t} sceneMgr={sceneMgr.current} 
+                            measureType={measureType} setMeasureType={setMeasureType}
+                            measureHistory={measureHistory}
+                            onDelete={(id: string) => { sceneMgr.current?.removeMeasurement(id); setMeasureHistory(prev => prev.filter(i => i.id !== id)); }}
+                            onClear={() => { sceneMgr.current?.clearAllMeasurements(); setMeasureHistory([]); }}
+                            onClose={() => setActiveTool('none')}
+                            styles={styles} theme={theme}
+                        />
+                    )}
+
+                    {activeTool === 'clip' && (
+                        <ClipPanel 
+                            t={t} sceneMgr={sceneMgr.current} onClose={() => setActiveTool('none')}
+                            clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
+                            clipValues={clipValues} setClipValues={setClipValues}
+                            clipActive={clipActive} setClipActive={setClipActive}
+                            styles={styles} theme={theme}
+                        />
+                    )}
+
+                    {activeTool === 'explode' && (
+                        <ExplodePanel t={t} onClose={() => setActiveTool('none')} explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor} styles={styles} theme={theme} />
+                    )}
+
+                    {activeTool === 'export' && (
+                        <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} styles={styles} theme={theme} />
+                    )}
+
+                    {activeTool === 'views' && (
+                        <ViewsPanel t={t} onClose={() => setActiveTool('none')} handleView={handleView} styles={styles} theme={theme} />
+                    )}
+
+                    {activeTool === 'settings' && (
+                        <SettingsPanel 
+                            t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
+                            currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
+                            showStats={showStats} setShowStats={setShowStats}
+                            styles={styles} theme={theme}
+                        />
+                    )}
+                </div>
+
+                {/* Right Sidebar: Properties */}
+                {showProps && (
+                    <div style={{ 
+                        width: `${rightWidth}px`, 
+                        backgroundColor: theme.panelBg, 
+                        borderLeft: `1px solid ${theme.border}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        zIndex: 10,
+                        position: 'relative'
+                    }}>
+                        <div style={{ 
+                            padding: '12px 16px', 
+                            borderBottom: `1px solid ${theme.border}`, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            fontWeight: '600'
+                        }}>
+                            <span>{t("interface_props")}</span>
+                            <div 
+                                onClick={() => setShowProps(false)} 
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                <IconClose width={20} height={20} />
+                            </div>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
+                        </div>
+                        {/* Resize handle */}
+                        <div 
+                            onMouseDown={() => resizingRight.current = true}
+                            style={{ 
+                                position: 'absolute', left: -2, top: 0, bottom: 0, width: 4, 
+                                cursor: 'col-resize', zIndex: 20 
+                            }} 
+                        />
+                    </div>
+                )}
              </div>
-
-             {/* Floating Panels Layer */}
-             
-             {showOutline && (
-                 <FloatingPanel title={t("interface_outline")} onClose={() => setShowOutline(false)} width={280} height={400} x={20} y={70} resizable={true} styles={styles} theme={theme} storageId="panel_outline">
-                     <SceneTree 
-                        sceneMgr={sceneMgr.current} 
-                        treeRoot={treeRoot} 
-                        setTreeRoot={setTreeRoot} 
-                        selectedUuid={selectedUuid}
-                        onSelect={(uuid, obj) => handleSelect(obj)}
-                        onToggleVisibility={handleToggleVisibility}
-                        onDelete={handleDeleteObject}
-                        styles={styles}
-                        theme={theme}
-                     />
-                 </FloatingPanel>
-             )}
-
-             {showProps && (
-                 <FloatingPanel title={t("interface_props")} onClose={() => setShowProps(false)} width={300} height={400} x={window.innerWidth - 320} y={70} resizable={true} styles={styles} theme={theme} storageId="panel_props">
-                    <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
-                 </FloatingPanel>
-             )}
-
-             {activeTool === 'measure' && (
-                <MeasurePanel 
-                    t={t} sceneMgr={sceneMgr.current} 
-                    measureType={measureType} setMeasureType={setMeasureType}
-                    measureHistory={measureHistory}
-                    onDelete={(id: string) => { sceneMgr.current?.removeMeasurement(id); setMeasureHistory(prev => prev.filter(i => i.id !== id)); }}
-                    onClear={() => { sceneMgr.current?.clearAllMeasurements(); setMeasureHistory([]); }}
-                    onClose={() => setActiveTool('none')}
-                    styles={styles} theme={theme}
-                />
-             )}
-
-             {activeTool === 'clip' && (
-                <ClipPanel 
-                    t={t} sceneMgr={sceneMgr.current} onClose={() => setActiveTool('none')}
-                    clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
-                    clipValues={clipValues} setClipValues={setClipValues}
-                    clipActive={clipActive} setClipActive={setClipActive}
-                    styles={styles} theme={theme}
-                />
-             )}
-
-             {activeTool === 'explode' && (
-                <ExplodePanel t={t} onClose={() => setActiveTool('none')} explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor} styles={styles} theme={theme} />
-             )}
-
-             {activeTool === 'export' && (
-                <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} styles={styles} theme={theme} />
-             )}
-
-             {activeTool === 'views' && (
-                 <ViewsPanel t={t} onClose={() => setActiveTool('none')} handleView={handleView} styles={styles} theme={theme} />
-             )}
-
-             {activeTool === 'settings' && (
-                <SettingsPanel 
-                    t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
-                    currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
-                    showStats={showStats} setShowStats={setShowStats}
-                    styles={styles} theme={theme}
-                />
-             )}
 
              <ConfirmModal 
                 isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message}

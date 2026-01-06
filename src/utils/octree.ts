@@ -3,8 +3,11 @@ import * as THREE from "three";
 // 八叉树项接口
 interface OctreeItem {
   id: string; // 几何体_uuid + 材质_uuid
+  uuid: string; // 原始 Object3D 的 uuid
+  expressID?: number; // IFC expressID
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
+  color: number; // 原始颜色
   matrix: THREE.Matrix4; // 世界矩阵
   center: THREE.Vector3;
 }
@@ -41,13 +44,113 @@ export function calculateGeometryMemory(geometry: THREE.BufferGeometry): number 
 }
 
 /**
+ * 几何体标准化处理（对齐 refs 逻辑）
+ * 强制转换为标准 BufferGeometry，处理 InterleavedBufferAttributes 等复杂情况
+ * 这是解决“块加载不全”和 BatchedMesh 兼容性的关键
+ */
+export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  if (!source.getAttribute('position')) return new THREE.BoxGeometry(0.1, 0.1, 0.1);
+
+  const geometry = new THREE.BufferGeometry();
+  
+  // 1. 复制 position
+  const posAttr = source.getAttribute('position');
+  const positions = new Float32Array(posAttr.count * 3);
+  for (let i = 0; i < posAttr.count; i++) {
+    positions[i * 3] = posAttr.getX(i);
+    positions[i * 3 + 1] = posAttr.getY(i);
+    positions[i * 3 + 2] = posAttr.getZ(i);
+  }
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  // 2. 复制 normal (如果不存在则重新计算)
+  const normAttr = source.getAttribute('normal');
+  if (normAttr) {
+    const normals = new Float32Array(normAttr.count * 3);
+    for (let i = 0; i < normAttr.count; i++) {
+      normals[i * 3] = normAttr.getX(i);
+      normals[i * 3 + 1] = normAttr.getY(i);
+      normals[i * 3 + 2] = normAttr.getZ(i);
+    }
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  } else {
+    geometry.computeVertexNormals();
+  }
+
+  // 3. 复制 index (如果不存在则生成)
+  if (source.getIndex()) {
+    const sourceIndex = source.getIndex()!;
+    const indices = new Uint32Array(sourceIndex.count);
+    for (let i = 0; i < sourceIndex.count; i++) {
+      indices[i] = sourceIndex.getX(i);
+    }
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  }
+
+  // 4. 移除冗余属性 (uv, uv2, color 等)，确保 BatchedMesh 兼容性
+  geometry.deleteAttribute('uv');
+  geometry.deleteAttribute('uv2');
+  geometry.deleteAttribute('color');
+
+  // 5. 计算包围盒
+  geometry.computeBoundingBox();
+  
+  return geometry;
+}
+
+/**
+ * 提取构件颜色
+ */
+function extractColor(mesh: THREE.Mesh): number {
+  if (mesh.userData.color !== undefined) return mesh.userData.color;
+  
+  // 尝试从顶点颜色提取（针对某些 BIM 格式）
+  const geo = mesh.geometry;
+  if (geo && geo.attributes.color) {
+    const colorAttr = geo.attributes.color;
+    if (colorAttr.count > 0) {
+      const r = colorAttr.getX(0);
+      const g = colorAttr.getY(0);
+      const b = colorAttr.getZ(0);
+      // 处理 0-1 或 0-255 范围
+      const color = new THREE.Color();
+      if (r > 1 || g > 1 || b > 1) color.setRGB(r / 255, g / 255, b / 255);
+      else color.setRGB(r, g, b);
+      return color.getHex();
+    }
+  }
+
+  const material = mesh.material;
+  if (Array.isArray(material)) {
+    for (const mat of material) {
+      if ((mat as any).color) return (mat as any).color.getHex();
+    }
+  } else if ((material as any).color) {
+    return (material as any).color.getHex();
+  }
+  
+  return getColorByComponentType(mesh.name);
+}
+
+/**
+ * 根据构件类型获取颜色
+ */
+function getColorByComponentType(name: string): number {
+  const n = name.toLowerCase();
+  if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // blue-200
+  if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // blue-300
+  if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // gray-200
+  if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // gray-100
+  return 0x94a3b8; // gray-400
+}
+
+/**
  * 从根对象收集所有可渲染项
  * @param root 根对象
  * @returns 可渲染项数组
  */
 function collectItems(root: THREE.Object3D): OctreeItem[] {
   const items: OctreeItem[] = [];
-  const _v3 = new THREE.Vector3();
   const _m4 = new THREE.Matrix4();
 
   // 根对象可能已居中（应用了偏移），所以updateMatrixWorld确保
@@ -63,6 +166,14 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
       
       if (!geometry) return;
 
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      const worldMatrix = mesh.matrixWorld;
+      
+      // 使用包围盒中心点，对齐 refs 逻辑，处理几何体偏移情况
+      const center = new THREE.Vector3();
+      geometry.boundingBox!.getCenter(center);
+      center.applyMatrix4(worldMatrix);
+
       const matUuid = Array.isArray(material) ? material[0]?.uuid : material?.uuid;
       const id = `${geometry.uuid}_${matUuid}`;
 
@@ -70,25 +181,33 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
         const instancedMesh = mesh as THREE.InstancedMesh;
         for (let i = 0; i < instancedMesh.count; i++) {
           instancedMesh.getMatrixAt(i, _m4);
-          _m4.premultiply(instancedMesh.matrixWorld);
-          _v3.setFromMatrixPosition(_m4);
+          _m4.premultiply(worldMatrix);
+          
+          const instanceCenter = new THREE.Vector3();
+          geometry.boundingBox!.getCenter(instanceCenter);
+          instanceCenter.applyMatrix4(_m4);
+
           items.push({
             id,
+            uuid: mesh.uuid,
+            expressID: instancedMesh.userData.expressID,
             geometry,
             material: material as THREE.Material,
+            color: extractColor(mesh),
             matrix: _m4.clone(),
-            center: _v3.clone()
+            center: instanceCenter
           });
         }
       } else {
-        _m4.copy(mesh.matrixWorld);
-        _v3.setFromMatrixPosition(_m4);
         items.push({
             id,
+            uuid: mesh.uuid,
+            expressID: mesh.userData.expressID,
             geometry,
             material: material as THREE.Material,
-            matrix: _m4.clone(),
-            center: _v3.clone()
+            color: extractColor(mesh),
+            matrix: worldMatrix.clone(),
+            center: center
         });
       }
     }
@@ -113,45 +232,26 @@ function buildOctree(items: OctreeItem[], bounds: THREE.Box3, config: OctreeConf
   const center = bounds.getCenter(new THREE.Vector3());
   const min = bounds.min;
   const max = bounds.max;
-  const childrenBounds: THREE.Box3[] = [];
-
-  for (let i = 0; i < 2; i++) {
-    for (let j = 0; j < 2; j++) {
-      for (let k = 0; k < 2; k++) {
-        const bMin = new THREE.Vector3(
-          i === 0 ? min.x : center.x,
-          j === 0 ? min.y : center.y,
-          k === 0 ? min.z : center.z
-        );
-        const bMax = new THREE.Vector3(
-          i === 0 ? center.x : max.x,
-          j === 0 ? center.y : max.y,
-          k === 0 ? center.z : max.z
-        );
-        childrenBounds.push(new THREE.Box3(bMin, bMax));
-      }
-    }
-  }
-
+  
   const childrenItems: OctreeItem[][] = Array(8).fill(null).map(() => []);
 
   for (const item of items) {
-    let found = false;
-    for (let i = 0; i < 8; i++) {
-      if (childrenBounds[i].containsPoint(item.center)) {
-        childrenItems[i].push(item);
-        found = true;
-        break;
-      }
-    }
-    if (!found) childrenItems[0].push(item);
+    const c = item.center;
+    // 使用与 refs 一致的位运算计算子块索引，更简洁高效
+    const idx = (c.x >= center.x ? 1 : 0) | (c.y >= center.y ? 2 : 0) | (c.z >= center.z ? 4 : 0);
+    childrenItems[idx].push(item);
   }
 
   const children: OctreeNode[] = [];
   let hasChildren = false;
+  
   for (let i = 0; i < 8; i++) {
     if (childrenItems[i].length > 0) {
-      children.push(buildOctree(childrenItems[i], childrenBounds[i], config, level + 1));
+      const cMin = new THREE.Vector3((i & 1) ? center.x : min.x, (i & 2) ? center.y : min.y, (i & 4) ? center.z : min.z);
+      const cMax = new THREE.Vector3((i & 1) ? max.x : center.x, (i & 2) ? max.y : center.y, (i & 4) ? max.z : center.z);
+      const childBounds = new THREE.Box3(cMin, cMax);
+      
+      children.push(buildOctree(childrenItems[i], childBounds, config, level + 1));
       hasChildren = true;
     }
   }
@@ -198,11 +298,110 @@ function createSceneFromItems(items: OctreeItem[]): THREE.Scene {
 }
 
 /**
+ * 从项数组创建 BatchedMesh
+ * @param items 可渲染项数组
+ * @param material 材质
+ * @returns 创建的 BatchedMesh
+ */
+function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Material): THREE.BatchedMesh | null {
+  if (items.length === 0) return null;
+
+  let vertexCount = 0;
+  let indexCount = 0;
+
+  // 预先处理所有几何体，确保它们是标准化的（对齐 refs）
+  const sanitizedItems = items.map(item => ({
+    ...item,
+    geometry: sanitizeGeometry(item.geometry)
+  }));
+
+  for (const item of sanitizedItems) {
+    vertexCount += item.geometry.attributes.position.count;
+    if (item.geometry.index) {
+      indexCount += item.geometry.index.count;
+    }
+  }
+
+  const batchedMesh = new THREE.BatchedMesh(sanitizedItems.length, vertexCount, indexCount, material);
+  
+  batchedMesh.frustumCulled = true;
+
+  const geometryMap = new Map<THREE.BufferGeometry, number>();
+  const batchIdToExpressId = new Map<number, number>();
+  const batchIdToUuid = new Map<number, string>();
+  const batchIdToColor = new Map<number, number>();
+
+  for (const item of sanitizedItems) {
+    let geometryId = geometryMap.get(item.geometry);
+    if (geometryId === undefined) {
+      geometryId = batchedMesh.addGeometry(item.geometry);
+      geometryMap.set(item.geometry, geometryId);
+    }
+
+    if (geometryId !== -1) {
+      const instanceId = batchedMesh.addInstance(geometryId);
+      batchedMesh.setMatrixAt(instanceId, item.matrix);
+      
+      const color = new THREE.Color(item.color);
+      batchedMesh.setColorAt(instanceId, color);
+
+      if (item.expressID !== undefined) {
+        batchIdToExpressId.set(instanceId, item.expressID);
+      }
+      
+      batchIdToUuid.set(instanceId, item.uuid);
+      batchIdToColor.set(instanceId, item.color);
+    }
+  }
+
+  batchedMesh.userData.batchIdToExpressId = batchIdToExpressId;
+  batchedMesh.userData.batchIdToUuid = batchIdToUuid;
+  batchedMesh.userData.batchIdToColor = batchIdToColor;
+  return batchedMesh;
+}
+
+/**
+ * 将八叉树转换为一组 BatchedMesh 节点
+ * @param node 八叉树节点
+ * @param material 共享材质（通常 BIM 模型可以使用一个 StandardMaterial）
+ * @param group 结果组
+ */
+function convertOctreeToBatchedMeshes(node: OctreeNode, material: THREE.Material, group: THREE.Group) {
+  if (node.children) {
+    for (const child of node.children) {
+      convertOctreeToBatchedMeshes(child, material, group);
+    }
+  } else if (node.items.length > 0) {
+    const batchedMesh = createBatchedMeshFromItems(node.items, material);
+    if (batchedMesh) {
+      batchedMesh.name = `chunk_l${node.level}`;
+      // 存储包围盒用于视锥体剔除优化（如果需要）
+      batchedMesh.userData.bounds = node.bounds;
+      group.add(batchedMesh);
+    }
+  }
+}
+
+/**
+ * 收集所有叶子节点
+ */
+export function collectLeafNodes(node: OctreeNode, leaves: OctreeNode[] = []) {
+  if (node.children) {
+    for (const child of node.children) {
+      collectLeafNodes(child, leaves);
+    }
+  } else if (node.items.length > 0) {
+    leaves.push(node);
+  }
+  return leaves;
+}
+
+/**
  * 导出内部接口以便在其他文件中使用
  */
-export { OctreeItem, OctreeNode, OctreeConfig };
+export type { OctreeItem, OctreeNode, OctreeConfig };
 
 /**
  * 导出内部函数以便在其他文件中使用
  */
-export { collectItems, buildOctree, createSceneFromItems };
+export { collectItems, buildOctree, createSceneFromItems, createBatchedMeshFromItems, convertOctreeToBatchedMeshes };

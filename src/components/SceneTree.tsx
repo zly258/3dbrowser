@@ -34,10 +34,16 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
         object
     };
 
-    // 从树中过滤掉内部辅助对象
+    // 从树中过滤掉内部辅助对象和优化后的渲染组
     if (object.children && object.children.length > 0) {
         node.children = object.children
-            .filter((c: any) => c.name !== "Helpers" && c.name !== "Measure")
+            .filter((c: any) => {
+                // 过滤辅助对象
+                if (c.name === "Helpers" || c.name === "Measure") return false;
+                // 过滤优化后的渲染组（用户不应该在大纲中看到它们）
+                if (c.userData && c.userData.isOptimizedGroup) return false;
+                return true;
+            })
             .map((c: any) => buildTree(c, depth + 1));
     }
 
@@ -125,7 +131,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                                     paddingLeft: node.depth * 16 + 8,
                                     ...(node.uuid === selectedUuid ? styles.treeNodeSelected : {})
                                 }}
-                                onClick={() => onSelect(node.uuid, sceneMgr?.contentGroup.getObjectByProperty("uuid", node.uuid))}
+                                onClick={() => onSelect(node.uuid, node.object)}
                                 onMouseEnter={() => setHoveredUuid(node.uuid)}
                                 onMouseLeave={() => setHoveredUuid(null)}
                         >
@@ -136,15 +142,17 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                             <input 
                                 type="checkbox" 
                                 checked={node.visible} 
-                                readOnly // Controlled by onClick
-                                onClick={(e) => handleCheckbox(e, node)}
+                                onChange={(e) => {
+                                    e.stopPropagation();
+                                    onToggleVisibility(node.uuid, e.target.checked);
+                                }}
                                 style={{marginRight: 8, cursor: 'pointer'}}
                             />
                             
                             <div style={styles.nodeLabel}>{node.name}</div>
 
-                            {/* Delete button only for top-level nodes (files) */}
-                            {node.depth === 0 && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
+                            {/* Delete button for top-level nodes (files) */}
+                            {node.depth > 0 && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
                                 <div 
                                     onClick={(e) => handleDelete(e, node.uuid)}
                                     style={{
@@ -154,7 +162,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                                     }}
                                     title="Delete File"
                                 >
-                                    <IconTrash width={12} height={12} />
+                                    <IconTrash width={16} height={16} />
                                 </div>
                             )}
                         </div>
