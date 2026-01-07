@@ -290,7 +290,7 @@ const App = () => {
                 name: node.name,
                 type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
                 depth,
-                children: isFileNode ? [] : (node.children || []).map((c: any) => convertNode(c, depth + 1)),
+                children: (node.children || []).map((c: any) => convertNode(c, depth + 1, false)),
                 expanded: depth < 1,
                 visible: node.visible !== false,
                 object: node,
@@ -660,7 +660,10 @@ const App = () => {
                 t
             );
             if (url) {
-                sceneMgr.current.addTileset(url);
+                sceneMgr.current.addTileset(url, (p, msg) => {
+                    setProgress(p);
+                    if(msg) setStatus(msg);
+                });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
                 setTimeout(() => sceneMgr.current?.fitView(), 500);
@@ -777,11 +780,25 @@ const App = () => {
             title: t("op_clear"),
             message: t("confirm_clear"),
             action: () => {
-                sceneMgr.current?.clear();
-                setTreeRoot([]);
-                setSelectedUuid(null);
-                setSelectedProps(null);
-                setMeasureHistory([]);
+                setLoading(true);
+                setStatus(t("processing") + "...");
+                
+                // 延迟执行清空，让 Loading 状态有机会显示
+                setTimeout(() => {
+                    try {
+                        sceneMgr.current?.clear();
+                        setTreeRoot([]);
+                        setSelectedUuid(null);
+                        setSelectedProps(null);
+                        setMeasureHistory([]);
+                        setStatus(t("ready"));
+                    } catch (e) {
+                        console.error("清空场景失败:", e);
+                        setStatus(t("failed"));
+                    } finally {
+                        setLoading(false);
+                    }
+                }, 100);
             }
         });
     };

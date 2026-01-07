@@ -88,6 +88,9 @@ export class SceneManager {
     explodeData: Map<string, { originalPos: THREE.Vector3, direction: THREE.Vector3 }> = new Map();
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
     
+    // 偏移状态 (解决大坐标问题)
+    globalOffset: THREE.Vector3 = new THREE.Vector3();
+    
     // 组件映射
     componentMap: Map<number | string, any> = new Map();
     
@@ -406,6 +409,14 @@ export class SceneManager {
                 bm.name = chunk.id;
                 bm.userData.chunkId = chunk.id;
                 
+                // 抵消全局偏移 (解决大坐标导致的精度问题)
+                // 只有远程 NBIM 分块需要手动抵消，因为其二进制数据是大坐标
+                // 本地分块在 addModel 时已经随 object 整体偏移过了，生成的 BatchedMesh 坐标是正确的
+                if (chunk.nbimFileId) {
+                    bm.position.sub(this.globalOffset);
+                    bm.updateMatrixWorld(true);
+                }
+                
                 // 查找或创建优化组
                 let optimizedGroup = this.contentGroup.getObjectByName(chunk.groupName) as THREE.Group;
                 if (!optimizedGroup) {
@@ -469,6 +480,18 @@ export class SceneManager {
     async addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
         object.updateMatrixWorld(true);
 
+        // 1. 处理大坐标偏移
+        const modelBox = new THREE.Box3().setFromObject(object);
+        if (!modelBox.isEmpty()) {
+            if (this.globalOffset.length() === 0) {
+                modelBox.getCenter(this.globalOffset);
+                console.log("初始化全局偏移以解决大坐标问题:", this.globalOffset);
+            }
+            // 抵消大坐标
+            object.position.sub(this.globalOffset);
+            object.updateMatrixWorld(true);
+        }
+
         // 1. 构建场景树结构
         if (onProgress) onProgress(5, "正在构建场景树...");
         const modelRoot = this.buildSceneGraph(object);
@@ -476,7 +499,7 @@ export class SceneManager {
         this.structureRoot.children.push(modelRoot);
 
         // 预计算包围盒
-        const modelBox = new THREE.Box3().setFromObject(object);
+        modelBox.setFromObject(object);
         if (!modelBox.isEmpty()) {
             this.precomputedBounds.union(modelBox);
             this.sceneBounds.copy(this.precomputedBounds);
@@ -683,12 +706,14 @@ export class SceneManager {
         return true;
     }
 
-    addTileset(url: string) {
+    addTileset(url: string, onProgress?: (p: number, msg: string) => void) {
         if (this.tilesRenderer) {
             this.tilesRenderer.dispose();
             this.contentGroup.remove(this.tilesRenderer.group);
         }
 
+        if (onProgress) onProgress(10, "正在初始化 TilesRenderer...");
+        
         const renderer = new TilesRenderer(url);
         renderer.setCamera(this.camera);
         renderer.setResolutionFromRenderer(this.camera, this.renderer);
@@ -696,6 +721,32 @@ export class SceneManager {
         // 从当前配置动态设置
         renderer.errorTarget = this.settings.sse;
         renderer.lruCache.maxSize = this.settings.maxMemory * 1024 * 1024;
+
+        (renderer.group as any).name = "3D Tileset"; // 确保大纲能识别
+
+        // 监听加载事件 (对齐 refs 进度)
+        let loadedTiles = 0;
+        let hasError = false;
+
+        (renderer as any).onLoadTileSet = () => {
+            if (onProgress) onProgress(50, "Tileset 结构已加载");
+        };
+        
+        (renderer as any).onLoadModel = () => {
+            loadedTiles++;
+            if (onProgress && !hasError) {
+                onProgress(Math.min(99, 50 + loadedTiles), `已加载瓦片: ${loadedTiles}`);
+            }
+        };
+
+        // 错误处理: 3d-tiles-renderer 没有直接的 onError，但我们可以通过 fetch 检查或监听特定的错误
+        // 这里的简单实现是检查 tileset 结构是否加载成功
+        setTimeout(() => {
+            if (!(renderer as any).tileset && !hasError) {
+                hasError = true;
+                if (onProgress) onProgress(0, "加载失败: 无法获取 Tileset 配置文件，请检查网络或路径。");
+            }
+        }, 10000); // 10秒超时检查
 
         // 树更新的钩子
         (renderer as any).onLoadTile = (tile: any) => {
@@ -707,6 +758,10 @@ export class SceneManager {
 
         this.contentGroup.add(renderer.group);
         this.tilesRenderer = renderer;
+
+        // 抵消全局偏移
+        (renderer.group as any).position.copy(this.globalOffset.clone().negate());
+        (renderer.group as any).name = "3D Tileset";
 
         // 添加到结构树
         const tilesNode: StructureTreeNode = {
@@ -1024,6 +1079,13 @@ export class SceneManager {
                 new THREE.Vector3(manifest.globalBounds.min.x, manifest.globalBounds.min.y, manifest.globalBounds.min.z),
                 new THREE.Vector3(manifest.globalBounds.max.x, manifest.globalBounds.max.y, manifest.globalBounds.max.z)
             );
+
+            // 处理大坐标偏移
+            if (this.globalOffset.length() === 0) {
+                newBounds.getCenter(this.globalOffset);
+                console.log("初始化全局偏移 (NBIM):", this.globalOffset);
+            }
+
             if (this.precomputedBounds.isEmpty()) {
                 this.precomputedBounds.copy(newBounds);
             } else {
@@ -1058,6 +1120,11 @@ export class SceneManager {
                 new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)
             );
             
+            // 关键：将包围盒也平移到偏移后的局部空间，否则视锥体裁剪会失败
+            if (this.globalOffset.length() > 0) {
+                bounds.translate(this.globalOffset.clone().negate());
+            }
+
             const chunkId = c.id;
             this.chunks.push({
                 id: chunkId,
@@ -1091,19 +1158,51 @@ export class SceneManager {
     }
 
     clear() {
-        // 清理场景中的内容
+        console.log("开始清空场景...");
+        
+        // 1. 深度清理 contentGroup
+        const disposeObject = (obj: THREE.Object3D) => {
+            if ((obj as any).isMesh) {
+                const mesh = obj as THREE.Mesh;
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) {
+                    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                    materials.forEach(m => m.dispose());
+                }
+            } else if ((obj as any).isBatchedMesh) {
+                const bm = obj as THREE.BatchedMesh;
+                if (bm.geometry) bm.geometry.dispose();
+                if (bm.material) {
+                    const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+                    materials.forEach(m => m.dispose());
+                }
+            }
+        };
+
+        this.contentGroup.traverse(disposeObject);
+        
+        // 移除所有子节点
         while(this.contentGroup.children.length > 0) {
-            const child = this.contentGroup.children[0];
-            this.removeObject(child.uuid);
+            this.contentGroup.remove(this.contentGroup.children[0]);
         }
+
+        // 2. 清理 3D Tiles
         if (this.tilesRenderer) {
             this.tilesRenderer.dispose();
             this.tilesRenderer = null;
         }
+
+        // 3. 清理辅助组
+        this.ghostGroup.children.forEach(disposeObject);
         this.ghostGroup.clear();
+        
         this.selectionBox.visible = false;
         this.highlightMesh.visible = false;
+        
+        // 4. 清理测量记录
         this.clearAllMeasurements();
+
+        // 5. 清理状态数据
         this.explodeData.clear();
         this.optimizedMapping.clear();
         this.sceneBounds.makeEmpty();
@@ -1114,6 +1213,11 @@ export class SceneManager {
         this.chunks = [];
         this.componentMap.clear();
         this.componentCounter = 0;
+        
+        // 6. 重置全局偏移 (如果场景完全清空，通常希望重置偏移以迎接下一个模型)
+        this.globalOffset.set(0, 0, 0);
+
+        console.log("场景已清空");
     }
 
     setObjectVisibility(uuid: string, visible: boolean) {
