@@ -105,6 +105,9 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                         <Row label={t("st_imp_ifc")} theme={theme}>
                              <AxisSelector value={settings.importAxisIFC} onChange={(v) => onUpdate({importAxisIFC: v})} theme={theme} t={t} />
                         </Row>
+                        <Row label={t("st_instancing")} theme={theme}>
+                             <input type="checkbox" checked={settings.enableInstancing} onChange={(e) => onUpdate({enableInstancing: e.target.checked})} style={{accentColor: theme.accent}} />
+                        </Row>
                     </Section>
 
                     <Section title={t("st_lighting")} theme={theme}>
@@ -119,21 +122,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                                 value={settings.dirInt} 
                                 onChange={(e) => onUpdate({dirInt: parseFloat(e.target.value)})} 
                                 style={{width: 100}}/>
-                        </Row>
-                    </Section>
-                    
-                    <Section title={t("st_tiles")} theme={theme}>
-                        <Row label={`${t("st_sse")} (${settings.sse})`} theme={theme}>
-                            <input type="range" min="1" max="50" step="1" 
-                                value={settings.sse} 
-                                onChange={(e) => onUpdate({sse: parseInt(e.target.value)})} 
-                                style={{width: 100}}/>
-                        </Row>
-                        <Row label={`${t("st_mem")} (${settings.maxMemory} MB)`} theme={theme}>
-                            <input type="number" 
-                                value={settings.maxMemory} 
-                                onChange={(e) => onUpdate({maxMemory: parseInt(e.target.value)})} 
-                                style={{width: 60, background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius:6}}/>
                         </Row>
                     </Section>
                 </div>
