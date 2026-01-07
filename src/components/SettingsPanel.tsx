@@ -15,6 +15,12 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
+    fontFamily: string;
+    setFontFamily: (f: string) => void;
+    fontSize: number;
+    setFontSize: (s: number) => void;
+    accentColor: string;
+    setAccentColor: (c: string) => void;
     styles: any;
     theme: any;
 }
@@ -52,7 +58,10 @@ const AxisSelector = ({ value, onChange, theme, t }: { value: string, onChange: 
     </select>
 );
 
-export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, showStats, setShowStats, styles, theme }) => {
+export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
+    t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, accentColor, setAccentColor,
+    showStats, setShowStats, fontFamily, setFontFamily, fontSize, setFontSize, styles, theme 
+}) => {
     return (
         <div style={styles.modalOverlay}>
             <div style={styles.modalContent}>
@@ -70,25 +79,71 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({ t, onClose, settin
                 
                 <div style={{padding: 20, overflowY: 'auto', flex: 1}}>
                     <Section title={t("setting_general")} theme={theme}>
+                        <Row label={t("st_theme")} theme={theme}>
+                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:8, border:`1px solid ${theme.border}`}}>
+                                <button 
+                                    onClick={() => setThemeMode('light')}
+                                    style={{
+                                        padding:'4px 12px', borderRadius:6, border:'none', fontSize:11, cursor:'pointer',
+                                        background: themeMode === 'light' ? theme.accent : 'transparent',
+                                        color: themeMode === 'light' ? 'white' : theme.text
+                                    }}
+                                >
+                                    {t("theme_light")}
+                                </button>
+                                <button 
+                                    onClick={() => setThemeMode('dark')}
+                                    style={{
+                                        padding:'4px 12px', borderRadius:6, border:'none', fontSize:11, cursor:'pointer',
+                                        background: themeMode === 'dark' ? theme.accent : 'transparent',
+                                        color: themeMode === 'dark' ? 'white' : theme.text
+                                    }}
+                                >
+                                    {t("theme_dark")}
+                                </button>
+                            </div>
+                        </Row>
+
+                        <Row label={t("st_accent_color")} theme={theme}>
+                            <input 
+                                type="color" 
+                                value={accentColor} 
+                                onChange={(e) => {
+                                    setAccentColor(e.target.value);
+                                    localStorage.setItem('3dbrowser_accentColor', e.target.value);
+                                }}
+                                style={{ width: 40, height: 24, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+                            />
+                        </Row>
+
                         <Row label={t("st_lang")} theme={theme}>
                             <select 
                                 style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
                                 value={currentLang}
                                 onChange={(e) => setLang(e.target.value as Lang)}
                             >
-                                <option value="zh">中文 (Chinese)</option>
+                                <option value="zh">简体中文</option>
                                 <option value="en">English</option>
                             </select>
                         </Row>
-                        <Row label={t("st_theme")} theme={theme}>
+                        <Row label={t("st_font_family")} theme={theme}>
                             <select 
                                 style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
-                                value={themeMode}
-                                onChange={(e) => setThemeMode(e.target.value as 'dark' | 'light')}
+                                value={fontFamily}
+                                onChange={(e) => setFontFamily(e.target.value)}
                             >
-                                <option value="dark">{t("theme_dark")}</option>
-                                <option value="light">{t("theme_light")}</option>
+                                <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
+                                <option value="'SimSun', serif">宋体</option>
+                                <option value="'SimHei', sans-serif">黑体</option>
+                                <option value="'Arial', sans-serif">Arial</option>
+                                <option value="'Times New Roman', serif">Times New Roman</option>
                             </select>
+                        </Row>
+                        <Row label={`${t("st_font_size")} (${fontSize}px)`} theme={theme}>
+                            <input type="range" min="10" max="20" step="1" 
+                                value={fontSize} 
+                                onChange={(e) => setFontSize(parseInt(e.target.value))} 
+                                style={{width: 100}}/>
                         </Row>
                         <Row label={t("st_bg")} theme={theme}>
                             <input type="color" value={settings.bgColor} onChange={(e) => onUpdate({bgColor: e.target.value})} />

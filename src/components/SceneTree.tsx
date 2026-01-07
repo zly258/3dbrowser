@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { SceneManager } from "../utils/SceneManager";
 import { IconTrash } from "../theme/Icons";
+import { Checkbox } from "./ToolPanels";
 
 interface TreeNode {
     uuid: string;
@@ -185,14 +186,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                                 {node.children.length > 0 && <span style={{fontSize: 10}}>{node.expanded ? "▼" : "▶"}</span>}
                             </div>
                             
-                            <input 
-                                type="checkbox" 
+                            <Checkbox 
                                 checked={node.visible} 
-                                onChange={(e) => {
-                                    e.stopPropagation();
-                                    onToggleVisibility(node.uuid, e.target.checked);
-                                }}
-                                style={{marginRight: 8, cursor: 'pointer'}}
+                                onChange={(val: boolean) => onToggleVisibility(node.uuid, val)} 
+                                styles={styles} 
+                                theme={theme}
+                                style={{ marginRight: 8, padding: 0 }}
                             />
                             
                             <div style={styles.nodeLabel}>{node.name}</div>

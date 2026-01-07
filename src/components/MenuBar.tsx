@@ -1,204 +1,241 @@
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import { 
     IconFile, IconFolder, IconExport, IconClear, IconFit, IconWireframe, IconList, IconInfo, IconMeasure, IconSettings,
-    IconPick, IconClip, IconMenu, IconClose, IconChevronRight, IconChevronDown
+    IconPick, IconClip, IconMenu, IconClose, IconChevronRight, IconChevronDown, IconMinimize, IconMaximize, IconLang
 } from "../theme/Icons";
-import { TFunc, Lang } from "../theme/Locales";
+
+// 尝试获取 ipcRenderer (仅在 Electron 环境下有效)
+let ipcRenderer: any = null;
+try {
+    if (window.require) {
+        ipcRenderer = window.require('electron').ipcRenderer;
+    }
+} catch (e) {}
+
+const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 
 // --- Components ---
 
-const ToolbarDivider = ({ styles }: { styles: any }) => (
-    <div style={styles.toolbarDivider} />
-);
+const WindowControls = ({ theme }: { theme: any }) => {
+    if (!ipcRenderer || isMac) return null; // 非 Electron 环境或 macOS 不显示
 
-const ToolbarButton = ({ label, icon, onClick, active, styles }: { label: string, icon: React.ReactNode, onClick: () => void, active?: boolean, styles: any }) => {
-    const [hover, setHover] = useState(false);
-    
-    const btnStyle = { ...styles.toolbarBtn };
-    if (active) Object.assign(btnStyle, styles.toolbarBtnActive);
-    else if (hover) Object.assign(btnStyle, styles.toolbarBtnHover);
+    const controlStyle: React.CSSProperties = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '46px',
+        height: '32px',
+        cursor: 'pointer',
+        WebkitAppRegion: 'no-drag' as any,
+        transition: 'background-color 0.1s'
+    };
 
     return (
-        <button 
-            style={btnStyle}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
-            onClick={onClick}
-            title={label}
-        >
-            {React.isValidElement(icon) 
-                ? React.cloneElement(icon as React.ReactElement<any>, { width: 20, height: 20 }) 
-                : icon}
-        </button>
-    );
-};
-
-const MenuOption = ({ label, onClick, active, theme }: { label: string, onClick: () => void, active?: boolean, theme: any }) => {
-    const [hover, setHover] = useState(false);
-    return (
-        <div 
-            onClick={onClick}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
-            style={{
-                padding: '6px 12px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                color: active ? theme.accent : theme.text,
-                backgroundColor: hover ? theme.itemHover : 'transparent',
-                borderRadius: '2px',
-                display: 'flex',
-                alignItems: 'center',
-                whiteSpace: 'nowrap'
-            }}
-        >
-            {label}
+        <div style={{ display: 'flex', marginLeft: 'auto' }}>
+            <div 
+                style={controlStyle} 
+                onClick={() => ipcRenderer.send('window-min')}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+                <IconMinimize width={12} height={12} />
+            </div>
+            <div 
+                style={controlStyle} 
+                onClick={() => ipcRenderer.send('window-max')}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+                <IconMaximize width={10} height={10} />
+            </div>
+            <div 
+                style={{ ...controlStyle }} 
+                onClick={() => ipcRenderer.send('window-close')}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#E81123'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+                <IconClose width={12} height={12} />
+            </div>
         </div>
     );
 };
+import { TFunc, Lang } from "../theme/Locales";
+import { Checkbox } from "./ToolPanels";
 
-// --- Props ---
-
-interface MenuBarProps {
+interface RibbonUIProps {
     t: TFunc;
+    themeType: 'dark' | 'light';
+    setThemeType: (type: 'dark' | 'light') => void;
+    activeTool: string;
+    setActiveTool: (tool: string) => void;
     handleOpenFiles: (e: any) => void;
     handleOpenFolder: (e: any) => void;
-    handleConvert: () => void; 
-    handleView: (v: string) => void;
     handleClear: () => void;
+    handleView: (view: string) => void;
+    wireframe: boolean;
+    setWireframe: (v: boolean) => void;
     pickEnabled: boolean;
     setPickEnabled: (v: boolean) => void;
-    activeTool?: 'none'|'measure'|'clip'|'settings'|'export'|'views';
-    setActiveTool: (tool: 'none'|'measure'|'clip'|'settings'|'export'|'views') => void;
     showOutline: boolean;
     setShowOutline: (v: boolean) => void;
     showProps: boolean;
     setShowProps: (v: boolean) => void;
-    setLang: React.Dispatch<React.SetStateAction<Lang>>;
-    sceneMgr: any; 
-    wireframe: boolean;
-    setWireframe: (v: boolean) => void;
+    showStats: boolean;
+    setShowStats: (v: boolean) => void;
+    handleAbout: () => void;
+    sceneMgr: any;
     styles: any;
     theme: any;
 }
 
-export const MenuBar: React.FC<MenuBarProps> = (props) => {
-    const { t, theme, styles } = props;
-    const [showViewMenu, setShowViewMenu] = useState(false);
-    const viewMenuRef = useRef<HTMLDivElement>(null);
+const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: React.ReactNode, label: string, onClick: () => void, active?: boolean, styles: any }) => (
+    <div style={styles.ribbonButtonLarge(active)} onClick={onClick}>
+        {icon && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 28 }) : icon}
+            </div>
+        )}
+        <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '11px' }}>{label}</div>
+    </div>
+);
 
-    // 点击外部关闭菜单
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
-                setShowViewMenu(false);
-            }
-        };
-        if (showViewMenu) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [showViewMenu]);
+const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: React.ReactNode, label: string, onClick: () => void, active?: boolean, styles: any }) => (
+    <div style={styles.ribbonButtonMedium(active)} onClick={onClick}>
+        {icon && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
+            </div>
+        )}
+        <span style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{label}</span>
+    </div>
+);
 
-    const handleViewClick = (view: string) => {
-        if (view === 'fit') {
-            props.sceneMgr?.fitView();
-        } else {
-            props.handleView(view);
-        }
-        setShowViewMenu(false);
-    };
-    
+const RibbonButtonSmall = ({ icon, onClick, active, styles, title }: { icon?: React.ReactNode, onClick: () => void, active?: boolean, styles: any, title?: string }) => (
+    <div style={styles.ribbonButtonSmall(active)} onClick={onClick} title={title}>
+        {icon && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
+            </div>
+        )}
+    </div>
+);
+
+const RibbonCheckbox = ({ label, checked, onChange, styles, theme }: { label: string, checked: boolean, onChange: (v: boolean) => void, styles: any, theme: any }) => (
+    <div style={{ ...styles.ribbonCheckbox, padding: '0 8px' }}>
+        <Checkbox 
+            label={label} 
+            checked={checked} 
+            onChange={onChange} 
+            styles={styles} 
+            theme={theme} 
+            style={{ padding: 0, fontSize: '11px', gap: '6px' }} 
+        />
+    </div>
+);
+
+const RibbonPanel = ({ label, children, styles }: { label: string, children: React.ReactNode, styles: any }) => (
+    <div style={styles.ribbonPanel}>
+        <div style={styles.ribbonPanelContent}>
+            {children}
+        </div>
+        <div style={styles.ribbonPanelLabel}>{label}</div>
+    </div>
+);
+
+export const MenuBar: React.FC<RibbonUIProps> = (props) => {
+    const { t, styles, theme } = props;
+    const [activeTab, setActiveTab] = useState('home');
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const folderInputRef = React.useRef<HTMLInputElement>(null);
 
     return (
-        <div style={styles.toolbarContainer}>
-            {/* File Operations */}
-            <ToolbarButton label={t("menu_open_file")} icon={<IconFile />} onClick={() => fileInputRef.current?.click()} styles={styles} />
-            <input 
-                ref={fileInputRef} 
-                type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim" 
-                onChange={props.handleOpenFiles} 
-            />
-            
-            <ToolbarButton label={t("menu_open_folder")} icon={<IconFolder />} onClick={() => folderInputRef.current?.click()} styles={styles} />
-            <input 
-                ref={folderInputRef} 
-                type="file" hidden {...({webkitdirectory: "", directory: ""} as any)} 
-                onChange={props.handleOpenFolder} 
-            />
-            
-            <ToolbarButton label={t("menu_export")} icon={<IconExport />} active={props.activeTool === 'export'} onClick={() => props.setActiveTool(props.activeTool === 'export' ? 'none' : 'export')} styles={styles} />
-            <ToolbarButton label={t("op_clear")} icon={<IconClear />} onClick={props.handleClear} styles={styles} />
-            
-            <ToolbarDivider styles={styles} />
-
-            {/* View / Panels */}
-            <ToolbarButton label={t("interface_outline")} icon={<IconList />} active={props.showOutline} onClick={() => props.setShowOutline(!props.showOutline)} styles={styles} />
-            <ToolbarButton label={t("interface_props")} icon={<IconInfo />} active={props.showProps} onClick={() => props.setShowProps(!props.showProps)} styles={styles} />
-            <ToolbarButton label={t("settings")} icon={<IconSettings />} active={props.activeTool === 'settings'} onClick={() => props.setActiveTool(props.activeTool === 'settings' ? 'none' : 'settings')} styles={styles} />
-
-            <ToolbarDivider styles={styles} />
-
-            {/* Display Ops */}
-            <div style={{ position: 'relative' }} ref={viewMenuRef}>
-                <ToolbarButton 
-                    label={t("view")} 
-                    icon={<IconMenu />} 
-                    active={showViewMenu} 
-                    onClick={() => setShowViewMenu(!showViewMenu)} 
-                    styles={styles} 
-                />
-                {showViewMenu && (
-                    <div style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        left: 0,
-                        marginBottom: '8px',
-                        backgroundColor: theme.panelBg,
-                        border: `1px solid ${theme.border}`,
+        <div style={styles.ribbonContainer}>
+            {/* Title Bar */}
+            <div style={styles.ribbonTitleBar}>
+                {isMac && <div style={{ width: '80px' }} />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', WebkitAppRegion: 'no-drag' as any }}>
+                    <div style={{ 
+                        width: '24px', height: '24px', 
+                        background: theme.accent, 
                         borderRadius: '4px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                        padding: '4px',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '4px',
-                        minWidth: '200px',
-                        zIndex: 1000
-                    }}>
-                        <MenuOption label={t("view_top")} onClick={() => handleViewClick('top')} theme={theme} />
-                        <MenuOption label={t("view_bottom")} onClick={() => handleViewClick('bottom')} theme={theme} />
-                        <MenuOption label={t("view_front")} onClick={() => handleViewClick('front')} theme={theme} />
-                        <MenuOption label={t("view_back")} onClick={() => handleViewClick('back')} theme={theme} />
-                        <MenuOption label={t("view_left")} onClick={() => handleViewClick('left')} theme={theme} />
-                        <MenuOption label={t("view_right")} onClick={() => handleViewClick('right')} theme={theme} />
-                        <MenuOption label={t("view_se")} onClick={() => handleViewClick('iso1')} theme={theme} />
-                        <MenuOption label={t("view_sw")} onClick={() => handleViewClick('iso2')} theme={theme} />
-                        <MenuOption label={t("view_ne")} onClick={() => handleViewClick('iso3')} theme={theme} />
-                        <MenuOption label={t("view_nw")} onClick={() => handleViewClick('iso4')} theme={theme} />
-                        <div style={{ gridColumn: 'span 2', height: '1px', backgroundColor: theme.border, margin: '2px 0' }} />
-                        <MenuOption label={t("menu_fit_view")} onClick={() => handleViewClick('fit')} theme={theme} />
-                        <MenuOption 
-                            label={t("menu_wireframe")} 
-                            active={props.wireframe}
-                            onClick={() => { props.setWireframe(!props.wireframe); setShowViewMenu(false); }} 
-                            theme={theme} 
-                        />
-                    </div>
-                )}
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'white', fontWeight: '800', fontSize: '10px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}>3D</div>
+                    <span style={{ 
+                        fontWeight: '600', 
+                        color: theme.text,
+                        letterSpacing: '0.3px',
+                        fontSize: '12px'
+                    }}>3D Browser</span>
+                </div>
+                <WindowControls theme={theme} />
             </div>
 
-            <ToolbarDivider styles={styles} />
+            {/* Tabs */}
+            <div style={styles.ribbonTabs}>
+                <div style={styles.ribbonTab(activeTab === 'home')} onClick={() => setActiveTab('home')}>{t('home')}</div>
+            </div>
 
-            {/* Tools */}
-            <ToolbarButton label={t("op_pick")} icon={<IconPick />} active={props.pickEnabled} onClick={() => props.setPickEnabled(!props.pickEnabled)} styles={styles} />
-            <ToolbarButton label={t("tool_measure")} icon={<IconMeasure />} active={props.activeTool === 'measure'} onClick={() => props.setActiveTool(props.activeTool === 'measure' ? 'none' : 'measure')} styles={styles} />
-            <ToolbarButton label={t("tool_clip")} icon={<IconClip />} active={props.activeTool === 'clip'} onClick={() => props.setActiveTool(props.activeTool === 'clip' ? 'none' : 'clip')} styles={styles} />
+            {/* Ribbon Content */}
+            <div style={styles.ribbonContent}>
+                <input ref={fileInputRef} type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim" onChange={props.handleOpenFiles} />
+                <input ref={folderInputRef} type="file" hidden {...({webkitdirectory: "", directory: ""} as any)} onChange={props.handleOpenFolder} />
+                
+                {activeTab === 'home' && (
+                    <>
+                        <RibbonPanel label={t('menu_file')} styles={styles}>
+                            <div style={styles.ribbonPanelRows}>
+                                <RibbonButtonMedium icon={<IconFile />} label={t('menu_open_file')} onClick={() => fileInputRef.current?.click()} styles={styles} />
+                                <RibbonButtonMedium icon={<IconFolder />} label={t('menu_open_folder')} onClick={() => folderInputRef.current?.click()} styles={styles} />
+                                <RibbonButtonMedium icon={<IconClear />} label={t('op_clear')} onClick={props.handleClear} styles={styles} />
+                            <RibbonButtonMedium icon={<IconExport />} label={t('menu_export')} onClick={() => props.setActiveTool('export')} active={props.activeTool === 'export'} styles={styles} />
+                            </div>
+                        </RibbonPanel>
 
+                        <RibbonPanel label={t('view')} styles={styles}>
+                            <RibbonButtonLarge icon={<IconFit />} label={t('menu_fit_view')} onClick={() => props.sceneMgr?.fitView()} styles={styles} />
+                            <RibbonButtonLarge icon={<IconPick />} label={t('op_pick')} onClick={() => props.setPickEnabled(!props.pickEnabled)} active={props.pickEnabled} styles={styles} />
+                            <div style={styles.ribbonPanelRows}>
+                                <RibbonButtonMedium  label={t('view_front')} onClick={() => props.handleView('front')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_back')} onClick={() => props.handleView('back')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_top')} onClick={() => props.handleView('top')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_bottom')} onClick={() => props.handleView('bottom')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_left')} onClick={() => props.handleView('left')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_right')} onClick={() => props.handleView('right')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_se')} onClick={() => props.handleView('se')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_sw')} onClick={() => props.handleView('sw')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_ne')} onClick={() => props.handleView('ne')} styles={styles} />
+                                <RibbonButtonMedium  label={t('view_nw')} onClick={() => props.handleView('nw')} styles={styles} />
+                            </div>
+                        </RibbonPanel>
+
+                        <RibbonPanel label={t('interface_display')} styles={styles}>
+                            <div style={styles.ribbonPanelRows}>
+                                <RibbonCheckbox label={t('menu_wireframe')} checked={props.wireframe} onChange={props.setWireframe} styles={styles} theme={theme} />
+                                <RibbonCheckbox label={t('interface_outline')} checked={props.showOutline} onChange={props.setShowOutline} styles={styles} theme={theme} />
+                                <RibbonCheckbox label={t('interface_props')} checked={props.showProps} onChange={props.setShowProps} styles={styles} theme={theme} />
+                                <RibbonCheckbox label={t('st_monitor')} checked={props.showStats} onChange={props.setShowStats} styles={styles} theme={theme} />
+                            </div>
+                        </RibbonPanel>
+
+                        <RibbonPanel label={t('tool_measure')} styles={styles}>
+                            <div style={styles.ribbonPanelRows}>
+                                <RibbonButtonMedium icon={<IconMeasure />} label={t('tool_measure')} onClick={() => props.setActiveTool('measure')} active={props.activeTool === 'measure'} styles={styles} />
+                                <RibbonButtonMedium icon={<IconClip />} label={t('tool_clip')} onClick={() => props.setActiveTool('clip')} active={props.activeTool === 'clip'} styles={styles} />
+                            </div>
+                        </RibbonPanel>
+
+                        <RibbonPanel label={t('settings')} styles={styles}>
+                            <div style={styles.ribbonPanelRows}>
+                                <RibbonButtonMedium icon={<IconSettings />} label={t('settings')} onClick={() => props.setActiveTool('settings')} active={props.activeTool === 'settings'} styles={styles} />
+                                <RibbonButtonMedium icon={<IconInfo />} label={t('about')} onClick={props.handleAbout} styles={styles} />
+                            </div>
+                        </RibbonPanel>
+                    </>
+                )}
+            </div>
         </div>
     );
 };

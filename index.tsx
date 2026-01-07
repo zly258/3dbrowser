@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
@@ -17,10 +17,128 @@ import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
 import { IconClose } from "./src/theme/Icons";
 
+interface ErrorBoundaryProps {
+    children: React.ReactNode;
+    t: any;
+    styles: any;
+    theme: any;
+}
+
+interface ErrorBoundaryState {
+    hasError: boolean;
+    error: Error | null;
+}
+
+// --- 错误边界组件 ---
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+    public state: ErrorBoundaryState;
+    public props: ErrorBoundaryProps;
+
+    constructor(props: ErrorBoundaryProps) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: Error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        console.error("ErrorBoundary caught an error:", error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            const { t, styles, theme } = this.props;
+            return (
+                <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text,
+                    fontFamily: "'Microsoft YaHei', sans-serif", gap: '20px', padding: '40px', textAlign: 'center'
+                }}>
+                    <div style={{ fontSize: '64px' }}>⚠️</div>
+                    <h1 style={{ fontSize: '24px', margin: 0 }}>应用发生错误</h1>
+                    <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6' }}>
+                        抱歉，程序运行过程中遇到了未预期的错误。您可以尝试重新加载页面，或联系开发人员。
+                    </p>
+                    {this.state.error && (
+                        <div style={{
+                            backgroundColor: 'rgba(255,0,0,0.1)', padding: '15px', borderRadius: '8px',
+                            fontSize: '12px', color: theme.danger, textAlign: 'left', width: '100%', maxWidth: '800px',
+                            overflow: 'auto', maxHeight: '200px', border: `1px solid ${theme.danger}44`
+                        }}>
+                            <pre style={{ margin: 0 }}>{this.state.error.stack}</pre>
+                        </div>
+                    )}
+                    <button 
+                        onClick={() => window.location.reload()}
+                        style={{
+                            padding: '10px 24px', backgroundColor: theme.accent, color: '#fff',
+                            border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
+                        }}
+                    >
+                        重新加载页面
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 // --- 全局样式注入 ---
-const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
-    <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme) }} />
+const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: string }) => (
+    <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme, fontFamily) }} />
 );
+
+// --- 关于弹窗 ---
+const AboutModal = ({ show, onClose, styles, theme, t }: { show: boolean, onClose: () => void, styles: any, theme: any, t: any }) => {
+    if (!show) return null;
+    return (
+        <div style={styles.modalOverlay}>
+            <div style={{ ...styles.modalContent, width: '450px', padding: '0' }}>
+                <div style={{ ...styles.floatingHeader, borderBottom: `1px solid ${theme.border}` }}>
+                    <span>{t('about')}</span>
+                    <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={onClose}>
+                        <IconClose size={18} />
+                    </div>
+                </div>
+                <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+                    <div style={{ 
+                        width: '64px', height: '64px', 
+                        background: theme.accent, 
+                        borderRadius: '12px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'white', fontWeight: '800', fontSize: '28px',
+                        boxShadow: `0 4px 12px ${theme.accent}40`
+                    }}>3D</div>
+                    <div style={{ textAlign: 'center' }}>
+                        <h2 style={{ margin: '0 0 5px 0', fontSize: '20px', color: theme.text }}>3D Browser</h2>
+                        <div style={{ fontSize: '12px', color: theme.textMuted }}>Version 1.0.0</div>
+                    </div>
+                    <div style={{ 
+                        width: '100%', 
+                        height: '1px', 
+                        background: `linear-gradient(to right, transparent, ${theme.border}, transparent)` 
+                    }} />
+                    <div style={{ fontSize: '13px', lineHeight: '1.6', color: theme.text, textAlign: 'center' }}>
+                        一个基于 WebGL 和 Three.js 的高性能 3D 模型浏览器。<br/>
+                        支持多种格式加载、测量、剖切及场景管理。
+                    </div>
+                    <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: '10px' }}>
+                        © 2026 3D Browser Team. All rights reserved.
+                    </div>
+                    <button 
+                        onClick={onClose}
+                        style={{ ...styles.btn, backgroundColor: theme.accent, color: 'white', border: 'none', padding: '8px 30px', marginTop: '10px' }}
+                    >
+                        {t('btn_confirm')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- 主应用 ---
 const App = () => {
@@ -28,13 +146,46 @@ const App = () => {
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
         try {
             const saved = localStorage.getItem('3dbrowser_themeMode');
-            return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+            return (saved === 'dark' || saved === 'light') ? saved : 'light';
         } catch {
-            return 'dark';
+            return 'light';
         }
     });
-    const theme = themes[themeMode];
-    const styles = useMemo(() => createStyles(theme), [themeMode]);
+
+    // 主题颜色状态
+    const [accentColor, setAccentColor] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_accentColor');
+            return saved || "#0078D4";
+        } catch {
+            return "#0078D4";
+        }
+    });
+
+    const theme = useMemo(() => {
+        const baseTheme = themes[themeMode];
+        return { ...baseTheme, accent: accentColor };
+    }, [themeMode, accentColor]);
+
+    // 字体设置状态 - 从localStorage恢复
+    const [fontFamily, setFontFamily] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_fontFamily');
+            return saved || "'Microsoft YaHei', sans-serif";
+        } catch {
+            return "'Microsoft YaHei', sans-serif";
+        }
+    });
+    const [fontSize, setFontSize] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_fontSize');
+            return saved ? parseInt(saved) : 12;
+        } catch {
+            return 12;
+        }
+    });
+
+    const styles = useMemo(() => createStyles(theme, fontFamily, fontSize), [theme, fontFamily, fontSize]);
 
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
@@ -57,6 +208,7 @@ const App = () => {
     
     // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export'>('none');
+    const [showAbout, setShowAbout] = useState(false);
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
@@ -154,8 +306,45 @@ const App = () => {
     const sceneMgr = useRef<SceneManager | null>(null);
     const visibilityDebounce = useRef<any>(null);
 
+    // Error State
+    const [errorState, setErrorState] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        detail?: string;
+    }>({ isOpen: false, title: "", message: "" });
+
     // Toast Message State
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+    
+    // 全局错误捕获
+    useEffect(() => {
+        const handleError = (event: ErrorEvent) => {
+            console.error("Global Error:", event.error);
+            setErrorState({
+                isOpen: true,
+                title: t("failed"),
+                message: event.message || "An unexpected error occurred",
+                detail: event.error?.stack
+            });
+        };
+        const handleRejection = (event: PromiseRejectionEvent) => {
+            console.error("Unhandled Rejection:", event.reason);
+            setErrorState({
+                isOpen: true,
+                title: t("failed"),
+                message: event.reason?.message || String(event.reason) || "A promise was rejected without reason",
+                detail: event.reason?.stack
+            });
+        };
+        window.addEventListener('error', handleError);
+        window.addEventListener('unhandledrejection', handleRejection);
+        return () => {
+            window.removeEventListener('error', handleError);
+            window.removeEventListener('unhandledrejection', handleRejection);
+        };
+    }, [lang]);
+
     useEffect(() => {
         if (toast) {
             const timer = setTimeout(() => setToast(null), 3000);
@@ -177,6 +366,18 @@ const App = () => {
             localStorage.setItem('3dbrowser_lang', lang);
         } catch (e) { console.error("Failed to save lang", e); }
     }, [lang]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_fontFamily', fontFamily);
+        } catch (e) { console.error("Failed to save fontFamily", e); }
+    }, [fontFamily]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_fontSize', String(fontSize));
+        } catch (e) { console.error("Failed to save fontSize", e); }
+    }, [fontSize]);
 
     // 持久化场景设置
     useEffect(() => {
@@ -226,8 +427,53 @@ const App = () => {
         });
         
         observer.observe(viewportRef.current);
-        return () => observer.disconnect();
-    }, []);
+
+        // 全局拖拽支持
+        const handleDragOver = (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+        };
+        const handleDrop = async (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                const files = Array.from(e.dataTransfer.files);
+                // 检查格式支持
+                const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim'];
+                const unsupportedFiles = files.filter(f => {
+                    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+                    return !supportedExtensions.includes(ext);
+                });
+
+                if (unsupportedFiles.length > 0) {
+                    setToast({ 
+                        message: `${t("failed")}: 不支持的格式 - ${unsupportedFiles.map(f => f.name).join(', ')}`, 
+                        type: 'error' 
+                    });
+                }
+
+                const supportedFiles = files.filter(f => {
+                    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+                    return supportedExtensions.includes(ext);
+                });
+
+                if (supportedFiles.length > 0) {
+                    // 调用加载逻辑
+                    await processFiles(supportedFiles);
+                }
+            }
+        };
+
+        window.addEventListener('dragover', handleDragOver);
+        window.addEventListener('drop', handleDrop);
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('dragover', handleDragOver);
+            window.removeEventListener('drop', handleDrop);
+        };
+    }, [lang]);
 
     // 2. 当布局状态变化时强制触发一次 resize（修复“场景未占满剩余空间”的问题）
     useEffect(() => {
@@ -598,9 +844,8 @@ const App = () => {
         setSelectedProps(finalProps);
     };
 
-    const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files?.length || !sceneMgr.current) return;
-        const files = Array.from(e.target.files) as File[];
+    const processFiles = async (files: File[]) => {
+        if (!files.length || !sceneMgr.current) return;
         setLoading(true);
         setStatus(t("loading"));
         setProgress(0);
@@ -642,9 +887,43 @@ const App = () => {
         } catch (err) {
             console.error(err); 
             setStatus(t("failed")); 
+            setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
         } finally { 
             setLoading(false); 
-            e.target.value = ""; 
+        }
+    };
+
+    const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files?.length) return;
+        await processFiles(Array.from(e.target.files));
+        e.target.value = ""; 
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const files = Array.from(e.dataTransfer.files) as File[];
+            const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim'];
+            
+            const validFiles = files.filter((file: File) => {
+                const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+                return supportedExtensions.includes(ext);
+            });
+
+            if (validFiles.length < files.length) {
+                setToast({ message: t("unsupported_format"), type: 'warning' });
+            }
+
+            if (validFiles.length > 0) {
+                await processFiles(validFiles);
+            }
         }
     };
 
@@ -810,8 +1089,40 @@ const App = () => {
     };
 
     return (
-        <div style={styles.container}>
-             <GlobalStyle theme={theme} />
+        <ErrorBoundary t={t} styles={styles} theme={theme}>
+            <div 
+                style={styles.container}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+            >
+             <GlobalStyle theme={theme} fontFamily={fontFamily} />
+
+             {/* Top MenuBar */}
+             <MenuBar 
+                t={t}
+                themeType={themeMode}
+                setThemeType={setThemeMode}
+                handleOpenFiles={handleOpenFiles}
+                handleOpenFolder={handleOpenFolder}
+                handleView={handleView}
+                handleClear={handleClear}
+                pickEnabled={pickEnabled}
+                setPickEnabled={setPickEnabled}
+                activeTool={activeTool}
+                setActiveTool={setActiveTool}
+                showOutline={showOutline}
+                setShowOutline={setShowOutline}
+                showProps={showProps}
+                setShowProps={setShowProps}
+                showStats={showStats}
+                setShowStats={setShowStats}
+                handleAbout={() => setShowAbout(true)}
+                wireframe={sceneSettings.wireframe}
+                setWireframe={(v) => handleSettingsUpdate({wireframe: v})}
+                sceneMgr={sceneMgr.current}
+                styles={styles}
+                theme={theme}
+            />
 
              {/* Main Content Area: Flex Row */}
              <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
@@ -879,51 +1190,31 @@ const App = () => {
                 }}>
                     <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
                     
-                    {/* Stats HUD (Top Center) */}
-                    {showStats && (
-                        <div style={styles.statsOverlay}>
-                            <div style={styles.statsRow}>
-                                <span style={{color: theme.textMuted}}>{t("monitor_meshes")}:</span>
-                                <span style={{fontWeight: 600}}>{stats.meshes}</span>
-                            </div>
-                            <div style={styles.statsDivider}></div>
-                            <div style={styles.statsRow}>
-                                <span style={{color: theme.textMuted}}>{t("monitor_faces")}:</span>
-                                <span style={{fontWeight: 600}}>{(stats.faces/1000).toFixed(1)}k</span>
-                            </div>
-                            <div style={styles.statsDivider}></div>
-                            <div style={styles.statsRow}>
-                                <span style={{color: theme.textMuted}}>{t("monitor_mem")}:</span>
-                                <span style={{fontWeight: 600}}>{stats.memory} MB</span>
-                            </div>
-                            <div style={styles.statsDivider}></div>
-                            <div style={styles.statsRow}>
-                                <span style={{color: theme.textMuted}}>{t("monitor_calls")}:</span>
-                                <span style={{fontWeight: 600}}>{stats.drawCalls}</span>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* Toast Notification */}
                     {toast && (
                         <div style={{
                             position: 'fixed',
-                            top: '20px',
+                            top: '32px',
                             left: '50%',
                             transform: 'translateX(-50%)',
                             backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
-                            color: toast.type === 'info' ? theme.text : 'white',
-                            padding: '10px 20px',
-                            borderRadius: '8px',
-                            boxShadow: `0 4px 12px ${theme.shadow}`,
+                            color: toast.type === 'info' ? theme.text : '#fff',
+                            padding: '12px 24px',
+                            borderRadius: '12px',
+                            boxShadow: `0 8px 24px ${theme.shadow}`,
                             zIndex: 10000,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
+                            gap: '10px',
                             fontSize: '14px',
-                            fontWeight: '500',
-                            animation: 'fadeInDown 0.3s ease'
+                            fontWeight: '600',
+                            border: `1px solid rgba(255,255,255,0.1)`,
+                            backdropFilter: 'blur(8px)',
+                            animation: 'fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                         }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor' }} />
                             {toast.message}
                         </div>
                     )}
@@ -961,10 +1252,21 @@ const App = () => {
                         <SettingsPanel 
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
+                            accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
+                            fontFamily={fontFamily} setFontFamily={setFontFamily}
+                            fontSize={fontSize} setFontSize={setFontSize}
                             styles={styles} theme={theme}
                         />
                     )}
+
+                    <AboutModal 
+                        show={showAbout} 
+                        onClose={() => setShowAbout(false)} 
+                        styles={styles} 
+                        theme={theme} 
+                        t={t} 
+                    />
                 </div>
 
                 {/* Right Sidebar: Properties */}
@@ -1011,6 +1313,41 @@ const App = () => {
                 )}
              </div>
 
+             {/* Bottom Status Bar */}
+             <div style={{
+                height: '24px',
+                backgroundColor: theme.accent,
+                color: 'white', 
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 12px',
+                fontSize: '11px',
+                zIndex: 1000,
+                justifyContent: 'space-between'
+             }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <span>{status}</span>
+                    {loading && <span>{progress}%</span>}
+                    {selectedUuid && (
+                        <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: '1px solid rgba(255,255,255,0.3)' }}>
+                            {t("prop_id")}: {selectedUuid.substring(0, 8)}...
+                        </span>
+                    )}
+                </div>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    {showStats && (
+                        <>
+                            <span>{stats.meshes} {t("monitor_meshes")}</span>
+                            <span>{(stats.faces/1000).toFixed(1)}k {t("monitor_faces")}</span>
+                            <span>{stats.memory} MB {t("monitor_mem")}</span>
+                            <span>{stats.drawCalls} {t("monitor_calls")}</span>
+                        </>
+                    )}
+                    <div style={{ width: '1px', height: '12px', backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                    <div style={{ opacity: 0.9 }}>{lang === 'zh' ? '简体中文' : 'English'}</div>
+                </div>
+             </div>
+
              <ConfirmModal 
                 isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message}
                 onConfirm={() => { confirmState.action(); setConfirmState({...confirmState, isOpen: false}); }}
@@ -1018,30 +1355,54 @@ const App = () => {
                 t={t} styles={styles} theme={theme}
              />
 
-             {/* Bottom Dock Toolbar */}
-             <MenuBar 
-                t={t}
-                handleOpenFiles={handleOpenFiles}
-                handleOpenFolder={handleOpenFolder}
-                handleConvert={() => {}} 
-                handleView={handleView}
-                handleClear={handleClear}
-                pickEnabled={pickEnabled}
-                setPickEnabled={setPickEnabled}
-                activeTool={activeTool}
-                setActiveTool={setActiveTool}
-                showOutline={showOutline}
-                setShowOutline={setShowOutline}
-                showProps={showProps}
-                setShowProps={setShowProps}
-                setLang={setLang}
-                sceneMgr={sceneMgr.current}
-                wireframe={sceneSettings.wireframe}
-                setWireframe={(v) => handleSettingsUpdate({wireframe: v})}
-                styles={styles}
-                theme={theme}
-             />
-        </div>
+             {/* Error Modal */}
+             {errorState.isOpen && (
+                <div style={styles.modalOverlay}>
+                    <div style={{ ...styles.modalContent, width: '450px' }}>
+                        <div style={{ ...styles.floatingHeader, backgroundColor: theme.danger, color: 'white' }}>
+                            <span>{errorState.title}</span>
+                            <div 
+                                onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))} 
+                                style={{ cursor: 'pointer', display: 'flex', padding: 2, borderRadius: 4 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                <IconClose width={18} height={18} />
+                            </div>
+                        </div>
+                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ fontWeight: '600', fontSize: '15px', color: theme.text }}>{errorState.message}</div>
+                            {errorState.detail && (
+                                <div style={{ 
+                                    fontSize: '11px', 
+                                    padding: '12px', 
+                                    backgroundColor: theme.bg, 
+                                    border: `1px solid ${theme.border}`,
+                                    borderRadius: '6px',
+                                    maxHeight: '180px',
+                                    overflowY: 'auto',
+                                    whiteSpace: 'pre-wrap',
+                                    fontFamily: 'monospace',
+                                    opacity: 0.8,
+                                    color: theme.text
+                                }}>
+                                    {errorState.detail}
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                                <button 
+                                    style={{ ...styles.btn, backgroundColor: theme.accent, color: 'white', borderColor: theme.accent, padding: '8px 24px' }}
+                                    onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))}
+                                >
+                                    {t("confirm") || "确定"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+             )}
+            </div>
+        </ErrorBoundary>
     );
 };
 

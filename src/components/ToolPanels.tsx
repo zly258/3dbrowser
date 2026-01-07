@@ -179,14 +179,30 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
     );
 };
 
+// --- Custom Checkbox Component ---
+export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any) => (
+    <label style={{ ...styles.checkboxContainer, ...style }} onClick={(e) => { e.preventDefault(); onChange(!checked); }}>
+        <div style={styles.checkboxCustom(checked)}>
+            {checked && (
+                <div style={styles.checkboxCheckmark}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '100%', height: '100%' }}>
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+            )}
+        </div>
+        {label && <span>{label}</span>}
+    </label>
+);
+
 // --- Custom Dual Slider Component ---
-const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void, theme: any }) => {
+const DualRangeSlider = ({ min, max, value, onChange, theme, disabled }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void, theme: any, disabled?: boolean }) => {
     const trackRef = useRef<HTMLDivElement>(null);
 
     const getPercentage = (val: number) => ((val - min) / (max - min)) * 100;
 
     const handleMouseDown = (index: 0 | 1) => (e: React.MouseEvent) => {
-        if(e.button !== 0) return;
+        if(disabled || e.button !== 0) return;
         e.preventDefault();
         
         const startX = e.clientX;
@@ -220,7 +236,10 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
 
     return (
         <div ref={trackRef} style={{
-            position: 'relative', width: '100%', height: '24px', display: 'flex', alignItems: 'center', cursor: 'pointer'
+            position: 'relative', width: '100%', height: '24px', display: 'flex', alignItems: 'center', 
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
+            transition: 'opacity 0.2s'
         }}>
             <div style={{
                 position: 'absolute', width: '100%', height: '4px', background: theme.border, borderRadius: '2px'
@@ -237,7 +256,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
                 onMouseDown={handleMouseDown(0)}
                 style={{
                     position: 'absolute', left: `calc(${getPercentage(value[0])}% - 8px)`,
-                    width: 16, height: 16, background: theme.panelBg, borderRadius: '50%', cursor: 'pointer',
+                    width: 16, height: 16, background: theme.panelBg, borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
                     boxShadow: `0 1px 3px ${theme.shadow}`, zIndex: 2, border: `2px solid ${theme.accent}`
                 }}
             />
@@ -245,7 +264,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
                 onMouseDown={handleMouseDown(1)}
                 style={{
                     position: 'absolute', left: `calc(${getPercentage(value[1])}% - 8px)`,
-                    width: 16, height: 16, background: theme.panelBg, borderRadius: '50%', cursor: 'pointer',
+                    width: 16, height: 16, background: theme.panelBg, borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
                     boxShadow: `0 1px 3px ${theme.shadow}`, zIndex: 2, border: `2px solid ${theme.accent}`
                 }}
             />
@@ -324,37 +343,46 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
 
 export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setClipValues, clipActive, setClipActive, styles, theme }: any) => {
     const SliderRow = ({ axis, label }: { axis: 'x'|'y'|'z', label: string }) => (
-        <div style={{marginBottom: 16}}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom: 4}}>
-                <label style={{display:'flex', alignItems:'center', gap: 6, cursor: 'pointer', fontSize:12, fontWeight:'500'}}>
-                    <input type="checkbox" checked={clipActive[axis]} onChange={(e) => setClipActive({...clipActive, [axis]: e.target.checked})}/>
-                    {label}
-                </label>
-                <span style={{fontSize: 10, color: theme.textMuted}}>
+        <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Checkbox 
+                    label={label} 
+                    checked={clipActive[axis]} 
+                    onChange={(v: boolean) => setClipActive({ ...clipActive, [axis]: v })} 
+                    styles={styles} 
+                    theme={theme}
+                    style={{ fontWeight: '500' }}
+                />
+                <span style={{ fontSize: 10, color: theme.textMuted, opacity: clipActive[axis] ? 1 : 0.5 }}>
                     {Math.round(clipValues[axis][0])}% - {Math.round(clipValues[axis][1])}%
                 </span>
             </div>
-            <div style={{padding: '0 4px'}}>
+            <div style={{ padding: '0 20px' }}>
                 <DualRangeSlider 
                     min={0} max={100} 
                     value={clipValues[axis]} 
-                    onChange={(val) => setClipValues({...clipValues, [axis]: val})}
+                    onChange={(val) => setClipValues({ ...clipValues, [axis]: val })}
                     theme={theme}
+                    disabled={!clipActive[axis]}
                 />
             </div>
         </div>
     );
 
     return (
-        <FloatingPanel title={t("clip_title")} onClose={onClose} width={300} height={320} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
-             <div style={{padding: 16}}>
-                 <div style={{marginBottom: 15, paddingBottom: 10, borderBottom: `1px solid ${theme.border}`}}>
-                    <label style={{cursor:'pointer', display:'flex', alignItems:'center', fontWeight:'bold', fontSize:12}}>
-                        <input type="checkbox" checked={clipEnabled} onChange={(e) => setClipEnabled(e.target.checked)} style={{marginRight:8}}/>
-                        {t("clip_enable")}
-                    </label>
+        <FloatingPanel title={t("clip_title")} onClose={onClose} width={300} height={360} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
+             <div style={{ padding: 16 }}>
+                 <div style={{ marginBottom: 20, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
+                    <Checkbox 
+                        label={t("clip_enable")} 
+                        checked={clipEnabled} 
+                        onChange={(v: boolean) => setClipEnabled(v)} 
+                        styles={styles} 
+                        theme={theme}
+                        style={{ fontWeight: 'bold' }}
+                    />
                  </div>
-                 <div style={{opacity: clipEnabled ? 1 : 0.5, pointerEvents: clipEnabled ? 'auto' : 'none', transition: 'opacity 0.2s'}}>
+                 <div style={{ opacity: clipEnabled ? 1 : 0.4, pointerEvents: clipEnabled ? 'auto' : 'none', transition: 'all 0.3s ease' }}>
                      <SliderRow axis="x" label={t("clip_x")} />
                      <SliderRow axis="y" label={t("clip_y")} />
                      <SliderRow axis="z" label={t("clip_z")} />
