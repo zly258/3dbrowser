@@ -89,37 +89,62 @@ interface RibbonUIProps {
     theme: any;
 }
 
-const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: React.ReactNode, label: string, onClick: () => void, active?: boolean, styles: any }) => (
-    <div style={styles.ribbonButtonLarge(active)} onClick={onClick}>
-        {icon && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 28 }) : icon}
-            </div>
-        )}
-        <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '11px' }}>{label}</div>
-    </div>
-);
+const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: React.ReactNode, label: string, onClick: () => void, active?: boolean, styles: any }) => {
+    const [hover, setHover] = useState(false);
+    return (
+        <div 
+            style={styles.ribbonButtonLarge(active, hover)} 
+            onClick={onClick}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            {icon && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 28 }) : icon}
+                </div>
+            )}
+            <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '11px' }}>{label}</div>
+        </div>
+    );
+};
 
-const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: React.ReactNode, label: string, onClick: () => void, active?: boolean, styles: any }) => (
-    <div style={styles.ribbonButtonMedium(active)} onClick={onClick}>
-        {icon && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
-            </div>
-        )}
-        <span style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{label}</span>
-    </div>
-);
+const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: React.ReactNode, label: string, onClick: () => void, active?: boolean, styles: any }) => {
+    const [hover, setHover] = useState(false);
+    return (
+        <div 
+            style={styles.ribbonButtonMedium(active, hover)} 
+            onClick={onClick}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            {icon && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
+                </div>
+            )}
+            <span style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{label}</span>
+        </div>
+    );
+};
 
-const RibbonButtonSmall = ({ icon, onClick, active, styles, title }: { icon?: React.ReactNode, onClick: () => void, active?: boolean, styles: any, title?: string }) => (
-    <div style={styles.ribbonButtonSmall(active)} onClick={onClick} title={title}>
-        {icon && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
-            </div>
-        )}
-    </div>
-);
+const RibbonButtonSmall = ({ icon, onClick, active, styles, title }: { icon?: React.ReactNode, onClick: () => void, active?: boolean, styles: any, title?: string }) => {
+    const [hover, setHover] = useState(false);
+    return (
+        <div 
+            style={styles.ribbonButtonSmall(active, hover)} 
+            onClick={onClick} 
+            title={title}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            {icon && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const RibbonCheckbox = ({ label, checked, onChange, styles, theme }: { label: string, checked: boolean, onChange: (v: boolean) => void, styles: any, theme: any }) => (
     <div style={{ ...styles.ribbonCheckbox, padding: '0 8px' }}>

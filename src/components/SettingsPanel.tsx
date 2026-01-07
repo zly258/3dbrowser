@@ -17,8 +17,6 @@ interface SettingsModalProps {
     setShowStats: (v: boolean) => void;
     fontFamily: string;
     setFontFamily: (f: string) => void;
-    fontSize: number;
-    setFontSize: (s: number) => void;
     accentColor: string;
     setAccentColor: (c: string) => void;
     styles: any;
@@ -60,7 +58,7 @@ const AxisSelector = ({ value, onChange, theme, t }: { value: string, onChange: 
 
 export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
     t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, accentColor, setAccentColor,
-    showStats, setShowStats, fontFamily, setFontFamily, fontSize, setFontSize, styles, theme 
+    showStats, setShowStats, fontFamily, setFontFamily, styles, theme 
 }) => {
     return (
         <div style={styles.modalOverlay}>
@@ -138,12 +136,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                                 <option value="'Arial', sans-serif">Arial</option>
                                 <option value="'Times New Roman', serif">Times New Roman</option>
                             </select>
-                        </Row>
-                        <Row label={`${t("st_font_size")} (${fontSize}px)`} theme={theme}>
-                            <input type="range" min="10" max="20" step="1" 
-                                value={fontSize} 
-                                onChange={(e) => setFontSize(parseInt(e.target.value))} 
-                                style={{width: 100}}/>
                         </Row>
                         <Row label={t("st_bg")} theme={theme}>
                             <input type="color" value={settings.bgColor} onChange={(e) => onUpdate({bgColor: e.target.value})} />

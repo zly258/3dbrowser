@@ -180,20 +180,35 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
 };
 
 // --- Custom Checkbox Component ---
-export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any) => (
-    <label style={{ ...styles.checkboxContainer, ...style }} onClick={(e) => { e.preventDefault(); onChange(!checked); }}>
-        <div style={styles.checkboxCustom(checked)}>
-            {checked && (
-                <div style={styles.checkboxCheckmark}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '100%', height: '100%' }}>
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                </div>
-            )}
-        </div>
-        {label && <span>{label}</span>}
-    </label>
-);
+export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any) => {
+    const [hover, setHover] = React.useState(false);
+    
+    return (
+        <label 
+            style={{ 
+                ...styles.checkboxContainer, 
+                ...style,
+                backgroundColor: hover ? `${theme.accent}08` : 'transparent',
+                borderRadius: '4px',
+                transition: 'background-color 0.2s'
+            }} 
+            onClick={(e) => { e.preventDefault(); onChange(!checked); }}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            <div style={styles.checkboxCustom(checked, hover)}>
+                {checked && (
+                    <div style={styles.checkboxCheckmark}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: '100%', height: '100%' }}>
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                )}
+            </div>
+            {label && <span style={{ marginLeft: 2 }}>{label}</span>}
+        </label>
+    );
+};
 
 // --- Custom Dual Slider Component ---
 const DualRangeSlider = ({ min, max, value, onChange, theme, disabled }: { min: number, max: number, value: [number, number], onChange: (val: [number, number]) => void, theme: any, disabled?: boolean }) => {
