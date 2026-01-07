@@ -13,6 +13,12 @@
 
 <a name="english"></a>
 
+## UI Preview
+
+<div align="center">
+  <img src="images/electron-en.png" alt="3D Browser English UI Preview" width="800" style="border-radius: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin: 10px 0;"/>
+</div>
+
 ## Key Features
 
 - **Cross-Platform Desktop App**: High-performance desktop application powered by **Electron**, supporting Windows and Linux.
@@ -124,6 +130,12 @@ This project is licensed under the MIT License.
 ---
 
 <a name="chinese"></a>
+
+## 界面预览
+
+<div align="center">
+  <img src="images/electron-zh.png" alt="3D Browser 中文界面预览" width="800" style="border-radius: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin: 10px 0;"/>
+</div>
 
 ## 特色功能
 
