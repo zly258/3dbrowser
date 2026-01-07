@@ -3,20 +3,19 @@ import * as THREE from "three";
 import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
-import { convertLMBTo3DTiles } from "./src/utils/threeDTiles";
-import { exportGLB } from "./src/utils/exportGLB";
-import { exportLMB } from "./src/utils/exportLMB";
+import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
 import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
 import { MenuBar } from "./src/components/MenuBar";
 import { SceneTree, buildTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, FloatingPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
+import { IconClose } from "./src/theme/Icons";
 
 // --- 全局样式注入 ---
 const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
@@ -25,24 +24,39 @@ const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
 
 // --- 主应用 ---
 const App = () => {
-    // 主题状态
-    const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+    // 主题状态 - 从localStorage恢复
+    const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_themeMode');
+            return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+        } catch {
+            return 'dark';
+        }
+    });
     const theme = themes[themeMode];
     const styles = useMemo(() => createStyles(theme), [themeMode]);
+
+    // 语言状态 - 从localStorage恢复
+    const [lang, setLang] = useState<Lang>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_lang');
+            return (saved === 'zh' || saved === 'en') ? saved : 'zh';
+        } catch {
+            return 'zh';
+        }
+    });
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
     const [selectedProps, setSelectedProps] = useState<any>(null);
-    const [lang, setLang] = useState<Lang>('zh');
-    // 使用默认语言'zh'初始化状态
-    const [status, setStatus] = useState(getTranslation('zh', 'ready'));
+    const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'explode' | 'settings' | 'export'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export'>('none');
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
@@ -52,7 +66,6 @@ const App = () => {
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
     const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
-    const [explodeFactor, setExplodeFactor] = useState(0);
 
     // Toolbar State - 从localStorage恢复状态
     const [pickEnabled, setPickEnabled] = useState(() => {
@@ -60,6 +73,14 @@ const App = () => {
             return localStorage.getItem('3dbrowser_pickEnabled') === 'true';
         } catch {
             return false;
+        }
+    });
+    const [showStats, setShowStats] = useState(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_showStats');
+            return saved !== null ? saved === 'true' : true;
+        } catch {
+            return true;
         }
     });
     const [showOutline, setShowOutline] = useState(() => {
@@ -79,19 +100,39 @@ const App = () => {
         }
     });
 
-    // Settings State (mirrors SceneManager)
-    const [sceneSettings, setSceneSettings] = useState<SceneSettings>({
-        ambientInt: 2.0,
-        dirInt: 1.0,
-        bgColor: theme.canvasBg,
-        wireframe: false,
-        progressive: true,
-        hideRatio: 0.6,
-        progressiveThreshold: 15000,
-        sse: 16,
-        maxMemory: 500,
-        importAxisGLB: '+y',
-        importAxisIFC: '+z',
+    // Settings State (mirrors SceneManager) - 从localStorage恢复
+    const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_sceneSettings');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return {
+                    ambientInt: typeof parsed.ambientInt === 'number' ? parsed.ambientInt : 2.0,
+                    dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
+                    bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
+                    wireframe: typeof parsed.wireframe === 'boolean' ? parsed.wireframe : false,
+                    progressive: typeof parsed.progressive === 'boolean' ? parsed.progressive : true,
+                    hideRatio: typeof parsed.hideRatio === 'number' ? parsed.hideRatio : 0.6,
+                    progressiveThreshold: typeof parsed.progressiveThreshold === 'number' ? parsed.progressiveThreshold : 15000,
+                    sse: typeof parsed.sse === 'number' ? parsed.sse : 16,
+                    maxMemory: typeof parsed.maxMemory === 'number' ? parsed.maxMemory : 500,
+                    importAxisGLB: typeof parsed.importAxisGLB === 'string' ? parsed.importAxisGLB : '+y',
+                    importAxisIFC: typeof parsed.importAxisIFC === 'string' ? parsed.importAxisIFC : '+z',
+                };
+            }
+        } catch (e) { console.error("Failed to load sceneSettings", e); }
+        return {
+            ambientInt: 2.0,
+            dirInt: 1.0,
+            bgColor: theme.canvasBg,
+            wireframe: false,
+            progressive: true,
+            hideRatio: 0.6,
+            progressiveThreshold: 15000,
+            importAxisGLB: '+y',
+            importAxisIFC: '+z',
+            enableInstancing: true,
+        };
     });
 
     // Confirmation Modal State
@@ -113,7 +154,36 @@ const App = () => {
     const sceneMgr = useRef<SceneManager | null>(null);
     const visibilityDebounce = useRef<any>(null);
 
+    // Toast Message State
+    const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
+
+    // 持久化主题和语言设置
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_themeMode', themeMode);
+        } catch (e) { console.error("Failed to save themeMode", e); }
+    }, [themeMode]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_lang', lang);
+        } catch (e) { console.error("Failed to save lang", e); }
+    }, [lang]);
+
+    // 持久化场景设置
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_sceneSettings', JSON.stringify(sceneSettings));
+        } catch (e) { console.error("Failed to save sceneSettings", e); }
+    }, [sceneSettings]);
 
     // Update status when lang changes if status is "Ready" (or equivalent)
     useEffect(() => {
@@ -189,6 +259,14 @@ const App = () => {
 
     useEffect(() => {
         try {
+            localStorage.setItem('3dbrowser_showStats', String(showStats));
+        } catch (e) {
+            console.warn('无法保存showStats状态', e);
+        }
+    }, [showStats]);
+
+    useEffect(() => {
+        try {
             localStorage.setItem('3dbrowser_showOutline', String(showOutline));
         } catch (e) {
             console.warn('无法保存showOutline状态', e);
@@ -206,102 +284,91 @@ const App = () => {
     // 树结构更新
     const updateTree = useCallback(() => {
         if (!sceneMgr.current) return;
-        const content = sceneMgr.current.contentGroup;
         
-        let roots: any[] = [];
-        // Flatten "ImportedModels" wrapper to show the actual RootNodes
-        const imported = content.getObjectByName("ImportedModels");
-        if (imported) {
-             roots = [...roots, ...imported.children.map(c => buildTree(c))];
+        const root = sceneMgr.current.structureRoot;
+        if (!root) {
+            setTreeRoot([]);
+            return;
         }
 
-        content.children.forEach(c => {
-             if (c.name !== "ImportedModels") {
-                 roots.push(buildTree(c));
-             }
-        });
+        const convertNode = (node: any, depth = 0, isFileNode = false): any => {
+            return {
+                uuid: node.id,
+                name: node.name,
+                type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
+                depth,
+                children: (node.children || []).map((c: any) => convertNode(c, depth + 1, false)),
+                expanded: depth < 1,
+                visible: node.visible !== false,
+                object: node,
+                isFileNode
+            };
+        };
 
+        // 只显示 Root 的子节点，从而移除 Root 和 ImportedModels 这一层
+        const roots: any[] = [];
+        (root.children || []).forEach((c: any) => {
+            if (c.name === "ImportedModels" || c.name === "Tilesets") {
+                // 如果是这两个容器，则将其子节点作为顶级节点，从而移除容器层
+                (c.children || []).forEach((child: any) => {
+                    roots.push(convertNode(child, 0, true));
+                });
+            } else {
+                roots.push(convertNode(c, 0, true));
+            }
+        });
+        
         setTreeRoot(roots);
-    }, []);
+    }, [])
 
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
         
-        const targetObj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-        const affectedUuids = new Set<string>();
-        
-        const processObject = (obj: THREE.Object3D) => {
-            obj.visible = visible;
-            affectedUuids.add(obj.uuid);
-            obj.children.forEach(child => {
-                if(child.name !== "Helpers") processObject(child);
-            });
-        };
+        sceneMgr.current.setObjectVisibility(uuid, visible);
 
-        if (targetObj) processObject(targetObj);
-
-        if (visibilityDebounce.current) clearTimeout(visibilityDebounce.current);
-        visibilityDebounce.current = setTimeout(() => {
-            setTreeRoot(prev => {
-                const updateNode = (nodes: any[]): any[] => {
-                    return nodes.map(n => {
-                        const shouldUpdate = affectedUuids.has(n.uuid);
-                        let newChildren = n.children;
-                        if (n.children.length > 0) newChildren = updateNode(n.children);
-                        if (shouldUpdate) return { ...n, visible, children: newChildren };
-                        return { ...n, children: newChildren };
-                    });
-                };
-                return updateNode(prev);
-            });
-        }, 120);
+        // 使用 updateTree 同步最新的结构树状态
+        updateTree();
     };
 
     const handleDeleteObject = (uuid: string) => {
         if (!sceneMgr.current) return;
         
         const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-        if (obj) {
-            const name = obj.name || "Item";
+        const node = sceneMgr.current.nodeMap.get(uuid);
+
+        if (obj || node) {
+            const name = (obj as any)?.name || (node as any)?.name || "Item";
             
             setConfirmState({
                 isOpen: true,
                 title: t("delete_item"),
                 message: `${t("confirm_delete")} "${name}"?`,
-                action: () => {
-                    // Traverse and dispose resources to prevent memory leaks
-                    obj.traverse((child: any) => {
-                        if (child.isMesh) {
-                            if (child.geometry) child.geometry.dispose();
-                            if (child.material) {
-                                if (Array.isArray(child.material)) child.material.forEach((m:any) => m.dispose());
-                                else child.material.dispose();
-                            }
-                        }
-                        if (child.isTilesRenderer) {
-                             child.dispose();
-                        }
-                    });
-
-                    // If it's the tiles renderer logic wrapped
-                    if (sceneMgr.current?.tilesRenderer && sceneMgr.current.tilesRenderer.group === obj) {
-                        sceneMgr.current.tilesRenderer.dispose();
-                        sceneMgr.current.tilesRenderer = null;
-                    }
-
-                    obj.removeFromParent();
+                action: async () => {
+                    setLoading(true);
+                    setStatus(t("delete_item") + "...");
                     
-                    // If selected, deselect
-                    if (selectedUuid === uuid) {
-                        setSelectedUuid(null);
-                        setSelectedProps(null);
-                        sceneMgr.current?.highlightObject(null);
-                    }
+                    try {
+                        // 使用 SceneManager 的 removeModel 进行清理
+                        await sceneMgr.current?.removeModel(uuid);
 
-                    // Refresh tree
-                    updateTree();
-                    // Refresh optimization cache in SceneManager
-                    sceneMgr.current?.refreshMeshCache();
+                        // If selected, deselect
+                        if (selectedUuid === uuid) {
+                            setSelectedUuid(null);
+                            setSelectedProps(null);
+                            sceneMgr.current?.highlightObject(null);
+                        }
+
+                        // Refresh tree
+                        updateTree();
+                        setStatus(t("ready"));
+                        // Add success notification
+                        setToast({ message: t("success"), type: 'success' });
+                    } catch (error) {
+                        console.error("删除对象失败:", error);
+                        setToast({ message: t("failed") + ": " + (error instanceof Error ? error.message : String(error)), type: 'error' });
+                    } finally {
+                        setLoading(false);
+                    }
                 }
             });
         }
@@ -359,12 +426,9 @@ const App = () => {
                 }
                 return;
             }
-        };
-
-        const handleDblClick = (e: MouseEvent) => {
-            if (activeTool !== 'measure' && pickEnabled) {
-                const intersect = mgr.pick(e.clientX, e.clientY);
-                handleSelect(intersect ? intersect.object : null, intersect);
+            if(pickEnabled) {
+                const result = mgr.pick(e.clientX, e.clientY);
+                handleSelect(result ? result.object : null, result ? result.intersect : null);
             }
         };
 
@@ -373,18 +437,17 @@ const App = () => {
                 mgr.updateMeasureHover(e.clientX, e.clientY);
                 return;
             }
+            mgr.highlightObject(selectedUuid);
         };
 
         canvas.addEventListener("click", handleClick);
-        canvas.addEventListener("dblclick", handleDblClick);
         canvas.addEventListener("mousemove", handleMouseMove);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
-            canvas.removeEventListener("dblclick", handleDblClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
         };
-    }, [pickEnabled, selectedUuid, activeTool, measureType, t]);
+    }, [pickEnabled, selectedUuid, activeTool, measureType]);
 
     // 工具状态同步
     useEffect(() => {
@@ -397,10 +460,6 @@ const App = () => {
             setMeasureType('none');
         }
 
-        if (activeTool !== 'explode') {
-            mgr.setExplodeFactor(0);
-            setExplodeFactor(0);
-        }
         if (activeTool !== 'clip') {
             mgr.setClippingEnabled(false);
             setClipEnabled(false);
@@ -429,13 +488,6 @@ const App = () => {
         }
     }, [clipEnabled, clipValues, clipActive, activeTool]);
 
-    // 爆炸参数更新
-    useEffect(() => {
-        if (activeTool === 'explode' && sceneMgr.current) {
-            sceneMgr.current.setExplodeFactor(explodeFactor / 100);
-        }
-    }, [explodeFactor, activeTool]);
-
 
     // --- 处理函数 ---
 
@@ -449,66 +501,87 @@ const App = () => {
             return;
         }
 
-        setSelectedUuid(obj.uuid);
-        sceneMgr.current.highlightObject(obj.uuid);
+        // 统一处理 UUID (兼容 Object3D 和 StructureTreeNode)
+        const uuid = obj.uuid || obj.id;
+        if (!uuid) return;
+
+        setSelectedUuid(uuid);
+        sceneMgr.current.highlightObject(uuid);
         
+        // 尝试获取真实的 Object3D 以获得更多几何信息
+        let realObj = obj instanceof THREE.Object3D ? obj : sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
+        
+        // 如果还是没找到，可能是优化后的对象，尝试从 SceneManager 获取
+        if (!realObj && sceneMgr.current) {
+            // 如果是 NBIM 模式，可能只能得到一个代理对象
+            // 我们在 getRayIntersects 中已经处理了代理对象的创建
+        }
+
+        const target = realObj || obj; // 优先使用真实对象，否则使用传入的对象（可能是 StructureTreeNode）
+
         const basicProps: any = {};
         const geoProps: any = {};
         const ifcProps: any = {};
 
-        basicProps[t("prop_name")] = obj.name || "Unnamed";
-        basicProps[t("prop_type")] = obj.type;
-        basicProps[t("prop_id")] = obj.uuid.substring(0, 8) + "..."; 
+        basicProps[t("prop_name")] = target.name || "Unnamed";
+        basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
+        basicProps[t("prop_id")] = uuid.substring(0, 8) + "..."; 
         
-        const worldPos = new THREE.Vector3();
-        obj.getWorldPosition(worldPos);
-        geoProps[t("prop_pos")] = `${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}`;
+        if (target.getWorldPosition) {
+            const worldPos = new THREE.Vector3();
+            target.getWorldPosition(worldPos);
+            geoProps[t("prop_pos")] = `${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}`;
+        }
         
-        if (obj.isMesh) {
-             const box = new THREE.Box3().setFromObject(obj);
-             const size = new THREE.Vector3();
-             box.getSize(size);
-             geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
-             
-             if (obj.geometry) {
-                geoProps[t("prop_vert")] = (obj.geometry.attributes.position?.count || 0).toLocaleString();
-                if(obj.geometry.index) {
-                    geoProps[t("prop_tri")] = (obj.geometry.index.count / 3).toLocaleString();
-                } else {
-                     geoProps[t("prop_tri")] = ((obj.geometry.attributes.position?.count || 0) / 3).toLocaleString();
+        if (target.isMesh || target.type === 'Mesh') {
+             // 几何信息
+             if (target instanceof THREE.Mesh) {
+                const box = new THREE.Box3().setFromObject(target);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
+                
+                if (target.geometry) {
+                    geoProps[t("prop_vert")] = (target.geometry.attributes.position?.count || 0).toLocaleString();
+                    if(target.geometry.index) {
+                        geoProps[t("prop_tri")] = (target.geometry.index.count / 3).toLocaleString();
+                    } else {
+                        geoProps[t("prop_tri")] = ((target.geometry.attributes.position?.count || 0) / 3).toLocaleString();
+                    }
                 }
-            }
-            if (obj.isInstancedMesh) {
-                 geoProps[t("prop_inst")] = obj.count.toLocaleString();
-            }
+             } else if (target.userData?.boundingBox) {
+                const size = new THREE.Vector3();
+                target.userData.boundingBox.getSize(size);
+                geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
+             }
+             
+             if (target.isInstancedMesh) {
+                 geoProps[t("prop_inst")] = target.count.toLocaleString();
+             }
 
             // --- IFC 属性获取逻辑 ---
-            if (obj.userData.isIFC || (obj.parent && obj.parent.userData.isIFC)) {
-                // 若使用新逻辑，通常 userData 在网格对象上
-                const target = obj.userData.isIFC ? obj : obj.parent;
-                if (target && target.userData.ifcAPI && target.userData.modelID !== undefined) {
-                    const expressID = obj.userData.expressID;
+            // 检查 userData 或 parent.userData
+            const userData = target.userData || {};
+            const parentUserData = target.parent?.userData || {};
+
+            if (userData.isIFC || parentUserData.isIFC) {
+                const ifcTarget = userData.isIFC ? target : target.parent;
+                if (ifcTarget && ifcTarget.userData.ifcAPI && ifcTarget.userData.modelID !== undefined) {
+                    const expressID = userData.expressID;
                     if (expressID) {
                         try {
-                            // 使用之前存储的原始 API 引用
-                            const api = target.userData.ifcAPI;
-                            const modelID = target.userData.modelID;
-                            
-                            // 使用自定义属性获取器解析属性（新的扁平化格式）
-                            const ifcMgr = target.userData.ifcManager;
-                            const flatProps = await ifcMgr.getItemProperties(modelID, expressID);
-                           
+                            const ifcMgr = ifcTarget.userData.ifcManager;
+                            const flatProps = await ifcMgr.getItemProperties(ifcTarget.userData.modelID, expressID);
                             if (flatProps) {
-                                // 直接合并所有IFC属性到ifcProps变量（扁平化格式）
                                 Object.assign(ifcProps, flatProps);
                             }
                         } catch(e) { console.error("IFC Props Error", e); }
                     }
                 }
             }
-        } else if (obj.userData.boundingBox) {
+        } else if (target.userData?.boundingBox) {
              const size = new THREE.Vector3();
-             obj.userData.boundingBox.getSize(size);
+             target.userData.boundingBox.getSize(size);
              geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
         }
 
@@ -527,25 +600,46 @@ const App = () => {
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length || !sceneMgr.current) return;
+        const files = Array.from(e.target.files) as File[];
         setLoading(true);
         setStatus(t("loading"));
         setProgress(0);
         
         try {
-            const group = await loadModelFiles(
-                Array.from(e.target.files), 
-                (p, msg) => {
-                    setProgress(p);
-                    if(msg) setStatus(msg);
-                }, 
-                t,
-                sceneSettings // Pass settings
-            );
-            sceneMgr.current.addModel(group);
+            // 分离 nbim 和其他文件
+            const nbimFiles = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
+            const otherFiles = files.filter(f => !f.name.toLowerCase().endsWith('.nbim'));
+
+            // 处理 nbim 文件
+            for (const file of nbimFiles) {
+                if (sceneMgr.current) {
+                    await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
+                        setProgress(p);
+                        if(msg) setStatus(msg);
+                    });
+                }
+            }
+
+            // 处理其他模型文件 (glb, ifc, etc.)
+            if (otherFiles.length > 0) {
+                const loadedObjects = await loadModelFiles(
+                    otherFiles, 
+                    (p, msg) => {
+                        setProgress(p);
+                        if(msg) setStatus(msg);
+                    }, 
+                    t,
+                    sceneSettings // Pass settings
+                );
+                for (const obj of loadedObjects) {
+                    await sceneMgr.current.addModel(obj);
+                }
+            }
+            
             updateTree();
             setStatus(t("success"));
             setTimeout(() => sceneMgr.current?.fitView(), 100);
-        } catch (err) { 
+        } catch (err) {
             console.error(err); 
             setStatus(t("failed")); 
         } finally { 
@@ -568,7 +662,10 @@ const App = () => {
                 t
             );
             if (url) {
-                sceneMgr.current.addTileset(url);
+                sceneMgr.current.addTileset(url, (p, msg) => {
+                    setProgress(p);
+                    if(msg) setStatus(msg);
+                });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
                 setTimeout(() => sceneMgr.current?.fitView(), 500);
@@ -580,8 +677,42 @@ const App = () => {
     // New unified Export Handler
     const handleExport = async (format: string) => {
         if (!sceneMgr.current) return;
-        const models = sceneMgr.current.contentGroup.getObjectByName("ImportedModels");
-        if (!models || models.children.length === 0) { alert(t("no_models")); return; }
+        
+        const content = sceneMgr.current.contentGroup;
+        
+        // NBIM 导出直接由 SceneManager 处理
+        if (format === 'nbim') {
+            if (content.children.length === 0) { 
+                setToast({ message: t("no_models"), type: 'info' });
+                return; 
+            }
+            setLoading(true);
+            setStatus(t("processing") + "...");
+            setActiveTool('none');
+            setTimeout(async () => {
+                try {
+                    await sceneMgr.current?.exportNbim();
+                    setToast({ message: t("success"), type: 'success' });
+                } catch (e) {
+                    console.error(e);
+                    setToast({ message: t("failed") + ": " + (e as Error).message, type: 'error' });
+                } finally {
+                    setLoading(false);
+                }
+            }, 100);
+            return;
+        }
+
+        // 收集所有原始模型进行导出（非优化组）
+        const modelsToExport = content.children.filter(c => !c.userData.isOptimizedGroup && c.name !== "TilesRenderer");
+        if (modelsToExport.length === 0) { 
+            setToast({ message: t("no_models"), type: 'info' });
+            return; 
+        }
+
+        // 创建一个临时组用于导出，包含所有要导出的模型
+        const exportGroup = new THREE.Group();
+        modelsToExport.forEach(m => exportGroup.add(m.clone()));
         
         setLoading(true);
         setProgress(0);
@@ -597,12 +728,12 @@ const App = () => {
                     // 强制选择输出目录并直接写入
                     // @ts-ignore
                     if (!window.showDirectoryPicker) {
-                        alert(t("select_output"));
+                        setToast({ message: t("select_output"), type: 'info' });
                         throw new Error("Browser does not support directory picker");
                     }
                     // @ts-ignore
                     const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-                    const filesMap = await convertLMBTo3DTiles(models, (msg) => {
+                    const filesMap = await convertLMBTo3DTiles(exportGroup, (msg) => {
                         setStatus(msg);
                         if (msg.includes('%')) {
                             const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
@@ -621,12 +752,12 @@ const App = () => {
                         writeCount++;
                         if (writeCount % 5 === 0) setProgress(Math.floor((writeCount / filesMap.size) * 100));
                     }
-                    alert(t("success"));
+                    setToast({ message: t("success"), type: 'success' });
                     return;
                 } else if (format === 'glb') {
-                    blob = await exportGLB(models);
+                    blob = await exportGLB(exportGroup);
                 } else if (format === 'lmb') {
-                    blob = await exportLMB(models, (msg) => setStatus(msg));
+                    blob = await exportLMB(exportGroup, (msg) => setStatus(msg));
                 }
 
                 if (blob) {
@@ -636,11 +767,11 @@ const App = () => {
                     a.download = filename;
                     a.click();
                     URL.revokeObjectURL(url);
-                    setStatus(t("success"));
+                    setToast({ message: t("success"), type: 'success' });
                 }
             } catch(e) {
                 console.error(e); 
-                setStatus(t("failed") + ": " + (e as Error).message);
+                setToast({ message: t("failed") + ": " + (e as Error).message, type: 'error' });
             } finally {
                 setLoading(false);
                 setProgress(0);
@@ -650,18 +781,30 @@ const App = () => {
 
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
     
-    // Update handleClear to use custom modal
-    const handleClear = () => {
+    const handleClear = async () => {
+        if (!sceneMgr.current) return;
+        
         setConfirmState({
             isOpen: true,
             title: t("op_clear"),
             message: t("confirm_clear"),
-            action: () => {
-                sceneMgr.current?.clear();
-                setTreeRoot([]);
-                setSelectedUuid(null);
-                setSelectedProps(null);
-                setMeasureHistory([]);
+            action: async () => {
+                setLoading(true);
+                setProgress(0);
+                setStatus(t("op_clear") + "...");
+                
+                try {
+                    await sceneMgr.current?.clear();
+                    setSelectedUuid(null);
+                    setSelectedProps(null);
+                    setMeasureHistory([]);
+                    updateTree();
+                    setStatus(t("ready"));
+                } catch (error) {
+                    console.error("清空场景失败:", error);
+                } finally {
+                    setLoading(false);
+                }
             }
         });
     };
@@ -674,11 +817,218 @@ const App = () => {
     return (
         <div style={styles.container}>
              <GlobalStyle theme={theme} />
+
+             {/* Main Content Area: Flex Row */}
+             <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+                
+                {/* Left Sidebar: Outline */}
+                {showOutline && (
+                    <div style={{ 
+                        width: `${leftWidth}px`, 
+                        backgroundColor: theme.panelBg, 
+                        borderRight: `1px solid ${theme.border}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        zIndex: 10,
+                        position: 'relative'
+                    }}>
+                        <div style={{ 
+                            padding: '12px 16px', 
+                            borderBottom: `1px solid ${theme.border}`, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            fontWeight: '600'
+                        }}>
+                            <span>{t("interface_outline")}</span>
+                            <div 
+                                onClick={() => setShowOutline(false)} 
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                <IconClose width={20} height={20} />
+                            </div>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <SceneTree 
+                                t={t}
+                                sceneMgr={sceneMgr.current} 
+                                treeRoot={treeRoot} 
+                                setTreeRoot={setTreeRoot} 
+                                selectedUuid={selectedUuid}
+                                onSelect={(uuid, obj) => handleSelect(obj)}
+                                onToggleVisibility={handleToggleVisibility}
+                                onDelete={handleDeleteObject}
+                                styles={styles}
+                                theme={theme}
+                            />
+                        </div>
+                        {/* Resize handle */}
+                        <div 
+                            onMouseDown={() => resizingLeft.current = true}
+                            style={{ 
+                                position: 'absolute', right: -2, top: 0, bottom: 0, width: 4, 
+                                cursor: 'col-resize', zIndex: 20 
+                            }} 
+                        />
+                    </div>
+                )}
+
+                {/* Center Viewport */}
+                <div ref={viewportRef} style={{ 
+                    flex: 1, 
+                    position: 'relative', 
+                    backgroundColor: theme.canvasBg,
+                    overflow: 'hidden'
+                }}>
+                    <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
+                    
+                    {/* Stats HUD (Top Center) */}
+                    {showStats && (
+                        <div style={styles.statsOverlay}>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_meshes")}:</span>
+                                <span style={{fontWeight: 600}}>{stats.meshes}</span>
+                            </div>
+                            <div style={styles.statsDivider}></div>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_faces")}:</span>
+                                <span style={{fontWeight: 600}}>{(stats.faces/1000).toFixed(1)}k</span>
+                            </div>
+                            <div style={styles.statsDivider}></div>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_mem")}:</span>
+                                <span style={{fontWeight: 600}}>{stats.memory} MB</span>
+                            </div>
+                            <div style={styles.statsDivider}></div>
+                            <div style={styles.statsRow}>
+                                <span style={{color: theme.textMuted}}>{t("monitor_calls")}:</span>
+                                <span style={{fontWeight: 600}}>{stats.drawCalls}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Toast Notification */}
+                    {toast && (
+                        <div style={{
+                            position: 'fixed',
+                            top: '20px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
+                            color: toast.type === 'info' ? theme.text : 'white',
+                            padding: '10px 20px',
+                            borderRadius: '8px',
+                            boxShadow: `0 4px 12px ${theme.shadow}`,
+                            zIndex: 10000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            animation: 'fadeInDown 0.3s ease'
+                        }}>
+                            {toast.message}
+                        </div>
+                    )}
+
+                    <LoadingOverlay t={t} loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
+
+                    {/* Overlay Panels for Tools */}
+                    {activeTool === 'measure' && (
+                        <MeasurePanel 
+                            t={t} sceneMgr={sceneMgr.current} 
+                            measureType={measureType} setMeasureType={setMeasureType}
+                            measureHistory={measureHistory}
+                            onDelete={(id: string) => { sceneMgr.current?.removeMeasurement(id); setMeasureHistory(prev => prev.filter(i => i.id !== id)); }}
+                            onClear={() => { sceneMgr.current?.clearAllMeasurements(); setMeasureHistory([]); }}
+                            onClose={() => setActiveTool('none')}
+                            styles={styles} theme={theme}
+                        />
+                    )}
+
+                    {activeTool === 'clip' && (
+                        <ClipPanel 
+                            t={t} sceneMgr={sceneMgr.current} onClose={() => setActiveTool('none')}
+                            clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
+                            clipValues={clipValues} setClipValues={setClipValues}
+                            clipActive={clipActive} setClipActive={setClipActive}
+                            styles={styles} theme={theme}
+                        />
+                    )}
+
+                    {activeTool === 'export' && (
+                        <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} styles={styles} theme={theme} />
+                    )}
+
+                    {activeTool === 'settings' && (
+                        <SettingsPanel 
+                            t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
+                            currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
+                            showStats={showStats} setShowStats={setShowStats}
+                            styles={styles} theme={theme}
+                        />
+                    )}
+                </div>
+
+                {/* Right Sidebar: Properties */}
+                {showProps && (
+                    <div style={{ 
+                        width: `${rightWidth}px`, 
+                        backgroundColor: theme.panelBg, 
+                        borderLeft: `1px solid ${theme.border}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        zIndex: 10,
+                        position: 'relative'
+                    }}>
+                        <div style={{ 
+                            padding: '12px 16px', 
+                            borderBottom: `1px solid ${theme.border}`, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            fontWeight: '600'
+                        }}>
+                            <span>{t("interface_props")}</span>
+                            <div 
+                                onClick={() => setShowProps(false)} 
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                                <IconClose width={20} height={20} />
+                            </div>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
+                        </div>
+                        {/* Resize handle */}
+                        <div 
+                            onMouseDown={() => resizingRight.current = true}
+                            style={{ 
+                                position: 'absolute', left: -2, top: 0, bottom: 0, width: 4, 
+                                cursor: 'col-resize', zIndex: 20 
+                            }} 
+                        />
+                    </div>
+                )}
+             </div>
+
+             <ConfirmModal 
+                isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message}
+                onConfirm={() => { confirmState.action(); setConfirmState({...confirmState, isOpen: false}); }}
+                onCancel={() => setConfirmState({...confirmState, isOpen: false})}
+                t={t} styles={styles} theme={theme}
+             />
+
+             {/* Bottom Dock Toolbar */}
              <MenuBar 
                 t={t}
                 handleOpenFiles={handleOpenFiles}
                 handleOpenFolder={handleOpenFolder}
-                handleConvert={() => {}} // Deprecated, handled via activeTool
+                handleConvert={() => {}} 
                 handleView={handleView}
                 handleClear={handleClear}
                 pickEnabled={pickEnabled}
@@ -696,142 +1046,21 @@ const App = () => {
                 styles={styles}
                 theme={theme}
              />
-
-             <div style={styles.workspace}>
-                 {showOutline && (
-                     <div style={{...styles.resizablePanel, width: leftWidth}}>
-                         <div style={styles.panelHeader}>{t("interface_outline")}</div>
-                         <SceneTree 
-                            sceneMgr={sceneMgr.current} 
-                            treeRoot={treeRoot} 
-                            setTreeRoot={setTreeRoot} 
-                            selectedUuid={selectedUuid}
-                            onSelect={(uuid, obj) => handleSelect(obj)}
-                            onToggleVisibility={handleToggleVisibility}
-                            onDelete={handleDeleteObject}
-                            styles={styles}
-                            theme={theme}
-                         />
-                     </div>
-                 )}
-                 
-                 {showOutline && (
-                     <div 
-                         style={{
-                             ...styles.resizeHandleHorizontal, 
-                             backgroundColor: resizingLeft.current ? theme.accent : theme.bg 
-                         }}
-                         onMouseDown={(e) => { e.preventDefault(); resizingLeft.current = true; }}
-                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.accent}
-                         onMouseLeave={(e) => !resizingLeft.current && (e.currentTarget.style.backgroundColor = theme.bg)}
-                     />
-                 )}
-
-                 <div ref={viewportRef} style={styles.viewport}>
-                    <canvas ref={canvasRef} style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', outline: 'none'}} />
-                    
-                    {activeTool === 'measure' && (
-                        <MeasurePanel 
-                            t={t} sceneMgr={sceneMgr.current} 
-                            measureType={measureType} setMeasureType={setMeasureType}
-                            measureHistory={measureHistory}
-                            onDelete={(id: string) => {
-                                sceneMgr.current?.removeMeasurement(id);
-                                setMeasureHistory(prev => prev.filter(i => i.id !== id));
-                            }}
-                            onClear={() => {
-                                sceneMgr.current?.clearAllMeasurements();
-                                setMeasureHistory([]);
-                            }}
-                            onClose={() => setActiveTool('none')}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    {activeTool === 'clip' && (
-                        <ClipPanel 
-                            t={t} sceneMgr={sceneMgr.current} onClose={() => setActiveTool('none')}
-                            clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
-                            clipValues={clipValues} setClipValues={setClipValues}
-                            clipActive={clipActive} setClipActive={setClipActive}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    {activeTool === 'explode' && (
-                        <ExplodePanel 
-                            t={t} onClose={() => setActiveTool('none')}
-                            explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    
-                    {activeTool === 'export' && (
-                        <ExportPanel 
-                            t={t} 
-                            onClose={() => setActiveTool('none')}
-                            onExport={handleExport}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-                    
-                    {/* Settings Modal - renders on top due to z-index */}
-                    {activeTool === 'settings' && (
-                        <SettingsPanel 
-                            t={t} 
-                            onClose={() => setActiveTool('none')}
-                            settings={sceneSettings}
-                            onUpdate={handleSettingsUpdate}
-                            currentLang={lang}
-                            setLang={setLang}
-                            themeMode={themeMode}
-                            setThemeMode={setThemeMode}
-                            styles={styles} theme={theme}
-                        />
-                    )}
-
-                    {/* CONFIRM MODAL */}
-                    <ConfirmModal 
-                        isOpen={confirmState.isOpen}
-                        title={confirmState.title}
-                        message={confirmState.message}
-                        onConfirm={confirmAction}
-                        onCancel={() => setConfirmState({...confirmState, isOpen: false})}
-                        t={t}
-                        styles={styles} theme={theme}
-                    />
-                    
-                    <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
-                 </div>
-
-                 {showProps && (
-                     <div 
-                         style={{
-                             ...styles.resizeHandleHorizontal,
-                             backgroundColor: resizingRight.current ? theme.accent : theme.bg 
-                         }}
-                         onMouseDown={(e) => { e.preventDefault(); resizingRight.current = true; }}
-                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.accent}
-                         onMouseLeave={(e) => !resizingRight.current && (e.currentTarget.style.backgroundColor = theme.bg)}
-                     />
-                 )}
-
-                 {showProps && (
-                     <div style={{...styles.resizablePanel, width: rightWidth}}>
-                        <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
-                     </div>
-                 )}
-             </div>
-
-             <div style={styles.statusBar}>
-                 <div style={{display:'flex', gap: 15}}><span>{status}</span></div>
-                 <div style={{display:'flex', gap: 15}}>
-                    <span>{t("meshes")}: {stats.meshes}</span>
-                    <span>{t("memory")}: {stats.memory} MB</span>
-                    <span>{t("draw_calls")}: {stats.drawCalls}</span>
-                 </div>
-             </div>
         </div>
     );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+root.render(
+    <>
+        <style>
+            {`
+                @keyframes fadeInDown {
+                    from { opacity: 0; transform: translate(-50%, -20px); }
+                    to { opacity: 1; transform: translate(-50%, 0); }
+                }
+            `}
+        </style>
+        <App />
+    </>
+);

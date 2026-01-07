@@ -11,6 +11,7 @@ interface TreeNode {
     expanded: boolean;
     visible: boolean;
     object: any;
+    isFileNode?: boolean;
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
@@ -34,10 +35,16 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
         object
     };
 
-    // 从树中过滤掉内部辅助对象
+    // 从树中过滤掉内部辅助对象和优化后的渲染组
     if (object.children && object.children.length > 0) {
         node.children = object.children
-            .filter((c: any) => c.name !== "Helpers" && c.name !== "Measure")
+            .filter((c: any) => {
+                // 过滤辅助对象
+                if (c.name === "Helpers" || c.name === "Measure") return false;
+                // 过滤优化后的渲染组（用户不应该在大纲中看到它们）
+                if (c.userData && c.userData.isOptimizedGroup) return false;
+                return true;
+            })
             .map((c: any) => buildTree(c, depth + 1));
     }
 
@@ -55,6 +62,7 @@ const flattenTree = (nodes: TreeNode[], result: TreeNode[] = []) => {
 };
 
 interface SceneTreeProps {
+    t: (key: string) => string;
     sceneMgr: SceneManager | null;
     treeRoot: TreeNode[];
     setTreeRoot: React.Dispatch<React.SetStateAction<TreeNode[]>>;
@@ -66,8 +74,32 @@ interface SceneTreeProps {
     theme: any;
 }
 
-export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, styles, theme }) => {
-    const flatData = useMemo(() => flattenTree(treeRoot), [treeRoot]);
+export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, styles, theme }) => {
+    const [searchQuery, setSearchQuery] = useState("");
+    
+    // 过滤树结构的辅助函数
+    const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
+        if (!query) return nodes;
+        
+        const lowercaseQuery = query.toLowerCase();
+        return nodes.reduce((acc: TreeNode[], node) => {
+            const matches = node.name.toLowerCase().includes(lowercaseQuery);
+            const filteredChildren = filterTree(node.children, query);
+            
+            if (matches || filteredChildren.length > 0) {
+                acc.push({
+                    ...node,
+                    expanded: query ? true : node.expanded, // 搜索时自动展开
+                    children: filteredChildren
+                });
+            }
+            return acc;
+        }, []);
+    };
+
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
+    const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
+    
     const rowHeight = 24;
     const [scrollTop, setScrollTop] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -115,8 +147,28 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
     const visibleItems = flatData.slice(startIndex, endIndex);
 
     return (
-        <div ref={containerRef} style={styles.treeContainer} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
-            <div style={{ height: totalHeight, position: "relative" }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
+                <input
+                    type="text"
+                    placeholder={t("search_nodes")}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        backgroundColor: theme.bg,
+                        color: theme.text,
+                        border: `1px solid ${theme.border}`,
+                        borderRadius: '4px',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                    }}
+                />
+            </div>
+            <div ref={containerRef} style={{ ...styles.treeContainer, flex: 1 }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
+                <div style={{ height: totalHeight, position: "relative" }}>
                 <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
                     {visibleItems.map((node, index) => (
                         <div key={node.uuid} 
@@ -125,7 +177,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                                     paddingLeft: node.depth * 16 + 8,
                                     ...(node.uuid === selectedUuid ? styles.treeNodeSelected : {})
                                 }}
-                                onClick={() => onSelect(node.uuid, sceneMgr?.contentGroup.getObjectByProperty("uuid", node.uuid))}
+                                onClick={() => onSelect(node.uuid, node.object)}
                                 onMouseEnter={() => setHoveredUuid(node.uuid)}
                                 onMouseLeave={() => setHoveredUuid(null)}
                         >
@@ -136,15 +188,17 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                             <input 
                                 type="checkbox" 
                                 checked={node.visible} 
-                                readOnly // Controlled by onClick
-                                onClick={(e) => handleCheckbox(e, node)}
+                                onChange={(e) => {
+                                    e.stopPropagation();
+                                    onToggleVisibility(node.uuid, e.target.checked);
+                                }}
                                 style={{marginRight: 8, cursor: 'pointer'}}
                             />
                             
                             <div style={styles.nodeLabel}>{node.name}</div>
 
-                            {/* Delete button only for top-level nodes (files) */}
-                            {node.depth === 0 && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
+                            {/* Delete button for file nodes */}
+                            {node.isFileNode && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
                                 <div 
                                     onClick={(e) => handleDelete(e, node.uuid)}
                                     style={{
@@ -154,11 +208,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                                     }}
                                     title="Delete File"
                                 >
-                                    <IconTrash width={12} height={12} />
+                                    <IconTrash width={16} height={16} />
                                 </div>
                             )}
                         </div>
                     ))}
+                </div>
                 </div>
             </div>
         </div>
