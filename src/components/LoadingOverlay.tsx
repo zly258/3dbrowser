@@ -1,6 +1,7 @@
 import React from "react";
 
 interface LoadingOverlayProps {
+    t: (key: string) => string;
     loading: boolean;
     status: string;
     progress: number;
@@ -8,7 +9,7 @@ interface LoadingOverlayProps {
     theme: any;
 }
 
-export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ loading, status, progress, styles, theme }) => {
+export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ t, loading, status, progress, styles, theme }) => {
     if (!loading) return null;
 
     return (
@@ -41,7 +42,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ loading, status,
                             to { transform: rotate(360deg); }
                         }
                     `}</style>
-                    <span>{progress === 100 ? "Processing..." : "Loading resources..."}</span>
+                    <span>{progress === 100 ? t("processing") : t("loading_resources")}</span>
                 </div>
             </div>
         </div>

@@ -933,7 +933,7 @@ const App = () => {
                         </div>
                     )}
 
-                    <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
+                    <LoadingOverlay t={t} loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
 
                     {/* Overlay Panels for Tools */}
                     {activeTool === 'measure' && (
