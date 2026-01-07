@@ -139,11 +139,17 @@ export const composeMatrixByMatrix3 = (matrix: Float32Array, position: Float32Ar
 
 export class LMBLoader extends Loader {
   manager: LoadingManager;
+  enableInstancing: boolean = true;
   private static expressIdCounter = 1000000; // LMB 使用较大的起始值以避免与 IFC 冲突
 
   constructor(manager?: LoadingManager) {
     super(manager);
     this.manager = manager || THREE.DefaultLoadingManager;
+  }
+
+  setEnableInstancing(value: boolean) {
+    this.enableInstancing = value;
+    return this;
   }
 
   async loadAsync(url: string, onProgress?: (progress: any) => void): Promise<THREE.Group> {
@@ -239,7 +245,7 @@ export class LMBLoader extends Loader {
       const nodeName = node.name && node.name.length > 0 ? node.name : `Node_${i}`;
       const expressID = LMBLoader.expressIdCounter++;
 
-      if (node.instances.length > 0) {
+      if (node.instances.length > 0 && this.enableInstancing) {
         const instancedMesh = new THREE.InstancedMesh(
           geometry,
           materials[node.colorIndex],
@@ -260,6 +266,7 @@ export class LMBLoader extends Loader {
         
         root.add(instancedMesh);
       } else {
+        // 基础节点
         const mesh = new THREE.Mesh(geometry, materials[node.colorIndex]);
         mesh.name = nodeName;
         mesh.userData.expressID = expressID;
@@ -268,6 +275,20 @@ export class LMBLoader extends Loader {
         mesh.applyMatrix4(matrix);
 
         root.add(mesh);
+
+        // 如果禁用了实例化但存在实例，则为每个实例创建独立的 Mesh
+        if (node.instances.length > 0 && !this.enableInstancing) {
+          node.instances.forEach((instance: any, idx: number) => {
+            const instanceMesh = new THREE.Mesh(geometry, materials[instance.colorIndex]);
+            instanceMesh.name = `${nodeName}_instance_${idx}`;
+            instanceMesh.userData.expressID = LMBLoader.expressIdCounter++;
+            
+            const instanceMatrix = composeMatrixByMatrix3(instance.matrix, instance.position);
+            instanceMesh.applyMatrix4(instanceMatrix);
+            
+            root.add(instanceMesh);
+          });
+        }
       }
 
       offset = node.nextOffset;

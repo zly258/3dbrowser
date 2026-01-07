@@ -1,8 +1,6 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { IconClose, IconClear } from "../theme/Icons";
-import { SceneManager, MeasureType } from "../utils/SceneManager";
-import { TFunc } from "../theme/Locales";
 
 // --- Generic Floating Panel ---
 interface FloatingPanelProps {
@@ -42,7 +40,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
     });
 
     const [size, setSize] = useState(() => {
-        if (storageId) {
+        if (storageId && resizable) {
             try {
                 const saved = localStorage.getItem(`panel_${storageId}`);
                 if (saved) {
@@ -259,7 +257,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme }: { min: number, ma
 
 export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory, onDelete, onClear, onClose, styles, theme }: any) => {
     return (
-        <FloatingPanel title={t("measure_title")} onClose={onClose} width={450} height={600} resizable={true} styles={styles} theme={theme} storageId="tool_measure">
+        <FloatingPanel title={t("measure_title")} onClose={onClose} width={300} height={450} resizable={false} styles={styles} theme={theme} storageId="tool_measure">
             <div style={{padding: 12, display: 'flex', flexDirection: 'column', height: '100%'}}>
                 <div style={{marginBottom: 12, display:'flex', gap:8}}>
                     <button style={{...styles.btn, flex:1, ...(measureType === 'dist' ? styles.btnActive : {})}} 
@@ -385,7 +383,7 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     const [format, setFormat] = useState('glb');
     
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={380} resizable={false} styles={styles} theme={theme} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={400} resizable={false} styles={styles} theme={theme} storageId="tool_export">
             <div style={{padding: 16}}>
                 <div style={{marginBottom: 10, fontSize:12, color: theme.textMuted}}>{t("export_format")}:</div>
                 
