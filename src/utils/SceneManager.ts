@@ -102,8 +102,6 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         wireframe: false,
-        sse: 16,
-        maxMemory: 500,
         importAxisGLB: '+y', // GLB标准
         importAxisIFC: '+z', // IFC标准
         enableInstancing: true,
@@ -282,14 +280,6 @@ export class SceneManager {
             });
         } else {
             this.scene.overrideMaterial = null;
-        }
-
-        // 应用瓦片配置
-        if (this.tilesRenderer) {
-            this.tilesRenderer.errorTarget = this.settings.sse;
-            this.tilesRenderer.lruCache.maxSize = this.settings.maxMemory * 1024 * 1024;
-            // 强制瓦片渲染器重新评估
-            this.tilesRenderer.setCamera(this.camera);
         }
 
         // 如果不忙则强制渲染
@@ -739,8 +729,8 @@ export class SceneManager {
         renderer.setResolutionFromRenderer(this.camera, this.renderer);
 
         // 从当前配置动态设置
-        renderer.errorTarget = this.settings.sse;
-        renderer.lruCache.maxSize = this.settings.maxMemory * 1024 * 1024;
+        renderer.errorTarget = 16; // 默认 SSE
+        renderer.lruCache.maxSize = 500 * 1024 * 1024; // 默认 500MB
 
         (renderer.group as any).name = "3D Tileset"; // 确保大纲能识别
 
