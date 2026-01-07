@@ -130,10 +130,9 @@ const App = () => {
             progressive: true,
             hideRatio: 0.6,
             progressiveThreshold: 15000,
-            sse: 16,
-            maxMemory: 500,
             importAxisGLB: '+y',
             importAxisIFC: '+z',
+            enableInstancing: true,
         };
     });
 
@@ -336,26 +335,32 @@ const App = () => {
                 isOpen: true,
                 title: t("delete_item"),
                 message: `${t("confirm_delete")} "${name}"?`,
-                action: () => {
-                    // Use SceneManager's removeObject for clean removal
-                    // SceneManager 内部会处理资源释放和结构树同步
-                    sceneMgr.current?.removeObject(uuid);
-
-                    // If it's the tiles renderer logic wrapped
-                    if (sceneMgr.current?.tilesRenderer && sceneMgr.current.tilesRenderer.group === obj) {
-                        sceneMgr.current.tilesRenderer.dispose();
-                        sceneMgr.current.tilesRenderer = null;
-                    }
+                action: async () => {
+                    setLoading(true);
+                    setStatus(t("delete_item") + "...");
                     
-                    // If selected, deselect
-                    if (selectedUuid === uuid) {
-                        setSelectedUuid(null);
-                        setSelectedProps(null);
-                        sceneMgr.current?.highlightObject(null);
-                    }
+                    try {
+                        // 使用 SceneManager 的 removeModel 进行清理
+                        await sceneMgr.current?.removeModel(uuid);
 
-                    // Refresh tree
-                    updateTree();
+                        // If selected, deselect
+                        if (selectedUuid === uuid) {
+                            setSelectedUuid(null);
+                            setSelectedProps(null);
+                            sceneMgr.current?.highlightObject(null);
+                        }
+
+                        // Refresh tree
+                        updateTree();
+                        setStatus(t("ready"));
+                        // Add success notification
+                        alert(t("success"));
+                    } catch (error) {
+                        console.error("删除对象失败:", error);
+                        alert(t("failed") + ": " + (error instanceof Error ? error.message : String(error)));
+                    } finally {
+                        setLoading(false);
+                    }
                 }
             });
         }
@@ -773,32 +778,33 @@ const App = () => {
 
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
     
-    // Update handleClear to use custom modal
-    const handleClear = () => {
+    const handleClear = async () => {
+        if (!sceneMgr.current) return;
+        
         setConfirmState({
             isOpen: true,
             title: t("op_clear"),
             message: t("confirm_clear"),
-            action: () => {
+            action: async () => {
                 setLoading(true);
-                setStatus(t("processing") + "...");
+                setProgress(0);
+                setStatus(t("op_clear") + "...");
                 
-                // 延迟执行清空，让 Loading 状态有机会显示
-                setTimeout(() => {
-                    try {
-                        sceneMgr.current?.clear();
-                        setTreeRoot([]);
-                        setSelectedUuid(null);
-                        setSelectedProps(null);
-                        setMeasureHistory([]);
-                        setStatus(t("ready"));
-                    } catch (e) {
-                        console.error("清空场景失败:", e);
-                        setStatus(t("failed"));
-                    } finally {
-                        setLoading(false);
-                    }
-                }, 100);
+                try {
+                    await sceneMgr.current?.clear();
+                    setSelectedUuid(null);
+                    setSelectedProps(null);
+                    setMeasureHistory([]);
+                    updateTree();
+                    setStatus(t("ready"));
+                    // Add success notification
+                    alert(t("success"));
+                } catch (error) {
+                    console.error("清空场景失败:", error);
+                    alert(t("failed") + ": " + (error instanceof Error ? error.message : String(error)));
+                } finally {
+                    setLoading(false);
+                }
             }
         });
     };

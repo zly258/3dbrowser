@@ -19,7 +19,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
     };
 
     return (
-        <div style={{flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden'}}>
              <div style={styles.list}>
                 {selectedProps ? Object.entries(selectedProps).map(([group, props]) => (
                     <div key={group}>

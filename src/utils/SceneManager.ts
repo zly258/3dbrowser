@@ -27,11 +27,10 @@ export interface SceneSettings {
     dirInt: number;
     bgColor: string;
     wireframe: boolean;
-    sse: number;
-    maxMemory: number;
     // 导入设置（加载时应用）
     importAxisGLB: AxisOption;
     importAxisIFC: AxisOption;
+    enableInstancing: boolean; // 是否开启实例化 (BatchedMesh/InstancedMesh)
 }
 
 export interface StructureTreeNode {
@@ -107,6 +106,7 @@ export class SceneManager {
         maxMemory: 500,
         importAxisGLB: '+y', // GLB标准
         importAxisIFC: '+z', // IFC标准
+        enableInstancing: true,
     };
 
     // 资源
@@ -494,9 +494,17 @@ export class SceneManager {
 
         // 1. 构建场景树结构
         if (onProgress) onProgress(5, "正在构建场景树...");
-        const modelRoot = this.buildSceneGraph(object);
-        if (!this.structureRoot.children) this.structureRoot.children = [];
-        this.structureRoot.children.push(modelRoot);
+        
+        let modelRoot = this.buildSceneGraph(object);
+        
+        // 如果根节点名字是 Root 且有子节点，则打平（防止嵌套 Root）
+        if (modelRoot.name === 'Root' && modelRoot.children && modelRoot.children.length > 0) {
+            if (!this.structureRoot.children) this.structureRoot.children = [];
+            this.structureRoot.children.push(...modelRoot.children);
+        } else {
+            if (!this.structureRoot.children) this.structureRoot.children = [];
+            this.structureRoot.children.push(modelRoot);
+        }
 
         // 预计算包围盒
         modelBox.setFromObject(object);
@@ -523,11 +531,23 @@ export class SceneManager {
             }
         });
 
-        // 2. 将原始模型加入场景（设为不可见，仅用于数据查询和备份）
-        object.visible = false;
+        // 2. 将原始模型加入场景
+        // 如果开启了实例化（默认），则设为不可见，仅用于数据查询和备份
+        // 如果关闭了实例化，则直接显示原始对象
+        if (this.settings.enableInstancing) {
+            object.visible = false;
+        } else {
+            object.visible = true;
+        }
         this.contentGroup.add(object);
 
-        // 3. 八叉树划分与分块优化
+        // 3. 八叉树划分与分块优化 (仅在开启实例化时进行)
+        if (!this.settings.enableInstancing) {
+            if (onProgress) onProgress(100, "加载完成 (已禁用实例化)");
+            this.fitView();
+            return;
+        }
+
         if (onProgress) onProgress(10, "正在进行空间划分...");
         
         const items = collectItems(object);
@@ -1096,7 +1116,15 @@ export class SceneManager {
         
         const modelRoot = manifest.structureTree;
         if (!this.structureRoot.children) this.structureRoot.children = [];
-        this.structureRoot.children.push(modelRoot);
+        
+        // 不要增加额外的 root 节点，直接将内容加入 structureRoot
+        if (modelRoot) {
+            if (modelRoot.children && modelRoot.name === 'Root') {
+                this.structureRoot.children.push(...modelRoot.children);
+            } else {
+                this.structureRoot.children.push(modelRoot);
+            }
+        }
 
         const rootId = modelRoot?.id || fileId;
         
@@ -1157,67 +1185,103 @@ export class SceneManager {
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
     }
 
-    clear() {
+    async clear() {
         console.log("开始清空场景...");
         
-        // 1. 深度清理 contentGroup
-        const disposeObject = (obj: THREE.Object3D) => {
-            if ((obj as any).isMesh) {
-                const mesh = obj as THREE.Mesh;
-                if (mesh.geometry) mesh.geometry.dispose();
-                if (mesh.material) {
-                    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                    materials.forEach(m => m.dispose());
+        try {
+            // 1. 深度清理 contentGroup
+            const disposeObject = (obj: THREE.Object3D) => {
+                if ((obj as any).isMesh) {
+                    const mesh = obj as THREE.Mesh;
+                    if (mesh.geometry) mesh.geometry.dispose();
+                    if (mesh.material) {
+                        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                        materials.forEach(m => m.dispose());
+                    }
+                } else if ((obj as any).isBatchedMesh) {
+                    const bm = obj as THREE.BatchedMesh;
+                    if (bm.geometry) bm.geometry.dispose();
+                    if (bm.material) {
+                        const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+                        materials.forEach(m => m.dispose());
+                    }
                 }
-            } else if ((obj as any).isBatchedMesh) {
-                const bm = obj as THREE.BatchedMesh;
-                if (bm.geometry) bm.geometry.dispose();
-                if (bm.material) {
-                    const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                    materials.forEach(m => m.dispose());
-                }
+            };
+
+            this.contentGroup.traverse(disposeObject);
+            
+            // 移除所有子节点
+            while(this.contentGroup.children.length > 0) {
+                this.contentGroup.remove(this.contentGroup.children[0]);
             }
-        };
 
-        this.contentGroup.traverse(disposeObject);
-        
-        // 移除所有子节点
-        while(this.contentGroup.children.length > 0) {
-            this.contentGroup.remove(this.contentGroup.children[0]);
+            // 2. 清理 3D Tiles
+            if (this.tilesRenderer) {
+                this.tilesRenderer.dispose();
+                this.tilesRenderer = null;
+            }
+
+            // 3. 清理辅助组
+            this.ghostGroup.children.forEach(disposeObject);
+            this.ghostGroup.clear();
+            
+            this.selectionBox.visible = false;
+            this.highlightMesh.visible = false;
+            
+            // 4. 清理测量记录
+            this.clearAllMeasurements();
+
+            // 5. 清理状态数据
+            this.explodeData.clear();
+            this.optimizedMapping.clear();
+            this.sceneBounds.makeEmpty();
+            this.precomputedBounds.makeEmpty();
+            this.nbimFiles.clear();
+            this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
+            this.nodeMap.clear();
+            this.chunks = [];
+            this.componentMap.clear();
+            this.componentCounter = 0;
+            
+            // 6. 重置全局偏移
+            this.globalOffset.set(0, 0, 0);
+
+            console.log("场景已清空");
+        } catch (error) {
+            console.error("清空场景失败:", error);
+            throw error;
         }
+    }
 
-        // 2. 清理 3D Tiles
-        if (this.tilesRenderer) {
-            this.tilesRenderer.dispose();
-            this.tilesRenderer = null;
+    async removeModel(uuid: string) {
+        console.log(`移除模型: ${uuid}`);
+        try {
+            const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+            if (obj) {
+                const disposeObject = (o: THREE.Object3D) => {
+                    if ((o as any).isMesh) {
+                        const mesh = o as THREE.Mesh;
+                        if (mesh.geometry) mesh.geometry.dispose();
+                        if (mesh.material) {
+                            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                            materials.forEach(m => m.dispose());
+                        }
+                    }
+                };
+                obj.traverse(disposeObject);
+                this.contentGroup.remove(obj);
+                
+                // 清理相关的映射和数据
+                this.nodeMap.delete(uuid);
+                // 这里可能还需要根据具体实现进一步清理 optimizedMapping 等
+                
+                this.updateSceneBounds();
+                console.log(`模型 ${uuid} 已移除`);
+            }
+        } catch (error) {
+            console.error(`移除模型 ${uuid} 失败:`, error);
+            throw error;
         }
-
-        // 3. 清理辅助组
-        this.ghostGroup.children.forEach(disposeObject);
-        this.ghostGroup.clear();
-        
-        this.selectionBox.visible = false;
-        this.highlightMesh.visible = false;
-        
-        // 4. 清理测量记录
-        this.clearAllMeasurements();
-
-        // 5. 清理状态数据
-        this.explodeData.clear();
-        this.optimizedMapping.clear();
-        this.sceneBounds.makeEmpty();
-        this.precomputedBounds.makeEmpty();
-        this.nbimFiles.clear();
-        this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
-        this.nodeMap.clear();
-        this.chunks = [];
-        this.componentMap.clear();
-        this.componentCounter = 0;
-        
-        // 6. 重置全局偏移 (如果场景完全清空，通常希望重置偏移以迎接下一个模型)
-        this.globalOffset.set(0, 0, 0);
-
-        console.log("场景已清空");
     }
 
     setObjectVisibility(uuid: string, visible: boolean) {
@@ -1427,6 +1491,10 @@ export class SceneManager {
             }
         });
         return totalBox;
+    }
+
+    updateSceneBounds() {
+        this.sceneBounds = this.computeTotalBounds();
     }
 
     fitView(keepOrientation = false) {
