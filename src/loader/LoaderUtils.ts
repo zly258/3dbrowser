@@ -136,7 +136,7 @@ export const loadModelFiles = async (
 };
 
 export const parseTilesetFromFolder = async (files: FileList, onProgress: ProgressCallback, t: TFunc): Promise<string | null> => {
-    onProgress(10, t("分析中"));
+    onProgress(10, t("analyzing"));
     
     const fileMap = new Map<string, Blob>();
     let tilesetKey = "";
@@ -161,7 +161,7 @@ export const parseTilesetFromFolder = async (files: FileList, onProgress: Progre
         throw new Error("在所选文件夹中未找到tileset.json");
     }
 
-    onProgress(50, t("读取中"));
+    onProgress(50, t("reading"));
 
     const blobUrlMap = new Map<string, string>();
     fileMap.forEach((blob, path) => {
@@ -183,7 +183,7 @@ export const parseTilesetFromFolder = async (files: FileList, onProgress: Progre
     };
     replaceUris(json.root);
 
-    onProgress(100, t("成功"));
+    onProgress(100, t("success"));
     const blob = new Blob([JSON.stringify(json)], { type: "application/json" });
     return URL.createObjectURL(blob);
 };

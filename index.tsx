@@ -809,11 +809,6 @@ const App = () => {
         });
     };
 
-    const confirmAction = () => {
-        confirmState.action();
-        setConfirmState({...confirmState, isOpen: false});
-    };
-
     return (
         <div style={styles.container}>
              <GlobalStyle theme={theme} />
