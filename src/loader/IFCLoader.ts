@@ -93,6 +93,115 @@ export const loadIFC = async (
     rootGroup.userData.ifcAPI = ifcApi;
     rootGroup.userData.modelID = modelID;
     
+    // --- 空间结构解析优化 ---
+    const nodesMap = new Map<number, THREE.Object3D>();
+    nodesMap.set(0, rootGroup);
+
+    // 预索引关系映射表，避免在递归中频繁查询 API 提升性能和准确性
+    const aggregatesMap = new Map<number, number[]>(); // RelatingObject -> RelatedObjects[]
+    const containmentMap = new Map<number, number[]>(); // RelatingStructure -> RelatedElements[]
+
+    const buildIndices = () => {
+        // 1. 索引分解关系 (IfcRelAggregates)
+        const relDecomposes = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELAGGREGATES);
+        for (let i = 0; i < relDecomposes.size(); i++) {
+            const rel = ifcApi.GetLine(modelID, relDecomposes.get(i));
+            const parentID = rel.RelatingObject.value;
+            const children = rel.RelatedObjects.map((obj: any) => obj.value);
+            
+            if (!aggregatesMap.has(parentID)) aggregatesMap.set(parentID, []);
+            aggregatesMap.get(parentID)!.push(...children);
+        }
+
+        // 2. 索引包含关系 (IfcRelContainedInSpatialStructure)
+        const relContained = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELCONTAINEDINSPATIALSTRUCTURE);
+        for (let i = 0; i < relContained.size(); i++) {
+            const rel = ifcApi.GetLine(modelID, relContained.get(i));
+            const containerID = rel.RelatingStructure.value;
+            const elements = rel.RelatedElements.map((el: any) => el.value);
+            
+            if (!containmentMap.has(containerID)) containmentMap.set(containerID, []);
+            containmentMap.get(containerID)!.push(...elements);
+        }
+    };
+
+    // 递归解析空间层级
+    const parseSpatialRecursive = (expressID: number, parent: THREE.Object3D) => {
+        const props = ifcApi.GetLine(modelID, expressID);
+        if (!props) return;
+
+        let currentParent = parent;
+        
+        // 识别所有的空间容器类型
+        const spatialTypes = [
+            'IFCPROJECT', 
+            'IFCSITE', 
+            'IFCBUILDING', 
+            'IFCBUILDINGSTOREY', 
+            'IFCSPACE',
+            'IFCZONE'
+        ];
+        
+        const isSpatialContainer = spatialTypes.includes(props.is_a);
+        
+        if (isSpatialContainer) {
+            // 创建层级节点
+            const name = props.Name?.value || props.LongName?.value || `${props.is_a} [${expressID}]`;
+            const group = new THREE.Group();
+            group.name = name;
+            group.userData = { expressID, isSpatial: true, type: props.is_a };
+            parent.add(group);
+            currentParent = group;
+            nodesMap.set(expressID, group);
+        } else {
+            // 如果不是空间容器（可能是嵌套的非空间组），则记录当前父级
+            nodesMap.set(expressID, parent);
+        }
+
+        // A. 处理通过分解关系连接的子空间/子对象
+        const children = aggregatesMap.get(expressID);
+        if (children) {
+            for (const childID of children) {
+                parseSpatialRecursive(childID, currentParent);
+            }
+        }
+
+        // B. 处理直接包含在该空间结构下的所有物理构件
+        const elements = containmentMap.get(expressID);
+        if (elements) {
+            for (const elementID of elements) {
+                // 构件可能还会进一步分解（例如 Curtain Wall 分解为 Panels 和 Mullions）
+                // 所以对构件也进行递归解析，以捕获其可能的子零件
+                parseSpatialRecursive(elementID, currentParent);
+            }
+        }
+    };
+
+    const loadSpatialStructure = () => {
+        try {
+            buildIndices(); // 先构建全局索引
+            
+            // 从 IfcProject 开始递归
+            const projects = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCPROJECT);
+            if (projects.size() > 0) {
+                for (let i = 0; i < projects.size(); i++) {
+                    parseSpatialRecursive(projects.get(i), rootGroup);
+                }
+            } else {
+                // 如果没有 IfcProject (非标准文件)，尝试从所有 IfcSite 或 IfcBuilding 开始
+                const sites = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCSITE);
+                for (let i = 0; i < sites.size(); i++) {
+                    parseSpatialRecursive(sites.get(i), rootGroup);
+                }
+            }
+        } catch (e) {
+            console.error("解析 IFC 完整空间结构失败:", e);
+        }
+    };
+
+    loadSpatialStructure();
+    // --- 空间结构解析结束 ---
+
     // 属性名称映射 - 提供更友好的显示名称
     const propertyNameMap: Record<string, string> = {
         // 基本属性
@@ -493,9 +602,21 @@ export const loadIFC = async (
             mesh.matrixWorldNeedsUpdate = true; 
             
             mesh.userData.expressID = expressID; 
-            mesh.name = `IFC Item ${expressID}`; 
             
-            rootGroup.add(mesh);
+            // 优化构件名称：获取真实的 IFC 类型作为名称前缀
+            try {
+                const props = ifcApi.GetLine(modelID, expressID);
+                const ifcType = props.is_a || 'Item';
+                const ifcName = props.Name?.value || '';
+                mesh.name = ifcName ? `${ifcType}: ${ifcName}` : `${ifcType} [${expressID}]`;
+            } catch(e) {
+                mesh.name = `IFC Item ${expressID}`; 
+            }
+            
+            // 将构件挂载到对应的空间层级节点下
+            const parentGroup = nodesMap.get(expressID) || rootGroup;
+            parentGroup.add(mesh);
+            
             meshCount++;
             
             if (expectedTotal > 0) {

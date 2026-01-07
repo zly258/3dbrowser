@@ -126,7 +126,7 @@ const AboutModal = ({ show, onClose, styles, theme, t }: { show: boolean, onClos
                         支持多种格式加载、测量、剖切及场景管理。
                     </div>
                     <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: '10px' }}>
-                        © 2026 3D Browser Team. All rights reserved.
+                        © 2026 zhangly1403@163.com. All rights reserved.
                     </div>
                     <button 
                         onClick={onClose}
@@ -1182,23 +1182,23 @@ const App = () => {
                     {toast && (
                         <div style={{
                             position: 'fixed',
-                            top: '32px',
+                            top: '15%', // 从 32px 改为 15%，使其位于中间偏上
                             left: '50%',
                             transform: 'translateX(-50%)',
                             backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
                             color: toast.type === 'info' ? theme.text : '#fff',
                             padding: '12px 24px',
                             borderRadius: '12px',
-                            boxShadow: `0 8px 24px ${theme.shadow}`,
+                            boxShadow: `0 8px 32px rgba(0,0,0,0.25)`, // 增强阴影
                             zIndex: 10000,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px',
+                            gap: '12px',
                             fontSize: '14px',
                             fontWeight: '600',
-                            border: `1px solid rgba(255,255,255,0.1)`,
-                            backdropFilter: 'blur(8px)',
-                            animation: 'fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                            border: `1px solid rgba(255,255,255,0.2)`,
+                            backdropFilter: 'blur(12px)', // 增强模糊效果
+                            animation: 'fadeInDown 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
                         }}>
                             <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor' }} />
                             {toast.message}
@@ -1385,23 +1385,11 @@ const App = () => {
                         </div>
                     </div>
                 </div>
-             )}
+            )}
             </div>
         </ErrorBoundary>
     );
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(
-    <>
-        <style>
-            {`
-                @keyframes fadeInDown {
-                    from { opacity: 0; transform: translate(-50%, -20px); }
-                    to { opacity: 1; transform: translate(-50%, 0); }
-                }
-            `}
-        </style>
-        <App />
-    </>
-);
+root.render(<App />);

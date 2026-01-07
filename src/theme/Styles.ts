@@ -55,10 +55,16 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
 };
 
 export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => `
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translate(-50%, -20px); }
+        to { opacity: 1; transform: translate(-50%, 0); }
+    }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: ${theme.bg}; }
-    ::-webkit-scrollbar-thumb { background: ${theme.border}; border-radius: 0px; border: 2px solid ${theme.bg}; }
-    ::-webkit-scrollbar-thumb:hover { background: ${theme.textMuted}; }
+    ::-webkit-scrollbar-thumb { background: ${theme.border}; border-radius: 5px; border: 2px solid ${theme.bg}; transition: background 0.2s; }
+    ::-webkit-scrollbar-thumb:hover { background: ${theme.accent}; }
+    ::-webkit-scrollbar-corner { background: ${theme.bg}; }
+    * { scrollbar-width: thin; scrollbar-color: ${theme.border} ${theme.bg}; }
     body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${fontFamily}; }
     * { box-sizing: border-box; }
     /* Ribbon styles */
@@ -535,8 +541,12 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
     },
     rangeSlider: {
         flex: 1,
-        cursor: 'pointer', // Ensure simple slider has pointer
-        accentColor: theme.accent
+        cursor: 'pointer',
+        accentColor: theme.accent,
+        height: '6px',
+        borderRadius: '3px',
+        outline: 'none',
+        transition: 'all 0.2s'
     },
     
     // Stats HUD (Top Center)

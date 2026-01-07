@@ -251,37 +251,46 @@ const DualRangeSlider = ({ min, max, value, onChange, theme, disabled }: { min: 
 
     return (
         <div ref={trackRef} style={{
-            position: 'relative', width: '100%', height: '24px', display: 'flex', alignItems: 'center', 
+            position: 'relative', width: '100%', height: '32px', display: 'flex', alignItems: 'center', 
             cursor: disabled ? 'not-allowed' : 'pointer',
             opacity: disabled ? 0.5 : 1,
             transition: 'opacity 0.2s'
         }}>
             <div style={{
-                position: 'absolute', width: '100%', height: '4px', background: theme.border, borderRadius: '2px'
+                position: 'absolute', width: '100%', height: '6px', background: theme.border, borderRadius: '3px',
+                boxShadow: `inset 0 1px 2px rgba(0,0,0,0.1)`
             }} />
             <div style={{
                 position: 'absolute',
                 left: `${getPercentage(value[0])}%`,
                 width: `${getPercentage(value[1]) - getPercentage(value[0])}%`,
-                height: '4px',
+                height: '6px',
                 background: theme.accent,
-                opacity: 1
+                borderRadius: '3px',
+                opacity: 1,
+                boxShadow: `0 0 4px ${theme.accent}40`
             }} />
             <div 
                 onMouseDown={handleMouseDown(0)}
                 style={{
-                    position: 'absolute', left: `calc(${getPercentage(value[0])}% - 8px)`,
-                    width: 16, height: 16, background: theme.panelBg, borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
-                    boxShadow: `0 1px 3px ${theme.shadow}`, zIndex: 2, border: `2px solid ${theme.accent}`
+                    position: 'absolute', left: `calc(${getPercentage(value[0])}% - 10px)`,
+                    width: 20, height: 20, background: 'white', borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
+                    boxShadow: `0 2px 5px rgba(0,0,0,0.2)`, zIndex: 2, border: `2px solid ${theme.accent}`,
+                    transition: 'transform 0.1s',
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             />
             <div 
                 onMouseDown={handleMouseDown(1)}
                 style={{
-                    position: 'absolute', left: `calc(${getPercentage(value[1])}% - 8px)`,
-                    width: 16, height: 16, background: theme.panelBg, borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
-                    boxShadow: `0 1px 3px ${theme.shadow}`, zIndex: 2, border: `2px solid ${theme.accent}`
+                    position: 'absolute', left: `calc(${getPercentage(value[1])}% - 10px)`,
+                    width: 20, height: 20, background: 'white', borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
+                    boxShadow: `0 2px 5px rgba(0,0,0,0.2)`, zIndex: 2, border: `2px solid ${theme.accent}`,
+                    transition: 'transform 0.1s',
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
             />
         </div>
     );

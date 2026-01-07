@@ -2,7 +2,8 @@
 
 <div align="center">
   <h1>Professional 3D Model Viewer</h1>
-  <p><em>Modern Web-based 3D model viewer with a professional ribbon interface</em></p>
+  <p><em>Modern Cross-platform 3D model viewer with a professional ribbon interface</em></p>
+  <p><strong>Version 1.0.0</strong></p>
   <div>
     <a href="#english">English</a> | <a href="#chinese">中文</a>
   </div>
@@ -14,6 +15,7 @@
 
 ## Key Features
 
+- **Cross-Platform Desktop App**: High-performance desktop application powered by **Electron**, supporting Windows and Linux.
 - **Ribbon Interface**: Modern ribbon-style UI similar to professional CAD software, enhancing workflow efficiency.
 - **High-Performance Rendering**: Powered by **NBIM** and **BatchedMesh** technologies, capable of smoothly rendering over 100,000 independent meshes with minimal draw calls.
 - **Multi-format Support**: Load and display various 3D model formats including IFC, GLB/GLTF, 3D Tiles, FBX, OBJ, and LMB.
@@ -28,17 +30,18 @@
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript 5.8
+- **Framework**: React 19, TypeScript 5.8
 - **3D Engine**: Three.js 0.181
-- **Build Tool**: Vite 6.2
+- **Desktop**: Electron 39
+- **Build Tool**: Vite 6.2, Electron Builder 26
 - **Format Support**: Web-IFC, 3D Tiles Renderer
 - **Styling**: Modern CSS-in-JS
 
 ## System Requirements
 
-- Node.js (Version 16 or higher)
+- Node.js (Version 18 or higher)
 - npm or yarn package manager
-- Modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
+- Modern browser or Windows/Linux Desktop environment
 
 ## Quick Start
 
@@ -53,20 +56,33 @@
    npm install
    ```
 
-3. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
+3. **Development**:
+   - **Web**: `npm run dev`
+   - **Desktop**: `npm run electron:dev`
 
-4. **Open your browser and navigate to** `http://localhost:5173`
+4. **Open your browser and navigate to** `http://localhost:5173` (for web)
 
 ## Available Scripts
 
 | Command | Description |
 |------|------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run preview` | Preview production build |
+| `npm run dev` | Start web development server |
+| `npm run build" | Build web production assets |
+| `npm run electron:dev` | Start Electron desktop app in dev mode |
+| `npm run electron:build` | Build and package desktop installers |
+
+## Packaging
+
+To generate desktop installers for Windows and Linux:
+
+```bash
+# Package for both Windows and Linux
+npm run electron:build -- --win --linux
+
+# Package for Windows only (NSIS and Portable)
+npm run electron:build -- --win
+```
+*Output will be generated in the `dist_electron` directory.*
 
 ## Core Components
 
@@ -111,6 +127,7 @@ This project is licensed under the MIT License.
 
 ## 特色功能
 
+- **跨平台桌面端**: 基于 **Electron** 的高性能桌面应用程序，支持 Windows 和 Linux 系统。
 - **功能区界面**: 类似专业 CAD 软件的现代功能区界面，提升工作效率。
 - **高性能渲染**: 采用 **NBIM** 与 **BatchedMesh** 技术，支持 10 万+ 独立网格（Mesh）的流畅渲染，极大地降低了绘制调用（Draw Calls）。
 - **多格式支持**: 支持 IFC、GLB/GLTF、3D Tiles、FBX、OBJ、LMB 等多种 3D 文件格式。
@@ -127,16 +144,17 @@ This project is licensed under the MIT License.
 
 - **前端框架**: React 19, TypeScript 5.8
 - **3D 引擎**: Three.js 0.181
-- **构建工具**: Vite 6.2
+- **桌面框架**: Electron 39
+- **构建工具**: Vite 6.2, Electron Builder 26
 - **核心技术**: NBIM Binary V7, BatchedMesh Optimization
 - **格式支持**: Web-IFC, 3D Tiles Renderer
 - **样式方案**: 现代 CSS-in-JS
 
 ## 系统要求
 
-- Node.js (版本 16 或更高)
+- Node.js (版本 18 或更高)
 - npm 或 yarn 包管理器
-- 现代浏览器 (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
+- 现代浏览器 或 Windows/Linux 桌面环境
 
 ## 快速开始
 
@@ -151,20 +169,33 @@ This project is licensed under the MIT License.
    npm install
    ```
 
-3. **启动开发服务器**:
-   ```bash
-   npm run dev
-   ```
+3. **启动开发**:
+   - **Web 端**: `npm run dev`
+   - **桌面端**: `npm run electron:dev`
 
-4. **打开浏览器并访问** `http://localhost:5173`
+4. **打开浏览器并访问** `http://localhost:5173` (Web 端)
 
 ## 可用脚本
 
 | 命令 | 描述 |
 |------|------|
-| `npm run dev` | 启动开发服务器 |
-| `npm run build` | 构建生产版本 |
-| `npm run preview` | 预览生产构建 |
+| `npm run dev` | 启动 Web 开发服务器 |
+| `npm run build` | 构建 Web 生产环境产物 |
+| `npm run electron:dev` | 以开发模式启动 Electron 桌面应用 |
+| `npm run electron:build` | 构建并打包桌面安装程序 |
+
+## 应用打包
+
+为 Windows 和 Linux 生成安装包：
+
+```bash
+# 同时打包 Windows 和 Linux 版本
+npm run electron:build -- --win --linux
+
+# 仅打包 Windows 版本 (包含安装包和便携版)
+npm run electron:build -- --win
+```
+*打包产物将存放在 `dist_electron` 目录下。*
 
 ## 核心组件
 

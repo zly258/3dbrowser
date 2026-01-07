@@ -128,6 +128,7 @@ export class SceneManager {
 
     // 回调
     onTilesUpdate?: () => void;
+    onStructureUpdate?: () => void;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -143,13 +144,12 @@ export class SceneManager {
             antialias: true,
             alpha: true,
             logarithmicDepthBuffer: true,
-            precision: "highp"
+            precision: "highp",
+            powerPreference: "high-performance"
         });
         // 重要：设置初始大小
-        // 在resize()中使用setSize(w, h, false)来防止内联样式锁定大小，
-        // 允许CSS（width: 100%, height: 100%）处理布局重排
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制最大像素比为2，平衡性能与清晰度
         this.renderer.setSize(width, height, false);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setClearColor(this.settings.bgColor);
         this.renderer.localClippingEnabled = true; 
         
@@ -350,6 +350,7 @@ export class SceneManager {
         // 关键修复：第三参数传 false（不更新内联样式）
         // 保持渲染分辨率与 clientWidth/Height 匹配
         // 由 CSS（宽度 100%）负责弹性容器中的实际显示大小
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.setSize(w, h, false);
         
         // 调整大小时强制渲染
@@ -617,20 +618,22 @@ export class SceneManager {
         const processRemoval = (o: THREE.Object3D | StructureTreeNode) => {
             const id = (o instanceof THREE.Object3D) ? o.uuid : (o as StructureTreeNode).id;
             
-            // 移除相关的优化组
-            const optimizedGroup = this.contentGroup.getObjectByName(`optimized_${id}`);
-            if (optimizedGroup) {
-                optimizedGroup.traverse(child => {
-                    if ((child as any).isBatchedMesh) {
-                        const bm = child as THREE.BatchedMesh;
-                        if (bm.geometry) bm.geometry.dispose();
-                        if (bm.material) {
-                            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                            materials.forEach(m => m.dispose());
+            // 移除相关的优化组 (仅针对当前要删除的根节点)
+            if (id === uuid) {
+                const optimizedGroup = this.contentGroup.getObjectByName(`optimized_${id}`);
+                if (optimizedGroup) {
+                    optimizedGroup.traverse(child => {
+                        if ((child as any).isBatchedMesh) {
+                            const bm = child as THREE.BatchedMesh;
+                            if (bm.geometry) bm.geometry.dispose();
+                            if (bm.material) {
+                                const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+                                materials.forEach(m => m.dispose());
+                            }
                         }
-                    }
-                });
-                optimizedGroup.removeFromParent();
+                    });
+                    optimizedGroup.removeFromParent();
+                }
             }
 
             // 处理 BatchedMesh 实例移除（通过隐藏实现）
@@ -692,24 +695,50 @@ export class SceneManager {
 
         // 从结构树中彻底移除该节点
         if (this.structureRoot) {
-            // 简单递归过滤
             const filterNodes = (nodes: StructureTreeNode[]): StructureTreeNode[] => {
                 return nodes.filter(n => {
+                    // 如果节点 ID 匹配，或者该节点是我们要删除的根对象的子节点（通过 nodeMap 检查）
                     if (n.id === uuid) return false;
-                    if (n.children) n.children = filterNodes(n.children);
+                    
+                    // 额外检查：如果 nodeMap 中找不到这个节点，说明它已经被 processRemoval 清理了
+                    // 这对于那些在 addModel 中被“打平”到 structureRoot 的节点非常有用
+                    if (!this.nodeMap.has(n.id) && n.id !== 'root') return false;
+
+                    if (n.children) {
+                        n.children = filterNodes(n.children);
+                    }
                     return true;
                 });
             };
 
             if (this.structureRoot.id === uuid) {
-                this.structureRoot = null;
+                this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
             } else if (this.structureRoot.children) {
                 this.structureRoot.children = filterNodes(this.structureRoot.children);
             }
         }
 
-        this.sceneBounds = this.computeTotalBounds();
+        // 重新计算包围盒，防止删除后 fitView 依然参考旧的包围盒
+        this.precomputedBounds = this.computeTotalBounds();
+        
+        // 如果开启了实例化但还没有加载分块，computeTotalBounds 可能是空的
+        // 此时我们需要从隐藏的原始模型中计算
+        if (this.precomputedBounds.isEmpty()) {
+            this.contentGroup.traverse(child => {
+                if ((child as any).isMesh) {
+                    const box = new THREE.Box3().setFromObject(child);
+                    if (!box.isEmpty()) this.precomputedBounds.union(box);
+                }
+            });
+        }
+
+        this.updateSceneBounds();
+        if (this.onStructureUpdate) this.onStructureUpdate();
         return true;
+    }
+
+    async removeModel(uuid: string) {
+        return this.removeObject(uuid);
     }
 
     addTileset(url: string, onProgress?: (p: number, msg: string) => void) {
@@ -1234,37 +1263,6 @@ export class SceneManager {
             console.log("场景已清空");
         } catch (error) {
             console.error("清空场景失败:", error);
-            throw error;
-        }
-    }
-
-    async removeModel(uuid: string) {
-        console.log(`移除模型: ${uuid}`);
-        try {
-            const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-            if (obj) {
-                const disposeObject = (o: THREE.Object3D) => {
-                    if ((o as any).isMesh) {
-                        const mesh = o as THREE.Mesh;
-                        if (mesh.geometry) mesh.geometry.dispose();
-                        if (mesh.material) {
-                            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                            materials.forEach(m => m.dispose());
-                        }
-                    }
-                };
-                obj.traverse(disposeObject);
-                this.contentGroup.remove(obj);
-                
-                // 清理相关的映射和数据
-                this.nodeMap.delete(uuid);
-                // 这里可能还需要根据具体实现进一步清理 optimizedMapping 等
-                
-                this.updateSceneBounds();
-                console.log(`模型 ${uuid} 已移除`);
-            }
-        } catch (error) {
-            console.error(`移除模型 ${uuid} 失败:`, error);
             throw error;
         }
     }

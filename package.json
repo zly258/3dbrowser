@@ -1,7 +1,9 @@
 {
   "name": "3dbrowser",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "A high-performance 3D model browser based on Three.js and Electron.",
+  "author": "3D Browser Team",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
@@ -29,5 +31,50 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "wait-on": "^9.0.3"
+  },
+  "build": {
+    "electronDist": "electron-runtime",
+    "appId": "com.3dbrowser.app",
+    "productName": "3D Browser",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "3D Browser"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Graphics"
+    }
   }
 }
