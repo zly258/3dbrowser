@@ -62,6 +62,7 @@ const flattenTree = (nodes: TreeNode[], result: TreeNode[] = []) => {
 };
 
 interface SceneTreeProps {
+    t: (key: string) => string;
     sceneMgr: SceneManager | null;
     treeRoot: TreeNode[];
     setTreeRoot: React.Dispatch<React.SetStateAction<TreeNode[]>>;
@@ -73,8 +74,32 @@ interface SceneTreeProps {
     theme: any;
 }
 
-export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, styles, theme }) => {
-    const flatData = useMemo(() => flattenTree(treeRoot), [treeRoot]);
+export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, styles, theme }) => {
+    const [searchQuery, setSearchQuery] = useState("");
+    
+    // 过滤树结构的辅助函数
+    const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
+        if (!query) return nodes;
+        
+        const lowercaseQuery = query.toLowerCase();
+        return nodes.reduce((acc: TreeNode[], node) => {
+            const matches = node.name.toLowerCase().includes(lowercaseQuery);
+            const filteredChildren = filterTree(node.children, query);
+            
+            if (matches || filteredChildren.length > 0) {
+                acc.push({
+                    ...node,
+                    expanded: query ? true : node.expanded, // 搜索时自动展开
+                    children: filteredChildren
+                });
+            }
+            return acc;
+        }, []);
+    };
+
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
+    const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
+    
     const rowHeight = 24;
     const [scrollTop, setScrollTop] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -122,8 +147,28 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
     const visibleItems = flatData.slice(startIndex, endIndex);
 
     return (
-        <div ref={containerRef} style={styles.treeContainer} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
-            <div style={{ height: totalHeight, position: "relative" }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
+                <input
+                    type="text"
+                    placeholder={t("search_nodes")}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        backgroundColor: theme.bg,
+                        color: theme.text,
+                        border: `1px solid ${theme.border}`,
+                        borderRadius: '4px',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                    }}
+                />
+            </div>
+            <div ref={containerRef} style={{ ...styles.treeContainer, flex: 1 }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
+                <div style={{ height: totalHeight, position: "relative" }}>
                 <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
                     {visibleItems.map((node, index) => (
                         <div key={node.uuid} 
@@ -168,6 +213,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ sceneMgr, treeRoot, setTre
                             )}
                         </div>
                     ))}
+                </div>
                 </div>
             </div>
         </div>

@@ -83,8 +83,6 @@ export class SceneManager {
     // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
     
-    // 爆炸状态
-    explodeData: Map<string, { originalPos: THREE.Vector3, direction: THREE.Vector3 }> = new Map();
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
     
     // 偏移状态 (解决大坐标问题)
@@ -607,7 +605,6 @@ export class SceneManager {
         }
 
         this.sceneBounds = this.computeTotalBounds();
-        this.initExplodeData();
         this.updateSettings(this.settings);
         if (onProgress) onProgress(100, "模型已加入加载队列");
     }
@@ -665,7 +662,6 @@ export class SceneManager {
                 this.componentMap.delete(nodeInfo.bimId);
             }
 
-            this.explodeData.delete(id);
             this.nodeMap.delete(id);
         };
 
@@ -1222,7 +1218,6 @@ export class SceneManager {
             this.clearAllMeasurements();
 
             // 5. 清理状态数据
-            this.explodeData.clear();
             this.optimizedMapping.clear();
             this.sceneBounds.makeEmpty();
             this.precomputedBounds.makeEmpty();
@@ -1814,54 +1809,6 @@ export class SceneManager {
             this.clippingPlanes[4].constant = Infinity;
             this.clippingPlanes[5].constant = Infinity;
         }
-    }
-
-    // --- Explode Logic ---
-
-    initExplodeData() {
-        this.explodeData.clear();
-        this.contentGroup.updateMatrixWorld(true);
-        const box = this.computeTotalBounds();
-        this.sceneCenter.copy(box.getCenter(new THREE.Vector3()));
-        
-        this.contentGroup.traverse((obj) => {
-            if ((obj as THREE.Mesh).isMesh && obj.name !== "__EdgesHelper") {
-                this.explodeData.set(obj.uuid, {
-                    originalPos: obj.position.clone(),
-                    direction: new THREE.Vector3() 
-                });
-            }
-        });
-
-        this.contentGroup.traverse((obj) => {
-             if ((obj as THREE.Mesh).isMesh && this.explodeData.has(obj.uuid)) {
-                 const worldPos = new THREE.Vector3();
-                 obj.getWorldPosition(worldPos);
-                 
-                 let dir = worldPos.clone().sub(this.sceneCenter).normalize();
-                 if(dir.lengthSq() === 0) dir.set(0,0,1); 
-
-                 if (obj.parent) {
-                    const parentQuat = new THREE.Quaternion();
-                    obj.parent.getWorldQuaternion(parentQuat);
-                    dir.applyQuaternion(parentQuat.invert());
-                 }
-                 
-                 this.explodeData.get(obj.uuid)!.direction = dir;
-             }
-        });
-    }
-
-    setExplodeFactor(factor: number) {
-        if (this.explodeData.size === 0) this.initExplodeData();
-        const maxDist = 100;
-        this.contentGroup.traverse((obj) => {
-            const data = this.explodeData.get(obj.uuid);
-            if (data) {
-                const offset = data.direction.clone().multiplyScalar(factor * maxDist);
-                obj.position.copy(data.originalPos).add(offset);
-            }
-        });
     }
 
     getStats() {

@@ -10,6 +10,7 @@ interface PropertiesPanelProps {
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps, styles, theme }) => {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    const [searchQuery, setSearchQuery] = useState("");
 
     const toggleGroup = (group: string) => {
         const next = new Set(collapsed);
@@ -18,10 +19,53 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
         setCollapsed(next);
     };
 
+    const filteredProps = React.useMemo(() => {
+        if (!selectedProps || !searchQuery) return selectedProps;
+        
+        const query = searchQuery.toLowerCase();
+        const result: Record<string, Record<string, string>> = {};
+        
+        Object.entries(selectedProps).forEach(([group, props]) => {
+            const filteredGroupProps: Record<string, string> = {};
+            Object.entries(props).forEach(([k, v]) => {
+                if (k.toLowerCase().includes(query) || String(v).toLowerCase().includes(query)) {
+                    filteredGroupProps[k] = v;
+                }
+            });
+            
+            if (Object.keys(filteredGroupProps).length > 0) {
+                result[group] = filteredGroupProps;
+            }
+        });
+        
+        return result;
+    }, [selectedProps, searchQuery]);
+
     return (
         <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden'}}>
-             <div style={styles.list}>
-                {selectedProps ? Object.entries(selectedProps).map(([group, props]) => (
+            {selectedProps && (
+                <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
+                    <input
+                        type="text"
+                        placeholder={t("search_props")}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            fontSize: '12px',
+                            backgroundColor: theme.bg,
+                            color: theme.text,
+                            border: `1px solid ${theme.border}`,
+                            borderRadius: '4px',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+                </div>
+            )}
+            <div style={{ ...styles.list, flex: 1, overflowY: 'auto' }}>
+                {filteredProps ? Object.entries(filteredProps).map(([group, props]) => (
                     <div key={group}>
                         <div 
                             style={styles.propGroupTitle} 

@@ -364,21 +364,6 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
     );
 };
 
-export const ExplodePanel = ({ t, onClose, explodeFactor, setExplodeFactor, styles, theme }: any) => (
-    <FloatingPanel title={t("explode_title")} onClose={onClose} width={260} height={180} resizable={false} styles={styles} theme={theme} storageId="tool_explode">
-        <div style={{padding: 16}}>
-            <div style={styles.sliderRow}>
-                <span style={styles.sliderLabel}>{t("explode_factor")}</span>
-                <input style={styles.rangeSlider} type="range" min="0" max="100" value={explodeFactor} onChange={(e) => setExplodeFactor(parseInt(e.target.value))} />
-                <span style={{fontSize:11, width:24, textAlign:'right', color: theme.textMuted}}>{explodeFactor}%</span>
-            </div>
-            <button style={{...styles.btn, marginTop:10, width:'100%'}} onClick={() => setExplodeFactor(0)}>
-                {t("explode_reset")}
-            </button>
-        </div>
-    </FloatingPanel>
-);
-
 export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     const [format, setFormat] = useState('glb');
     
@@ -416,39 +401,4 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     );
 };
 
-export const ViewsPanel = ({ t, onClose, handleView, styles, theme }: any) => {
-    // Helper to render grid button
-    const GridBtn = ({ label, view }: { label: string, view: string }) => (
-        <button 
-            style={styles.viewGridBtn}
-            onClick={() => handleView(view)}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.bg}
-        >
-            {/* Simple geometric icon representation */}
-            <div style={{width:16, height:16, border:`1px solid ${theme.textMuted}`, opacity:0.5}}></div>
-            <span>{label}</span>
-        </button>
-    );
 
-    return (
-        <FloatingPanel title={t("view")} onClose={onClose} width={280} height={360} resizable={false} styles={styles} theme={theme} storageId="tool_views">
-            <div style={{padding: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px'}}>
-                <GridBtn label={t("btn_view_top")} view="top" />
-                <GridBtn label={t("btn_view_front")} view="front" />
-                <GridBtn label={t("btn_view_left")} view="left" />
-                
-                <GridBtn label={t("btn_view_bottom")} view="bottom" />
-                <GridBtn label={t("btn_view_back")} view="back" />
-                <GridBtn label={t("btn_view_right")} view="right" />
-                
-                <div style={{gridColumn: '1 / -1', height: 1, backgroundColor: theme.border, margin: '5px 0'}}></div>
-
-                <GridBtn label={t("btn_view_iso1")} view="se" />
-                <GridBtn label={t("btn_view_iso2")} view="sw" />
-                <GridBtn label={t("btn_view_iso1")} view="ne" /> 
-                {/* Reusing ISO1 label logic but distinct views */}
-            </div>
-        </FloatingPanel>
-    )
-};

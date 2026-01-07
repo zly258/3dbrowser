@@ -280,7 +280,7 @@ export class LMBLoader extends Loader {
         if (node.instances.length > 0 && !this.enableInstancing) {
           node.instances.forEach((instance: any, idx: number) => {
             const instanceMesh = new THREE.Mesh(geometry, materials[instance.colorIndex]);
-            instanceMesh.name = `${nodeName}_instance_${idx}`;
+            instanceMesh.name = nodeName;
             instanceMesh.userData.expressID = LMBLoader.expressIdCounter++;
             
             const instanceMatrix = composeMatrixByMatrix3(instance.matrix, instance.position);

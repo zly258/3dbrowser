@@ -10,7 +10,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { MenuBar } from "./src/components/MenuBar";
 import { SceneTree, buildTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExplodePanel, ExportPanel, ViewsPanel, FloatingPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, FloatingPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
@@ -56,7 +56,7 @@ const App = () => {
     const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'explode' | 'settings' | 'export' | 'views'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export'>('none');
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
@@ -66,7 +66,6 @@ const App = () => {
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
     const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
-    const [explodeFactor, setExplodeFactor] = useState(0);
 
     // Toolbar State - 从localStorage恢复状态
     const [pickEnabled, setPickEnabled] = useState(() => {
@@ -154,6 +153,15 @@ const App = () => {
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const visibilityDebounce = useRef<any>(null);
+
+    // Toast Message State
+    const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
@@ -354,10 +362,10 @@ const App = () => {
                         updateTree();
                         setStatus(t("ready"));
                         // Add success notification
-                        alert(t("success"));
+                        setToast({ message: t("success"), type: 'success' });
                     } catch (error) {
                         console.error("删除对象失败:", error);
-                        alert(t("failed") + ": " + (error instanceof Error ? error.message : String(error)));
+                        setToast({ message: t("failed") + ": " + (error instanceof Error ? error.message : String(error)), type: 'error' });
                     } finally {
                         setLoading(false);
                     }
@@ -452,10 +460,6 @@ const App = () => {
             setMeasureType('none');
         }
 
-        if (activeTool !== 'explode') {
-            mgr.setExplodeFactor(0);
-            setExplodeFactor(0);
-        }
         if (activeTool !== 'clip') {
             mgr.setClippingEnabled(false);
             setClipEnabled(false);
@@ -483,13 +487,6 @@ const App = () => {
             }
         }
     }, [clipEnabled, clipValues, clipActive, activeTool]);
-
-    // 爆炸参数更新
-    useEffect(() => {
-        if (activeTool === 'explode' && sceneMgr.current) {
-            sceneMgr.current.setExplodeFactor(explodeFactor / 100);
-        }
-    }, [explodeFactor, activeTool]);
 
 
     // --- 处理函数 ---
@@ -685,17 +682,20 @@ const App = () => {
         
         // NBIM 导出直接由 SceneManager 处理
         if (format === 'nbim') {
-            if (content.children.length === 0) { alert(t("no_models")); return; }
+            if (content.children.length === 0) { 
+                setToast({ message: t("no_models"), type: 'info' });
+                return; 
+            }
             setLoading(true);
             setStatus(t("processing") + "...");
             setActiveTool('none');
             setTimeout(async () => {
                 try {
                     await sceneMgr.current?.exportNbim();
-                    setStatus(t("success"));
+                    setToast({ message: t("success"), type: 'success' });
                 } catch (e) {
                     console.error(e);
-                    setStatus(t("failed") + ": " + (e as Error).message);
+                    setToast({ message: t("failed") + ": " + (e as Error).message, type: 'error' });
                 } finally {
                     setLoading(false);
                 }
@@ -705,7 +705,10 @@ const App = () => {
 
         // 收集所有原始模型进行导出（非优化组）
         const modelsToExport = content.children.filter(c => !c.userData.isOptimizedGroup && c.name !== "TilesRenderer");
-        if (modelsToExport.length === 0) { alert(t("no_models")); return; }
+        if (modelsToExport.length === 0) { 
+            setToast({ message: t("no_models"), type: 'info' });
+            return; 
+        }
 
         // 创建一个临时组用于导出，包含所有要导出的模型
         const exportGroup = new THREE.Group();
@@ -725,7 +728,7 @@ const App = () => {
                     // 强制选择输出目录并直接写入
                     // @ts-ignore
                     if (!window.showDirectoryPicker) {
-                        alert(t("select_output"));
+                        setToast({ message: t("select_output"), type: 'info' });
                         throw new Error("Browser does not support directory picker");
                     }
                     // @ts-ignore
@@ -749,7 +752,7 @@ const App = () => {
                         writeCount++;
                         if (writeCount % 5 === 0) setProgress(Math.floor((writeCount / filesMap.size) * 100));
                     }
-                    alert(t("success"));
+                    setToast({ message: t("success"), type: 'success' });
                     return;
                 } else if (format === 'glb') {
                     blob = await exportGLB(exportGroup);
@@ -764,11 +767,11 @@ const App = () => {
                     a.download = filename;
                     a.click();
                     URL.revokeObjectURL(url);
-                    setStatus(t("success"));
+                    setToast({ message: t("success"), type: 'success' });
                 }
             } catch(e) {
                 console.error(e); 
-                setStatus(t("failed") + ": " + (e as Error).message);
+                setToast({ message: t("failed") + ": " + (e as Error).message, type: 'error' });
             } finally {
                 setLoading(false);
                 setProgress(0);
@@ -797,11 +800,8 @@ const App = () => {
                     setMeasureHistory([]);
                     updateTree();
                     setStatus(t("ready"));
-                    // Add success notification
-                    alert(t("success"));
                 } catch (error) {
                     console.error("清空场景失败:", error);
-                    alert(t("failed") + ": " + (error instanceof Error ? error.message : String(error)));
                 } finally {
                     setLoading(false);
                 }
@@ -852,6 +852,7 @@ const App = () => {
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
                             <SceneTree 
+                                t={t}
                                 sceneMgr={sceneMgr.current} 
                                 treeRoot={treeRoot} 
                                 setTreeRoot={setTreeRoot} 
@@ -908,6 +909,30 @@ const App = () => {
                         </div>
                     )}
 
+                    {/* Toast Notification */}
+                    {toast && (
+                        <div style={{
+                            position: 'fixed',
+                            top: '20px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
+                            color: toast.type === 'info' ? theme.text : 'white',
+                            padding: '10px 20px',
+                            borderRadius: '8px',
+                            boxShadow: `0 4px 12px ${theme.shadow}`,
+                            zIndex: 10000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            animation: 'fadeInDown 0.3s ease'
+                        }}>
+                            {toast.message}
+                        </div>
+                    )}
+
                     <LoadingOverlay loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
 
                     {/* Overlay Panels for Tools */}
@@ -933,16 +958,8 @@ const App = () => {
                         />
                     )}
 
-                    {activeTool === 'explode' && (
-                        <ExplodePanel t={t} onClose={() => setActiveTool('none')} explodeFactor={explodeFactor} setExplodeFactor={setExplodeFactor} styles={styles} theme={theme} />
-                    )}
-
                     {activeTool === 'export' && (
                         <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} styles={styles} theme={theme} />
-                    )}
-
-                    {activeTool === 'views' && (
-                        <ViewsPanel t={t} onClose={() => setActiveTool('none')} handleView={handleView} styles={styles} theme={theme} />
                     )}
 
                     {activeTool === 'settings' && (
@@ -1034,4 +1051,16 @@ const App = () => {
 };
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+root.render(
+    <>
+        <style>
+            {`
+                @keyframes fadeInDown {
+                    from { opacity: 0; transform: translate(-50%, -20px); }
+                    to { opacity: 1; transform: translate(-50%, 0); }
+                }
+            `}
+        </style>
+        <App />
+    </>
+);
