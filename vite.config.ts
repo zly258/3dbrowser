@@ -24,7 +24,17 @@ export default defineConfig(({ mode }) => {
         exclude: ['web-ifc']
       },
       build: {
-        target: 'esnext'
+        target: 'esnext',
+        minify: 'terser',
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'vendor-three': ['three'],
+              'vendor-ifc': ['web-ifc'],
+              'vendor-ui': ['react', 'react-dom', 'lucide-react'],
+            }
+          }
+        }
       },
       define: {
         global: 'globalThis'

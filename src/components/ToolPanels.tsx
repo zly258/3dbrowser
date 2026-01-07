@@ -317,7 +317,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
                     </button>
                 </div>
                 
-                <div style={{fontSize:11, color: theme.textMuted, marginBottom: 10, minHeight: 16}}>
+                <div style={{fontSize:12, color: theme.textMuted, marginBottom: 10, minHeight: 16}}>
                     {measureType === 'dist' && t("measure_instruct_dist")}
                     {measureType === 'angle' && t("measure_instruct_angle")}
                     {measureType === 'coord' && t("measure_instruct_coord")}
@@ -325,7 +325,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
 
                 <div style={{
                     border: `1px solid ${theme.border}`, 
-                    borderRadius: 8, 
+                    borderRadius: 4, 
                     backgroundColor: theme.bg, 
                     flex: 1, 
                     overflowY: 'auto',
@@ -342,7 +342,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
                                 padding: '8px 12px', borderBottom: `1px solid ${theme.border}`, fontSize: 12
                             }}>
                                 <div style={{display:'flex', flexDirection:'column'}}>
-                                    <span style={{color: theme.textMuted, fontSize: 10}}>
+                                    <span style={{color: theme.textMuted, fontSize: 11}}>
                                         {item.type === 'dist' ? t("measure_dist") : 
                                          item.type === 'angle' ? t("measure_angle") : 
                                          item.type === 'coord' ? t("measure_coord") : item.type}
@@ -377,7 +377,7 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
                     theme={theme}
                     style={{ fontWeight: '500' }}
                 />
-                <span style={{ fontSize: 10, color: theme.textMuted, opacity: clipActive[axis] ? 1 : 0.5 }}>
+                <span style={{ fontSize: 11, color: theme.textMuted, opacity: clipActive[axis] ? 1 : 0.5 }}>
                     {Math.round(clipValues[axis][0])}% - {Math.round(clipValues[axis][1])}%
                 </span>
             </div>
@@ -394,7 +394,7 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
     );
 
     return (
-        <FloatingPanel title={t("clip_title")} onClose={onClose} width={300} height={360} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
+        <FloatingPanel title={t("clip_title")} onClose={onClose} width={300} height={370} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
              <div style={{ padding: 16 }}>
                  <div style={{ marginBottom: 20, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
                     <Checkbox 
@@ -433,13 +433,13 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
                     <label key={opt.id} style={{
                         display:'flex', alignItems:'center', padding: '10px', cursor:'pointer', 
                         border: `1px solid ${format === opt.id ? theme.accent : theme.border}`,
-                        borderRadius: 8, marginBottom: 8,
+                        borderRadius: 4, marginBottom: 8,
                         backgroundColor: format === opt.id ? `${theme.accent}15` : 'transparent',
                         transition: 'all 0.2s'
                     }}>
                         <input type="radio" name="exportFmt" checked={format === opt.id} onChange={() => setFormat(opt.id)} style={{marginRight: 10, accentColor: theme.accent}}/>
                         <div>
-                            <div style={{color: theme.text, fontWeight:'bold', fontSize:13}}>{opt.label}</div>
+                            <div style={{color: theme.text, fontWeight:'bold', fontSize:14}}>{opt.label}</div>
                             <div style={{fontSize:11, color: theme.textMuted}}>{opt.desc}</div>
                         </div>
                     </label>

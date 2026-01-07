@@ -10,11 +10,47 @@
         body { margin: 0; padding: 0; overflow: hidden; background: #1e1e1e; color: #d4d4d4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #root { width: 100vw; height: 100vh; }
         button:focus { outline: 1px solid #007acc; }
+        
+        /* 启动加载提示样式 */
+        .loading-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #1e1e1e;
+            z-index: 9999;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255,255,255,.1);
+            border-radius: 50%;
+            border-top-color: #007acc;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-text {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #888;
+            letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
-<script type="module" src="/index.tsx"></script>
+    <div id="root">
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <div class="loading-text">3D BROWSER 正在启动...</div>
+        </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>

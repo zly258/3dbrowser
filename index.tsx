@@ -107,7 +107,7 @@ const AboutModal = ({ show, onClose, styles, theme, t }: { show: boolean, onClos
                     <div style={{ 
                         width: '64px', height: '64px', 
                         background: theme.accent, 
-                        borderRadius: '12px',
+                        borderRadius: '4px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: 'white', fontWeight: '800', fontSize: '28px',
                         boxShadow: `0 4px 12px ${theme.accent}40`
@@ -1124,22 +1124,15 @@ const App = () => {
                         zIndex: 10,
                         position: 'relative'
                     }}>
-                        <div style={{ 
-                            padding: '12px 16px', 
-                            borderBottom: `1px solid ${theme.border}`, 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center',
-                            fontWeight: '600'
-                        }}>
+                        <div style={styles.floatingHeader}>
                             <span>{t("interface_outline")}</span>
                             <div 
                                 onClick={() => setShowOutline(false)} 
-                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 2 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
-                                <IconClose width={20} height={20} />
+                                <IconClose width={16} height={16} />
                             </div>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -1188,7 +1181,7 @@ const App = () => {
                             backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
                             color: toast.type === 'info' ? theme.text : '#fff',
                             padding: '12px 24px',
-                            borderRadius: '12px',
+                            borderRadius: '2px',
                             boxShadow: `0 8px 32px rgba(0,0,0,0.25)`, // 增强阴影
                             zIndex: 10000,
                             display: 'flex',
@@ -1265,22 +1258,15 @@ const App = () => {
                         zIndex: 10,
                         position: 'relative'
                     }}>
-                        <div style={{ 
-                            padding: '12px 16px', 
-                            borderBottom: `1px solid ${theme.border}`, 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center',
-                            fontWeight: '600'
-                        }}>
+                        <div style={styles.floatingHeader}>
                             <span>{t("interface_props")}</span>
                             <div 
                                 onClick={() => setShowProps(false)} 
-                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 2 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
-                                <IconClose width={20} height={20} />
+                                <IconClose width={16} height={16} />
                             </div>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>

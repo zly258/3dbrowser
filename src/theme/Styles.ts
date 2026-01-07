@@ -68,9 +68,9 @@ export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Seg
     body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${fontFamily}; }
     * { box-sizing: border-box; }
     /* Ribbon styles */
-    .ribbon-button-large { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; height: 72px; padding: 4px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 11px; gap: 4px; color: ${theme.text}; }
+    .ribbon-button-large { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; height: 72px; padding: 4px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 12px; gap: 4px; color: ${theme.text}; }
     .ribbon-button-large:hover { background-color: ${theme.itemHover}; border-color: ${theme.border}; }
-    .ribbon-button-small { display: flex; align-items: center; width: 100%; height: 24px; padding: 2px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 11px; gap: 8px; color: ${theme.text}; }
+    .ribbon-button-small { display: flex; align-items: center; width: 100%; height: 24px; padding: 2px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 12px; gap: 8px; color: ${theme.text}; }
     .ribbon-button-small:hover { background-color: ${theme.itemHover}; border-color: ${theme.border}; }
 `;
 
@@ -89,22 +89,22 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         fontFamily,
     },
     ribbonTitleBar: {
-        height: "28px", // Reduced from 32px
+        height: "26px", 
         display: "flex",
         alignItems: "center",
         padding: "0 8px",
-        fontSize: "11px", // Reduced from 12px
+        fontSize: "12px", 
         color: theme.textMuted,
     },
     ribbonTabs: {
         display: "flex",
-        padding: "0 4px", // Reduced from 8px
-        gap: "0px", // Reduced from 2px
+        padding: "0 4px", 
+        gap: "0px", 
         WebkitAppRegion: "no-drag" as any,
     },
     ribbonTab: (active: boolean) => ({
-        padding: "4px 12px", // Reduced from 6px 16px
-        fontSize: "12px", // Reduced from 13px
+        padding: "4px 12px", 
+        fontSize: "12.5px", 
         cursor: "pointer",
         backgroundColor: active ? theme.panelBg : "transparent",
         color: active ? theme.accent : theme.text,
@@ -153,11 +153,11 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         height: "100%"
     },
     ribbonPanelLabel: {
-        fontSize: "10px", // Increased from 9px
+        fontSize: "11px", // Increased from 10px
         color: theme.textMuted,
         textAlign: "center" as const,
         padding: "1px 2px 2px 2px", 
-        opacity: 0.8, // Increased from 0.7
+        opacity: 0.9, // Increased from 0.8
         whiteSpace: "nowrap" as const,
         minHeight: "14px", 
         width: "100%",
@@ -173,7 +173,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         height: "100%",
         gap: "1px", 
         cursor: "pointer",
-        borderRadius: "4px",
+        borderRadius: "2px",
         backgroundColor: active ? `${theme.accent}15` : (hover ? theme.itemHover : "transparent"),
         border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}20` : "1px solid transparent"),
         boxShadow: hover ? `0 2px 8px ${theme.shadow}` : "none",
@@ -186,7 +186,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         padding: "1px 3px", 
         gap: "3px", 
         cursor: "pointer",
-        borderRadius: "4px",
+        borderRadius: "2px",
         width: "auto",
         minWidth: "44px", 
         height: "20px", 
@@ -195,7 +195,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         boxShadow: hover ? `0 2px 4px ${theme.shadow}` : "none",
         transform: hover ? "translateY(-1px)" : "none",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-        fontSize: "11px",
+        fontSize: "12px", // Increased from 11px
     }),
     ribbonButtonSmall: (active: boolean, hover: boolean = false) => ({
         display: "flex",
@@ -204,7 +204,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         width: "22px", 
         height: "20px", 
         cursor: "pointer",
-        borderRadius: "3px",
+        borderRadius: "2px",
         backgroundColor: active ? `${theme.accent}15` : (hover ? theme.itemHover : "transparent"),
         border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}20` : "1px solid transparent"),
         transform: hover ? "scale(1.05)" : "none",
@@ -213,11 +213,11 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
     ribbonCheckbox: {
         display: "flex",
         alignItems: "center",
-        gap: "3px", // Reduced from 4px
-        padding: "0 4px", // Reduced from 0 6px
-        fontSize: "11px",
+        gap: "3px", 
+        padding: "0 4px", 
+        fontSize: "12px", // Increased from 11px
         cursor: "pointer",
-        height: "20px", // Reduced from 22px
+        height: "20px", 
         ":hover": {
             backgroundColor: theme.itemHover
         }
@@ -252,7 +252,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         justifyContent: "center",
         width: "32px",
         height: "32px",
-        borderRadius: "4px", 
+        borderRadius: "2px", 
         cursor: "pointer",
         color: theme.textMuted,
         backgroundColor: "transparent",
@@ -281,7 +281,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
     checkboxCustom: (checked: boolean, hover: boolean = false) => ({
         width: "16px",
         height: "16px",
-        borderRadius: "4px",
+        borderRadius: "2px",
         border: `2px solid ${checked ? theme.accent : (hover ? theme.accent : theme.border)}`,
         backgroundColor: checked ? theme.accent : (hover ? `${theme.accent}15` : "transparent"),
         display: "flex",
@@ -304,8 +304,8 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         position: 'absolute' as const,
         backgroundColor: theme.panelBg,
         border: `1px solid ${theme.border}`,
-        boxShadow: `0 8px 30px ${theme.shadow}`,
-        borderRadius: "6px",
+        boxShadow: `0 4px 16px ${theme.shadow}`, 
+        borderRadius: "2px", 
         display: "flex",
         flexDirection: "column" as const,
         zIndex: 200,
@@ -316,18 +316,18 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         transition: "box-shadow 0.2s",
     },
     floatingHeader: {
-        padding: "10px 14px",
-        backgroundColor: theme.panelBg, 
+        padding: "6px 12px", 
+        backgroundColor: theme.bg, 
         borderBottom: `1px solid ${theme.border}`,
         cursor: "move",
-        fontWeight: "600",
+        fontWeight: "bold",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
         userSelect: "none" as const,
-        fontSize: "13px",
+        fontSize: "12px",
         color: theme.text,
-        letterSpacing: "0.2px"
+        letterSpacing: "0.1px"
     },
     floatingContent: {
         padding: "0", 
@@ -442,7 +442,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         border: `1px solid ${theme.border}`,
         padding: "8px 16px",
         cursor: "pointer",
-        borderRadius: "4px",
+        borderRadius: "2px",
         fontSize: "12px",
         fontWeight: "500",
         transition: "all 0.2s",
@@ -466,7 +466,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         justifyContent: 'center',
         backgroundColor: theme.bg,
         border: `1px solid ${theme.border}`,
-        borderRadius: '4px',
+        borderRadius: '2px',
         padding: '8px',
         cursor: 'pointer',
         transition: 'all 0.2s',
@@ -489,7 +489,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         backgroundColor: theme.panelBg,
         border: `1px solid ${theme.border}`,
         boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
-        borderRadius: "6px", 
+        borderRadius: "2px", 
         display: "flex",
         flexDirection: "column" as const,
         width: '400px',
@@ -509,7 +509,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         width: '320px',
         backgroundColor: theme.panelBg,
         padding: '24px',
-        borderRadius: '6px', 
+        borderRadius: '2px', 
         border: `1px solid ${theme.border}`,
         boxShadow: '0 12px 32px rgba(0,0,0,0.1)',
         color: theme.text
@@ -565,7 +565,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         fontSize: "12px", 
         zIndex: 100,
         pointerEvents: "none" as const,
-        borderRadius: "6px", 
+        borderRadius: "2px", 
         border: `1px solid ${theme.border}`,
         boxShadow: `0 4px 12px ${theme.shadow}`,
     },

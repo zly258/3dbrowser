@@ -103,7 +103,7 @@ const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: Re
                     {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 28 }) : icon}
                 </div>
             )}
-            <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '11px' }}>{label}</div>
+            <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '12px' }}>{label}</div>
         </div>
     );
 };
@@ -122,7 +122,7 @@ const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: R
                     {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
                 </div>
             )}
-            <span style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{label}</span>
         </div>
     );
 };
@@ -154,7 +154,7 @@ const RibbonCheckbox = ({ label, checked, onChange, styles, theme }: { label: st
             onChange={onChange} 
             styles={styles} 
             theme={theme} 
-            style={{ padding: 0, fontSize: '11px', gap: '6px' }} 
+            style={{ padding: 0, fontSize: '12px', gap: '6px' }} 
         />
     </div>
 );
