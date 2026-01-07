@@ -176,16 +176,8 @@ const App = () => {
             return "'Microsoft YaHei', sans-serif";
         }
     });
-    const [fontSize, setFontSize] = useState(() => {
-        try {
-            const saved = localStorage.getItem('3dbrowser_fontSize');
-            return saved ? parseInt(saved) : 12;
-        } catch {
-            return 12;
-        }
-    });
 
-    const styles = useMemo(() => createStyles(theme, fontFamily, fontSize), [theme, fontFamily, fontSize]);
+    const styles = useMemo(() => createStyles(theme, fontFamily), [theme, fontFamily]);
 
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
@@ -372,12 +364,6 @@ const App = () => {
             localStorage.setItem('3dbrowser_fontFamily', fontFamily);
         } catch (e) { console.error("Failed to save fontFamily", e); }
     }, [fontFamily]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_fontSize', String(fontSize));
-        } catch (e) { console.error("Failed to save fontSize", e); }
-    }, [fontSize]);
 
     // 持久化场景设置
     useEffect(() => {
@@ -1255,7 +1241,6 @@ const App = () => {
                             accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
                             fontFamily={fontFamily} setFontFamily={setFontFamily}
-                            fontSize={fontSize} setFontSize={setFontSize}
                             styles={styles} theme={theme}
                         />
                     )}

@@ -68,9 +68,9 @@ export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Seg
     .ribbon-button-small:hover { background-color: ${theme.itemHover}; border-color: ${theme.border}; }
 `;
 
-export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif", fontSize: number = 12) => ({
+export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => ({
     // Desktop / Shared
-    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: `${fontSize}px`, fontFamily, userSelect: "none" as const, overflow: "hidden" },
+    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "12px", fontFamily, userSelect: "none" as const, overflow: "hidden" },
     
     // Ribbon UI Styles
     ribbonContainer: {
@@ -83,22 +83,22 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         fontFamily,
     },
     ribbonTitleBar: {
-        height: "32px",
+        height: "28px", // Reduced from 32px
         display: "flex",
         alignItems: "center",
         padding: "0 8px",
-        fontSize: "12px",
+        fontSize: "11px", // Reduced from 12px
         color: theme.textMuted,
     },
     ribbonTabs: {
         display: "flex",
-        padding: "0 8px",
-        gap: "2px",
+        padding: "0 4px", // Reduced from 8px
+        gap: "0px", // Reduced from 2px
         WebkitAppRegion: "no-drag" as any,
     },
     ribbonTab: (active: boolean) => ({
-        padding: "6px 16px",
-        fontSize: "13px",
+        padding: "4px 12px", // Reduced from 6px 16px
+        fontSize: "12px", // Reduced from 13px
         cursor: "pointer",
         backgroundColor: active ? theme.panelBg : "transparent",
         color: active ? theme.accent : theme.text,
@@ -113,12 +113,12 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         }
     }),
     ribbonContent: {
-        height: "92px",
+        height: "88px", // Reduced from 92px
         backgroundColor: theme.panelBg,
         borderTop: `1px solid ${theme.border}`,
         display: "flex",
-        padding: "2px 4px",
-        gap: "4px",
+        padding: "1px 2px", // Reduced from 2px 4px
+        gap: "2px", // Reduced from 4px
         overflowX: "auto" as const,
         WebkitAppRegion: "no-drag" as any,
     },
@@ -126,8 +126,8 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         display: "flex",
         flexDirection: "column" as const,
         borderRight: `1px solid ${theme.border}`,
-        padding: "2px 4px",
-        minWidth: "40px",
+        padding: "1px 1px", // Reduced from 1px 2px
+        minWidth: "30px", 
         height: "100%",
         position: "relative" as const,
         flexShrink: 0
@@ -136,94 +136,82 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         flex: 1,
         display: "flex",
         alignItems: "center",
-        gap: "6px",
-        padding: "2px 0"
+        gap: "1px", // Reduced from 3px
+        padding: "1px 0"
     },
     ribbonPanelRows: {
         display: "grid",
         gridTemplateRows: "repeat(2, 1fr)",
         gridAutoFlow: "column",
-        gap: "1px",
+        gap: "0px", // Reduced from 1px
         height: "100%"
     },
     ribbonPanelLabel: {
-        fontSize: "10px",
+        fontSize: "10px", // Increased from 9px
         color: theme.textMuted,
         textAlign: "center" as const,
-        padding: "2px 2px 4px 2px",
-        opacity: 0.8,
+        padding: "1px 2px 2px 2px", 
+        opacity: 0.8, // Increased from 0.7
         whiteSpace: "nowrap" as const,
-        minHeight: "16px",
+        minHeight: "14px", 
         width: "100%",
         overflow: "hidden",
         textOverflow: "ellipsis"
     },
-    ribbonButtonLarge: (active: boolean) => ({
+    ribbonButtonLarge: (active: boolean, hover: boolean = false) => ({
         display: "flex",
         flexDirection: "column" as const,
         alignItems: "center",
         justifyContent: "center",
-        width: "50px", // Reduced from 52px
+        width: "48px", 
         height: "100%",
-        gap: "2px",
+        gap: "1px", 
         cursor: "pointer",
-        borderRadius: "4px", // More rounded
-        backgroundColor: active ? theme.itemHover : "transparent",
-        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        borderRadius: "4px",
+        backgroundColor: active ? `${theme.accent}15` : (hover ? theme.itemHover : "transparent"),
+        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}20` : "1px solid transparent"),
+        boxShadow: hover ? `0 2px 8px ${theme.shadow}` : "none",
+        transform: hover ? "translateY(-1px)" : "none",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-        ":hover": {
-            backgroundColor: theme.itemHover,
-            border: `1px solid ${theme.accent}40`,
-            boxShadow: `0 2px 8px ${theme.shadow}`,
-            transform: "translateY(-1px)"
-        }
     }),
-    ribbonButtonMedium: (active: boolean) => ({
+    ribbonButtonMedium: (active: boolean, hover: boolean = false) => ({
         display: "flex",
         alignItems: "center",
-        padding: "2px 4px", // Reduced from 6px
-        gap: "4px",
+        padding: "1px 3px", 
+        gap: "3px", 
         cursor: "pointer",
         borderRadius: "4px",
         width: "auto",
-        minWidth: "48px", // Reduced from 64px
-        height: "22px",
-        backgroundColor: active ? theme.itemHover : "transparent",
-        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        minWidth: "44px", 
+        height: "20px", 
+        backgroundColor: active ? `${theme.accent}15` : (hover ? theme.itemHover : "transparent"),
+        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}20` : "1px solid transparent"),
+        boxShadow: hover ? `0 2px 4px ${theme.shadow}` : "none",
+        transform: hover ? "translateY(-1px)" : "none",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         fontSize: "11px",
-        ":hover": {
-            backgroundColor: theme.itemHover,
-            border: `1px solid ${theme.accent}40`,
-            boxShadow: `0 2px 4px ${theme.shadow}`,
-            transform: "translateY(-1px)"
-        }
     }),
-    ribbonButtonSmall: (active: boolean) => ({
+    ribbonButtonSmall: (active: boolean, hover: boolean = false) => ({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: "24px",
-        height: "22px",
+        width: "22px", 
+        height: "20px", 
         cursor: "pointer",
         borderRadius: "3px",
-        backgroundColor: active ? theme.itemHover : "transparent",
-        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        backgroundColor: active ? `${theme.accent}15` : (hover ? theme.itemHover : "transparent"),
+        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}20` : "1px solid transparent"),
+        transform: hover ? "scale(1.05)" : "none",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-        ":hover": {
-            backgroundColor: theme.itemHover,
-            border: `1px solid ${theme.accent}40`,
-            transform: "scale(1.05)"
-        }
     }),
     ribbonCheckbox: {
         display: "flex",
         alignItems: "center",
-        gap: "4px",
-        padding: "0 6px",
+        gap: "3px", // Reduced from 4px
+        padding: "0 4px", // Reduced from 0 6px
         fontSize: "11px",
         cursor: "pointer",
-        height: "22px",
+        height: "20px", // Reduced from 22px
         ":hover": {
             backgroundColor: theme.itemHover
         }
@@ -284,22 +272,19 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         color: theme.text,
         padding: "4px 0",
     },
-    checkboxCustom: (checked: boolean) => ({
+    checkboxCustom: (checked: boolean, hover: boolean = false) => ({
         width: "16px",
         height: "16px",
         borderRadius: "4px",
-        border: `2px solid ${checked ? theme.accent : theme.border}`,
-        backgroundColor: checked ? theme.accent : "transparent",
+        border: `2px solid ${checked ? theme.accent : (hover ? theme.accent : theme.border)}`,
+        backgroundColor: checked ? theme.accent : (hover ? `${theme.accent}15` : "transparent"),
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         position: "relative" as const,
-        boxShadow: checked ? `0 2px 4px ${theme.accent}40` : "none",
-        "&:hover": {
-            borderColor: theme.accent,
-            backgroundColor: checked ? theme.accent : `${theme.accent}10`,
-        }
+        boxShadow: checked ? `0 2px 4px ${theme.accent}40` : (hover ? `0 0 4px ${theme.accent}20` : "none"),
+        transform: hover ? "scale(1.05)" : "none",
     }),
     checkboxCheckmark: {
         width: "10px",
