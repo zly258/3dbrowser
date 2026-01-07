@@ -18,7 +18,9 @@ import {
   Menu, 
   X, 
   Globe,
-  Type
+  Type,
+  Minus,
+  Square
 } from 'lucide-react';
 
 // Consistent icon size and style
@@ -43,6 +45,8 @@ export const IconExplode = (props: any) => <Zap size={iconSize} {...props} />;
 export const IconMenu = (props: any) => <Menu size={iconSize} {...props} />;
 export const IconClose = (props: any) => <X size={iconSize} {...props} />;
 export const IconLang = (props: any) => <Globe size={iconSize} {...props} />;
+export const IconMinimize = (props: any) => <Minus size={iconSize} {...props} />;
+export const IconMaximize = (props: any) => <Square size={iconSize - 4} {...props} />;
 
 export const IconText = ({text, ...props}: any) => (
   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -26,7 +26,7 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
         text: "#E0E0E0",
         textLight: "#FFFFFF",
         textMuted: "#A0A0A0",
-        accent: "#64B5F6", 
+        accent: "#0078D4", 
         highlight: "#2C2C2C",
         itemHover: "rgba(255, 255, 255, 0.08)",
         success: "#81C784",
@@ -36,132 +36,279 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
         shadow: "rgba(0, 0, 0, 0.5)"
     },
     light: {
-        bg: "#F0F2F5",
+        bg: "#F3F2F1", // Office Background
         panelBg: "#FFFFFF",
         headerBg: "#FFFFFF",
-        border: "#E0E0E0",
-        text: "#333333",
+        border: "#EDEBE9",
+        text: "#323130",
         textLight: "#000000",
-        textMuted: "#757575",
-        accent: "#1976D2",
-        highlight: "#F5F5F5",
-        itemHover: "rgba(0, 0, 0, 0.04)",
-        success: "#388E3C",
-        warning: "#F57C00",
-        danger: "#D32F2F",
-        canvasBg: "#E8E8E8",
-        shadow: "rgba(0, 0, 0, 0.12)"
+        textMuted: "#605E5C",
+        accent: "#0078D4", // Office Blue
+        highlight: "#F3F2F1",
+        itemHover: "#F3F2F1",
+        success: "#107C10",
+        warning: "#D83B01",
+        danger: "#A4262C",
+        canvasBg: "#FAF9F8",
+        shadow: "rgba(0, 0, 0, 0.1)"
     }
 };
 
-export const createGlobalStyle = (theme: ThemeColors) => `
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: ${theme.border}; border-radius: 4px; }
+export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => `
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: ${theme.bg}; }
+    ::-webkit-scrollbar-thumb { background: ${theme.border}; border-radius: 0px; border: 2px solid ${theme.bg}; }
     ::-webkit-scrollbar-thumb:hover { background: ${theme.textMuted}; }
-    body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: 'Roboto', 'Segoe UI', sans-serif; }
+    body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${fontFamily}; }
     * { box-sizing: border-box; }
-    
-    /* Remove default checkbox border/appearance and use accent color */
-    input[type="checkbox"] {
-        accent-color: ${theme.accent};
-        cursor: pointer;
-        outline: none;
-        border: 1px solid ${theme.border};
-        border-radius: 4px;
-        width: 14px;
-        height: 14px;
-        appearance: none;
-        -webkit-appearance: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-    input[type="checkbox"]:checked {
-        background-color: ${theme.accent};
-        border-color: ${theme.accent};
-    }
-    input[type="checkbox"]:checked::after {
-        content: '';
-        width: 4px;
-        height: 8px;
-        border: solid white;
-        border-width: 0 2px 2px 0;
-        transform: rotate(45deg) translate(-1px, -1px);
-    }
-    input[type="checkbox"]:focus {
-        outline: none;
-        box-shadow: none;
-    }
-    /* Enforce pointer cursor on range inputs */
-    input[type="range"] {
-        cursor: pointer;
-    }
+    /* Ribbon styles */
+    .ribbon-button-large { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; height: 72px; padding: 4px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 11px; gap: 4px; color: ${theme.text}; }
+    .ribbon-button-large:hover { background-color: ${theme.itemHover}; border-color: ${theme.border}; }
+    .ribbon-button-small { display: flex; align-items: center; width: 100%; height: 24px; padding: 2px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 11px; gap: 8px; color: ${theme.text}; }
+    .ribbon-button-small:hover { background-color: ${theme.itemHover}; border-color: ${theme.border}; }
 `;
 
-export const createStyles = (theme: ThemeColors) => ({
+export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif", fontSize: number = 12) => ({
     // Desktop / Shared
-    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "13px", userSelect: "none" as const, overflow: "hidden" },
+    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: `${fontSize}px`, fontFamily, userSelect: "none" as const, overflow: "hidden" },
     
-    // Viewport
-    viewport: { 
-        position: "absolute" as const, 
-        top: 0, left: 0, right: 0, bottom: 0, 
-        backgroundColor: theme.canvasBg, 
-        overflow: "hidden",
-        zIndex: 0
+    // Ribbon UI Styles
+    ribbonContainer: {
+        display: "flex",
+        flexDirection: "column" as const,
+        backgroundColor: theme.headerBg,
+        borderBottom: `1px solid ${theme.border}`,
+        WebkitAppRegion: "drag" as any,
+        zIndex: 1000,
+        fontFamily,
     },
-
-    // Bottom Toolbar - Compact Material Design
-    toolbarContainer: {
-        position: "absolute" as const,
-        bottom: "24px",
-        left: "50%",
-        transform: "translateX(-50%)",
+    ribbonTitleBar: {
+        height: "32px",
         display: "flex",
         alignItems: "center",
-        backgroundColor: theme.panelBg,
-        padding: "4px 6px", 
-        borderRadius: "6px", 
-        boxShadow: `0 4px 20px ${theme.shadow}`,
+        padding: "0 8px",
+        fontSize: "12px",
+        color: theme.textMuted,
+    },
+    ribbonTabs: {
+        display: "flex",
+        padding: "0 8px",
         gap: "2px",
-        zIndex: 1000,
-        border: `1px solid ${theme.border}`,
+        WebkitAppRegion: "no-drag" as any,
+    },
+    ribbonTab: (active: boolean) => ({
+        padding: "6px 16px",
+        fontSize: "13px",
+        cursor: "pointer",
+        backgroundColor: active ? theme.panelBg : "transparent",
+        color: active ? theme.accent : theme.text,
+        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        borderBottom: active ? `1px solid ${theme.panelBg}` : "1px solid transparent",
+        marginBottom: "-1px",
+        fontWeight: active ? "600" : "400",
+        zIndex: 2,
+        transition: "background-color 0.1s",
+        ":hover": {
+            backgroundColor: active ? theme.panelBg : theme.itemHover
+        }
+    }),
+    ribbonContent: {
+        height: "92px",
+        backgroundColor: theme.panelBg,
+        borderTop: `1px solid ${theme.border}`,
+        display: "flex",
+        padding: "2px 4px",
+        gap: "4px",
+        overflowX: "auto" as const,
+        WebkitAppRegion: "no-drag" as any,
+    },
+    ribbonPanel: {
+        display: "flex",
+        flexDirection: "column" as const,
+        borderRight: `1px solid ${theme.border}`,
+        padding: "2px 4px",
+        minWidth: "40px",
+        height: "100%",
+        position: "relative" as const,
+        flexShrink: 0
+    },
+    ribbonPanelContent: {
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "2px 0"
+    },
+    ribbonPanelRows: {
+        display: "grid",
+        gridTemplateRows: "repeat(2, 1fr)",
+        gridAutoFlow: "column",
+        gap: "1px",
+        height: "100%"
+    },
+    ribbonPanelLabel: {
+        fontSize: "10px",
+        color: theme.textMuted,
+        textAlign: "center" as const,
+        padding: "2px 2px 4px 2px",
+        opacity: 0.8,
+        whiteSpace: "nowrap" as const,
+        minHeight: "16px",
+        width: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+    },
+    ribbonButtonLarge: (active: boolean) => ({
+        display: "flex",
+        flexDirection: "column" as const,
+        alignItems: "center",
+        justifyContent: "center",
+        width: "50px", // Reduced from 52px
+        height: "100%",
+        gap: "2px",
+        cursor: "pointer",
+        borderRadius: "4px", // More rounded
+        backgroundColor: active ? theme.itemHover : "transparent",
+        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        ":hover": {
+            backgroundColor: theme.itemHover,
+            border: `1px solid ${theme.accent}40`,
+            boxShadow: `0 2px 8px ${theme.shadow}`,
+            transform: "translateY(-1px)"
+        }
+    }),
+    ribbonButtonMedium: (active: boolean) => ({
+        display: "flex",
+        alignItems: "center",
+        padding: "2px 4px", // Reduced from 6px
+        gap: "4px",
+        cursor: "pointer",
+        borderRadius: "4px",
+        width: "auto",
+        minWidth: "48px", // Reduced from 64px
+        height: "22px",
+        backgroundColor: active ? theme.itemHover : "transparent",
+        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        fontSize: "11px",
+        ":hover": {
+            backgroundColor: theme.itemHover,
+            border: `1px solid ${theme.accent}40`,
+            boxShadow: `0 2px 4px ${theme.shadow}`,
+            transform: "translateY(-1px)"
+        }
+    }),
+    ribbonButtonSmall: (active: boolean) => ({
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "24px",
+        height: "22px",
+        cursor: "pointer",
+        borderRadius: "3px",
+        backgroundColor: active ? theme.itemHover : "transparent",
+        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        ":hover": {
+            backgroundColor: theme.itemHover,
+            border: `1px solid ${theme.accent}40`,
+            transform: "scale(1.05)"
+        }
+    }),
+    ribbonCheckbox: {
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        padding: "0 6px",
+        fontSize: "11px",
+        cursor: "pointer",
+        height: "22px",
+        ":hover": {
+            backgroundColor: theme.itemHover
+        }
     },
     
-    toolbarDivider: {
-        width: "1px",
-        height: "18px",
-        backgroundColor: theme.border,
-        margin: "0 2px"
+    statusBar: {
+        height: "24px",
+        backgroundColor: theme.accent,
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        padding: "0 12px",
+        fontSize: "12px",
+        justifyContent: "space-between"
+    },
+    statusBarRight: {
+        display: "flex",
+        alignItems: "center",
+        gap: "16px"
+    },
+    statusMonitorItem: {
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        fontFamily: "monospace",
+        opacity: 0.9
     },
 
     toolbarBtn: {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: "36px",
-        height: "36px",
+        width: "32px",
+        height: "32px",
         borderRadius: "4px", 
         cursor: "pointer",
         color: theme.textMuted,
         backgroundColor: "transparent",
-        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "all 0.1s ease",
         border: "none", 
         outline: "none",
-        position: "relative" as const
+        position: "relative" as const,
+        WebkitAppRegion: "no-drag" as any, // 按钮不可拖拽
     },
     toolbarBtnHover: {
         backgroundColor: theme.itemHover,
         color: theme.text,
         transform: "translateY(-1px)",
     },
-    toolbarBtnActive: {
-        backgroundColor: `${theme.accent}15`, 
-        color: theme.accent,
+    // Checkbox Style
+    checkboxContainer: {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        cursor: "pointer",
+        userSelect: "none" as const,
+        fontSize: "13px",
+        color: theme.text,
+        padding: "4px 0",
     },
-    
-    // Floating Panels
+    checkboxCustom: (checked: boolean) => ({
+        width: "16px",
+        height: "16px",
+        borderRadius: "4px",
+        border: `2px solid ${checked ? theme.accent : theme.border}`,
+        backgroundColor: checked ? theme.accent : "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        position: "relative" as const,
+        boxShadow: checked ? `0 2px 4px ${theme.accent}40` : "none",
+        "&:hover": {
+            borderColor: theme.accent,
+            backgroundColor: checked ? theme.accent : `${theme.accent}10`,
+        }
+    }),
+    checkboxCheckmark: {
+        width: "10px",
+        height: "10px",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    },
     floatingPanel: {
         position: 'absolute' as const,
         backgroundColor: theme.panelBg,
