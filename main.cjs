@@ -1,7 +1,9 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
 const url = require('url');
-const isDev = require('electron-is-dev');
+
+// 使用 app.isPackaged 替代 electron-is-dev，减少打包后的依赖问题
+const isDev = !app.isPackaged;
 
 // 移除原生菜单
 Menu.setApplicationMenu(null);
@@ -15,10 +17,10 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
       webSecurity: false,
-      devTools: isDev 
+      devTools: true // 允许在打包后也开启控制台调试（可选，根据需求）
     },
-    titleBarStyle: 'hiddenInset',
-    frame: process.platform === 'darwin' ? true : false,
+    titleBarStyle: 'hidden',
+    frame: false,
     backgroundColor: '#1E1E1E',
   });
 
@@ -27,9 +29,12 @@ function createWindow() {
     win.focus();
   });
 
-  win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('Failed to load:', errorCode, errorDescription);
-    dialog.showErrorBox('页面加载失败', `错误代码: ${errorCode}\n错误描述: ${errorDescription}`);
+  win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('Failed to load:', errorCode, errorDescription, validatedURL);
+    // 如果是打包后的环境且加载失败，尝试检查路径
+    if (!isDev) {
+      dialog.showErrorBox('页面加载失败', `错误代码: ${errorCode}\n错误描述: ${errorDescription}\n尝试加载的URL: ${validatedURL}`);
+    }
   });
 
   // 注册 F12 快捷键
@@ -39,15 +44,40 @@ function createWindow() {
     }
   });
 
-  const startUrl = isDev 
-    ? 'http://127.0.0.1:5173' 
-    : url.format({
-        pathname: path.join(__dirname, 'dist', 'index.html'),
+  // 优化路径处理，确保在 Windows 上的兼容性
+  const indexPaths = [
+    path.join(__dirname, 'dist', 'index.html'),
+    path.join(__dirname, 'index.html')
+  ];
+
+  let startUrl = isDev ? 'http://127.0.0.1:5173' : '';
+  
+  if (!isDev) {
+    // 尝试寻找 index.html
+    const existingPath = indexPaths.find(p => {
+      try {
+        return require('fs').existsSync(p);
+      } catch (e) {
+        return false;
+      }
+    });
+
+    if (existingPath) {
+      startUrl = url.format({
+        pathname: existingPath,
         protocol: 'file:',
         slashes: true
       });
+    } else {
+      console.error('Could not find index.html in:', indexPaths);
+    }
+  }
 
-  win.loadURL(startUrl);
+  if (startUrl) {
+    win.loadURL(startUrl);
+  } else if (!isDev) {
+    dialog.showErrorBox('启动错误', '找不到应用程序入口文件 index.html');
+  }
 }
 
 // 确保只运行一个实例

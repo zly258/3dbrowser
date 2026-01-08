@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "3d-tiles-renderer": "0.3.31",
-    "electron-is-dev": "^3.0.1",
     "lucide-react": "^0.562.0",
+    "pako": "^2.1.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "terser": "^5.44.1",
