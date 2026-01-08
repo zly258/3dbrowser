@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "A high-performance 3D model browser based on Three.js and Electron.",
+  "license": "MIT with Non-Commercial Use Restrictions",
   "author": "3D Browser Team",
   "type": "module",
   "main": "main.cjs",

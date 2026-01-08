@@ -125,7 +125,44 @@ NBIM is a high-performance binary 3D format optimized for web streaming:
 
 ## License
 
-This project is licensed under the MIT License.
+### Free for Non-Commercial Use (Commercial Use Prohibited)
+
+This project is intended for learning and research purposes only. **Commercial use of any kind is strictly prohibited**. For commercial licensing, please contact the original author for authorization.
+
+### Usage Terms
+
+- ✅ **Allowed**: Personal learning, research, and educational purposes
+- ✅ **Allowed**: Learning and reference for non-commercial projects
+- ✅ **Allowed**: Code modification for non-commercial purposes
+- ❌ **Prohibited**: Direct or indirect commercial use
+- ❌ **Prohibited**: Sale or lease of commercial products
+- ❌ **Prohibited**: Integration or deployment in commercial projects
+
+### Attribution Requirements
+
+**Attribution is mandatory** when using this project:
+
+- **Must cite**: `<workspace>`
+- **Must cite**: Original author attribution
+- **Recommended**: Project source and author information
+
+### Attribution Example
+
+When using this project's code or documentation, please attribute as follows:
+
+```markdown
+Based on 3D Browser development
+Original source: <workspace>
+Author: zhangly1403@163.com
+```
+
+### Disclaimer
+
+Users assume all risks when using this project. The author assumes no responsibility for any direct or indirect losses arising from the use of this project.
+
+---
+
+
 
 ---
 
@@ -246,7 +283,44 @@ NBIM 是一种专为 Web 端流式传输优化的二进制 3D 格式：
 
 ## 许可证
 
-本项目采用 MIT 许可证。
+### 非商业用途免费（禁止用于商业目的）
+
+本项目仅供学习和研究使用，**禁止用于任何商业目的**。如需商业使用，请联系原作者获得授权。
+
+### 使用条款
+
+- ✅ **允许**: 个人学习、研究、教育用途
+- ✅ **允许**: 非商业项目的学习和参考
+- ✅ **允许**: 修改代码用于非商业目的
+- ❌ **禁止**: 直接或间接商业使用
+- ❌ **禁止**: 商业产品的销售或租赁
+- ❌ **禁止**: 商业项目的集成或部署
+
+### 署名要求
+
+使用本项目时**必须注明出处**，具体要求如下：
+
+- **必须标注**: `<workspace>`
+- **必须标注**: 原作者署名
+- **推荐标注**: 项目来源和作者信息
+
+### 署名示例
+
+在使用本项目的代码或文档时，请按以下格式署名：
+
+```markdown
+本项目基于 3D Browser 开发
+原始出处: <workspace>
+作者: zhangly1403@163.com
+```
+
+### 免责声明
+
+使用本项目的风险由用户自行承担。作者不对使用本项目造成的任何直接或间接损失承担责任。
+
+---
+
+
 
 <div align="center">
   <p>Built with React, Three.js, and Vite</p>
