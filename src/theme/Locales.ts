@@ -151,6 +151,7 @@ const resources: Record<Lang, Record<string, string>> = {
         search_nodes: "搜索节点...",
         search_props: "搜索属性...",
         confirm_delete: "确定要删除",
+        confirm_clear: "确定要清空场景吗？",
         delete_item: "删除模型",
         btn_confirm: "确定",
         btn_cancel: "取消",
