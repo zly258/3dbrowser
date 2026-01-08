@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { LMBLoader } from "./lmbLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { TFunc } from "../theme/Locales";
 import { SceneSettings, AxisOption } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
@@ -87,7 +88,7 @@ export const loadModelFiles = async (
                     const loader = new LMBLoader();
                     loader.setEnableInstancing(settings.enableInstancing);
                     object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
-                    axisSetting = '+y'; // LMB通常使用Three.js原生的Y轴向上
+                    axisSetting = '+y'; 
                 } else if (ext === 'glb' || ext === 'gltf') {
                     const loader = new GLTFLoader();
                     const gltf = await new Promise<any>((resolve, reject) => {
@@ -97,10 +98,19 @@ export const loadModelFiles = async (
                         }, reject);
                     });
                     object = gltf.scene;
-                    axisSetting = settings.importAxisGLB;
+                    axisSetting = '+y'; // GLB 默认使用 Y 轴向上
+                } else if (ext === 'fbx') {
+                    const loader = new FBXLoader();
+                    object = await new Promise<THREE.Group>((resolve, reject) => {
+                        loader.load(url, resolve, (e) => {
+                            if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
+                            else updateFileProgress(50);
+                        }, reject);
+                    });
+                    axisSetting = '+y'; // FBX 默认使用 Y 轴向上
                 } else if (ext === 'ifc') {
                     object = await loadIFC(url, updateFileProgress, t);
-                    axisSetting = settings.importAxisIFC;
+                    axisSetting = '-z'; // 用户要求 IFC 默认使用 -z 向上
                 }
 
                 if (object) {

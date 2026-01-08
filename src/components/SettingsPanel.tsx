@@ -41,21 +41,6 @@ const Row = ({ label, children, theme }: { label: string, children?: React.React
     </div>
 );
 
-const AxisSelector = ({ value, onChange, theme, t }: { value: string, onChange: (v: AxisOption) => void, theme: any, t: TFunc }) => (
-    <select 
-        style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
-        value={value}
-        onChange={(e) => onChange(e.target.value as AxisOption)}
-    >
-        <option value="+x">{t("axis_px")}</option>
-        <option value="-x">{t("axis_nx")}</option>
-        <option value="+y">{t("axis_py")}</option>
-        <option value="-y">{t("axis_ny")}</option>
-        <option value="+z">{t("axis_pz")}</option>
-        <option value="-z">{t("axis_nz")}</option>
-    </select>
-);
-
 export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
     t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, accentColor, setAccentColor,
     showStats, setShowStats, fontFamily, setFontFamily, styles, theme 
@@ -146,12 +131,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                     </Section>
 
                     <Section title={t("st_import_settings")} theme={theme}>
-                        <Row label={t("st_imp_glb")} theme={theme}>
-                            <AxisSelector value={settings.importAxisGLB} onChange={(v) => onUpdate({importAxisGLB: v})} theme={theme} t={t} />
-                        </Row>
-                        <Row label={t("st_imp_ifc")} theme={theme}>
-                             <AxisSelector value={settings.importAxisIFC} onChange={(v) => onUpdate({importAxisIFC: v})} theme={theme} t={t} />
-                        </Row>
                         <Row label={t("st_instancing")} theme={theme}>
                              <input type="checkbox" checked={settings.enableInstancing} onChange={(e) => onUpdate({enableInstancing: e.target.checked})} style={{accentColor: theme.accent}} />
                         </Row>
