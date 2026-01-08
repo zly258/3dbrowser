@@ -27,9 +27,6 @@ export interface SceneSettings {
     dirInt: number;
     bgColor: string;
     wireframe: boolean;
-    // 导入设置（加载时应用）
-    importAxisGLB: AxisOption;
-    importAxisIFC: AxisOption;
     enableInstancing: boolean; // 是否开启实例化 (BatchedMesh/InstancedMesh)
 }
 
@@ -100,8 +97,6 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         wireframe: false,
-        importAxisGLB: '+y', // GLB标准
-        importAxisIFC: '+z', // IFC标准
         enableInstancing: true,
     };
 

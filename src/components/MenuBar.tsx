@@ -205,7 +205,7 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
 
             {/* Ribbon Content */}
             <div style={styles.ribbonContent}>
-                <input ref={fileInputRef} type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim" onChange={props.handleOpenFiles} />
+                <input ref={fileInputRef} type="file" multiple hidden accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx" onChange={props.handleOpenFiles} />
                 <input ref={folderInputRef} type="file" hidden {...({webkitdirectory: "", directory: ""} as any)} onChange={props.handleOpenFolder} />
                 
                 {activeTab === 'home' && (
