@@ -213,6 +213,7 @@ const App = () => {
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
+    const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export'>('none');
@@ -412,6 +413,18 @@ const App = () => {
             window.removeEventListener('mouseup', handleUp);
         };
     }, []);
+
+    // --- 格式化辅助函数 ---
+    const formatNumber = (num: number) => {
+        if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+    };
+
+    const formatMemory = (mb: number) => {
+        if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+        return mb.toFixed(1) + ' MB';
+    };
 
     // --- 视口稳健自适应 ---
     // 1. 使用 ResizeObserver 处理容器尺寸变化
@@ -626,6 +639,14 @@ const App = () => {
         // Initial setup
         manager.updateSettings(sceneSettings);
         manager.resize();
+
+        // 监听分块加载进度
+        manager.onChunkProgress = (loaded, total) => {
+            setChunkProgress({ loaded, total });
+            if (loaded === total && total > 0) {
+                setToast({ message: t("all_chunks_loaded"), type: 'success' });
+            }
+        };
 
         // 监听瓦片更新（防抖刷新树）
         let debounceTimer: any;
@@ -1307,6 +1328,32 @@ const App = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <span>{status}</span>
                     {loading && <span>{progress}%</span>}
+                    {chunkProgress.total > 0 && (
+                        <span style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            paddingLeft: '8px', 
+                            borderLeft: '1px solid rgba(255,255,255,0.3)' 
+                        }}>
+                            {t("loading_chunks")}: {chunkProgress.loaded} / {chunkProgress.total}
+                            {chunkProgress.loaded < chunkProgress.total && (
+                                <div style={{ 
+                                    width: '40px', 
+                                    height: '4px', 
+                                    backgroundColor: 'rgba(255,255,255,0.2)', 
+                                    borderRadius: '2px',
+                                    overflow: 'hidden'
+                                }}>
+                                    <div style={{ 
+                                        width: `${(chunkProgress.loaded / chunkProgress.total) * 100}%`, 
+                                        height: '100%', 
+                                        backgroundColor: '#fff' 
+                                    }} />
+                                </div>
+                            )}
+                        </span>
+                    )}
                     {selectedUuid && (
                         <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: '1px solid rgba(255,255,255,0.3)' }}>
                             {t("prop_id")}: {selectedUuid.substring(0, 8)}...
@@ -1316,9 +1363,9 @@ const App = () => {
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                     {showStats && (
                         <>
-                            <span>{stats.meshes} {t("monitor_meshes")}</span>
-                            <span>{(stats.faces/1000).toFixed(1)}k {t("monitor_faces")}</span>
-                            <span>{stats.memory} MB {t("monitor_mem")}</span>
+                            <span>{formatNumber(stats.meshes)} {t("monitor_meshes")}</span>
+                            <span>{formatNumber(stats.faces)} {t("monitor_faces")}</span>
+                            <span>{formatMemory(stats.memory)}</span>
                             <span>{stats.drawCalls} {t("monitor_calls")}</span>
                         </>
                     )}

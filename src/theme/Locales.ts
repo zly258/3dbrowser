@@ -125,6 +125,8 @@ const resources: Record<Lang, Record<string, string>> = {
         start_exit: "Exit",
         start_feedback: "Feedback",
         start_about: "About",
+        all_chunks_loaded: "All model chunks loaded",
+        loading_chunks: "Chunks",
     },
     zh: {
         home: "首页",
@@ -244,6 +246,8 @@ const resources: Record<Lang, Record<string, string>> = {
         start_exit: "退出应用",
         start_feedback: "反馈问题",
         start_about: "关于软件",
+        all_chunks_loaded: "所有模型块已加载完毕",
+        loading_chunks: "数据块",
     }
 };
 
