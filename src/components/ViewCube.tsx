@@ -89,6 +89,10 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
             return texture;
         };
 
+        const faceColor = 0xf8f9fa;
+        const edgeColor = 0xf8f9fa;
+        const cornerColor = 0xf8f9fa;
+
         // Create Cube Parts
         const createPart = (size: THREE.Vector3, pos: THREE.Vector3, name: string, color: number, text?: string, rotation: number = 0) => {
             const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
@@ -98,14 +102,14 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
                 material = new THREE.MeshPhongMaterial({
                     map: texture,
                     transparent: true,
-                    opacity: 0.95,
+                    opacity: 0.98,
                     shininess: 30
                 });
             } else {
                 material = new THREE.MeshPhongMaterial({
                     color: color,
                     transparent: true,
-                    opacity: 0.4,
+                    opacity: 0.98,
                     shininess: 30
                 });
             }
@@ -114,6 +118,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
             mesh.name = name;
             // Store original color/opacity for hover effect
             mesh.userData.originalOpacity = material.opacity;
+            mesh.userData.originalColor = material.color.clone();
             mesh.userData.isFace = !!text;
             cubeGroup.add(mesh);
             return mesh;
@@ -123,10 +128,6 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
         const edgeSize = 0.12;
         const cornerSize = 0.12;
         const offset = 0.5;
-
-        const faceColor = 0xffffff;
-        const edgeColor = 0xcccccc;
-        const cornerColor = 0xaaaaaa;
 
         // Faces (SceneManager: Z up, Y- front)
         createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, "前");
@@ -208,24 +209,21 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
             const mesh = intersects[0].object as THREE.Mesh;
             if (hoveredPart.current !== mesh) {
                 if (hoveredPart.current) {
-                    (hoveredPart.current.material as THREE.MeshPhongMaterial).opacity = hoveredPart.current.userData.originalOpacity;
-                    if (!hoveredPart.current.userData.isFace) {
-                        (hoveredPart.current.material as THREE.MeshPhongMaterial).color.set(0xcccccc);
-                    }
+                    const mat = hoveredPart.current.material as THREE.MeshPhongMaterial;
+                    mat.opacity = hoveredPart.current.userData.originalOpacity;
+                    mat.color.copy(hoveredPart.current.userData.originalColor);
                 }
                 hoveredPart.current = mesh;
-                (mesh.material as THREE.MeshPhongMaterial).opacity = 0.9;
-                if (!mesh.userData.isFace) {
-                    (mesh.material as THREE.MeshPhongMaterial).color.set(0x0078d4);
-                }
+                const mat = mesh.material as THREE.MeshPhongMaterial;
+                mat.opacity = 1.0;
+                mat.color.set(0x0078d4); // Highlight color
             }
             containerRef.current!.style.cursor = 'pointer';
         } else {
             if (hoveredPart.current) {
-                (hoveredPart.current.material as THREE.MeshPhongMaterial).opacity = hoveredPart.current.userData.originalOpacity;
-                if (!hoveredPart.current.userData.isFace) {
-                    (hoveredPart.current.material as THREE.MeshPhongMaterial).color.set(0xcccccc);
-                }
+                const mat = hoveredPart.current.material as THREE.MeshPhongMaterial;
+                mat.opacity = hoveredPart.current.userData.originalOpacity;
+                mat.color.copy(hoveredPart.current.userData.originalColor);
                 hoveredPart.current = null;
             }
             containerRef.current!.style.cursor = 'default';
@@ -234,10 +232,9 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
 
     const handleMouseLeave = () => {
         if (hoveredPart.current) {
-            (hoveredPart.current.material as THREE.MeshPhongMaterial).opacity = hoveredPart.current.userData.originalOpacity;
-            if (!hoveredPart.current.userData.isFace) {
-                (hoveredPart.current.material as THREE.MeshPhongMaterial).color.set(0xcccccc);
-            }
+            const mat = hoveredPart.current.material as THREE.MeshPhongMaterial;
+            mat.opacity = hoveredPart.current.userData.originalOpacity;
+            mat.color.copy(hoveredPart.current.userData.originalColor);
             hoveredPart.current = null;
         }
     };

@@ -124,6 +124,7 @@ export class SceneManager {
     // 回调
     onTilesUpdate?: () => void;
     onStructureUpdate?: () => void;
+    onChunkProgress?: (loaded: number, total: number) => void;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -305,7 +306,8 @@ export class SceneManager {
         this.sceneBounds.getBoundingSphere(sphere);
         
         const dist = this.camera.position.distanceTo(sphere.center);
-        const range = sphere.radius * 4 + dist; 
+        // 增加范围系数，确保大模型不会被裁剪
+        const range = sphere.radius * 20 + dist; 
         
         this.camera.near = -range;
         this.camera.far = range;
@@ -341,7 +343,15 @@ export class SceneManager {
     }
 
     private checkCullingAndLoad() {
-        if (this.chunks.length === 0 || this.processingChunks.size >= 6) return;
+        if (this.chunks.length === 0) return;
+
+        // 计算加载进度
+        const loadedCount = this.chunks.filter(c => c.loaded).length;
+        if (this.onChunkProgress) {
+            this.onChunkProgress(loadedCount, this.chunks.length);
+        }
+
+        if (this.processingChunks.size >= 6) return;
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { SceneManager } from "../utils/SceneManager";
-import { IconTrash } from "../theme/Icons";
+import { IconTrash, IconChevronRight, IconChevronDown } from "../theme/Icons";
 import { Checkbox } from "./ToolPanels";
 
 interface TreeNode {
@@ -13,6 +13,8 @@ interface TreeNode {
     visible: boolean;
     object: any;
     isFileNode?: boolean;
+    isLastChild?: boolean;
+    parentIsLast?: boolean[]; // 追踪每一层父节点是否是最后一个孩子
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
@@ -38,25 +40,33 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
 
     // 从树中过滤掉内部辅助对象和优化后的渲染组
     if (object.children && object.children.length > 0) {
-        node.children = object.children
-            .filter((c: any) => {
-                // 过滤辅助对象
-                if (c.name === "Helpers" || c.name === "Measure") return false;
-                // 过滤优化后的渲染组（用户不应该在大纲中看到它们）
-                if (c.userData && c.userData.isOptimizedGroup) return false;
-                return true;
-            })
-            .map((c: any) => buildTree(c, depth + 1));
+        const children = object.children.filter((c: any) => {
+            // 过滤辅助对象
+            if (c.name === "Helpers" || c.name === "Measure") return false;
+            // 过滤优化后的渲染组（用户不应该在大纲中看到它们）
+            if (c.userData && c.userData.isOptimizedGroup) return false;
+            return true;
+        });
+        
+        node.children = children.map((c: any, index: number) => {
+            const childNode = buildTree(c, depth + 1);
+            childNode.isLastChild = index === children.length - 1;
+            return childNode;
+        });
     }
 
     return node;
 };
 
-const flattenTree = (nodes: TreeNode[], result: TreeNode[] = []) => {
-    for (const node of nodes) {
+const flattenTree = (nodes: TreeNode[], result: TreeNode[] = [], parentIsLast: boolean[] = []) => {
+    for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        node.isLastChild = i === nodes.length - 1;
+        node.parentIsLast = [...parentIsLast];
+        
         result.push(node);
         if (node.expanded && node.children.length > 0) {
-            flattenTree(node.children, result);
+            flattenTree(node.children, result, [...parentIsLast, node.isLastChild]);
         }
     }
     return result;
@@ -175,15 +185,56 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                         <div key={node.uuid} 
                                 style={{
                                     ...styles.treeNode,
-                                    paddingLeft: node.depth * 16 + 8,
+                                    paddingLeft: 8,
                                     ...(node.uuid === selectedUuid ? styles.treeNodeSelected : {})
                                 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
                                 onMouseEnter={() => setHoveredUuid(node.uuid)}
                                 onMouseLeave={() => setHoveredUuid(null)}
                         >
+                            {/* Connection Lines */}
+                            <div style={{ display: 'flex', height: '100%', alignItems: 'center', flexShrink: 0 }}>
+                                {node.parentIsLast?.map((isLast, i) => (
+                                    <div key={i} style={{ 
+                                        width: 16, 
+                                        height: '100%', 
+                                        position: 'relative',
+                                        borderLeft: isLast ? 'none' : `1px solid ${theme.border}60` 
+                                    }} />
+                                ))}
+                                <div style={{ 
+                                    width: 16, 
+                                    height: '100%', 
+                                    position: 'relative',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                }}>
+                                    {/* Vertical line segment */}
+                                    {node.depth > 0 && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: 0,
+                                            top: 0,
+                                            bottom: node.isLastChild ? '50%' : 0,
+                                            borderLeft: `1px solid ${theme.border}60`
+                                        }} />
+                                    )}
+                                    {/* Horizontal line segment */}
+                                    {node.depth > 0 && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: 0,
+                                            width: 8,
+                                            borderTop: `1px solid ${theme.border}60`
+                                        }} />
+                                    )}
+                                </div>
+                            </div>
+
                             <div style={styles.expander} onClick={(e) => { e.stopPropagation(); toggleNode(node.uuid); }}>
-                                {node.children.length > 0 && <span style={{fontSize: 10}}>{node.expanded ? "▼" : "▶"}</span>}
+                                {node.children.length > 0 ? (
+                                    node.expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />
+                                ) : null}
                             </div>
                             
                             <Checkbox 
