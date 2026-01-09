@@ -126,6 +126,8 @@ export class SceneManager {
     onStructureUpdate?: () => void;
     onChunkProgress?: (loaded: number, total: number) => void;
 
+    private lastReportedProgress = { loaded: -1, total: -1 };
+
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
         const width = canvas.clientWidth;
@@ -347,8 +349,11 @@ export class SceneManager {
 
         // 计算加载进度
         const loadedCount = this.chunks.filter(c => c.loaded).length;
-        if (this.onChunkProgress) {
-            this.onChunkProgress(loadedCount, this.chunks.length);
+        const totalCount = this.chunks.length;
+        
+        if (this.onChunkProgress && (loadedCount !== this.lastReportedProgress.loaded || totalCount !== this.lastReportedProgress.total)) {
+            this.lastReportedProgress = { loaded: loadedCount, total: totalCount };
+            this.onChunkProgress(loadedCount, totalCount);
         }
 
         if (this.processingChunks.size >= 6) return;
@@ -470,30 +475,10 @@ export class SceneManager {
     /**
      * 构建基于 IFC 图层和空间结构的复合树
      */
+    /**
+     * 构建基于 IFC 图层和空间结构的复合树
+     */
     private buildIFCStructure(object: THREE.Object3D): StructureTreeNode {
-        const root: StructureTreeNode = {
-            id: `ifc_root_${object.uuid}`,
-            name: object.name || 'IFC Model',
-            type: 'Group',
-            children: [],
-            userData: { originalUuid: object.uuid }
-        };
-        
-        if (!this.nodeMap.has(root.id)) this.nodeMap.set(root.id, []);
-        this.nodeMap.get(root.id)!.push(root);
-
-        // 1. 空间结构分支
-        const spatialRoot: StructureTreeNode = {
-            id: `spatial_${object.uuid}`,
-            name: '空间结构 (Spatial Structure)',
-            type: 'Group',
-            children: [],
-            userData: { originalUuid: object.uuid }
-        };
-        
-        if (!this.nodeMap.has(spatialRoot.id)) this.nodeMap.set(spatialRoot.id, []);
-        this.nodeMap.get(spatialRoot.id)!.push(spatialRoot);
-        
         // 递归构建原始空间结构
         const buildSpatialRecursive = (obj: THREE.Object3D): StructureTreeNode => {
             const node: StructureTreeNode = {
@@ -514,8 +499,7 @@ export class SceneManager {
             return node;
         };
         
-        spatialRoot.children = [buildSpatialRecursive(object)];
-        root.children!.push(spatialRoot);
+        const spatialRoot = buildSpatialRecursive(object);
 
         // 2. 图层结构分支
         const layerMap = object.userData.layerMap as Map<number, string> | undefined;
@@ -570,11 +554,21 @@ export class SceneManager {
 
             layerRoot.children = Array.from(layers.values());
             if (layerRoot.children.length > 0) {
-                root.children!.push(layerRoot);
+                // 如果有图层结构，则返回包含空间和图层的根节点
+                const compositeRoot: StructureTreeNode = {
+                    id: `composite_${object.uuid}`,
+                    name: object.name || 'IFC Model',
+                    type: 'Group',
+                    children: [spatialRoot, layerRoot],
+                    userData: { originalUuid: object.uuid }
+                };
+                if (!this.nodeMap.has(compositeRoot.id)) this.nodeMap.set(compositeRoot.id, []);
+                this.nodeMap.get(compositeRoot.id)!.push(compositeRoot);
+                return compositeRoot;
             }
         }
 
-        return root;
+        return spatialRoot;
     }
 
     async addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {

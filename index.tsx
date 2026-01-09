@@ -543,6 +543,15 @@ const App = () => {
     }, [showProps]);
 
     // 树结构更新
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => {
+                setToast(null);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
     const updateTree = useCallback(() => {
         if (!sceneMgr.current) return;
         
@@ -647,10 +656,16 @@ const App = () => {
         manager.resize();
 
         // 监听分块加载进度
+        let lastReportedSuccess = false;
         manager.onChunkProgress = (loaded, total) => {
             setChunkProgress({ loaded, total });
             if (loaded === total && total > 0) {
-                setToast({ message: t("all_chunks_loaded"), type: 'success' });
+                if (!lastReportedSuccess) {
+                    setToast({ message: t("all_chunks_loaded"), type: 'success' });
+                    lastReportedSuccess = true;
+                }
+            } else {
+                lastReportedSuccess = false;
             }
         };
 
