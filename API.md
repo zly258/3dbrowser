@@ -1,94 +1,317 @@
 # 3D Browser API Documentation
 
+[English](#english-documentation) | [中文文档](#中文文档)
+
+---
+
+<a name="english-documentation"></a>
+
+## English Documentation
+
 A high-performance 3D model browser based on Three.js, designed for BIM, architectural, and large-scale model visualization.
 
-## Installation
+### 1. NPM Publication
+
+To publish this project as an NPM package, follow these steps:
+
+1.  **Build the project**:
+    ```bash
+    npm run build
+    ```
+    This will generate the `dist` folder containing the library files.
+
+2.  **Login to NPM**:
+    ```bash
+    npm login
+    ```
+
+3.  **Publish**:
+    ```bash
+    npm publish
+    ```
+
+### 2. Local Development Usage
+
+If you want to use this library in another local project without publishing to NPM:
+
+#### Method A: Using `npm link` (Recommended)
+1. In the `3dbrowser` project directory:
+   ```bash
+   npm run build
+   npm link
+   ```
+2. In your other project directory:
+   ```bash
+   npm link 3dbrowser
+   ```
+
+#### Method B: Using Local Path
+In your other project's `package.json`, add:
+```bash
+npm install ../path/to/3dbrowser
+```
+*(Replace `../path/to/3dbrowser` with the actual relative path to this project)*
+
+### 3. Installation
 
 ```bash
 npm install 3dbrowser
 ```
 
-## Basic Usage
+### 3. Basic Usage
 
-### SceneManager
-
+#### SceneManager
 The `SceneManager` is the core class for managing the 3D scene, cameras, and loaders.
 
+**JavaScript / TypeScript Example:**
 ```typescript
 import { SceneManager } from '3dbrowser';
 
-// Initialize
-const container = document.getElementById('canvas-container');
-const canvas = document.createElement('canvas');
-container.appendChild(canvas);
-
+// Initialize with a canvas element
+const canvas = document.querySelector('#my-canvas');
 const sceneMgr = new SceneManager(canvas);
 
-// Load a model
-sceneMgr.loadModelFiles([file1, file2], (progress, message) => {
+// Load models from files
+const files = [/* File objects from <input type="file"> */];
+sceneMgr.loadModelFiles(files, (progress, message) => {
   console.log(`Loading: ${progress}% - ${message}`);
 });
 
-// Fit view
+// Load a 3D Tileset from URL
+sceneMgr.addTileset('https://example.com/tileset.json');
+
+// Auto-fit the camera to the scene
 sceneMgr.fitView();
 ```
 
-### Main API Methods
+### 4. Detailed API Reference
 
 #### `SceneManager`
 
-- `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>`
-  Loads various 3D formats (.ifc, .glb, .gltf, .fbx, .obj, .stl, etc.).
-- `addTileset(url: string, onProgress?: ProgressCallback): void`
-  Loads a 3D Tileset from a URL.
-- `clear(): Promise<void>`
-  Clears the current scene.
-- `setView(view: ViewName): void`
-  Changes the camera view (e.g., 'top', 'bottom', 'front', 'back', 'left', 'right', 'se', 'sw', 'ne', 'nw').
-- `fitView(): void`
-  Zooms the camera to fit all objects in the scene.
-- `setObjectVisibility(uuid: string, visible: boolean): void`
-  Toggles visibility of a specific object or group.
-- `removeModel(uuid: string): Promise<void>`
-  Removes a model from the scene.
-- `highlightObject(uuid: string | null): void`
-  Highlights an object by its UUID.
+| Method | Description |
+| :--- | :--- |
+| `constructor(canvas: HTMLCanvasElement)` | Initializes the manager. |
+| `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>` | Loads multiple 3D files. |
+| `addTileset(url: string, onProgress?: ProgressCallback): void` | Adds a 3D Tileset. |
+| `setView(view: ViewName): void` | Sets camera view (top, bottom, se, etc.). |
+| `fitView(): void` | Focuses camera on all objects. |
+| `clear(): Promise<void>` | Clears the entire scene. |
+| `updateSettings(settings: Partial<SceneSettings>): void` | Updates scene configuration. |
+| `setObjectVisibility(uuid: string, visible: boolean): void` | Toggles object visibility. |
+| `highlightObject(uuid: string \| null): void` | Highlights an object by UUID. |
 
-#### `LoaderUtils`
+#### `SceneSettings`
 
-- `processFiles(files: File[], onProgress?: ProgressCallback): Promise<void>`
-  High-level helper to process multiple files and handle format detection.
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `ambientInt` | `number` | `1.0` | Ambient light intensity. |
+| `dirInt` | `number` | `1.5` | Directional light intensity. |
+| `viewCubeSize` | `number` | `100` | Size of the navigation cube. |
+| `bgColor` | `string` | `#ffffff` | Scene background color. |
+| `enableInstancing`| `boolean`| `true` | Enable GPU instancing for LMB. |
+| `appMode` | `'local' \| 'remote'` | `'local'` | UI mode (file vs URL). |
 
-## Supported Formats
+### 5. React Integration
 
-- **BIM**: IFC (.ifc)
-- **Standard**: GLB, GLTF, FBX, OBJ, STL, PLY, 3MF
-- **Large Scale**: 3D Tiles (via tileset.json)
-- **Custom**: LMB, LMBZ (Optimized compressed format)
-- **High Performance**: NBIM (Binary chunks)
+The library provides components that can be used directly in React projects.
 
-## Customization
+```tsx
+import React, { useEffect, useRef } from 'react';
+import { SceneManager, MenuBar, createStyles, themes } from '3dbrowser';
 
-### SceneSettings
+const MyViewer = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneMgrRef = useRef<SceneManager | null>(null);
+  const theme = themes.light;
+  const styles = createStyles(theme);
 
-You can customize the scene behavior through the settings object:
+  useEffect(() => {
+    if (canvasRef.current) {
+      sceneMgrRef.current = new SceneManager(canvasRef.current);
+    }
+  }, []);
 
+  return (
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <MenuBar 
+        sceneMgr={sceneMgrRef.current}
+        t={(key) => key} // Translation function
+        theme={theme}
+        styles={styles}
+        // ... other props
+      />
+      <canvas ref={canvasRef} style={{ flex: 1 }} />
+    </div>
+  );
+};
+```
+
+### 6. Development
+
+To contribute to this project:
+
+1.  Clone the repository.
+2.  Install dependencies: `npm install`.
+3.  Run dev server: `npm run dev`.
+4.  Run in Electron: `npm run electron:dev`.
+
+### 7. License
+
+This project is licensed under the MIT License.
+
+---
+
+<a name="中文文档"></a>
+
+## 中文文档
+
+基于 Three.js 的高性能 3D 模型浏览器，专为 BIM、建筑和大规模模型可视化而设计。
+
+### 1. 发布到 NPM
+
+要将此项目发布为 NPM 包，请遵循以下步骤：
+
+1.  **构建项目**:
+    ```bash
+    npm run build
+    ```
+    这将生成包含库文件的 `dist` 文件夹。
+
+2.  **登录 NPM**:
+    ```bash
+    npm login
+    ```
+
+3.  **发布**:
+    ```bash
+    npm publish
+    ```
+
+### 2. 本地开发引用
+
+如果您想在不发布到 NPM 的情况下在本地其他项目中使用此库：
+
+#### 方法 A: 使用 `npm link` (推荐)
+1. 在 `3dbrowser` 项目目录下执行：
+   ```bash
+   npm run build
+   npm link
+   ```
+2. 在您的另一个项目目录下执行：
+   ```bash
+   npm link 3dbrowser
+   ```
+
+#### 方法 B: 使用本地路径安装
+在您的另一个项目目录下，直接通过路径安装：
+```bash
+npm install ../path/to/3dbrowser
+```
+*(将 `../path/to/3dbrowser` 替换为本项目的实际相对路径)*
+
+### 3. 安装
+
+```bash
+npm install 3dbrowser
+```
+
+### 3. 基本用法
+
+#### 场景管理器 (SceneManager)
+`SceneManager` 是管理 3D 场景、相机和加载器的核心类。
+
+**JavaScript / TypeScript 示例:**
 ```typescript
-sceneMgr.updateSettings({
-  viewCubeSize: 120,
-  ambientInt: 1.0,
-  dirInt: 1.5,
-  bgColor: '#f0f0f0',
-  enableInstancing: true
+import { SceneManager } from '3dbrowser';
+
+// 使用 canvas 元素初始化
+const canvas = document.querySelector('#my-canvas');
+const sceneMgr = new SceneManager(canvas);
+
+// 从文件加载模型
+const files = [/* 从 <input type="file"> 获取的文件对象 */];
+sceneMgr.loadModelFiles(files, (progress, message) => {
+  console.log(`加载中: ${progress}% - ${message}`);
 });
+
+// 从 URL 加载 3D Tiles
+sceneMgr.addTileset('https://example.com/tileset.json');
+
+// 相机自动适配场景
+sceneMgr.fitView();
 ```
 
-## Localization
+### 4. 详细 API 参考
 
-The library supports multiple languages (default: Chinese and English).
+#### `SceneManager`
 
-```typescript
-import { getTranslation } from '3dbrowser';
+| 方法 | 描述 |
+| :--- | :--- |
+| `constructor(canvas: HTMLCanvasElement)` | 初始化管理器。 |
+| `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>` | 加载多个 3D 文件。 |
+| `addTileset(url: string, onProgress?: ProgressCallback): void` | 添加 3D Tiles。 |
+| `setView(view: ViewName): void` | 设置相机视角 (top, bottom, se 等)。 |
+| `fitView(): void` | 相机聚焦所有物体。 |
+| `clear(): Promise<void>` | 清空整个场景。 |
+| `updateSettings(settings: Partial<SceneSettings>): void` | 更新场景配置。 |
+| `setObjectVisibility(uuid: string, visible: boolean): void` | 切换对象可见性。 |
+| `highlightObject(uuid: string \| null): void` | 通过 UUID 高亮对象。 |
 
-const label = getTranslation('en', 'menu_open_file'); // "Open File"
+#### `SceneSettings` (场景设置)
+
+| 属性 | 类型 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `ambientInt` | `number` | `1.0` | 环境光强度。 |
+| `dirInt` | `number` | `1.5` | 直射光强度。 |
+| `viewCubeSize` | `number` | `100` | 导航方块大小。 |
+| `bgColor` | `string` | `#ffffff` | 场景背景颜色。 |
+| `enableInstancing`| `boolean`| `true` | 开启 LMB 实例化渲染。 |
+| `appMode` | `'local' \| 'remote'` | `'local'` | UI 模式（本地 vs 远程）。 |
+
+### 5. React 集成
+
+该库提供了可以直接在 React 项目中使用的组件。
+
+```tsx
+import React, { useEffect, useRef } from 'react';
+import { SceneManager, MenuBar, createStyles, themes } from '3dbrowser';
+
+const MyViewer = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneMgrRef = useRef<SceneManager | null>(null);
+  const theme = themes.light;
+  const styles = createStyles(theme);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      sceneMgrRef.current = new SceneManager(canvasRef.current);
+    }
+  }, []);
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <MenuBar 
+        sceneMgr={sceneMgrRef.current}
+        t={(key) => key} // 翻译函数
+        theme={theme}
+        styles={styles}
+        // ... 其他属性
+      />
+      <canvas ref={canvasRef} style={{ flex: 1 }} />
+    </div>
+  );
+};
 ```
+
+### 6. 开发
+
+参与本项目开发：
+
+1.  克隆仓库。
+2.  安装依赖: `npm install`。
+3.  启动开发服务器: `npm run dev`。
+4.  在 Electron 中运行: `npm run electron:dev`。
+
+### 7. 授权
+
+本项目采用 MIT 授权。

@@ -1,12 +1,32 @@
 {
   "name": "3dbrowser",
-  "private": true,
-  "version": "1.0.0",
-  "description": "A high-performance 3D model browser based on Three.js and Electron.",
-  "license": "MIT with Non-Commercial Use Restrictions",
+  "private": false,
+  "version": "1.0.1",
+  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, 3D Tiles, GLB, and more.",
+  "keywords": [
+    "threejs",
+    "bim",
+    "ifc",
+    "3dtiles",
+    "3d-viewer",
+    "browser"
+  ],
+  "license": "MIT",
   "author": "3D Browser Team",
   "type": "module",
-  "main": "main.cjs",
+  "main": "./dist/3dbrowser.umd.js",
+  "module": "./dist/3dbrowser.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/3dbrowser.es.js",
+      "require": "./dist/3dbrowser.umd.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
