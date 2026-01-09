@@ -199,18 +199,18 @@ const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: R
             style={{
                 ...styles.ribbonButtonMedium(active, hover),
                 gap: icon ? '6px' : '0',
-                padding: icon ? '2px 6px' : '2px 8px'
+                padding: icon ? '2px 8px' : '2px 10px'
             }} 
             onClick={onClick}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
             {icon && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
                 </div>
             )}
-            <span style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ fontSize: '12px', whiteSpace: 'nowrap', textAlign: 'center' }}>{label}</span>
         </div>
     );
 };
