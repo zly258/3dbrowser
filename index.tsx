@@ -184,6 +184,16 @@ const App = () => {
 
     const styles = useMemo(() => createStyles(theme, fontFamily), [theme, fontFamily]);
 
+    // 菜单模式状态 - 从localStorage恢复
+    const [menuMode, setMenuMode] = useState<'ribbon' | 'classic'>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_menuMode');
+            return (saved === 'ribbon' || saved === 'classic') ? saved : 'ribbon';
+        } catch {
+            return 'ribbon';
+        }
+    });
+
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
         try {
@@ -352,6 +362,12 @@ const App = () => {
             localStorage.setItem('3dbrowser_lang', lang);
         } catch (e) { console.error("Failed to save lang", e); }
     }, [lang]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('3dbrowser_menuMode', menuMode);
+        } catch (e) { console.error("Failed to save menuMode", e); }
+    }, [menuMode]);
 
     useEffect(() => {
         try {
@@ -1082,6 +1098,7 @@ const App = () => {
                 t={t}
                 themeType={themeMode}
                 setThemeType={setThemeMode}
+                menuMode={menuMode}
                 handleOpenFiles={handleOpenFiles}
                 handleOpenFolder={handleOpenFolder}
                 handleView={handleView}
@@ -1222,6 +1239,7 @@ const App = () => {
                         <SettingsPanel 
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
+                            menuMode={menuMode} setMenuMode={setMenuMode}
                             accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
                             fontFamily={fontFamily} setFontFamily={setFontFamily}

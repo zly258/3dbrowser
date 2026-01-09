@@ -63,6 +63,71 @@ export const IconLang = (props: any) => withThemeIcon(Globe, props);
 export const IconMinimize = (props: any) => withThemeIcon(Minus, props);
 export const IconMaximize = (props: any) => withThemeIcon(Square, { ...props, size: (props.size || iconSize) - 4 });
 
+// CAD Style View Icons
+export const IconViewTop = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="1" />
+    <path d="M3 12h18" opacity="0.3" />
+    <path d="M12 3v18" opacity="0.3" />
+    <rect x="7" y="7" width="10" height="10" fill="currentColor" fillOpacity="0.2" stroke="none" />
+  </svg>
+);
+
+export const IconViewBottom = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="3" y="3" width="18" height="18" rx="1" />
+    <path d="M3 12h18" strokeDasharray="2 2" opacity="0.3" />
+    <path d="M12 3v18" strokeDasharray="2 2" opacity="0.3" />
+    <rect x="8" y="8" width="8" height="8" strokeDasharray="2 2" />
+  </svg>
+);
+
+export const IconViewFront = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="3" y="8" width="18" height="12" rx="1" />
+    <path d="M3 14h18" opacity="0.3" />
+    <path d="M12 8v12" opacity="0.3" />
+    <rect x="7" y="11" width="10" height="6" fill="currentColor" fillOpacity="0.2" stroke="none" />
+  </svg>
+);
+
+export const IconViewBack = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="3" y="8" width="18" height="12" rx="1" />
+    <path d="M3 14h18" strokeDasharray="2 2" opacity="0.3" />
+    <path d="M12 8v12" strokeDasharray="2 2" opacity="0.3" />
+    <rect x="8" y="12" width="8" height="4" strokeDasharray="2 2" />
+  </svg>
+);
+
+export const IconViewLeft = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="6" y="5" width="12" height="14" rx="1" />
+    <path d="M6 12h12" opacity="0.3" />
+    <path d="M12 5v14" opacity="0.3" />
+    <rect x="9" y="8" width="6" height="8" fill="currentColor" fillOpacity="0.2" stroke="none" />
+  </svg>
+);
+
+export const IconViewRight = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="6" y="5" width="12" height="14" rx="1" />
+    <path d="M6 12h12" strokeDasharray="2 2" opacity="0.3" />
+    <path d="M12 5v14" strokeDasharray="2 2" opacity="0.3" />
+    <rect x="10" y="9" width="4" height="6" strokeDasharray="2 2" />
+  </svg>
+);
+
+export const IconViewIso = (props: any) => (
+  <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M12 2l9.5 5.5v11L12 22l-9.5-5.5v-11z" />
+    <path d="M12 22V12" />
+    <path d="M21.5 7.5L12 12 2.5 7.5" />
+    <path d="M12 12l9.5 5.5" opacity="0.3" />
+    <path d="M12 12l-9.5 5.5" opacity="0.3" />
+  </svg>
+);
+
 export const IconText = ({text, ...props}: any) => (
   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
     <Type size={iconSize} {...props} />

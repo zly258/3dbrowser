@@ -174,6 +174,51 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         marginTop: "auto",
         overflow: "visible" // Prevent bottom cutoff
     },
+
+    // Classic Menu Styles
+    classicMenuBar: {
+        display: "flex",
+        alignItems: "center",
+        backgroundColor: theme.bg,
+        borderBottom: `1px solid ${theme.border}`,
+        padding: "0 8px",
+        height: "28px",
+        gap: "4px",
+        WebkitAppRegion: "no-drag" as any,
+    },
+    classicMenuItem: (active: boolean, hover: boolean) => ({
+        padding: "0 10px",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        fontSize: "12px",
+        color: theme.text,
+        cursor: "pointer",
+        backgroundColor: active ? theme.highlight : (hover ? theme.itemHover : "transparent"),
+        transition: "background-color 0.1s",
+    }),
+    classicMenuDropdown: {
+        position: "absolute" as const,
+        top: "100%",
+        left: 0,
+        backgroundColor: theme.panelBg,
+        border: `1px solid ${theme.border}`,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        zIndex: 2000,
+        minWidth: "160px",
+        padding: "4px 0",
+    },
+    classicMenuSubItem: (hover: boolean) => ({
+        padding: "6px 16px",
+        fontSize: "12px",
+        color: theme.text,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: hover ? theme.itemHover : "transparent",
+    }),
+
     ribbonButtonLarge: (active: boolean, hover: boolean = false) => ({
         display: "flex",
         flexDirection: "column" as const,
