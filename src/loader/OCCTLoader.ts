@@ -30,14 +30,25 @@ export class OCCTLoader {
         
         // Try to read as STEP first, then IGES
         try {
-            result = occt.ReadStepFile(fileContent, null);
+            // 优化：增加参数以减少冗余面片
+            // linearDeflection: 线性偏差，值越大面片越少（越粗糙），默认通常较小。设置为 0.1 左右可以显著减少面片数量。
+            // angularDeflection: 角度偏差，弧度制。
+            const params = {
+                linearDeflection: 0.1,
+                angularDeflection: 0.5
+            };
+            result = occt.ReadStepFile(fileContent, params);
         } catch (e) {
             console.warn('Failed to read as STEP, trying IGES...', e);
         }
 
         if (!result || !result.success) {
             try {
-                result = occt.ReadIgesFile(fileContent, null);
+                const params = {
+                    linearDeflection: 0.1,
+                    angularDeflection: 0.5
+                };
+                result = occt.ReadIgesFile(fileContent, params);
             } catch (e) {
                 console.error('Failed to read as IGES', e);
             }
