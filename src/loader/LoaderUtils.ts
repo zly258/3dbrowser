@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { LMBLoader } from "./lmbLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import { TFunc } from "../theme/Locales";
 import { SceneSettings, AxisOption } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
@@ -111,6 +115,35 @@ export const loadModelFiles = async (
                 } else if (ext === 'ifc') {
                     object = await loadIFC(url, updateFileProgress, t);
                     axisSetting = '-z'; // 用户要求 IFC 默认使用 -z 向上
+                } else if (ext === 'obj') {
+                    const loader = new OBJLoader();
+                    object = await loader.loadAsync(url, (e) => {
+                        if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
+                    });
+                    axisSetting = '+y';
+                } else if (ext === 'stl') {
+                    const loader = new STLLoader();
+                    const geometry = await loader.loadAsync(url, (e) => {
+                        if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
+                    });
+                    object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x888888 }));
+                    axisSetting = '+y';
+                } else if (ext === 'ply') {
+                    const loader = new PLYLoader();
+                    const geometry = await loader.loadAsync(url, (e) => {
+                        if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
+                    });
+                    object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ 
+                        color: 0x888888, 
+                        vertexColors: geometry.hasAttribute('color') 
+                    }));
+                    axisSetting = '+y';
+                } else if (ext === '3mf') {
+                    const loader = new ThreeMFLoader();
+                    object = await loader.loadAsync(url, (e) => {
+                        if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
+                    });
+                    axisSetting = '+y';
                 }
 
                 if (object) {
