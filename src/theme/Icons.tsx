@@ -18,6 +18,7 @@ import {
   Menu, 
   X, 
   Globe,
+  Link,
   Type,
   Minus,
   Square
@@ -60,6 +61,7 @@ export const IconExplode = (props: any) => withThemeIcon(Zap, props);
 export const IconMenu = (props: any) => withThemeIcon(Menu, props);
 export const IconClose = (props: any) => withThemeIcon(X, props);
 export const IconLang = (props: any) => withThemeIcon(Globe, props);
+export const IconLink = (props: any) => withThemeIcon(Link, props);
 export const IconMinimize = (props: any) => withThemeIcon(Minus, props);
 export const IconMaximize = (props: any) => withThemeIcon(Square, { ...props, size: (props.size || iconSize) - 4 });
 

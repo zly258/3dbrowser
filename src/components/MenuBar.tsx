@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { 
-    IconFile, IconFolder, IconExport, IconClear, IconFit, IconList, IconInfo, IconMeasure, IconSettings,
+    IconFile, IconFolder, IconLink, IconExport, IconClear, IconFit, IconList, IconInfo, IconMeasure, IconSettings,
     IconPick, IconClip, IconMenu, IconClose, IconChevronRight, IconChevronDown, IconMinimize, IconMaximize, IconLang
 } from "../theme/Icons";
 
@@ -17,8 +17,10 @@ const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
 
 // --- Components ---
 
-const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolder, handleAbout }: any) => {
+const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolder, handleOpenUrl, handleAbout, sceneMgr }: any) => {
     if (!isOpen) return null;
+
+    const appMode = sceneMgr?.settings?.appMode || 'local';
 
     const itemStyle = {
         display: 'flex',
@@ -53,24 +55,38 @@ const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolde
                 <div style={{ padding: '8px 16px', fontSize: '11px', color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase' }}>
                     {t('start_menu')}
                 </div>
-                <div 
-                    style={itemStyle} 
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    onClick={() => { handleOpenFiles(); onClose(); }}
-                >
-                    <IconFile size={18} />
-                    {t('start_open')}
-                </div>
-                <div 
-                    style={itemStyle} 
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    onClick={() => { handleOpenFolder(); onClose(); }}
-                >
-                    <IconFolder size={18} />
-                    {t('menu_open_folder')}
-                </div>
+                {appMode === 'local' ? (
+                    <>
+                        <div 
+                            style={itemStyle} 
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={() => { handleOpenFiles(); onClose(); }}
+                        >
+                            <IconFile size={18} />
+                            {t('start_open')}
+                        </div>
+                        <div 
+                            style={itemStyle} 
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={() => { handleOpenFolder(); onClose(); }}
+                        >
+                            <IconFolder size={18} />
+                            {t('menu_open_folder')}
+                        </div>
+                    </>
+                ) : (
+                    <div 
+                        style={itemStyle} 
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onClick={() => { handleOpenUrl(); onClose(); }}
+                    >
+                        <IconLink size={18} />
+                        {t('menu_open_url')}
+                    </div>
+                )}
                 <div style={{ height: '1px', background: theme.border, margin: '8px 0' }} />
                 <div 
                     style={itemStyle} 
@@ -156,6 +172,7 @@ interface RibbonUIProps {
     setActiveTool: (tool: string) => void;
     handleOpenFiles: (e: any) => void;
     handleOpenFolder: (e: any) => void;
+    handleOpenUrl: () => void;
     handleClear: () => void;
     handleView: (view: string) => void;
     pickEnabled: boolean;
@@ -177,7 +194,7 @@ const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: Re
     return (
         <div 
             style={styles.ribbonButtonLarge(active, hover)} 
-            onClick={onClick}
+            onClick={() => { onClick(); setHover(false); }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
@@ -200,7 +217,7 @@ const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: R
                 gap: icon ? '6px' : '0',
                 padding: icon ? '2px 8px' : '2px 10px'
             }} 
-            onClick={onClick}
+            onClick={() => { onClick(); setHover(false); }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
@@ -219,7 +236,7 @@ const RibbonButtonSmall = ({ icon, onClick, active, styles, title }: { icon?: Re
     return (
         <div 
             style={styles.ribbonButtonSmall(active, hover)} 
-            onClick={onClick} 
+            onClick={() => { onClick(); setHover(false); }} 
             title={title}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
@@ -260,7 +277,10 @@ const ClassicMenuItem = ({ label, children, styles, theme }: { label: string, ch
     const [hover, setHover] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const closeMenu = () => setIsOpen(false);
+    const closeMenu = () => {
+        setIsOpen(false);
+        setHover(false);
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -299,7 +319,7 @@ const ClassicSubItem = ({ label, onClick, styles }: { label: string, onClick: ()
     return (
         <div 
             style={styles.classicMenuSubItem(hover)}
-            onClick={() => { onClick(); }}
+            onClick={() => { onClick(); setHover(false); }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
@@ -361,7 +381,9 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                             theme={theme} 
                             handleOpenFiles={() => fileInputRef.current?.click()}
                             handleOpenFolder={() => folderInputRef.current?.click()}
+                            handleOpenUrl={props.handleOpenUrl}
                             handleAbout={props.handleAbout}
+                            sceneMgr={props.sceneMgr}
                         />
                     </div>
                     <div style={styles.ribbonTab(activeTab === 'home')} onClick={() => setActiveTab('home')}>{t('home')}</div>
@@ -379,10 +401,16 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                         <>
                             <RibbonPanel label={t('menu_file')} styles={styles}>
                                 <div style={styles.ribbonPanelRows}>
-                                    <RibbonButtonMedium icon={<IconFile />} label={t('menu_open_file')} onClick={() => fileInputRef.current?.click()} styles={styles} />
-                                    <RibbonButtonMedium icon={<IconFolder />} label={t('menu_open_folder')} onClick={() => folderInputRef.current?.click()} styles={styles} />
-                                    <RibbonButtonMedium icon={<IconClear />} label={t('op_clear')} onClick={props.handleClear} styles={styles} />
-                                <RibbonButtonMedium icon={<IconExport />} label={t('menu_export')} onClick={() => props.setActiveTool('export')} active={props.activeTool === 'export'} styles={styles} />
+                                    { (props.sceneMgr?.settings?.appMode || 'local') === 'local' ? (
+                                        <>
+                                            <RibbonButtonMedium icon={<IconFile />} label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); props.handleView('se'); }} styles={styles} />
+                                            <RibbonButtonMedium icon={<IconFolder />} label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); props.handleView('se'); }} styles={styles} />
+                                        </>
+                                    ) : (
+                                        <RibbonButtonMedium icon={<IconLink />} label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); props.handleView('se'); }} styles={styles} />
+                                    )}
+                                    <RibbonButtonMedium icon={<IconClear />} label={t('op_clear')} onClick={() => { props.handleClear(); props.handleView('se'); }} styles={styles} />
+                                    <RibbonButtonMedium icon={<IconExport />} label={t('menu_export')} onClick={() => props.setActiveTool('export')} active={props.activeTool === 'export'} styles={styles} />
                                 </div>
                             </RibbonPanel>
 
@@ -432,12 +460,18 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                     <ClassicMenuItem label={t('menu_file')} styles={styles} theme={theme}>
                         {(close) => (
                             <>
-                                <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} styles={styles} />
-                                <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); }} styles={styles} />
-                                <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool('export'); close(); }} styles={styles} />
-                                <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear(); close(); }} styles={styles} />
+                                { (props.sceneMgr?.settings?.appMode || 'local') === 'local' ? (
+                                    <>
+                                        <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} />
+                                <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} />
+                            </>
+                        ) : (
+                            <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); close(); props.handleView('se'); }} styles={styles} />
+                        )}
+                        <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                        <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool('export'); close(); props.handleView('se'); }} styles={styles} />
+                        <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                        <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear(); close(); props.handleView('se'); }} styles={styles} />
                             </>
                         )}
                     </ClassicMenuItem>
@@ -477,8 +511,8 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                     <ClassicMenuItem label={t('tool')} styles={styles} theme={theme}>
                         {(close) => (
                             <>
-                                <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); }} styles={styles} />
-                                <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool('clip'); close(); }} styles={styles} />
+                                <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); props.handleView('se'); }} styles={styles} />
+                                <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool('clip'); close(); props.handleView('se'); }} styles={styles} />
                             </>
                         )}
                     </ClassicMenuItem>
@@ -486,9 +520,9 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                     <ClassicMenuItem label={t('settings')} styles={styles} theme={theme}>
                         {(close) => (
                             <>
-                                <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); }} styles={styles} />
+                                <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); props.handleView('se'); }} styles={styles} />
                                 <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                <ClassicSubItem label={t('about')} onClick={() => { props.handleAbout(); close(); }} styles={styles} />
+                                <ClassicSubItem label={t('about')} onClick={() => { props.handleAbout(); close(); props.handleView('se'); }} styles={styles} />
                             </>
                         )}
                     </ClassicMenuItem>
