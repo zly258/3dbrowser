@@ -890,7 +890,7 @@ const App = () => {
         
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const files = Array.from(e.dataTransfer.files) as File[];
-            const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx'];
+            const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3mf'];
             
             const validFiles = files.filter((file: File) => {
                 const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -1169,25 +1169,22 @@ const App = () => {
                     {toast && (
                         <div style={{
                             position: 'fixed',
-                            top: '15%', // 从 32px 改为 15%，使其位于中间偏上
+                            top: '140px', // 位于菜单栏下方
                             left: '50%',
                             transform: 'translateX(-50%)',
                             backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
                             color: toast.type === 'info' ? theme.text : '#fff',
                             padding: '12px 24px',
-                            borderRadius: '24px',
-                            boxShadow: `0 8px 32px rgba(0,0,0,0.25)`, // 增强阴影
+                            borderRadius: '4px', // 稍微增加一点圆角，更现代
+                            boxShadow: `0 8px 24px rgba(0,0,0,0.25)`,
                             zIndex: 10000,
                             display: 'flex',
                             alignItems: 'center',
                             gap: '12px',
                             fontSize: '14px',
-                            fontWeight: '600',
-                            border: `1px solid rgba(255,255,255,0.2)`,
-                            backdropFilter: 'blur(12px)', // 增强模糊效果
-                            animation: 'fadeInDown 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+                            borderLeft: `4px solid rgba(255,255,255,0.4)`, 
+                            animation: 'fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                         }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'currentColor' }} />
                             {toast.message}
                         </div>
                     )}

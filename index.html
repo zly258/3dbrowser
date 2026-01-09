@@ -36,6 +36,14 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeInDown {
+            from { transform: translate(-50%, -20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
         .loading-text {
             margin-top: 20px;
             font-size: 14px;

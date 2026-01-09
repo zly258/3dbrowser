@@ -56,8 +56,12 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
 
 export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => `
     @keyframes fadeInDown {
-        from { opacity: 0; transform: translate(-50%, -10px); }
+        from { opacity: 0; transform: translate(-50%, -20px); }
         to { opacity: 1; transform: translate(-50%, 0); }
+    }
+    @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(100%); }
+        to { opacity: 1; transform: translateX(0); }
     }
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: ${theme.bg}; }
@@ -318,7 +322,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         padding: "4px 10px", 
         backgroundColor: theme.bg, 
         borderBottom: `1px solid ${theme.border}`,
-        cursor: "move",
+        cursor: "default",
         fontWeight: "400",
         display: "flex",
         justifyContent: "space-between",

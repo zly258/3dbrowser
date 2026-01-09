@@ -330,6 +330,7 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   const batchIdToExpressId = new Map<number, number>();
   const batchIdToUuid = new Map<number, string>();
   const batchIdToColor = new Map<number, number>();
+  const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
 
   for (const item of sanitizedItems) {
     let geometryId = geometryMap.get(item.geometry);
@@ -351,12 +352,14 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
       
       batchIdToUuid.set(instanceId, item.uuid);
       batchIdToColor.set(instanceId, item.color);
+      batchIdToGeometry.set(instanceId, item.geometry);
     }
   }
 
   batchedMesh.userData.batchIdToExpressId = batchIdToExpressId;
   batchedMesh.userData.batchIdToUuid = batchIdToUuid;
   batchedMesh.userData.batchIdToColor = batchIdToColor;
+  batchedMesh.userData.batchIdToGeometry = batchIdToGeometry;
   return batchedMesh;
 }
 

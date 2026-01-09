@@ -38,6 +38,7 @@ export interface StructureTreeNode {
     bimId?: number;
     chunkId?: string;
     visible?: boolean;
+    userData?: any;
 }
 
 export class SceneManager {
@@ -67,6 +68,7 @@ export class SceneManager {
     tilesRenderer: TilesRenderer | null = null;
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh; 
+    private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 Uuid
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -88,8 +90,8 @@ export class SceneManager {
     // 组件映射
     componentMap: Map<number | string, any> = new Map();
     
-    // 优化后的网格映射: originalUuid -> { mesh, instanceId, originalColor }[]
-    optimizedMapping: Map<string, { mesh: THREE.BatchedMesh, instanceId: number, originalColor: number }[]> = new Map();
+    // 优化后的网格映射: originalUuid -> { mesh, instanceId, originalColor, geometry }[]
+    optimizedMapping: Map<string, { mesh: THREE.BatchedMesh, instanceId: number, originalColor: number, geometry?: THREE.BufferGeometry }[]> = new Map();
     
     // 设置
     settings: SceneSettings = {
@@ -416,6 +418,7 @@ export class SceneManager {
                 // 建立映射 (对齐 refs，记录原始颜色以便高亮恢复)
                 const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
                 const batchIdToColor = bm.userData.batchIdToColor as Map<number, number>; // 记录颜色
+                const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry>; // 记录几何体
                 
                 if (batchIdToUuid) {
                     for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
@@ -423,10 +426,12 @@ export class SceneManager {
                             this.optimizedMapping.set(originalUuid, []);
                         }
                         const originalColor = batchIdToColor?.get(batchId) ?? 0xffffff;
+                        const geometry = batchIdToGeometry?.get(batchId);
                         this.optimizedMapping.get(originalUuid)!.push({ 
                             mesh: bm, 
                             instanceId: batchId,
-                            originalColor: originalColor
+                            originalColor: originalColor,
+                            geometry: geometry
                         });
                     }
                 }
@@ -481,6 +486,14 @@ export class SceneManager {
         
         let modelRoot = this.buildSceneGraph(object);
         
+        // 记录原始模型 UUID，用于后续删除和分块匹配
+        const markOriginalUuid = (node: StructureTreeNode) => {
+            if (!node.userData) node.userData = {};
+            node.userData.originalUuid = object.uuid;
+            if (node.children) node.children.forEach(markOriginalUuid);
+        };
+        markOriginalUuid(modelRoot);
+        
         // 如果根节点名字是 Root 且有子节点，则打平（防止嵌套 Root）
         if (modelRoot.name === 'Root' && modelRoot.children && modelRoot.children.length > 0) {
             if (!this.structureRoot.children) this.structureRoot.children = [];
@@ -516,6 +529,12 @@ export class SceneManager {
         });
 
         // 2. 将原始模型加入场景
+        // 为每个加载的文件创建一个容器组，方便统一管理
+        const fileGroup = new THREE.Group();
+        fileGroup.name = `file_${object.uuid}`;
+        fileGroup.userData.originalUuid = object.uuid;
+        fileGroup.add(object);
+
         // 如果开启了实例化（默认），则设为不可见，仅用于数据查询和备份
         // 如果关闭了实例化，则直接显示原始对象
         if (this.settings.enableInstancing) {
@@ -523,7 +542,7 @@ export class SceneManager {
         } else {
             object.visible = true;
         }
-        this.contentGroup.add(object);
+        this.contentGroup.add(fileGroup);
 
         // 3. 八叉树划分与分块优化 (仅在开启实例化时进行)
         if (!this.settings.enableInstancing) {
@@ -606,31 +625,48 @@ export class SceneManager {
     }
 
     removeObject(uuid: string) {
-        // 从 contentGroup 中找到对象
-        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
         const node = this.nodeMap.get(uuid);
+        // 尝试获取该节点所属的原始模型 UUID (用于 NBIM 分块匹配)
+        const originalUuid = node?.userData?.originalUuid || uuid;
+
+        // 1. 彻底移除相关的优化组 (针对 NBIM / 实例化分块)
+        // 注意：可能有多个优化组（对应不同的分块）
+        const optimizedGroupsToRemove: THREE.Object3D[] = [];
+        this.contentGroup.traverse(child => {
+            // 匹配逻辑：名字匹配，或者 userData 里的原始 UUID 匹配
+            const isMatch = (child.name === `optimized_${uuid}`) || 
+                          (child.name === `file_${uuid}`) ||
+                          (child.userData.originalUuid === uuid) ||
+                          (child.userData.originalUuid === originalUuid) ||
+                          (child.name.startsWith('optimized_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid)) ||
+                          (child.name.startsWith('file_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid));
+            
+            if (isMatch) {
+                optimizedGroupsToRemove.push(child);
+            }
+        });
+
+        optimizedGroupsToRemove.forEach(group => {
+            group.traverse(child => {
+                if ((child as any).isBatchedMesh) {
+                    const bm = child as THREE.BatchedMesh;
+                    if (bm.geometry) bm.geometry.dispose();
+                    if (bm.material) {
+                        const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+                        materials.forEach(m => m.dispose());
+                    }
+                }
+            });
+            group.removeFromParent();
+        });
+
+        // 2. 从 contentGroup 中找到原始对象并递归清理
+        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+        // 注意：node 已经在函数开头定义过了
 
         const processRemoval = (o: THREE.Object3D | StructureTreeNode) => {
             const id = (o instanceof THREE.Object3D) ? o.uuid : (o as StructureTreeNode).id;
             
-            // 移除相关的优化组 (仅针对当前要删除的根节点)
-            if (id === uuid) {
-                const optimizedGroup = this.contentGroup.getObjectByName(`optimized_${id}`);
-                if (optimizedGroup) {
-                    optimizedGroup.traverse(child => {
-                        if ((child as any).isBatchedMesh) {
-                            const bm = child as THREE.BatchedMesh;
-                            if (bm.geometry) bm.geometry.dispose();
-                            if (bm.material) {
-                                const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                                materials.forEach(m => m.dispose());
-                            }
-                        }
-                    });
-                    optimizedGroup.removeFromParent();
-                }
-            }
-
             // 处理 BatchedMesh 实例移除（通过隐藏实现）
             const mappings = this.optimizedMapping.get(id);
             if (mappings) {
@@ -654,7 +690,6 @@ export class SceneManager {
             if (o instanceof THREE.Object3D && o.userData.expressID !== undefined) {
                 this.componentMap.delete(o.userData.expressID);
             }
-            // 检查 nodeMap 中的关联 ID
             const nodeInfo = this.nodeMap.get(id);
             if (nodeInfo && nodeInfo.bimId !== undefined) {
                 this.componentMap.delete(nodeInfo.bimId);
@@ -667,7 +702,6 @@ export class SceneManager {
             obj.traverse(processRemoval);
             obj.removeFromParent();
         } else if (node) {
-            // 如果 contentGroup 中没有（例如 NBIM 模式），则递归清理结构树节点
             const traverseNode = (n: StructureTreeNode) => {
                 processRemoval(n);
                 if (n.children) n.children.forEach(traverseNode);
@@ -675,9 +709,10 @@ export class SceneManager {
             traverseNode(node);
         }
 
-        // 移除关联的分块和鬼影
+        // 3. 移除关联的分块和鬼影
         this.chunks = this.chunks.filter(c => {
-            if (c.originalUuid === uuid || c.id.startsWith(uuid)) {
+            const isMatch = c.originalUuid === uuid || c.originalUuid === originalUuid || c.id.startsWith(uuid);
+            if (isMatch) {
                 const ghost = this.ghostGroup.getObjectByName(`ghost_${c.id}`);
                 if (ghost) {
                     this.ghostGroup.remove(ghost);
@@ -688,17 +723,12 @@ export class SceneManager {
             return true;
         });
 
-        // 从结构树中彻底移除该节点
+        // 4. 从结构树中彻底移除该节点
         if (this.structureRoot) {
             const filterNodes = (nodes: StructureTreeNode[]): StructureTreeNode[] => {
                 return nodes.filter(n => {
-                    // 如果节点 ID 匹配，或者该节点是我们要删除的根对象的子节点（通过 nodeMap 检查）
                     if (n.id === uuid) return false;
-                    
-                    // 额外检查：如果 nodeMap 中找不到这个节点，说明它已经被 processRemoval 清理了
-                    // 这对于那些在 addModel 中被“打平”到 structureRoot 的节点非常有用
                     if (!this.nodeMap.has(n.id) && n.id !== 'root') return false;
-
                     if (n.children) {
                         n.children = filterNodes(n.children);
                     }
@@ -713,14 +743,11 @@ export class SceneManager {
             }
         }
 
-        // 重新计算包围盒，防止删除后 fitView 依然参考旧的包围盒
+        // 5. 重新计算包围盒并更新场景
         this.precomputedBounds = this.computeTotalBounds();
-        
-        // 如果开启了实例化但还没有加载分块，computeTotalBounds 可能是空的
-        // 此时我们需要从隐藏的原始模型中计算
         if (this.precomputedBounds.isEmpty()) {
             this.contentGroup.traverse(child => {
-                if ((child as any).isMesh) {
+                if ((child as any).isMesh && child.visible) {
                     const box = new THREE.Box3().setFromObject(child);
                     if (!box.isEmpty()) this.precomputedBounds.union(box);
                 }
@@ -990,6 +1017,7 @@ export class SceneManager {
         const color = new THREE.Color();
         const batchIdToUuid = new Map<number, string>();
         const batchIdToColor = new Map<number, number>();
+        const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
 
         for (let i = 0; i < instanceCount; i++) {
             const bimId = dv.getUint32(offset, true); offset += 4;
@@ -1008,10 +1036,12 @@ export class SceneManager {
             
             batchIdToUuid.set(instId, `bim_${bimId}`);
             batchIdToColor.set(instId, hex);
+            batchIdToGeometry.set(instId, geometries[geoIdx]);
         }
 
         bm.userData.batchIdToUuid = batchIdToUuid;
         bm.userData.batchIdToColor = batchIdToColor;
+        bm.userData.batchIdToGeometry = batchIdToGeometry;
         return bm;
     }
 
@@ -1137,10 +1167,18 @@ export class SceneManager {
         }
 
         const rootId = modelRoot?.id || fileId;
+
+        // 为 NBIM 创建一个容器组
+        const fileGroup = new THREE.Group();
+        fileGroup.name = `file_${rootId}`;
+        fileGroup.userData.originalUuid = rootId;
+        this.contentGroup.add(fileGroup);
         
         // 增量构建节点映射
         if (modelRoot) {
             const traverse = (node: StructureTreeNode) => {
+                if (!node.userData) node.userData = {};
+                node.userData.originalUuid = rootId;
                 this.nodeMap.set(node.id, node);
                 if (node.children) node.children.forEach(traverse);
             };
@@ -1313,36 +1351,85 @@ export class SceneManager {
     }
 
     highlightObject(uuid: string | null) {
-        // 清除之前的 BatchedMesh 高亮 (恢复原始颜色)
-        this.optimizedMapping.forEach((mappings) => {
-            mappings.forEach(m => {
-                m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-            });
-        });
-        // 标记所有 BatchedMesh 材质颜色需要更新
-        this.contentGroup.traverse(o => {
-            if ((o as any).isBatchedMesh) {
-                const bm = o as THREE.BatchedMesh;
-                if (bm.geometry.getAttribute('color')) bm.geometry.getAttribute('color').needsUpdate = true;
+        if (this.lastSelectedUuid === uuid) return;
+
+        // 1. 清除之前的状态
+        if (this.lastSelectedUuid) {
+            const prevMappings = this.optimizedMapping.get(this.lastSelectedUuid);
+            if (prevMappings) {
+                prevMappings.forEach(m => {
+                    m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
+                    if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
+                });
             }
-        });
+        } else {
+            // 如果没有记录，全量清除一次 (兜底)
+            this.optimizedMapping.forEach((mappings) => {
+                mappings.forEach(m => {
+                    m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
+                    if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
+                });
+            });
+        }
 
         this.selectionBox.visible = false;
         this.highlightMesh.visible = false;
+        this.lastSelectedUuid = uuid;
         
         if (!uuid) return;
 
-        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-        if (!obj) return;
-
-        // 处理 BatchedMesh 高亮
+        // 2. 处理 BatchedMesh 高亮 (NBIM/优化模式)
         const mappings = this.optimizedMapping.get(uuid);
-        if (mappings) {
+        if (mappings && mappings.length > 0) {
             mappings.forEach(m => {
                 m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
-                if (m.mesh.geometry.getAttribute('color')) m.mesh.geometry.getAttribute('color').needsUpdate = true;
+                if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
             });
+
+            // 使用第一个映射实例来设置高亮外形
+            const m = mappings[0];
+            if (m.geometry) {
+                this.highlightMesh.geometry = m.geometry;
+                
+                const matrix = new THREE.Matrix4();
+                m.mesh.getMatrixAt(m.instanceId, matrix);
+                matrix.premultiply(m.mesh.matrixWorld);
+
+                const worldPos = new THREE.Vector3();
+                const worldQuat = new THREE.Quaternion();
+                const worldScale = new THREE.Vector3();
+                matrix.decompose(worldPos, worldQuat, worldScale);
+
+                if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+                const center = new THREE.Vector3();
+                m.geometry.boundingBox!.getCenter(center);
+                
+                if (center.length() > 10000) {
+                    this.highlightMesh.position.set(0, 0, 0);
+                    const pureRotationMatrix = matrix.clone().setPosition(0, 0, 0);
+                    pureRotationMatrix.decompose(worldPos, worldQuat, worldScale);
+                    this.highlightMesh.quaternion.copy(worldQuat);
+                    this.highlightMesh.scale.copy(worldScale);
+                    
+                    const bmPos = new THREE.Vector3();
+                    const bmQuat = new THREE.Quaternion();
+                    const bmScale = new THREE.Vector3();
+                    m.mesh.matrixWorld.decompose(bmPos, bmQuat, bmScale);
+                    this.highlightMesh.position.add(bmPos);
+                } else {
+                    this.highlightMesh.position.copy(worldPos);
+                    this.highlightMesh.quaternion.copy(worldQuat);
+                    this.highlightMesh.scale.copy(worldScale);
+                }
+                
+                this.highlightMesh.visible = true;
+            }
+            return; 
         }
+
+        // 3. 处理普通 Mesh 高亮
+        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+        if (!obj) return;
 
         if ((obj as THREE.Mesh).isMesh) {
             const mesh = obj as THREE.Mesh;
@@ -1403,7 +1490,9 @@ export class SceneManager {
             // 如果拾取到的是 BatchedMesh，我们需要将其转换为原始 Object3D 或 Proxy
             if ((hit.object as any).isBatchedMesh) {
                 const bm = hit.object as THREE.BatchedMesh;
-                const batchId = (hit as any).batchId;
+                // 兼容不同版本的 Three.js 拾取结果字段
+                const batchId = (hit as any).batchId !== undefined ? (hit as any).batchId : (hit as any).instanceId;
+                
                 if (batchId !== undefined) {
                     const originalUuid = (bm.userData.batchIdToUuid as Map<number, string>)?.get(batchId);
                     if (originalUuid) {
@@ -1411,25 +1500,29 @@ export class SceneManager {
                         if (originalObj) {
                             (hit as any).object = originalObj;
                         } else {
-                            // NBIM 模式下可能没有原始对象，返回一个 Proxy Object
+                            // NBIM 模式下可能没有原始对象，返回一个更健壮的 Proxy Object
+                            // 模拟基础的 Object3D 方法以防止 UI 端处理报错
                             const node = this.nodeMap.get(originalUuid);
+                            const proxy = new THREE.Object3D();
+                            proxy.uuid = originalUuid;
                             if (node) {
-                                (hit as any).object = {
-                                    uuid: node.id,
-                                    name: node.name,
-                                    type: node.type,
-                                    isMesh: node.type === 'Mesh',
-                                    userData: {},
-                                    parent: null,
-                                    children: [],
-                                    getWorldPosition: (v: THREE.Vector3) => {
-                                        // 从 BatchedMesh 实例矩阵获取位置
-                                        const mat = new THREE.Matrix4();
-                                        bm.getMatrixAt(batchId, mat);
-                                        return v.setFromMatrixPosition(mat);
-                                    }
-                                };
+                                proxy.name = node.name;
+                                (proxy as any).type = node.type;
+                                (proxy as any).isMesh = node.type === 'Mesh';
                             }
+                            
+                            // 覆盖 getWorldPosition 以返回实例位置
+                            proxy.getWorldPosition = (v: THREE.Vector3) => {
+                                const mat = new THREE.Matrix4();
+                                bm.getMatrixAt(batchId, mat);
+                                mat.premultiply(bm.matrixWorld);
+                                return v.setFromMatrixPosition(mat);
+                            };
+
+                            // 覆盖 getPosition (针对某些 UI 组件)
+                            proxy.position.setFromMatrixPosition(new THREE.Matrix4().getMatrixAt ? new THREE.Matrix4() : new THREE.Matrix4()); // 占位
+
+                            (hit as any).object = proxy;
                         }
                     }
                 }
