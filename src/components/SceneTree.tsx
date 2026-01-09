@@ -59,13 +59,14 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
 };
 
 const flattenTree = (nodes: TreeNode[], result: TreeNode[] = [], parentIsLast: boolean[] = []) => {
+    if (!nodes) return result;
     for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
         node.isLastChild = i === nodes.length - 1;
         node.parentIsLast = [...parentIsLast];
         
         result.push(node);
-        if (node.expanded && node.children.length > 0) {
+        if (node.expanded && node.children && node.children.length > 0) {
             flattenTree(node.children, result, [...parentIsLast, node.isLastChild]);
         }
     }

@@ -133,6 +133,13 @@ const resources: Record<Lang, Record<string, string>> = {
         start_about: "About",
         all_chunks_loaded: "All model chunks loaded",
         loading_chunks: "Chunks",
+        loading_cad_engine: "Loading CAD engine...",
+        parsing_cad_data: "Parsing CAD data...",
+        creating_geometry: "Creating geometry...",
+        error_cad_parse_failed: "Failed to parse CAD file",
+        model_loaded: "Model loaded",
+        confirm_clear_title: "Clear Scene",
+        confirm_clear_msg: "Are you sure you want to clear all models in the scene?",
     },
     zh: {
         home: "首页",
@@ -258,8 +265,15 @@ const resources: Record<Lang, Record<string, string>> = {
         start_exit: "退出应用",
         start_feedback: "反馈问题",
         start_about: "关于软件",
-        all_chunks_loaded: "所有模型块已加载完毕",
-        loading_chunks: "数据块",
+        all_chunks_loaded: "所有模型分片已加载",
+        loading_chunks: "分片",
+        loading_cad_engine: "正在加载 CAD 引擎...",
+        parsing_cad_data: "正在解析 CAD 数据...",
+        creating_geometry: "正在生成几何体...",
+        error_cad_parse_failed: "CAD 文件解析失败",
+        model_loaded: "模型加载完成",
+        confirm_clear_title: "清空场景",
+        confirm_clear_msg: "确定要清空场景中的所有模型吗？",
     }
 };
 

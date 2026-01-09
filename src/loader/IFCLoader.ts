@@ -11,7 +11,7 @@ export const loadIFC = async (
     const ifcApi = new WebIFC.IfcAPI();
     
     // 设置WASM路径，使用相对路径以适配打包后的环境
-    ifcApi.SetWasmPath('./');
+    ifcApi.SetWasmPath('./libs/web-ifc/');
     
     await ifcApi.Init();
     

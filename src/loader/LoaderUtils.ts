@@ -9,6 +9,7 @@ import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import { TFunc, ProgressCallback } from "../theme/Locales";
 import { SceneSettings, AxisOption } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
+import { OCCTLoader } from "./OCCTLoader";
 
 export interface LoadedItem {
     name: string;
@@ -142,6 +143,13 @@ export const loadModelFiles = async (
                         if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
                     });
                     axisSetting = '+y';
+                } else if (ext === 'stp' || ext === 'step' || ext === 'igs' || ext === 'iges') {
+                    const buffer = await file.arrayBuffer();
+                    const loader = new OCCTLoader();
+                    object = await loader.load(buffer, t, (p, msg) => {
+                        updateFileProgress(p, msg);
+                    });
+                    axisSetting = '+z'; // CAD 常用 Z 轴向上
                 }
 
                 if (object) {
