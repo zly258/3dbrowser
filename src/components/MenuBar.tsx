@@ -17,11 +17,8 @@ const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
 
 // --- Components ---
 
-const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolder, handleOpenUrl, handleAbout, sceneMgr }: any) => {
-    if (!isOpen) return null;
-
-    const appMode = sceneMgr?.settings?.appMode || 'local';
-
+const StartMenuItem = ({ icon: Icon, label, onClick, theme }: any) => {
+    const [hover, setHover] = useState(false);
     const itemStyle = {
         display: 'flex',
         alignItems: 'center',
@@ -30,8 +27,30 @@ const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolde
         cursor: 'pointer',
         fontSize: '13px',
         color: theme.text,
+        backgroundColor: hover ? theme.itemHover : 'transparent',
         transition: 'background-color 0.2s',
     };
+
+    return (
+        <div 
+            style={itemStyle} 
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            onClick={() => { 
+                setHover(false);
+                onClick();
+            }}
+        >
+            <Icon size={18} />
+            {label}
+        </div>
+    );
+};
+
+const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolder, handleOpenUrl, handleAbout, sceneMgr }: any) => {
+    if (!isOpen) return null;
+
+    const appMode = sceneMgr?.settings?.appMode || 'local';
 
     return (
         <>
@@ -57,55 +76,15 @@ const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolde
                 </div>
                 {appMode === 'local' ? (
                     <>
-                        <div 
-                            style={itemStyle} 
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                            onClick={() => { handleOpenFiles(); onClose(); }}
-                        >
-                            <IconFile size={18} />
-                            {t('start_open')}
-                        </div>
-                        <div 
-                            style={itemStyle} 
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                            onClick={() => { handleOpenFolder(); onClose(); }}
-                        >
-                            <IconFolder size={18} />
-                            {t('menu_open_folder')}
-                        </div>
+                        <StartMenuItem icon={IconFile} label={t('start_open')} onClick={() => { handleOpenFiles(); onClose(); }} theme={theme} />
+                        <StartMenuItem icon={IconFolder} label={t('menu_open_folder')} onClick={() => { handleOpenFolder(); onClose(); }} theme={theme} />
                     </>
                 ) : (
-                    <div 
-                        style={itemStyle} 
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        onClick={() => { handleOpenUrl(); onClose(); }}
-                    >
-                        <IconLink size={18} />
-                        {t('menu_open_url')}
-                    </div>
+                    <StartMenuItem icon={IconLink} label={t('menu_open_url')} onClick={() => { handleOpenUrl(); onClose(); }} theme={theme} />
                 )}
                 <div style={{ height: '1px', background: theme.border, margin: '8px 0' }} />
-                <div 
-                    style={itemStyle} 
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    onClick={() => { handleAbout(); onClose(); }}
-                >
-                    <IconInfo size={18} />
-                    {t('start_about')}
-                </div>
-                <div 
-                    style={itemStyle} 
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    onClick={() => { if (window.confirm(t('start_exit') + '?')) window.close(); }}
-                >
-                    <IconClose size={18} />
-                    {t('start_exit')}
-                </div>
+                <StartMenuItem icon={IconInfo} label={t('start_about')} onClick={() => { handleAbout(); onClose(); }} theme={theme} />
+                <StartMenuItem icon={IconClose} label={t('start_exit')} onClick={() => { if (window.confirm(t('start_exit') + '?')) window.close(); onClose(); }} theme={theme} />
             </div>
             <style>{`
                 @keyframes slideIn {
@@ -194,7 +173,10 @@ const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: Re
     return (
         <div 
             style={styles.ribbonButtonLarge(active, hover)} 
-            onClick={() => { onClick(); setHover(false); }}
+            onClick={() => { 
+                setHover(false);
+                onClick(); 
+            }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
@@ -217,7 +199,10 @@ const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: R
                 gap: icon ? '6px' : '0',
                 padding: icon ? '2px 8px' : '2px 10px'
             }} 
-            onClick={() => { onClick(); setHover(false); }}
+            onClick={() => { 
+                setHover(false);
+                onClick(); 
+            }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
@@ -236,7 +221,10 @@ const RibbonButtonSmall = ({ icon, onClick, active, styles, title }: { icon?: Re
     return (
         <div 
             style={styles.ribbonButtonSmall(active, hover)} 
-            onClick={() => { onClick(); setHover(false); }} 
+            onClick={() => { 
+                setHover(false);
+                onClick(); 
+            }} 
             title={title}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
@@ -319,7 +307,10 @@ const ClassicSubItem = ({ label, onClick, styles }: { label: string, onClick: ()
     return (
         <div 
             style={styles.classicMenuSubItem(hover)}
-            onClick={() => { onClick(); setHover(false); }}
+            onClick={() => { 
+                setHover(false);
+                onClick(); 
+            }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
