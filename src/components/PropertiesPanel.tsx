@@ -52,12 +52,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{
                             width: '100%',
-                            padding: '6px 10px',
+                            padding: '4px 8px',
                             fontSize: '12px',
                             backgroundColor: theme.bg,
                             color: theme.text,
                             border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
+                            borderRadius: '0px',
                             outline: 'none',
                             boxSizing: 'border-box'
                         }}

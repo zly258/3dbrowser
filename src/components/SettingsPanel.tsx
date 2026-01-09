@@ -24,8 +24,8 @@ interface SettingsModalProps {
 }
 
 const Section = ({ title, children, theme }: { title: string, children?: React.ReactNode, theme: any }) => (
-    <div style={{marginBottom: 16}}>
-        <div style={{fontSize: 11, fontWeight: 'bold', color: theme.accent, marginBottom: 8, borderBottom:`1px solid ${theme.border}`, paddingBottom:4}}>
+    <div style={{marginBottom: 20}}>
+        <div style={{fontSize: 11, fontWeight: '600', color: theme.accent, marginBottom: 10, borderBottom:`1px solid ${theme.border}`, paddingBottom:6, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px'}}>
             {title}
         </div>
         {children}
@@ -33,9 +33,9 @@ const Section = ({ title, children, theme }: { title: string, children?: React.R
 );
 
 const Row = ({ label, children, theme }: { label: string, children?: React.ReactNode, theme: any }) => (
-    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 6, fontSize:12}}>
-        <span style={{color: theme.textMuted}}>{label}</span>
-        <div style={{flex:1, display:'flex', justifyContent:'flex-end', marginLeft: 10}}>
+    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8, fontSize:12, padding: '0 4px'}}>
+        <span style={{color: theme.textMuted, fontWeight: '400'}}>{label}</span>
+        <div style={{flex:1, display:'flex', justifyContent:'flex-end', marginLeft: 12}}>
             {children}
         </div>
     </div>
@@ -52,7 +52,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                     <span>{t("settings")}</span>
                     <div 
                         onClick={onClose} 
-                        style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
+                        style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 0 }}
                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
@@ -63,11 +63,11 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 <div style={{padding: 20, overflowY: 'auto', flex: 1}}>
                     <Section title={t("setting_general")} theme={theme}>
                         <Row label={t("st_theme")} theme={theme}>
-                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:8, border:`1px solid ${theme.border}`}}>
+                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:0, border:`1px solid ${theme.border}`}}>
                                 <button 
                                     onClick={() => setThemeMode('light')}
                                     style={{
-                                        padding:'4px 12px', borderRadius:6, border:'none', fontSize:11, cursor:'pointer',
+                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
                                         background: themeMode === 'light' ? theme.accent : 'transparent',
                                         color: themeMode === 'light' ? 'white' : theme.text
                                     }}
@@ -77,7 +77,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                                 <button 
                                     onClick={() => setThemeMode('dark')}
                                     style={{
-                                        padding:'4px 12px', borderRadius:6, border:'none', fontSize:11, cursor:'pointer',
+                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
                                         background: themeMode === 'dark' ? theme.accent : 'transparent',
                                         color: themeMode === 'dark' ? 'white' : theme.text
                                     }}
@@ -101,7 +101,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
                         <Row label={t("st_lang")} theme={theme}>
                             <select 
-                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
+                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:0}}
                                 value={currentLang}
                                 onChange={(e) => setLang(e.target.value as Lang)}
                             >
@@ -111,7 +111,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                         </Row>
                         <Row label={t("st_font_family")} theme={theme}>
                             <select 
-                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:6}}
+                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:0}}
                                 value={fontFamily}
                                 onChange={(e) => setFontFamily(e.target.value)}
                             >

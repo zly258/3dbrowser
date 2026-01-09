@@ -19,6 +19,7 @@ interface FloatingPanelProps {
 }
 
 export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, children, width = 300, height = 200, x = 100, y = 100, resizable = false, movable = true, styles, theme, storageId }) => {
+    const panelRef = useRef<HTMLDivElement>(null);
     // Initialize position from localStorage or props
     const [pos, setPos] = useState(() => {
         if (storageId) {
@@ -88,9 +89,17 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
                     let newX = startPos.current.x + dx;
                     let newY = startPos.current.y + dy;
 
-                    // Clamping logic: keep panel within window bounds
-                    const maxX = window.innerWidth - size.w;
-                    const maxY = window.innerHeight - size.h;
+                    // Clamping logic: keep panel within parent bounds
+                    let limitW = window.innerWidth;
+                    let limitH = window.innerHeight;
+                    
+                    if (panelRef.current?.parentElement) {
+                        limitW = panelRef.current.parentElement.clientWidth;
+                        limitH = panelRef.current.parentElement.clientHeight;
+                    }
+
+                    const maxX = limitW - size.w;
+                    const maxY = limitH - size.h;
                     
                     newX = Math.max(0, Math.min(newX, maxX));
                     newY = Math.max(0, Math.min(newY, maxY));
@@ -155,17 +164,23 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
     };
 
     return (
-        <div style={{ ...styles.floatingPanel, left: pos.x, top: pos.y, width: size.w, height: size.h }}>
+        <div ref={panelRef} style={{ ...styles.floatingPanel, left: pos.x, top: pos.y, width: size.w, height: size.h }}>
             <div style={{...styles.floatingHeader, cursor: movable ? 'move' : 'default'}} onMouseDown={onHeaderDown}>
                 <span>{title}</span>
                 {onClose && (
                     <div 
                         onClick={(e) => { e.stopPropagation(); onClose(); }} 
-                        style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        style={{ cursor: 'pointer', opacity: 0.8, display:'flex', padding: 4 }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#e81123';
+                            e.currentTarget.style.color = 'white';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = 'inherit';
+                        }}
                     >
-                        <IconClose width={20} height={20} />
+                        <IconClose width={16} height={16} />
                     </div>
                 )}
             </div>
@@ -188,9 +203,8 @@ export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any
             style={{ 
                 ...styles.checkboxContainer, 
                 ...style,
-                backgroundColor: hover ? `${theme.accent}08` : 'transparent',
-                borderRadius: '4px',
-                transition: 'background-color 0.2s'
+                backgroundColor: hover ? theme.highlight : 'transparent',
+                transition: 'background-color 0.1s'
             }} 
             onClick={(e) => { e.preventDefault(); onChange(!checked); }}
             onMouseEnter={() => setHover(true)}
@@ -325,7 +339,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
 
                 <div style={{
                     border: `1px solid ${theme.border}`, 
-                    borderRadius: 4, 
+                    borderRadius: 0, 
                     backgroundColor: theme.bg, 
                     flex: 1, 
                     overflowY: 'auto',
@@ -349,7 +363,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
                                     </span>
                                     <span style={{color: theme.text, fontFamily: 'monospace'}}>{item.val}</span>
                                 </div>
-                                <div style={{cursor: 'pointer', opacity: 0.7, color: theme.danger, padding: 4, borderRadius: 4}} onClick={() => onDelete(item.id)}>
+                                <div style={{cursor: 'pointer', opacity: 0.7, color: theme.danger, padding: 4, borderRadius: 0}} onClick={() => onDelete(item.id)}>
                                     <IconClose width={18} height={18} />
                                 </div>
                             </div>
@@ -433,7 +447,7 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
                     <label key={opt.id} style={{
                         display:'flex', alignItems:'center', padding: '10px', cursor:'pointer', 
                         border: `1px solid ${format === opt.id ? theme.accent : theme.border}`,
-                        borderRadius: 4, marginBottom: 8,
+                        borderRadius: 0, marginBottom: 8,
                         backgroundColor: format === opt.id ? `${theme.accent}15` : 'transparent',
                         transition: 'all 0.2s'
                     }}>

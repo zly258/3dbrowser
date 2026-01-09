@@ -21,7 +21,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
             <div style={{...styles.modalContent, width: '320px', height: 'auto'}}>
                 <div style={styles.floatingHeader}>
                     <span>{title}</span>
-                    <div onClick={onCancel} style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 4 }}>
+                    <div onClick={onCancel} style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 0 }}>
                         <IconClose width={20} height={20} />
                     </div>
                 </div>

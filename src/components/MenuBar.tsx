@@ -17,6 +17,90 @@ const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
 
 // --- Components ---
 
+const StartMenu = ({ isOpen, onClose, t, theme, handleOpenFiles, handleOpenFolder, handleAbout }: any) => {
+    if (!isOpen) return null;
+
+    const itemStyle = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '10px 16px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        color: theme.text,
+        transition: 'background-color 0.2s',
+    };
+
+    return (
+        <>
+            <div 
+                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }} 
+                onClick={onClose} 
+            />
+            <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '240px',
+                backgroundColor: theme.bg,
+                border: `1px solid ${theme.border}`,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                zIndex: 1001,
+                padding: '8px 0',
+                marginTop: '1px',
+                animation: 'slideIn 0.2s ease-out'
+            }}>
+                <div style={{ padding: '8px 16px', fontSize: '11px', color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    {t('start_menu')}
+                </div>
+                <div 
+                    style={itemStyle} 
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onClick={() => { handleOpenFiles(); onClose(); }}
+                >
+                    <IconFile size={18} />
+                    {t('start_open')}
+                </div>
+                <div 
+                    style={itemStyle} 
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onClick={() => { handleOpenFolder(); onClose(); }}
+                >
+                    <IconFolder size={18} />
+                    {t('menu_open_folder')}
+                </div>
+                <div style={{ height: '1px', background: theme.border, margin: '8px 0' }} />
+                <div 
+                    style={itemStyle} 
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onClick={() => { handleAbout(); onClose(); }}
+                >
+                    <IconInfo size={18} />
+                    {t('start_about')}
+                </div>
+                <div 
+                    style={itemStyle} 
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onClick={() => { if (window.confirm(t('start_exit') + '?')) window.close(); }}
+                >
+                    <IconClose size={18} />
+                    {t('start_exit')}
+                </div>
+            </div>
+            <style>{`
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translateY(-10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
+        </>
+    );
+};
+
 const WindowControls = ({ theme }: { theme: any }) => {
     if (!ipcRenderer || isMac) return null; // 非 Electron 环境或 macOS 不显示
 
@@ -103,7 +187,7 @@ const RibbonButtonLarge = ({ icon, label, onClick, active, styles }: { icon?: Re
                     {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 28 }) : icon}
                 </div>
             )}
-            <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '12px' }}>{label}</div>
+            <div style={{ textAlign: 'center', lineHeight: '1.1', fontSize: '12px', marginTop: icon ? '2px' : '0' }}>{label}</div>
         </div>
     );
 };
@@ -112,7 +196,11 @@ const RibbonButtonMedium = ({ icon, label, onClick, active, styles }: { icon?: R
     const [hover, setHover] = useState(false);
     return (
         <div 
-            style={styles.ribbonButtonMedium(active, hover)} 
+            style={{
+                ...styles.ribbonButtonMedium(active, hover),
+                gap: icon ? '6px' : '0',
+                padding: icon ? '2px 6px' : '2px 8px'
+            }} 
             onClick={onClick}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
@@ -147,14 +235,14 @@ const RibbonButtonSmall = ({ icon, onClick, active, styles, title }: { icon?: Re
 };
 
 const RibbonCheckbox = ({ label, checked, onChange, styles, theme }: { label: string, checked: boolean, onChange: (v: boolean) => void, styles: any, theme: any }) => (
-    <div style={{ ...styles.ribbonCheckbox, padding: '0 8px' }}>
+    <div style={styles.ribbonCheckbox}>
         <Checkbox 
             label={label} 
             checked={checked} 
             onChange={onChange} 
             styles={styles} 
             theme={theme} 
-            style={{ padding: 0, fontSize: '12px', gap: '6px' }} 
+            style={{ padding: 0, fontSize: '11px', gap: '6px' }} 
         />
     </div>
 );
@@ -171,6 +259,7 @@ const RibbonPanel = ({ label, children, styles }: { label: string, children: Rea
 export const MenuBar: React.FC<RibbonUIProps> = (props) => {
     const { t, styles, theme } = props;
     const [activeTab, setActiveTab] = useState('home');
+    const [startMenuOpen, setStartMenuOpen] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const folderInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -179,28 +268,39 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
             {/* Title Bar */}
             <div style={styles.ribbonTitleBar}>
                 {isMac && <div style={{ width: '80px' }} />}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', WebkitAppRegion: 'no-drag' as any }}>
-                    <div style={{ 
-                        width: '24px', height: '24px', 
-                        background: theme.accent, 
-                        borderRadius: '4px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'white', fontWeight: '800', fontSize: '10px',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                    }}>3D</div>
-                    <span style={{ 
-                        fontWeight: '600', 
-                        color: theme.text,
-                        letterSpacing: '0.3px',
-                        fontSize: '12px'
-                    }}>3D Browser</span>
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%', WebkitAppRegion: 'no-drag' as any }}>
+                    <div 
+                        style={{ 
+                            display: 'flex', alignItems: 'center', gap: '8px', padding: '0 16px', height: '100%',
+                            borderRight: `1px solid ${theme.border}40`
+                        }}
+                    >
+                        <div style={{ 
+                            width: '24px', height: '24px', 
+                            background: `linear-gradient(135deg, ${theme.accent}, #60a5fa)`, 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: 'white', fontWeight: 'bold', fontSize: '12px',
+                            borderRadius: '6px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                        }}>3D</div>
+                        <span style={{ fontWeight: '700', color: theme.text, fontSize: '14px', letterSpacing: '0.5px' }}>3D BROWSER</span>
+                    </div>
+                </div>
+                <div style={{ 
+                    position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+                    fontSize: '12px', color: theme.textMuted, pointerEvents: 'none',
+                    fontWeight: '500'
+                }}>
+                    {t('app_title')}
                 </div>
                 <WindowControls theme={theme} />
             </div>
 
             {/* Tabs */}
-            <div style={styles.ribbonTabs}>
-                <div style={styles.ribbonTab(activeTab === 'home')} onClick={() => setActiveTab('home')}>{t('home')}</div>
+            <div style={{...styles.ribbonTabs, paddingLeft: '4px'}}>
+                <div style={styles.ribbonTab(activeTab === 'home', true)} onClick={() => setActiveTab('home')}>{t('home')}</div>
+                <div style={styles.ribbonTab(activeTab === 'view')} onClick={() => setActiveTab('home')}>{t('view')}</div>
             </div>
 
             {/* Ribbon Content */}
@@ -238,7 +338,6 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
 
                         <RibbonPanel label={t('interface_display')} styles={styles}>
                             <div style={styles.ribbonPanelRows}>
-                                <RibbonCheckbox label={t('menu_wireframe')} checked={props.wireframe} onChange={props.setWireframe} styles={styles} theme={theme} />
                                 <RibbonCheckbox label={t('interface_outline')} checked={props.showOutline} onChange={props.setShowOutline} styles={styles} theme={theme} />
                                 <RibbonCheckbox label={t('interface_props')} checked={props.showProps} onChange={props.setShowProps} styles={styles} theme={theme} />
                                 <RibbonCheckbox label={t('st_monitor')} checked={props.showStats} onChange={props.setShowStats} styles={styles} theme={theme} />

@@ -99,7 +99,12 @@ const AboutModal = ({ show, onClose, styles, theme, t }: { show: boolean, onClos
             <div style={{ ...styles.modalContent, width: '450px', padding: '0' }}>
                 <div style={{ ...styles.floatingHeader, borderBottom: `1px solid ${theme.border}` }}>
                     <span>{t('about')}</span>
-                    <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={onClose}>
+                    <div 
+                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '50%' }} 
+                        onClick={onClose}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
                         <IconClose size={18} />
                     </div>
                 </div>
@@ -415,7 +420,7 @@ const App = () => {
             if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
                 const files = Array.from(e.dataTransfer.files);
                 // 检查格式支持
-                const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx'];
+                const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3ds', '.dae'];
                 const unsupportedFiles = files.filter(f => {
                     const ext = '.' + f.name.split('.').pop()?.toLowerCase();
                     return !supportedExtensions.includes(ext);
@@ -1117,7 +1122,7 @@ const App = () => {
                             <span>{t("interface_outline")}</span>
                             <div 
                                 onClick={() => setShowOutline(false)} 
-                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 2 }}
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: '50%' }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
@@ -1170,7 +1175,7 @@ const App = () => {
                             backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
                             color: toast.type === 'info' ? theme.text : '#fff',
                             padding: '12px 24px',
-                            borderRadius: '2px',
+                            borderRadius: '24px',
                             boxShadow: `0 8px 32px rgba(0,0,0,0.25)`, // 增强阴影
                             zIndex: 10000,
                             display: 'flex',
@@ -1251,7 +1256,7 @@ const App = () => {
                             <span>{t("interface_props")}</span>
                             <div 
                                 onClick={() => setShowProps(false)} 
-                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 2 }}
+                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: '50%' }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
@@ -1323,7 +1328,7 @@ const App = () => {
                             <span>{errorState.title}</span>
                             <div 
                                 onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))} 
-                                style={{ cursor: 'pointer', display: 'flex', padding: 2, borderRadius: 4 }}
+                                style={{ cursor: 'pointer', display: 'flex', padding: 2, borderRadius: '50%' }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
@@ -1338,7 +1343,7 @@ const App = () => {
                                     padding: '12px', 
                                     backgroundColor: theme.bg, 
                                     border: `1px solid ${theme.border}`,
-                                    borderRadius: '6px',
+                                    borderRadius: '0px',
                                     maxHeight: '180px',
                                     overflowY: 'auto',
                                     whiteSpace: 'pre-wrap',

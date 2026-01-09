@@ -157,12 +157,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                     onChange={(e) => setSearchQuery(e.target.value)}
                     style={{
                         width: '100%',
-                        padding: '6px 10px',
+                        padding: '4px 8px',
                         fontSize: '12px',
                         backgroundColor: theme.bg,
                         color: theme.text,
                         border: `1px solid ${theme.border}`,
-                        borderRadius: '4px',
+                        borderRadius: '0px',
                         outline: 'none',
                         boxSizing: 'border-box'
                     }}
@@ -191,10 +191,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                                 onChange={(val: boolean) => onToggleVisibility(node.uuid, val)} 
                                 styles={styles} 
                                 theme={theme}
-                                style={{ marginRight: 8, padding: 0 }}
+                                style={{ marginRight: 6, padding: 0, flexShrink: 0 }}
                             />
                             
-                            <div style={styles.nodeLabel}>{node.name}</div>
+                            <div style={{ ...styles.nodeLabel, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
 
                             {/* Delete button for file nodes */}
                             {node.isFileNode && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
