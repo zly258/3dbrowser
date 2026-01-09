@@ -6,7 +6,7 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
-import { TFunc } from "../theme/Locales";
+import { TFunc, ProgressCallback } from "../theme/Locales";
 import { SceneSettings, AxisOption } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
 
@@ -16,8 +16,6 @@ export interface LoadedItem {
     type: "MODEL" | "TILES";
     object?: THREE.Object3D;
 }
-
-export type ProgressCallback = (percent: number, msg?: string) => void;
 
 // 辅助函数：纠正上轴到Y轴向上
 const applyUpAxisCorrection = (object: THREE.Object3D, sourceAxis: AxisOption) => {

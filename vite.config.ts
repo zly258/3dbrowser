@@ -26,13 +26,21 @@ export default defineConfig(({ mode }) => {
       build: {
         target: 'esnext',
         minify: 'terser',
+        lib: {
+          entry: path.resolve(__dirname, 'src/index.ts'),
+          name: 'ThreeDBrowser',
+          fileName: (format) => `3dbrowser.${format}.js`,
+          formats: ['es', 'umd']
+        },
         rollupOptions: {
+          external: ['react', 'react-dom', 'three'],
           output: {
-            manualChunks: {
-              'vendor-three': ['three'],
-              'vendor-ifc': ['web-ifc'],
-              'vendor-ui': ['react', 'react-dom', 'lucide-react'],
-            }
+            globals: {
+              react: 'React',
+              'react-dom': 'ReactDOM',
+              three: 'THREE'
+            },
+            manualChunks: undefined // Library mode doesn't support manualChunks
           }
         }
       },

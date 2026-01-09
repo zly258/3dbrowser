@@ -27,6 +27,8 @@ export interface SceneSettings {
     dirInt: number;
     bgColor: string;
     enableInstancing: boolean; // 是否开启实例化 (BatchedMesh/InstancedMesh)
+    viewCubeSize?: number;
+    appMode?: 'local' | 'remote';
 }
 
 export interface StructureTreeNode {
@@ -98,6 +100,7 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         enableInstancing: true,
+        viewCubeSize: 100,
     };
 
     // 资源
@@ -937,11 +940,26 @@ export class SceneManager {
         (renderer.group as any).name = "3D Tileset";
 
         // 添加到结构树
+        const buildTilesTree = (tile: any, depth = 0): StructureTreeNode => {
+            const node: StructureTreeNode = {
+                id: tile.content?.uuid || THREE.MathUtils.generateUUID(),
+                name: tile.content?.name || `Tile_${tile.level}_${tile.x || 0}_${tile.y || 0}`,
+                type: 'Group',
+                children: []
+            };
+            
+            if (tile.children) {
+                node.children = tile.children.map((c: any) => buildTilesTree(c, depth + 1));
+            }
+            
+            return node;
+        };
+
         const tilesNode: StructureTreeNode = {
             id: (renderer.group as any).uuid,
             name: "3D Tileset",
             type: 'Group',
-            children: []
+            children: (renderer as any).tileset ? [buildTilesTree((renderer as any).tileset.root)] : []
         };
         if (!this.structureRoot.children) this.structureRoot.children = [];
         this.structureRoot.children.push(tilesNode);

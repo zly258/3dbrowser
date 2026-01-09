@@ -91,6 +91,7 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         WebkitAppRegion: "drag" as any,
         zIndex: 1000,
         fontFamily,
+        boxShadow: "none",
     },
     ribbonTitleBar: {
         height: "32px", 
@@ -219,19 +220,18 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         backgroundColor: hover ? theme.itemHover : "transparent",
     }),
 
-    ribbonButtonLarge: (active: boolean, hover: boolean = false) => ({
+    ribbonButtonLarge: (active: boolean = false, hover: boolean = false) => ({
         display: "flex",
         flexDirection: "column" as const,
         alignItems: "center",
         justifyContent: "center",
-        minWidth: "52px", 
-        padding: "2px 6px",
+        padding: "0 8px", 
         height: "calc(100% - 4px)",
         gap: "2px", 
         cursor: "pointer",
         borderRadius: "4px",
-        backgroundColor: active ? theme.highlight : (hover ? "rgba(128, 128, 128, 0.1)" : "transparent"),
-        border: active ? `1px solid ${theme.accent}40` : "1px solid transparent",
+        backgroundColor: active ? theme.highlight : (hover ? theme.itemHover : "transparent"),
+        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}40` : "1px solid transparent"),
         transition: "all 0.1s",
     }),
     ribbonButtonMedium: (active: boolean, hover: boolean = false) => ({
@@ -244,8 +244,8 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         width: "auto",
         minWidth: "32px", 
         height: "22px", 
-        backgroundColor: active ? theme.highlight : (hover ? "rgba(128, 128, 128, 0.1)" : "transparent"),
-        border: active ? `1px solid ${theme.accent}40` : "1px solid transparent",
+        backgroundColor: active ? theme.highlight : (hover ? theme.itemHover : "transparent"),
+        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}40` : "1px solid transparent"),
         transition: "all 0.1s",
         fontSize: "11px", 
     }),

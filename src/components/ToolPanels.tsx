@@ -314,7 +314,7 @@ const DualRangeSlider = ({ min, max, value, onChange, theme, disabled }: { min: 
 
 export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory, onDelete, onClear, onClose, styles, theme }: any) => {
     return (
-        <FloatingPanel title={t("measure_title")} onClose={onClose} width={300} height={450} resizable={false} styles={styles} theme={theme} storageId="tool_measure">
+        <FloatingPanel title={t("measure_title")} onClose={onClose} width={300} height={450} resizable={true} styles={styles} theme={theme} storageId="tool_measure">
             <div style={{padding: 12, display: 'flex', flexDirection: 'column', height: '100%'}}>
                 <div style={{marginBottom: 12, display:'flex', gap:8}}>
                     <button style={{...styles.btn, flex:1, ...(measureType === 'dist' ? styles.btnActive : {})}} 
@@ -466,5 +466,3 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
         </FloatingPanel>
     );
 };
-
-

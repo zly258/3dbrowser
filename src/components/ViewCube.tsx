@@ -18,11 +18,13 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
     const mouse = useRef(new THREE.Vector2());
     const hoveredPart = useRef<THREE.Mesh | null>(null);
 
+    const cubeSize = sceneMgr?.settings.viewCubeSize || 100;
+
     useEffect(() => {
         if (!canvasRef.current || !containerRef.current) return;
 
-        const width = 180;
-        const height = 180;
+        const width = cubeSize;
+        const height = cubeSize;
 
         // Renderer
         const renderer = new THREE.WebGLRenderer({
@@ -132,7 +134,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
         // Faces (SceneManager: Z up, Y- front)
         createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, "前");
         createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, offset, 0), "back", faceColor, "后", 180);
-        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, offset), "top", faceColor, "顶", 180);
+        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, offset), "top", faceColor, "顶", 90);
         createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, -offset), "bottom", faceColor, "底");
         createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(-offset, 0, 0), "left", faceColor, "左", 90);
         createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(offset, 0, 0), "right", faceColor, "右", 270);
@@ -193,7 +195,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
                 }
             });
         };
-    }, [sceneMgr]);
+    }, [sceneMgr, cubeSize]);
 
     const handleMouseMove = (event: React.MouseEvent) => {
         if (!canvasRef.current || !sceneRef.current || !cameraRef.current || !cubeRef.current) return;
@@ -283,8 +285,8 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
                 position: "absolute",
                 top: "10px",
                 right: "10px",
-                width: "180px",
-                height: "180px",
+                width: `${cubeSize}px`,
+                height: `${cubeSize}px`,
                 zIndex: 100,
                 pointerEvents: "auto",
                 borderRadius: "8px",

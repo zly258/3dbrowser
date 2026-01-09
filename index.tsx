@@ -62,15 +62,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                     <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6' }}>
                         抱歉，程序运行过程中遇到了未预期的错误。您可以尝试重新加载页面，或联系开发人员。
                     </p>
-                    {this.state.error && (
-                        <div style={{
-                            backgroundColor: 'rgba(255,0,0,0.1)', padding: '15px', borderRadius: '8px',
-                            fontSize: '12px', color: theme.danger, textAlign: 'left', width: '100%', maxWidth: '800px',
-                            overflow: 'auto', maxHeight: '200px', border: `1px solid ${theme.danger}44`
-                        }}>
-                            <pre style={{ margin: 0 }}>{this.state.error.stack}</pre>
-                        </div>
-                    )}
                     <button 
                         onClick={() => window.location.reload()}
                         style={{
@@ -128,8 +119,8 @@ const AboutModal = ({ show, onClose, styles, theme, t }: { show: boolean, onClos
                         background: `linear-gradient(to right, transparent, ${theme.border}, transparent)` 
                     }} />
                     <div style={{ fontSize: '13px', lineHeight: '1.6', color: theme.text, textAlign: 'center' }}>
-                        一个基于 WebGL 和 Three.js 的高性能 3D 模型浏览器。<br/>
-                        支持多种格式加载、测量、剖切及场景管理。
+                        一个基于 Three.js 的高性能 3D 模型浏览器。<br/>
+                        支持多种三维格式加载。
                     </div>
                     <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: '10px' }}>
                         © 2026 zhangly1403@163.com. All rights reserved.
@@ -272,6 +263,8 @@ const App = () => {
                     dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
                     bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
                     enableInstancing: typeof parsed.enableInstancing === 'boolean' ? parsed.enableInstancing : true,
+                    viewCubeSize: typeof parsed.viewCubeSize === 'number' ? parsed.viewCubeSize : 100,
+                    appMode: (parsed.appMode === 'local' || parsed.appMode === 'remote') ? parsed.appMode : 'local',
                 };
             }
         } catch (e) { console.error("Failed to load sceneSettings", e); }
@@ -280,6 +273,8 @@ const App = () => {
             dirInt: 1.0,
             bgColor: theme.canvasBg,
             enableInstancing: true,
+            viewCubeSize: 100,
+            appMode: 'local',
         };
     });
 
@@ -327,8 +322,7 @@ const App = () => {
             setErrorState({
                 isOpen: true,
                 title: t("failed"),
-                message: event.message || "An unexpected error occurred",
-                detail: event.error?.stack
+                message: event.message || "An unexpected error occurred"
             });
         };
         const handleRejection = (event: PromiseRejectionEvent) => {
@@ -336,8 +330,7 @@ const App = () => {
             setErrorState({
                 isOpen: true,
                 title: t("failed"),
-                message: event.reason?.message || String(event.reason) || "A promise was rejected without reason",
-                detail: event.reason?.stack
+                message: event.reason?.message || String(event.reason) || "A promise was rejected without reason"
             });
         };
         window.addEventListener('error', handleError);
@@ -938,6 +931,40 @@ const App = () => {
         e.target.value = ""; 
     };
 
+    const handleOpenUrl = async () => {
+        const url = window.prompt(t("menu_open_url"), "http://");
+        if (!url || !url.startsWith("http")) return;
+        
+        setLoading(true);
+        setStatus(t("processing") + "...");
+        try {
+            if (url.toLowerCase().endsWith('.json') || url.includes('tileset')) {
+                // Assume 3D Tiles
+                if (sceneMgr.current) {
+                    sceneMgr.current.addTileset(url, (p, msg) => {
+                        setProgress(p);
+                        if(msg) setStatus(cleanStatus(msg));
+                    });
+                    updateTree();
+                    setStatus(t("tileset_loaded"));
+                    setTimeout(() => sceneMgr.current?.fitView(), 500);
+                }
+            } else {
+                // Assume other model formats via loadModelFiles (needs to support URL)
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const fileName = url.substring(url.lastIndexOf('/') + 1) || "model";
+                const file = new File([blob], fileName);
+                await processFiles([file]);
+            }
+        } catch (err) {
+            console.error(err);
+            setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1144,6 +1171,7 @@ const App = () => {
                 menuMode={menuMode}
                 handleOpenFiles={handleOpenFiles}
                 handleOpenFolder={handleOpenFolder}
+                handleOpenUrl={handleOpenUrl}
                 handleView={handleView}
                 handleClear={handleClear}
                 pickEnabled={pickEnabled}
@@ -1434,23 +1462,6 @@ const App = () => {
                         </div>
                         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div style={{ fontWeight: '600', fontSize: '15px', color: theme.text }}>{errorState.message}</div>
-                            {errorState.detail && (
-                                <div style={{ 
-                                    fontSize: '11px', 
-                                    padding: '12px', 
-                                    backgroundColor: theme.bg, 
-                                    border: `1px solid ${theme.border}`,
-                                    borderRadius: '0px',
-                                    maxHeight: '180px',
-                                    overflowY: 'auto',
-                                    whiteSpace: 'pre-wrap',
-                                    fontFamily: 'monospace',
-                                    opacity: 0.8,
-                                    color: theme.text
-                                }}>
-                                    {errorState.detail}
-                                </div>
-                            )}
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
                                 <button 
                                     style={{ ...styles.btn, backgroundColor: theme.accent, color: 'white', borderColor: theme.accent, padding: '8px 24px' }}

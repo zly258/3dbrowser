@@ -193,24 +193,24 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                                 onMouseLeave={() => setHoveredUuid(null)}
                         >
                             {/* Connection Lines */}
-                            <div style={{ display: 'flex', height: '100%', alignItems: 'center', flexShrink: 0 }}>
-                                {node.parentIsLast?.map((isLast, i) => (
-                                    <div key={i} style={{ 
+                            {node.depth > 0 && (
+                                <div style={{ display: 'flex', height: '100%', alignItems: 'center', flexShrink: 0 }}>
+                                    {node.parentIsLast?.map((isLast, i) => (
+                                        <div key={i} style={{ 
+                                            width: 16, 
+                                            height: '100%', 
+                                            position: 'relative',
+                                            borderLeft: isLast ? 'none' : `1px solid ${theme.border}60` 
+                                        }} />
+                                    ))}
+                                    <div style={{ 
                                         width: 16, 
                                         height: '100%', 
                                         position: 'relative',
-                                        borderLeft: isLast ? 'none' : `1px solid ${theme.border}60` 
-                                    }} />
-                                ))}
-                                <div style={{ 
-                                    width: 16, 
-                                    height: '100%', 
-                                    position: 'relative',
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                }}>
-                                    {/* Vertical line segment */}
-                                    {node.depth > 0 && (
+                                        display: 'flex',
+                                        alignItems: 'center'
+                                    }}>
+                                        {/* Vertical line segment */}
                                         <div style={{
                                             position: 'absolute',
                                             left: 0,
@@ -218,18 +218,16 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                                             bottom: node.isLastChild ? '50%' : 0,
                                             borderLeft: `1px solid ${theme.border}60`
                                         }} />
-                                    )}
-                                    {/* Horizontal line segment */}
-                                    {node.depth > 0 && (
+                                        {/* Horizontal line segment */}
                                         <div style={{
                                             position: 'absolute',
                                             left: 0,
                                             width: 8,
                                             borderTop: `1px solid ${theme.border}60`
                                         }} />
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div style={styles.expander} onClick={(e) => { e.stopPropagation(); toggleNode(node.uuid); }}>
                                 {node.children.length > 0 ? (

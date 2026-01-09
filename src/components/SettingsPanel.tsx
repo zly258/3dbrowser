@@ -127,6 +127,31 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                             </div>
                         </Row>
 
+                        <Row label={t("st_app_mode")} theme={theme}>
+                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:0, border:`1px solid ${theme.border}`}}>
+                                <button 
+                                    onClick={() => onUpdate({ appMode: 'local' })}
+                                    style={{
+                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
+                                        background: (settings.appMode || 'local') === 'local' ? theme.accent : 'transparent',
+                                        color: (settings.appMode || 'local') === 'local' ? 'white' : theme.text
+                                    }}
+                                >
+                                    {t("mode_local")}
+                                </button>
+                                <button 
+                                    onClick={() => onUpdate({ appMode: 'remote' })}
+                                    style={{
+                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
+                                        background: settings.appMode === 'remote' ? theme.accent : 'transparent',
+                                        color: settings.appMode === 'remote' ? 'white' : theme.text
+                                    }}
+                                >
+                                    {t("mode_remote")}
+                                </button>
+                            </div>
+                        </Row>
+
                         <Row label={t("st_lang")} theme={theme}>
                             <select 
                                 style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:0}}
@@ -155,6 +180,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                         </Row>
                         <Row label={t("st_monitor")} theme={theme}>
                              <input type="checkbox" checked={showStats} onChange={(e) => setShowStats(e.target.checked)} style={{accentColor: theme.accent}} />
+                        </Row>
+                    </Section>
+
+                    <Section title={t("st_viewport")} theme={theme}>
+                        <Row label={`${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`} theme={theme}>
+                            <input type="range" min="80" max="300" step="10" 
+                                value={settings.viewCubeSize || 100} 
+                                onChange={(e) => onUpdate({viewCubeSize: parseInt(e.target.value)})} 
+                                style={styles.rangeSlider}/>
                         </Row>
                     </Section>
 
