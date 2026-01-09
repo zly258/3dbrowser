@@ -314,6 +314,12 @@ const App = () => {
     // Toast Message State
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
     
+    // 状态清理工具
+    const cleanStatus = (msg: string) => {
+        if (!msg) return "";
+        return msg.replace(/:\s*\d+%/g, '').replace(/\(\d+%\)/g, '').replace(/\d+%/g, '').trim();
+    };
+    
     // 全局错误捕获
     useEffect(() => {
         const handleError = (event: ErrorEvent) => {
@@ -878,7 +884,7 @@ const App = () => {
                 if (sceneMgr.current) {
                     await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
                         setProgress(p);
-                        if(msg) setStatus(msg);
+                        if(msg) setStatus(cleanStatus(msg));
                     });
                 }
             }
@@ -889,7 +895,7 @@ const App = () => {
                     otherFiles, 
                     (p, msg) => {
                         setProgress(p);
-                        if(msg) setStatus(msg);
+                        if(msg) setStatus(cleanStatus(msg));
                     }, 
                     t,
                     sceneSettings // Pass settings
@@ -954,14 +960,14 @@ const App = () => {
                 e.target.files, 
                 (p, msg) => {
                     setProgress(p);
-                    if(msg) setStatus(msg);
+                    if(msg) setStatus(cleanStatus(msg));
                 }, 
                 t
             );
             if (url) {
                 sceneMgr.current.addTileset(url, (p, msg) => {
                     setProgress(p);
-                    if(msg) setStatus(msg);
+                    if(msg) setStatus(cleanStatus(msg));
                 });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
@@ -1031,13 +1037,13 @@ const App = () => {
                     // @ts-ignore
                     const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
                     const filesMap = await convertLMBTo3DTiles(exportGroup, (msg) => {
-                        setStatus(msg);
                         if (msg.includes('%')) {
                             const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
                             setProgress(p);
                         }
+                        setStatus(cleanStatus(msg));
                     });
-                    setStatus(t("writing"));
+                setStatus(t("writing"));
                     let writeCount = 0;
                     for (const [name, b] of filesMap) {
                         // @ts-ignore
@@ -1054,7 +1060,7 @@ const App = () => {
                 } else if (format === 'glb') {
                     blob = await exportGLB(exportGroup);
                 } else if (format === 'lmb') {
-                    blob = await exportLMB(exportGroup, (msg) => setStatus(msg));
+                    blob = await exportLMB(exportGroup, (msg) => setStatus(cleanStatus(msg)));
                 }
 
                 if (blob) {
@@ -1211,7 +1217,7 @@ const App = () => {
                             transform: 'translateX(-50%)',
                             backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
                             color: toast.type === 'info' ? theme.text : '#fff',
-                            padding: '12px 24px',
+                            padding: '12px 20px 12px 24px',
                             borderRadius: '4px', // 稍微增加一点圆角，更现代
                             boxShadow: `0 8px 24px rgba(0,0,0,0.25)`,
                             zIndex: 10000,
@@ -1222,7 +1228,22 @@ const App = () => {
                             borderLeft: `4px solid rgba(255,255,255,0.4)`, 
                             animation: 'fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                         }}>
-                            {toast.message}
+                            <span>{toast.message}</span>
+                            <div 
+                                onClick={() => setToast(null)}
+                                style={{ 
+                                    cursor: 'pointer', 
+                                    padding: '4px', 
+                                    display: 'flex', 
+                                    borderRadius: '50%',
+                                    marginLeft: '8px',
+                                    backgroundColor: 'rgba(255,255,255,0.1)'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                            >
+                                <IconClose size={14} />
+                            </div>
                         </div>
                     )}
 

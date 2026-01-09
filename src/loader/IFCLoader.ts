@@ -30,7 +30,7 @@ export const loadIFC = async (
                 if (event.total > 0) {
                     const downloadPercent = (event.loaded / event.total) * 100;
                     // 下载阶段显示实际下载进度，不限制在40%
-                    onProgress(downloadPercent, `${t("reading")}... ${Math.round(downloadPercent)}%`);
+                    onProgress(downloadPercent, `${t("reading")}...`);
                 } else {
                     // 如果无法获取总量，使用递增方式
                     staticDownloadCounter = (staticDownloadCounter || 0) + 5;
@@ -93,6 +93,27 @@ export const loadIFC = async (
     rootGroup.userData.ifcAPI = ifcApi;
     rootGroup.userData.modelID = modelID;
     
+    // --- 图层解析 ---
+    const layerMap = new Map<number, string>();
+    try {
+        const layerType = ifcApi.GetTypeCodeFromName('IFCPRESENTATIONLAYERASSIGNMENT');
+        const layers = ifcApi.GetLineIDsWithType(modelID, layerType);
+        for (let i = 0; i < layers.size(); i++) {
+            const id = layers.get(i);
+            const layer = ifcApi.GetLine(modelID, id);
+            const layerName = layer.Name?.value || `Layer_${id}`;
+            if (layer.AssignedItems && Array.isArray(layer.AssignedItems)) {
+                layer.AssignedItems.forEach((itemRef: any) => {
+                    const itemID = itemRef.value;
+                    layerMap.set(itemID, layerName);
+                });
+            }
+        }
+    } catch (e) {
+        console.warn("无法构建图层映射表", e);
+    }
+    rootGroup.userData.layerMap = layerMap;
+
     // --- 空间结构解析优化 ---
     const nodesMap = new Map<number, THREE.Object3D>();
     nodesMap.set(0, rootGroup);
@@ -602,6 +623,11 @@ export const loadIFC = async (
             mesh.matrixWorldNeedsUpdate = true; 
             
             mesh.userData.expressID = expressID; 
+            
+            // 附加图层信息
+            if (layerMap.has(expressID)) {
+                mesh.userData.layer = layerMap.get(expressID);
+            }
             
             // 优化构件名称：获取真实的 IFC 类型作为名称前缀
             try {

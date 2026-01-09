@@ -61,7 +61,7 @@ export class SceneManager {
     // 结构树
     structureRoot: StructureTreeNode = { id: 'root', name: 'Root', type: 'Group', children: [] };
     private componentCounter = 0;
-    private nodeMap = new Map<string, StructureTreeNode>();
+    private nodeMap = new Map<string, StructureTreeNode[]>();
 
     // 引用
     tilesRenderer: TilesRenderer | null = null;
@@ -453,13 +453,128 @@ export class SceneManager {
             id: object.uuid,
             name: object.name || `Object_${object.id}`,
             type: (object as any).isMesh ? 'Mesh' : 'Group',
-            children: []
+            children: [],
+            userData: { ...object.userData }
         };
-        this.nodeMap.set(object.uuid, node);
+        
+        // 将节点添加到映射表（支持一个 ID 对应多个节点）
+        if (!this.nodeMap.has(object.uuid)) this.nodeMap.set(object.uuid, []);
+        this.nodeMap.get(object.uuid)!.push(node);
+
         for (const child of object.children) {
             node.children!.push(this.buildSceneGraph(child));
         }
         return node;
+    }
+
+    /**
+     * 构建基于 IFC 图层和空间结构的复合树
+     */
+    private buildIFCStructure(object: THREE.Object3D): StructureTreeNode {
+        const root: StructureTreeNode = {
+            id: `ifc_root_${object.uuid}`,
+            name: object.name || 'IFC Model',
+            type: 'Group',
+            children: [],
+            userData: { originalUuid: object.uuid }
+        };
+        
+        if (!this.nodeMap.has(root.id)) this.nodeMap.set(root.id, []);
+        this.nodeMap.get(root.id)!.push(root);
+
+        // 1. 空间结构分支
+        const spatialRoot: StructureTreeNode = {
+            id: `spatial_${object.uuid}`,
+            name: '空间结构 (Spatial Structure)',
+            type: 'Group',
+            children: [],
+            userData: { originalUuid: object.uuid }
+        };
+        
+        if (!this.nodeMap.has(spatialRoot.id)) this.nodeMap.set(spatialRoot.id, []);
+        this.nodeMap.get(spatialRoot.id)!.push(spatialRoot);
+        
+        // 递归构建原始空间结构
+        const buildSpatialRecursive = (obj: THREE.Object3D): StructureTreeNode => {
+            const node: StructureTreeNode = {
+                id: obj.uuid,
+                name: obj.name || `Object_${obj.id}`,
+                type: (obj as any).isMesh ? 'Mesh' : 'Group',
+                children: [],
+                bimId: obj.userData?.expressID,
+                userData: { ...obj.userData }
+            };
+            
+            if (!this.nodeMap.has(obj.uuid)) this.nodeMap.set(obj.uuid, []);
+            this.nodeMap.get(obj.uuid)!.push(node);
+
+            for (const child of obj.children) {
+                node.children!.push(buildSpatialRecursive(child));
+            }
+            return node;
+        };
+        
+        spatialRoot.children = [buildSpatialRecursive(object)];
+        root.children!.push(spatialRoot);
+
+        // 2. 图层结构分支
+        const layerMap = object.userData.layerMap as Map<number, string> | undefined;
+        if (layerMap && layerMap.size > 0) {
+            const layerRoot: StructureTreeNode = {
+                id: `layers_${object.uuid}`,
+                name: '图层结构 (Layers)',
+                type: 'Group',
+                children: [],
+                userData: { originalUuid: object.uuid }
+            };
+            
+            if (!this.nodeMap.has(layerRoot.id)) this.nodeMap.set(layerRoot.id, []);
+            this.nodeMap.get(layerRoot.id)!.push(layerRoot);
+
+            const layers = new Map<string, StructureTreeNode>();
+            
+            // 遍历所有网格并按图层分组
+            object.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh && child.userData.expressID !== undefined) {
+                    const expressID = child.userData.expressID;
+                    const layerName = layerMap.get(expressID) || '未分类图层';
+                    
+                    if (!layers.has(layerName)) {
+                        const lNode: StructureTreeNode = {
+                            id: `layer_${layerName}_${object.uuid}`,
+                            name: layerName,
+                            type: 'Group',
+                            children: [],
+                            userData: { originalUuid: object.uuid }
+                        };
+                        layers.set(layerName, lNode);
+                        
+                        if (!this.nodeMap.has(lNode.id)) this.nodeMap.set(lNode.id, []);
+                        this.nodeMap.get(lNode.id)!.push(lNode);
+                    }
+                    
+                    const layerNode = layers.get(layerName)!;
+                    const node: StructureTreeNode = {
+                        id: child.uuid,
+                        name: child.name,
+                        type: 'Mesh',
+                        bimId: expressID,
+                        userData: { ...child.userData }
+                    };
+                    layerNode.children!.push(node);
+                    
+                    if (!this.nodeMap.has(child.uuid)) this.nodeMap.set(child.uuid, []);
+                    this.nodeMap.get(child.uuid)!.push(node);
+                }
+            });
+
+            layerRoot.children = Array.from(layers.values());
+            if (layerRoot.children.length > 0) {
+                root.children!.push(layerRoot);
+            }
+        }
+
+        return root;
     }
 
     async addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
@@ -480,7 +595,12 @@ export class SceneManager {
         // 1. 构建场景树结构
         if (onProgress) onProgress(5, "正在构建场景树...");
         
-        let modelRoot = this.buildSceneGraph(object);
+        let modelRoot: StructureTreeNode;
+        if (object.userData.isIFC) {
+            modelRoot = this.buildIFCStructure(object);
+        } else {
+            modelRoot = this.buildSceneGraph(object);
+        }
         
         // 记录原始模型 UUID，用于后续删除和分块匹配
         const markOriginalUuid = (node: StructureTreeNode) => {
@@ -571,12 +691,14 @@ export class SceneManager {
                 
                 // 为每个构件分配 bimId 和 chunkId
                 node.items.forEach(item => {
-                    const treeNode = this.nodeMap.get(item.uuid);
-                    if (treeNode) {
-                        if (treeNode.bimId === undefined) {
-                            treeNode.bimId = ++this.componentCounter;
-                        }
-                        treeNode.chunkId = chunkId;
+                    const treeNodes = this.nodeMap.get(item.uuid);
+                    if (treeNodes) {
+                        treeNodes.forEach(treeNode => {
+                            if (treeNode.bimId === undefined) {
+                                treeNode.bimId = ++this.componentCounter;
+                            }
+                            treeNode.chunkId = chunkId;
+                        });
                     }
                 });
 
@@ -621,9 +743,9 @@ export class SceneManager {
     }
 
     removeObject(uuid: string) {
-        const node = this.nodeMap.get(uuid);
+        const nodes = this.nodeMap.get(uuid);
         // 尝试获取该节点所属的原始模型 UUID (用于 NBIM 分块匹配)
-        const originalUuid = node?.userData?.originalUuid || uuid;
+        const originalUuid = nodes?.[0]?.userData?.originalUuid || uuid;
 
         // 1. 彻底移除相关的优化组 (针对 NBIM / 实例化分块)
         // 注意：可能有多个优化组（对应不同的分块）
@@ -686,9 +808,13 @@ export class SceneManager {
             if (o instanceof THREE.Object3D && o.userData.expressID !== undefined) {
                 this.componentMap.delete(o.userData.expressID);
             }
-            const nodeInfo = this.nodeMap.get(id);
-            if (nodeInfo && nodeInfo.bimId !== undefined) {
-                this.componentMap.delete(nodeInfo.bimId);
+            const nodeInfos = this.nodeMap.get(id);
+            if (nodeInfos) {
+                nodeInfos.forEach(nodeInfo => {
+                    if (nodeInfo.bimId !== undefined) {
+                        this.componentMap.delete(nodeInfo.bimId);
+                    }
+                });
             }
 
             this.nodeMap.delete(id);
@@ -697,12 +823,12 @@ export class SceneManager {
         if (obj) {
             obj.traverse(processRemoval);
             obj.removeFromParent();
-        } else if (node) {
+        } else if (nodes && nodes.length > 0) {
             const traverseNode = (n: StructureTreeNode) => {
                 processRemoval(n);
                 if (n.children) n.children.forEach(traverseNode);
             };
-            traverseNode(node);
+            traverseNode(nodes[0]);
         }
 
         // 3. 移除关联的分块和鬼影
@@ -825,7 +951,7 @@ export class SceneManager {
         };
         if (!this.structureRoot.children) this.structureRoot.children = [];
         this.structureRoot.children.push(tilesNode);
-        this.nodeMap.set(tilesNode.id, tilesNode);
+        this.nodeMap.set(tilesNode.id, [tilesNode]);
         
         // 如需，应用当前设置
         this.updateSettings(this.settings);
@@ -952,9 +1078,10 @@ export class SceneManager {
         // 写入实例
         dv.setUint32(offset, items.length, true); offset += 4;
         for (const item of items) {
-            const treeNode = this.nodeMap.get(item.uuid);
-            const id = treeNode?.bimId || 0;
-            const typeStr = this.guessType(treeNode?.name || "");
+            const treeNodes = this.nodeMap.get(item.uuid);
+            const firstNode = treeNodes?.[0];
+            const id = firstNode?.bimId || 0;
+            const typeStr = this.guessType(firstNode?.name || "");
             dv.setUint32(offset, id, true); offset += 4;
             dv.setUint32(offset, this.getTypeIndex(typeStr), true); offset += 4;
             dv.setUint32(offset, item.color, true); offset += 4;
@@ -1175,7 +1302,8 @@ export class SceneManager {
             const traverse = (node: StructureTreeNode) => {
                 if (!node.userData) node.userData = {};
                 node.userData.originalUuid = rootId;
-                this.nodeMap.set(node.id, node);
+                if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
+                this.nodeMap.get(node.id)!.push(node);
                 if (node.children) node.children.forEach(traverse);
             };
             traverse(modelRoot);
@@ -1297,21 +1425,29 @@ export class SceneManager {
     }
 
     setObjectVisibility(uuid: string, visible: boolean) {
-        // 更新结构树中的状态
-        const node = this.nodeMap.get(uuid);
-        if (node) {
-            const setVisibleRecursive = (n: StructureTreeNode) => {
-                n.visible = visible;
-                if (n.children) n.children.forEach(setVisibleRecursive);
-            };
-            setVisibleRecursive(node);
+        // 更新结构树中的状态 (可能存在多个节点指向同一个 UUID)
+        const nodes = this.nodeMap.get(uuid);
+        if (nodes) {
+            nodes.forEach(node => {
+                const setVisibleRecursive = (n: StructureTreeNode) => {
+                    n.visible = visible;
+                    if (n.children) n.children.forEach(setVisibleRecursive);
+                    
+                    // 如果该子节点也有其他映射，同步更新它们
+                    const otherNodes = this.nodeMap.get(n.id);
+                    if (otherNodes) {
+                        otherNodes.forEach(on => on.visible = visible);
+                    }
+                };
+                setVisibleRecursive(node);
+            });
         }
 
         const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
         if (!obj) {
             // 如果在 contentGroup 中找不到，可能已经被优化掉了
             // 我们尝试直接根据 node 递归更新 mappings
-            if (node) {
+            if (nodes && nodes.length > 0) {
                 const updateMappingsRecursive = (n: StructureTreeNode) => {
                     const mappings = this.optimizedMapping.get(n.id);
                     if (mappings) {
@@ -1321,7 +1457,7 @@ export class SceneManager {
                     }
                     if (n.children) n.children.forEach(updateMappingsRecursive);
                 };
-                updateMappingsRecursive(node);
+                updateMappingsRecursive(nodes[0]); // 只需要递归一个分支来更新物理对象
             }
             return;
         }
@@ -1498,7 +1634,8 @@ export class SceneManager {
                         } else {
                             // NBIM 模式下可能没有原始对象，返回一个更健壮的 Proxy Object
                             // 模拟基础的 Object3D 方法以防止 UI 端处理报错
-                            const node = this.nodeMap.get(originalUuid);
+                            const nodes = this.nodeMap.get(originalUuid);
+                            const node = nodes?.[0];
                             const proxy = new THREE.Object3D();
                             proxy.uuid = originalUuid;
                             if (node) {
