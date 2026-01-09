@@ -26,7 +26,6 @@ export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
     bgColor: string;
-    wireframe: boolean;
     enableInstancing: boolean; // 是否开启实例化 (BatchedMesh/InstancedMesh)
 }
 
@@ -98,7 +97,6 @@ export class SceneManager {
         ambientInt: 2.0,
         dirInt: 1.0,
         bgColor: "#1e1e1e",
-        wireframe: false,
         enableInstancing: true,
     };
 
@@ -264,18 +262,6 @@ export class SceneManager {
 
         // 应用背景
         this.renderer.setClearColor(this.settings.bgColor);
-
-        // 应用线框模式（全局覆盖）
-        if (this.settings.wireframe) {
-            this.scene.overrideMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0xcccccc, 
-                wireframe: true,
-                transparent: true,
-                opacity: 0.3
-            });
-        } else {
-            this.scene.overrideMaterial = null;
-        }
 
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
@@ -1660,10 +1646,26 @@ export class SceneManager {
             case 'back': pos.set(0, dist, 0); break;
             case 'left': pos.set(-dist, 0, 0); break;
             case 'right': pos.set(dist, 0, 0); break;
-            case 'se': pos.set(dist, -dist, dist); break;
-            case 'sw': pos.set(-dist, -dist, dist); break;
-            case 'ne': pos.set(dist, dist, dist); break;
-            case 'nw': pos.set(-dist, dist, dist); break;
+            case 'se': case 'top-front-right': pos.set(dist, -dist, dist); break;
+            case 'sw': case 'top-front-left': pos.set(-dist, -dist, dist); break;
+            case 'ne': case 'top-back-right': pos.set(dist, dist, dist); break;
+            case 'nw': case 'top-back-left': pos.set(-dist, dist, dist); break;
+            case 'bottom-front-right': pos.set(dist, -dist, -dist); break;
+            case 'bottom-front-left': pos.set(-dist, -dist, -dist); break;
+            case 'bottom-back-right': pos.set(dist, dist, -dist); break;
+            case 'bottom-back-left': pos.set(-dist, dist, -dist); break;
+            case 'top-front': pos.set(0, -dist, dist); break;
+            case 'top-back': pos.set(0, dist, dist); break;
+            case 'top-left': pos.set(-dist, 0, dist); break;
+            case 'top-right': pos.set(dist, 0, dist); break;
+            case 'bottom-front': pos.set(0, -dist, -dist); break;
+            case 'bottom-back': pos.set(0, dist, -dist); break;
+            case 'bottom-left': pos.set(-dist, 0, -dist); break;
+            case 'bottom-right': pos.set(dist, 0, -dist); break;
+            case 'front-left': pos.set(-dist, -dist, 0); break;
+            case 'front-right': pos.set(dist, -dist, 0); break;
+            case 'back-left': pos.set(-dist, dist, 0); break;
+            case 'back-right': pos.set(dist, dist, 0); break;
         }
 
         if (pos.lengthSq() > 0) {

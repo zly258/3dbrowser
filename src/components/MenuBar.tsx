@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { 
-    IconFile, IconFolder, IconExport, IconClear, IconFit, IconWireframe, IconList, IconInfo, IconMeasure, IconSettings,
+    IconFile, IconFolder, IconExport, IconClear, IconFit, IconList, IconInfo, IconMeasure, IconSettings,
     IconPick, IconClip, IconMenu, IconClose, IconChevronRight, IconChevronDown, IconMinimize, IconMaximize, IconLang
 } from "../theme/Icons";
 
@@ -158,8 +158,6 @@ interface RibbonUIProps {
     handleOpenFolder: (e: any) => void;
     handleClear: () => void;
     handleView: (view: string) => void;
-    wireframe: boolean;
-    setWireframe: (v: boolean) => void;
     pickEnabled: boolean;
     setPickEnabled: (v: boolean) => void;
     showOutline: boolean;
@@ -313,7 +311,7 @@ const ClassicSubItem = ({ label, onClick, styles }: { label: string, onClick: ()
 export const MenuBar: React.FC<RibbonUIProps> = (props) => {
     const { t, styles, theme } = props;
     const [activeTab, setActiveTab] = useState('home');
-    const [startMenuOpen, setStartMenuOpen] = useState(false);
+    const [showStartMenu, setShowStartMenu] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const folderInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -354,8 +352,20 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
             {/* Tabs */}
             {props.menuMode === 'ribbon' && (
                 <div style={{...styles.ribbonTabs, paddingLeft: '4px'}}>
-                    <div style={styles.ribbonTab(activeTab === 'home', true)} onClick={() => setActiveTab('home')}>{t('home')}</div>
-                    <div style={styles.ribbonTab(activeTab === 'view')} onClick={() => setActiveTab('home')}>{t('view')}</div>
+                    <div style={{ position: 'relative' }}>
+                        <div style={styles.ribbonTab(showStartMenu, true)} onClick={() => setShowStartMenu(!showStartMenu)}>{t('menu_file')}</div>
+                        <StartMenu 
+                            isOpen={showStartMenu} 
+                            onClose={() => setShowStartMenu(false)} 
+                            t={t} 
+                            theme={theme} 
+                            handleOpenFiles={() => fileInputRef.current?.click()}
+                            handleOpenFolder={() => folderInputRef.current?.click()}
+                            handleAbout={props.handleAbout}
+                        />
+                    </div>
+                    <div style={styles.ribbonTab(activeTab === 'home')} onClick={() => setActiveTab('home')}>{t('home')}</div>
+                    <div style={styles.ribbonTab(activeTab === 'view')} onClick={() => setActiveTab('view')}>{t('view')}</div>
                 </div>
             )}
 
@@ -401,7 +411,7 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                                 </div>
                             </RibbonPanel>
 
-                            <RibbonPanel label={t('tool_measure')} styles={styles}>
+                            <RibbonPanel label={t('tool')} styles={styles}>
                                 <div style={styles.ribbonPanelRows}>
                                     <RibbonButtonMedium icon={<IconMeasure />} label={t('tool_measure')} onClick={() => props.setActiveTool('measure')} active={props.activeTool === 'measure'} styles={styles} />
                                     <RibbonButtonMedium icon={<IconClip />} label={t('tool_clip')} onClick={() => props.setActiveTool('clip')} active={props.activeTool === 'clip'} styles={styles} />
@@ -460,12 +470,11 @@ export const MenuBar: React.FC<RibbonUIProps> = (props) => {
                                 <ClassicSubItem label={`${props.showStats ? '✓ ' : ''}${t('st_monitor')}`} onClick={() => { props.setShowStats(!props.showStats); close(); }} styles={styles} />
                                 <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
                                 <ClassicSubItem label={`${props.pickEnabled ? '✓ ' : ''}${t('op_pick')}`} onClick={() => { props.setPickEnabled(!props.pickEnabled); close(); }} styles={styles} />
-                                <ClassicSubItem label={`${props.wireframe ? '✓ ' : ''}${t('menu_wireframe')}`} onClick={() => { props.setWireframe(!props.wireframe); close(); }} styles={styles} />
                             </>
                         )}
                     </ClassicMenuItem>
 
-                    <ClassicMenuItem label={t('tool_measure')} styles={styles} theme={theme}>
+                    <ClassicMenuItem label={t('tool')} styles={styles} theme={theme}>
                         {(close) => (
                             <>
                                 <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); }} styles={styles} />

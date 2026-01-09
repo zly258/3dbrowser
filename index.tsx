@@ -15,6 +15,7 @@ import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
+import { ViewCube } from "./src/components/ViewCube";
 import { IconClose } from "./src/theme/Icons";
 
 interface ErrorBoundaryProps {
@@ -269,7 +270,6 @@ const App = () => {
                     ambientInt: typeof parsed.ambientInt === 'number' ? parsed.ambientInt : 2.0,
                     dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
                     bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
-                    wireframe: typeof parsed.wireframe === 'boolean' ? parsed.wireframe : false,
                     enableInstancing: typeof parsed.enableInstancing === 'boolean' ? parsed.enableInstancing : true,
                 };
             }
@@ -278,7 +278,6 @@ const App = () => {
             ambientInt: 2.0,
             dirInt: 1.0,
             bgColor: theme.canvasBg,
-            wireframe: false,
             enableInstancing: true,
         };
     });
@@ -300,6 +299,7 @@ const App = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
+    const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     const visibilityDebounce = useRef<any>(null);
 
     // Error State
@@ -622,6 +622,7 @@ const App = () => {
         
         const manager = new SceneManager(canvasRef.current);
         sceneMgr.current = manager;
+        setMgrInstance(manager);
         // Initial setup
         manager.updateSettings(sceneSettings);
         manager.resize();
@@ -1114,8 +1115,6 @@ const App = () => {
                 showStats={showStats}
                 setShowStats={setShowStats}
                 handleAbout={() => setShowAbout(true)}
-                wireframe={sceneSettings.wireframe}
-                setWireframe={(v) => handleSettingsUpdate({wireframe: v})}
                 sceneMgr={sceneMgr.current}
                 styles={styles}
                 theme={theme}
@@ -1180,7 +1179,7 @@ const App = () => {
                 }}>
                     <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
                     
-
+                    <ViewCube sceneMgr={mgrInstance} theme={theme} />
 
                     {/* Toast Notification */}
                     {toast && (

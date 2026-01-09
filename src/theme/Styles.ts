@@ -102,25 +102,25 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         backgroundColor: theme.bg,
     },
     ribbonTabs: {
-        display: "none", // Hide tabs section
+        display: "flex", // Show tabs section
+        height: "30px",
+        backgroundColor: theme.bg,
+        borderBottom: `1px solid ${theme.border}`,
+        WebkitAppRegion: "no-drag" as any,
     },
     ribbonTab: (active: boolean, isFile: boolean = false) => ({
         padding: "6px 16px", 
         fontSize: "12px", 
         textTransform: "uppercase" as const,
         cursor: "pointer",
-        backgroundColor: isFile ? theme.accent : (active ? theme.panelBg : "transparent"),
-        color: isFile ? "#ffffff" : (active ? theme.accent : theme.text),
+        backgroundColor: isFile ? (active ? theme.accent : "transparent") : (active ? theme.panelBg : "transparent"),
+        color: isFile ? (active ? "#ffffff" : theme.text) : (active ? theme.accent : theme.text),
         border: active ? `1px solid ${theme.border}` : "1px solid transparent",
         borderBottom: active ? `1px solid ${theme.panelBg}` : "1px solid transparent",
         marginBottom: "-1px",
         fontWeight: active ? "600" : "400",
         zIndex: 2,
         transition: "all 0.1s",
-        ":hover": {
-            backgroundColor: isFile ? `${theme.accent}ee` : (active ? theme.panelBg : theme.itemHover),
-            color: isFile ? "#ffffff" : (active ? theme.accent : theme.text),
-        }
     }),
     ribbonContent: {
         height: "92px", // Increased from 88px to fit checkboxes better
