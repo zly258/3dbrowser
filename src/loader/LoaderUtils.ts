@@ -32,9 +32,25 @@ export const loadModelFiles = async (
     for (let i = 0; i < totalFiles; i++) {
         const fileOrUrl = files[i];
         const isUrl = typeof fileOrUrl === 'string';
-        const fileName = isUrl ? (fileOrUrl as string).split('/').pop() || 'model' : (fileOrUrl as File).name;
-        const ext = fileName.split('.').pop()?.toLowerCase();
-        const url = isUrl ? (fileOrUrl as string) : URL.createObjectURL(fileOrUrl as File);
+        let fileName = '';
+        let ext = '';
+        let url = '';
+
+        if (isUrl) {
+            url = fileOrUrl as string;
+            // 移除查询参数和锚点以提取正确的文件名和扩展名
+            const urlPath = url.split('?')[0].split('#')[0];
+            fileName = urlPath.split('/').pop() || 'model';
+            ext = fileName.split('.').pop()?.toLowerCase() || '';
+            console.log(`[LoaderUtils] Loading URL: ${url}`);
+            console.log(`[LoaderUtils] Parsed fileName: ${fileName}, ext: ${ext}`);
+        } else {
+            const file = fileOrUrl as File;
+            fileName = file.name;
+            ext = fileName.split('.').pop()?.toLowerCase() || '';
+            url = URL.createObjectURL(file);
+            console.log(`[LoaderUtils] Loading File: ${fileName}, ext: ${ext}`);
+        }
         
         const fileBaseProgress = (i / totalFiles) * 100;
         const fileWeight = 100 / totalFiles;
@@ -50,6 +66,7 @@ export const loadModelFiles = async (
         let object: THREE.Object3D | null = null;
 
         try {
+                console.log(`[LoaderUtils] Dispatching loader for ext: ${ext}`);
                 if (ext === 'lmb' || ext === 'lmbz') {
                     const loader = new LMBLoader();
                     loader.setEnableInstancing(settings.enableInstancing);
@@ -64,12 +81,19 @@ export const loadModelFiles = async (
                     });
                     object = gltf.scene;
                 } else if (ext === 'fbx') {
+                    console.log(`[LoaderUtils] Starting FBXLoader for ${url}`);
                     const loader = new FBXLoader();
                     object = await new Promise<THREE.Group>((resolve, reject) => {
-                        loader.load(url, resolve, (e) => {
+                        loader.load(url, (fbx) => {
+                            console.log(`[LoaderUtils] FBX loaded successfully:`, fbx);
+                            resolve(fbx);
+                        }, (e) => {
                             if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
                             else updateFileProgress(50);
-                        }, reject);
+                        }, (err) => {
+                            console.error(`[LoaderUtils] FBXLoader error:`, err);
+                            reject(err);
+                        });
                     });
                 } else if (ext === 'ifc') {
                     object = await loadIFC(url, updateFileProgress, t, libPath);
