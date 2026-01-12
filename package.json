@@ -11,7 +11,7 @@
     "3d-viewer",
     "browser"
   ],
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "author": "zhangly1403@163.com",
   "type": "module",
   "main": "./dist/3dbrowser.umd.js",
