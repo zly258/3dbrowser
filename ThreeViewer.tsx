@@ -89,6 +89,8 @@ const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: st
 export interface ThreeViewerProps {
     allowDragOpen?: boolean;
     disabledMenus?: string[];
+    hiddenMenus?: string[];
+    libPath?: string;
     defaultTheme?: 'dark' | 'light';
     defaultLang?: Lang;
     accentColor?: string;
@@ -105,6 +107,8 @@ export interface ThreeViewerProps {
 export const ThreeViewer = ({ 
     allowDragOpen = true, 
     disabledMenus = [],
+    hiddenMenus = [],
+    libPath = './libs',
     defaultTheme,
     defaultLang,
     accentColor: propAccentColor,
@@ -933,7 +937,8 @@ export const ThreeViewer = ({
                         if(msg) setStatus(cleanStatus(msg));
                     }, 
                     t,
-                    sceneSettings // Pass settings
+                    sceneSettings, // Pass settings
+                    libPath
                 );
                 for (const obj of loadedObjects) {
                     await sceneMgr.current.addModel(obj);
@@ -1213,6 +1218,7 @@ export const ThreeViewer = ({
                 styles={styles}
                 theme={theme}
                 disabledMenus={disabledMenus}
+                hiddenMenus={hiddenMenus}
                 onOpenAbout={() => setIsAboutOpen(true)}
              />
 
@@ -1527,7 +1533,4 @@ export const ThreeViewer = ({
     );
 };
 
-if (document.getElementById("root")) {
-    const root = createRoot(document.getElementById("root")!);
-    root.render(<ThreeViewer />);
-}
+export default ThreeViewer;

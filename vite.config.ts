@@ -13,7 +13,9 @@ export default defineConfig(({ mode }) => {
           allow: ['..']
         }
       },
-      plugins: [react()],
+      plugins: [react({
+        jsxRuntime: 'classic'
+      })],
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
@@ -45,7 +47,8 @@ export default defineConfig(({ mode }) => {
         }
       },
       define: {
-        global: 'globalThis'
+        global: 'globalThis',
+        'process.env': {}
       }
     };
 });

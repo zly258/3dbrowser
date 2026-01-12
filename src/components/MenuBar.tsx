@@ -108,7 +108,7 @@ export const MenuBar: React.FC<any> = (props) => {
     } = props;
 
     const isDisabled = (id: string) => disabledMenus.includes(id);
-    const isHidden = (id: string) => disabledMenus.includes(id);
+    const isHidden = (id: string) => (hiddenMenus || []).includes(id);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const folderInputRef = React.useRef<HTMLInputElement>(null);

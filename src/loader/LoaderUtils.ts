@@ -22,7 +22,8 @@ export const loadModelFiles = async (
     files: (File | string)[], 
     onProgress: ProgressCallback, 
     t: TFunc,
-    settings: SceneSettings
+    settings: SceneSettings,
+    libPath: string = './libs'
 ): Promise<THREE.Object3D[]> => {
     const loadedObjects: THREE.Object3D[] = [];
     const totalFiles = files.length;
@@ -71,7 +72,7 @@ export const loadModelFiles = async (
                         }, reject);
                     });
                 } else if (ext === 'ifc') {
-                    object = await loadIFC(url, updateFileProgress, t);
+                    object = await loadIFC(url, updateFileProgress, t, libPath);
                 } else if (ext === 'obj') {
                     const loader = new OBJLoader();
                     object = await loader.loadAsync(url, (e) => {
@@ -99,7 +100,8 @@ export const loadModelFiles = async (
                     });
                 } else if (ext === 'stp' || ext === 'step' || ext === 'igs' || ext === 'iges') {
                     const buffer = isUrl ? await fetch(url).then(r => r.arrayBuffer()) : await (fileOrUrl as File).arrayBuffer();
-                    const loader = new OCCTLoader();
+                    const wasmUrl = `${libPath}/occt-import-js/occt-import-js.wasm`;
+                    const loader = new OCCTLoader(wasmUrl);
                     object = await loader.load(buffer, t, (p, msg) => {
                         updateFileProgress(p, msg);
                     });

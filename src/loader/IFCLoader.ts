@@ -5,13 +5,15 @@ import { ProgressCallback, TFunc } from "../theme/Locales";
 export const loadIFC = async (
     url: string, 
     onProgress: ProgressCallback, 
-    t: TFunc
+    t: TFunc,
+    libPath: string = './libs'
 ): Promise<THREE.Group> => {
     // 初始化web-ifc API
     const ifcApi = new WebIFC.IfcAPI();
     
     // 设置WASM路径，使用相对路径以适配打包后的环境
-    ifcApi.SetWasmPath('./libs/web-ifc/');
+    const wasmPath = libPath.endsWith('/') ? `${libPath}web-ifc/` : `${libPath}/web-ifc/`;
+    ifcApi.SetWasmPath(wasmPath);
     
     await ifcApi.Init();
     
