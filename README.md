@@ -35,6 +35,9 @@ function App() {
         defaultLang="en"
         accentColor="#0078D4"
         showStats={true}
+        initialFiles={[
+          "https://example.com/models/building.glb"
+        ]}
         onSelect={(uuid, object) => console.log('Selected:', uuid, object)}
       />
     </div>
@@ -55,6 +58,7 @@ function App() {
 | `showOutline` | `boolean` | `true` | Show scene structure outline panel |
 | `showProperties` | `boolean` | `true` | Show object properties panel |
 | `initialSettings` | `Partial<SceneSettings>` | - | Initial scene settings (lighting, bg, etc.) |
+| `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or File objects to load on mount |
 | `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
 | `onLoad` | `(manager: SceneManager) => void` | - | Callback when the scene manager is initialized |
 
@@ -116,6 +120,10 @@ function App() {
         defaultLang="zh"
         accentColor="#0078D4"
         showStats={true}
+        initialFiles={[
+          "https://example.com/models/building.glb",
+          "https://example.com/models/tileset/tileset.json"
+        ]}
         onSelect={(uuid, object) => console.log('选中对象:', uuid, object)}
       />
     </div>
@@ -136,6 +144,7 @@ function App() {
 | `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
 | `showProperties` | `boolean` | `true` | 是否显示属性面板 |
 | `initialSettings` | `Partial<SceneSettings>` | - | 初始场景设置（光照、背景等） |
+| `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的文件（URL 或 File 对象） |
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
 | `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
 

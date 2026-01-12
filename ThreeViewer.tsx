@@ -96,6 +96,7 @@ export interface ThreeViewerProps {
     showOutline?: boolean;
     showProperties?: boolean;
     initialSettings?: Partial<SceneSettings>;
+    initialFiles?: (string | File) | (string | File)[];
     onSelect?: (uuid: string, object: any) => void;
     onLoad?: (manager: SceneManager) => void;
 }
@@ -110,10 +111,11 @@ export const ThreeViewer = ({
     showStats: propShowStats,
     showOutline: propShowOutline,
     showProperties: propShowProperties,
-    initialSettings,
-    onSelect: propOnSelect,
-    onLoad
-}: ThreeViewerProps) => {
+     initialSettings,
+     initialFiles,
+     onSelect: propOnSelect,
+     onLoad
+ }: ThreeViewerProps) => {
     // 主题状态 - 从localStorage恢复或使用prop
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
         if (defaultTheme) return defaultTheme;
@@ -652,6 +654,57 @@ export const ThreeViewer = ({
             manager.dispose();
         };
     }, []); 
+
+    // --- Effect for Initial Files ---
+    useEffect(() => {
+        if (!mgrInstance || !initialFiles) return;
+
+        const loadInitial = async () => {
+            const filesToProcess: File[] = [];
+            const urlsToLoad: string[] = [];
+
+            const filesArray = Array.isArray(initialFiles) ? initialFiles : [initialFiles];
+            
+            for (const item of filesArray) {
+                if (item instanceof File) {
+                    filesToProcess.push(item);
+                } else if (typeof item === 'string') {
+                    urlsToLoad.push(item);
+                }
+            }
+
+            // Process direct files
+            if (filesToProcess.length > 0) {
+                await processFiles(filesToProcess);
+            }
+
+            // Process URLs
+            for (const url of urlsToLoad) {
+                try {
+                    if (url.toLowerCase().endsWith('.json') || url.includes('tileset')) {
+                        // Assume 3D Tiles
+                        mgrInstance.addTileset(url, (p, msg) => {
+                            setProgress(p);
+                            if(msg) setStatus(cleanStatus(msg));
+                        });
+                        updateTree();
+                        setStatus(t("tileset_loaded"));
+                        setTimeout(() => mgrInstance?.fitView(), 500);
+                    } else {
+                        const response = await fetch(url);
+                        const blob = await response.blob();
+                        const fileName = url.substring(url.lastIndexOf('/') + 1) || "model";
+                        const file = new File([blob], fileName);
+                        await processFiles([file]);
+                    }
+                } catch (err) {
+                    console.error("Failed to load initial URL:", url, err);
+                }
+            }
+        };
+
+        loadInitial();
+    }, [mgrInstance, initialFiles]);
 
     // --- 逻辑事件挂钩 ---
 
