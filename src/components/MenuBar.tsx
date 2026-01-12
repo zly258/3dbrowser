@@ -121,6 +121,7 @@ export const MenuBar: React.FC<any> = (props) => {
                 ref={fileInputRef} 
                 style={{ display: 'none' }} 
                 multiple 
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleOpenFiles} 
             />
             <input 
@@ -128,6 +129,7 @@ export const MenuBar: React.FC<any> = (props) => {
                 ref={folderInputRef} 
                 style={{ display: 'none' }} 
                 {...{ webkitdirectory: "", directory: "" } as any} 
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleOpenFolder} 
             />
 
@@ -215,6 +217,16 @@ export const MenuBar: React.FC<any> = (props) => {
                     {(close) => (
                         <>
                             {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('settings')} />}
+                        </>
+                    )}
+                </ClassicMenuItem>
+            )}
+
+            {!isHidden('help') && (
+                <ClassicMenuItem label={t('menu_about')} styles={styles} theme={theme} enabled={!isDisabled('help')}>
+                    {(close) => (
+                        <>
+                            {!isHidden('about') && <ClassicSubItem label={t('menu_about')} onClick={() => { props.onOpenAbout(); close(); }} styles={styles} enabled={!isDisabled('about')} />}
                         </>
                     )}
                 </ClassicMenuItem>

@@ -15,6 +15,7 @@ import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
+import { AboutModal } from "./src/components/AboutModal";
 import { ViewCube } from "./src/components/ViewCube";
 import { IconClose } from "./src/theme/Icons";
 
@@ -225,6 +226,9 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
         message: string;
         action: () => void;
     }>({ isOpen: false, title: "", message: "", action: () => {} });
+
+    // About Modal State
+    const [isAboutOpen, setIsAboutOpen] = useState(false);
 
     // Layout State (Resizable Panels)
     const [leftWidth, setLeftWidth] = useState(260);
@@ -1122,6 +1126,7 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
                 styles={styles}
                 theme={theme}
                 disabledMenus={disabledMenus}
+                onOpenAbout={() => setIsAboutOpen(true)}
              />
 
              {/* Main Content Area: Flex Row */}
@@ -1393,6 +1398,12 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
                 onConfirm={() => { confirmState.action(); setConfirmState({...confirmState, isOpen: false}); }}
                 onCancel={() => setConfirmState({...confirmState, isOpen: false})}
                 t={t} styles={styles} theme={theme}
+             />
+
+             <AboutModal 
+                isOpen={isAboutOpen} 
+                onClose={() => setIsAboutOpen(false)} 
+                t={t} styles={styles} theme={theme} 
              />
 
              {/* Error Modal */}

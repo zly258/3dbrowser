@@ -124,6 +124,11 @@ const resources: Record<Lang, Record<string, string>> = {
         model_loaded: "Model loaded",
         confirm_clear_title: "Clear Scene",
         confirm_clear_msg: "Are you sure you want to clear all models in the scene?",
+        menu_about: "About",
+        about_title: "About 3D Browser",
+        about_author: "Author",
+        about_license: "License",
+        about_license_nc: "Non-commercial Use Only",
     },
     zh: {
         home: "首页",
@@ -242,6 +247,11 @@ const resources: Record<Lang, Record<string, string>> = {
         model_loaded: "模型加载完成",
         confirm_clear_title: "清空场景",
         confirm_clear_msg: "确定要清空场景中的所有模型吗？",
+        menu_about: "关于",
+        about_title: "关于 3D Browser",
+        about_author: "作者",
+        about_license: "授权协议",
+        about_license_nc: "仅限非商业用途",
     }
 };
 

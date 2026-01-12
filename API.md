@@ -58,7 +58,7 @@ npm install ../path/to/3dbrowser
 npm install 3dbrowser
 ```
 
-### 3. Basic Usage
+### 4. Basic Usage
 
 #### SceneManager
 The `SceneManager` is the core class for managing the 3D scene, cameras, and loaders.
@@ -84,14 +84,14 @@ sceneMgr.addTileset('https://example.com/tileset.json');
 sceneMgr.fitView();
 ```
 
-### 4. Detailed API Reference
+### 5. Detailed API Reference
 
 #### `SceneManager`
 
 | Method | Description |
 | :--- | :--- |
 | `constructor(canvas: HTMLCanvasElement)` | Initializes the manager. |
-| `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>` | Loads multiple 3D files. |
+| `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>` | Loads multiple 3D files. Supported formats: `.lmb`, `.lmbz`, `.glb`, `.gltf`, `.ifc`, `.nbim`, `.fbx`, `.obj`, `.stl`, `.ply`, `.3ds`, `.dae`, `.stp`, `.step`, `.igs`, `.iges`. |
 | `addTileset(url: string, onProgress?: ProgressCallback): void` | Adds a 3D Tileset. |
 | `setView(view: ViewName): void` | Sets camera view (top, bottom, se, etc.). |
 | `fitView(): void` | Focuses camera on all objects. |
@@ -110,9 +110,9 @@ sceneMgr.fitView();
 | `bgColor` | `string` | `#ffffff` | Scene background color. |
 | `enableInstancing`| `boolean`| `true` | Enable GPU instancing for LMB. |
 
-### 5. React Integration
+### 6. React Integration
 
-The library provides components that can be used directly in React projects.
+The library provides a ready-to-use `ThreeViewer` component for React projects.
 
 #### `ThreeViewer` Component
 
@@ -123,7 +123,7 @@ The simplest way to use this library is through the `ThreeViewer` component, whi
 | Property | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `allowDragOpen` | `boolean` | `true` | Whether to allow opening files by dragging them into the viewer. |
-| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable. Example: `['export', 'settings']`. |
+| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `help`, `about`. |
 
 **Usage Example:**
 
@@ -143,41 +143,6 @@ const MyPage = () => {
 };
 ```
 
-### 6. Manual React Integration (Advanced)
-
-If you need more control, you can use individual components:
-
-```tsx
-import React, { useEffect, useRef } from 'react';
-import { SceneManager, MenuBar, createStyles, themes } from '3dbrowser';
-
-const MyViewer = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneMgrRef = useRef<SceneManager | null>(null);
-  const theme = themes.light;
-  const styles = createStyles(theme);
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      sceneMgrRef.current = new SceneManager(canvasRef.current);
-    }
-  }, []);
-
-  return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <MenuBar 
-        sceneMgr={sceneMgrRef.current}
-        t={(key) => key} // Translation function
-        theme={theme}
-        styles={styles}
-        // ... other props
-      />
-      <canvas ref={canvasRef} style={{ flex: 1 }} />
-    </div>
-  );
-};
-```
-
 ### 7. Development
 
 To contribute to this project:
@@ -189,7 +154,7 @@ To contribute to this project:
 
 ### 8. License
 
-This project is licensed under the MIT License.
+This project is licensed under a Non-Commercial Use License. See the `LICENSE` file for details.
 
 ---
 
@@ -247,7 +212,7 @@ npm install ../path/to/3dbrowser
 npm install 3dbrowser
 ```
 
-### 3. 基本用法
+### 4. 基本用法
 
 #### 场景管理器 (SceneManager)
 `SceneManager` 是管理 3D 场景、相机和加载器的核心类。
@@ -273,14 +238,14 @@ sceneMgr.addTileset('https://example.com/tileset.json');
 sceneMgr.fitView();
 ```
 
-### 4. 详细 API 参考
+### 5. 详细 API 参考
 
 #### `SceneManager`
 
 | 方法 | 描述 |
 | :--- | :--- |
 | `constructor(canvas: HTMLCanvasElement)` | 初始化管理器。 |
-| `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>` | 加载多个 3D 文件。 |
+| `loadModelFiles(files: File[], onProgress?: ProgressCallback): Promise<void>` | 加载多个 3D 文件。支持格式：`.lmb`, `.lmbz`, `.glb`, `.gltf`, `.ifc`, `.nbim`, `.fbx`, `.obj`, `.stl`, `.ply`, `.3ds`, `.dae`, `.stp`, `.step`, `.igs`, `.iges`。 |
 | `addTileset(url: string, onProgress?: ProgressCallback): void` | 添加 3D Tiles。 |
 | `setView(view: ViewName): void` | 设置相机视角 (top, bottom, se 等)。 |
 | `fitView(): void` | 相机聚焦所有物体。 |
@@ -299,9 +264,9 @@ sceneMgr.fitView();
 | `bgColor` | `string` | `#ffffff` | 场景背景颜色。 |
 | `enableInstancing`| `boolean`| `true` | 开启 LMB 实例化渲染。 |
 
-### 5. React 集成
+### 6. React 集成
 
-该库提供了可以直接在 React 项目中使用的组件。
+该库提供了可以直接在 React 项目中使用的 `ThreeViewer` 组件。
 
 #### `ThreeViewer` 组件
 
@@ -312,7 +277,7 @@ sceneMgr.fitView();
 | 属性 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽文件到浏览器来打开模型。 |
-| `disabledMenus` | `string[]` | `[]` | 要禁用的菜单 ID 列表。例如：`['export', 'settings']`。 |
+| `disabledMenus` | `string[]` | `[]` | 要禁用的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `help`, `about`。 |
 
 **使用示例:**
 
@@ -332,41 +297,6 @@ const MyPage = () => {
 };
 ```
 
-### 6. 手动 React 集成 (进阶)
-
-如果您需要更多控制，可以使用单个组件：
-
-```tsx
-import React, { useEffect, useRef } from 'react';
-import { SceneManager, MenuBar, createStyles, themes } from '3dbrowser';
-
-const MyViewer = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneMgrRef = useRef<SceneManager | null>(null);
-  const theme = themes.light;
-  const styles = createStyles(theme);
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      sceneMgrRef.current = new SceneManager(canvasRef.current);
-    }
-  }, []);
-
-  return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <MenuBar 
-        sceneMgr={sceneMgrRef.current}
-        t={(key) => key} // 翻译函数
-        theme={theme}
-        styles={styles}
-        // ... 其他属性
-      />
-      <canvas ref={canvasRef} style={{ flex: 1 }} />
-    </div>
-  );
-};
-```
-
 ### 7. 开发
 
 参与本项目开发：
@@ -378,4 +308,4 @@ const MyViewer = () => {
 
 ### 8. 授权
 
-本项目采用 MIT 授权。
+本项目采用非商业用途授权协议。详情请参阅 `LICENSE` 文件。
