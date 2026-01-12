@@ -1,4 +1,5 @@
 
+export * from '../index';
 export * from './utils/SceneManager';
 export * from './loader/LoaderUtils';
 export { getTranslation } from './theme/Locales';

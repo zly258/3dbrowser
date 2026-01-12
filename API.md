@@ -114,6 +114,39 @@ sceneMgr.fitView();
 
 The library provides components that can be used directly in React projects.
 
+#### `ThreeViewer` Component
+
+The simplest way to use this library is through the `ThreeViewer` component, which includes the full UI (Menu, Tree, Properties, etc.).
+
+**Props:**
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `allowDragOpen` | `boolean` | `true` | Whether to allow opening files by dragging them into the viewer. |
+| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable. Example: `['export', 'settings']`. |
+
+**Usage Example:**
+
+```tsx
+import React from 'react';
+import { ThreeViewer } from '3dbrowser';
+
+const MyPage = () => {
+  return (
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <ThreeViewer 
+        allowDragOpen={true}
+        disabledMenus={['export']} 
+      />
+    </div>
+  );
+};
+```
+
+### 6. Manual React Integration (Advanced)
+
+If you need more control, you can use individual components:
+
 ```tsx
 import React, { useEffect, useRef } from 'react';
 import { SceneManager, MenuBar, createStyles, themes } from '3dbrowser';
@@ -145,7 +178,7 @@ const MyViewer = () => {
 };
 ```
 
-### 6. Development
+### 7. Development
 
 To contribute to this project:
 
@@ -154,7 +187,7 @@ To contribute to this project:
 3.  Run dev server: `npm run dev`.
 4.  Run in Electron: `npm run electron:dev`.
 
-### 7. License
+### 8. License
 
 This project is licensed under the MIT License.
 
@@ -270,6 +303,39 @@ sceneMgr.fitView();
 
 该库提供了可以直接在 React 项目中使用的组件。
 
+#### `ThreeViewer` 组件
+
+使用本库最简单的方法是使用 `ThreeViewer` 组件，它包含了完整的 UI（菜单、树结构、属性面板等）。
+
+**属性 (Props):**
+
+| 属性 | 类型 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽文件到浏览器来打开模型。 |
+| `disabledMenus` | `string[]` | `[]` | 要禁用的菜单 ID 列表。例如：`['export', 'settings']`。 |
+
+**使用示例:**
+
+```tsx
+import React from 'react';
+import { ThreeViewer } from '3dbrowser';
+
+const MyPage = () => {
+  return (
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <ThreeViewer 
+        allowDragOpen={true}
+        disabledMenus={['export']} 
+      />
+    </div>
+  );
+};
+```
+
+### 6. 手动 React 集成 (进阶)
+
+如果您需要更多控制，可以使用单个组件：
+
 ```tsx
 import React, { useEffect, useRef } from 'react';
 import { SceneManager, MenuBar, createStyles, themes } from '3dbrowser';
@@ -301,7 +367,7 @@ const MyViewer = () => {
 };
 ```
 
-### 6. 开发
+### 7. 开发
 
 参与本项目开发：
 
@@ -310,6 +376,6 @@ const MyViewer = () => {
 3.  启动开发服务器: `npm run dev`。
 4.  在 Electron 中运行: `npm run electron:dev`。
 
-### 7. 授权
+### 8. 授权
 
 本项目采用 MIT 授权。

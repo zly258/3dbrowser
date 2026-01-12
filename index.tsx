@@ -85,8 +85,13 @@ const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: st
 
 // --- 全局样式注入 ---
 
+export interface ThreeViewerProps {
+    allowDragOpen?: boolean;
+    disabledMenus?: string[];
+}
+
 // --- 主应用 ---
-const App = () => {
+export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeViewerProps) => {
     // 主题状态 - 从localStorage恢复
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
         try {
@@ -367,10 +372,12 @@ const App = () => {
 
         // 全局拖拽支持
         const handleDragOver = (e: DragEvent) => {
+            if (!allowDragOpen) return;
             e.preventDefault();
             e.stopPropagation();
         };
         const handleDrop = async (e: DragEvent) => {
+            if (!allowDragOpen) return;
             e.preventDefault();
             e.stopPropagation();
             
@@ -410,7 +417,7 @@ const App = () => {
             window.removeEventListener('dragover', handleDragOver);
             window.removeEventListener('drop', handleDrop);
         };
-    }, [lang]);
+    }, [lang, allowDragOpen]);
 
     // 2. 当布局状态变化时强制触发一次 resize（修复“场景未占满剩余空间”的问题）
     useEffect(() => {
@@ -1114,6 +1121,7 @@ const App = () => {
                 sceneMgr={sceneMgr.current}
                 styles={styles}
                 theme={theme}
+                disabledMenus={disabledMenus}
              />
 
              {/* Main Content Area: Flex Row */}
@@ -1421,5 +1429,7 @@ const App = () => {
     );
 };
 
-const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+if (document.getElementById("root")) {
+    const root = createRoot(document.getElementById("root")!);
+    root.render(<ThreeViewer />);
+}
