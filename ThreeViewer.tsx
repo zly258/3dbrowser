@@ -89,12 +89,34 @@ const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: st
 export interface ThreeViewerProps {
     allowDragOpen?: boolean;
     disabledMenus?: string[];
+    defaultTheme?: 'dark' | 'light';
+    defaultLang?: Lang;
+    accentColor?: string;
+    showStats?: boolean;
+    showOutline?: boolean;
+    showProperties?: boolean;
+    initialSettings?: Partial<SceneSettings>;
+    onSelect?: (uuid: string, object: any) => void;
+    onLoad?: (manager: SceneManager) => void;
 }
 
 // --- 主应用 ---
-export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeViewerProps) => {
-    // 主题状态 - 从localStorage恢复
+export const ThreeViewer = ({ 
+    allowDragOpen = true, 
+    disabledMenus = [],
+    defaultTheme,
+    defaultLang,
+    accentColor: propAccentColor,
+    showStats: propShowStats,
+    showOutline: propShowOutline,
+    showProperties: propShowProperties,
+    initialSettings,
+    onSelect: propOnSelect,
+    onLoad
+}: ThreeViewerProps) => {
+    // 主题状态 - 从localStorage恢复或使用prop
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
+        if (defaultTheme) return defaultTheme;
         try {
             const saved = localStorage.getItem('3dbrowser_themeMode');
             return (saved === 'dark' || saved === 'light') ? saved : 'light';
@@ -105,6 +127,7 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
 
     // 主题颜色状态
     const [accentColor, setAccentColor] = useState(() => {
+        if (propAccentColor) return propAccentColor;
         try {
             const saved = localStorage.getItem('3dbrowser_accentColor');
             return saved || "#0078D4";
@@ -132,6 +155,7 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
 
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
+        if (defaultLang) return defaultLang;
         try {
             const saved = localStorage.getItem('3dbrowser_lang');
             return (saved === 'zh' || saved === 'en') ? saved : 'zh';
@@ -171,6 +195,7 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
         }
     });
     const [showStats, setShowStats] = useState(() => {
+        if (propShowStats !== undefined) return propShowStats;
         try {
             const saved = localStorage.getItem('3dbrowser_showStats');
             return saved !== null ? saved === 'true' : true;
@@ -179,6 +204,7 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
         }
     });
     const [showOutline, setShowOutline] = useState(() => {
+        if (propShowOutline !== undefined) return propShowOutline;
         try {
             const saved = localStorage.getItem('3dbrowser_showOutline');
             return saved !== null ? saved === 'true' : true;
@@ -187,6 +213,7 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
         }
     });
     const [showProps, setShowProps] = useState(() => {
+        if (propShowProperties !== undefined) return propShowProperties;
         try {
             const saved = localStorage.getItem('3dbrowser_showProps');
             return saved !== null ? saved === 'true' : true;
@@ -197,11 +224,18 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
 
     // Settings State (mirrors SceneManager) - 从localStorage恢复
     const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
+        let baseSettings = {
+            ambientInt: 2.0,
+            dirInt: 1.0,
+            bgColor: theme.canvasBg,
+            enableInstancing: true,
+            viewCubeSize: 100,
+        };
         try {
             const saved = localStorage.getItem('3dbrowser_sceneSettings');
             if (saved) {
                 const parsed = JSON.parse(saved);
-                return {
+                baseSettings = {
                     ambientInt: typeof parsed.ambientInt === 'number' ? parsed.ambientInt : 2.0,
                     dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
                     bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
@@ -210,13 +244,8 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
                 };
             }
         } catch (e) { console.error("Failed to load sceneSettings", e); }
-        return {
-            ambientInt: 2.0,
-            dirInt: 1.0,
-            bgColor: theme.canvasBg,
-            enableInstancing: true,
-            viewCubeSize: 100,
-        };
+        
+        return initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
     });
 
     // Confirmation Modal State
@@ -584,6 +613,9 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
         const manager = new SceneManager(canvasRef.current);
         sceneMgr.current = manager;
         setMgrInstance(manager);
+        
+        if (onLoad) onLoad(manager);
+
         // Initial setup
         manager.updateSettings(sceneSettings);
         manager.resize();
@@ -725,6 +757,8 @@ export const ThreeViewer = ({ allowDragOpen = true, disabledMenus = [] }: ThreeV
 
         setSelectedUuid(uuid);
         sceneMgr.current.highlightObject(uuid);
+        
+        if (propOnSelect) propOnSelect(uuid, obj);
         
         // 尝试获取真实的 Object3D 以获得更多几何信息
         let realObj = obj instanceof THREE.Object3D ? obj : sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
