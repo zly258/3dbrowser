@@ -664,34 +664,18 @@ export const ThreeViewer = ({
         if (!mgrInstance || !initialFiles) return;
 
         const loadInitial = async () => {
-            const filesToProcess: File[] = [];
-            const urlsToLoad: string[] = [];
-
-            const filesArray = Array.isArray(initialFiles) ? initialFiles : [initialFiles];
+            const itemsToProcess: (File | string)[] = Array.isArray(initialFiles) ? initialFiles : [initialFiles];
+            console.log("[ThreeViewer] loadInitial with items:", itemsToProcess);
             
-            for (const item of filesArray) {
-                if (item instanceof File) {
-                    filesToProcess.push(item);
-                } else if (typeof item === 'string') {
-                    urlsToLoad.push(item);
-                }
-            }
-
-            // Process direct files
-            if (filesToProcess.length > 0) {
-                await processFiles(filesToProcess);
-            }
-
-            // Process URLs
-            for (const url of urlsToLoad) {
-                console.log("[ThreeViewer] Loading URL:", url);
-                try {
-                    const urlPath = url.split('?')[0].split('#')[0];
-                    console.log("[ThreeViewer] Parsed path:", urlPath);
+            // 分离 3D Tiles 和其他模型
+            const modelItems: (File | string)[] = [];
+            
+            for (const item of itemsToProcess) {
+                if (typeof item === 'string') {
+                    const urlPath = item.split('?')[0].split('#')[0];
                     if (urlPath.toLowerCase().endsWith('.json') || urlPath.includes('tileset')) {
-                        console.log("[ThreeViewer] Detected as 3D Tiles");
-                        // Assume 3D Tiles
-                        mgrInstance.addTileset(url, (p, msg) => {
+                        console.log("[ThreeViewer] Initial URL detected as 3D Tiles:", item);
+                        mgrInstance.addTileset(item, (p, msg) => {
                             setProgress(p);
                             if(msg) setStatus(cleanStatus(msg));
                         });
@@ -699,22 +683,15 @@ export const ThreeViewer = ({
                         setStatus(t("tileset_loaded"));
                         setTimeout(() => mgrInstance?.fitView(), 500);
                     } else {
-                        console.log("[ThreeViewer] Fetching URL...");
-                        const response = await fetch(url);
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        const blob = await response.blob();
-                        console.log("[ThreeViewer] Fetched blob size:", blob.size);
-                        const fileName = urlPath.split('/').pop() || "model";
-                        const file = new File([blob], fileName);
-                        console.log("[ThreeViewer] Created file object:", fileName);
-                        await processFiles([file]);
+                        modelItems.push(item);
                     }
-                } catch (err) {
-                    console.error("[ThreeViewer] Failed to load initial URL:", url, err);
-                    setToast({ message: `${t("failed")}: ${err instanceof Error ? err.message : String(err)}`, type: 'error' });
+                } else {
+                    modelItems.push(item);
                 }
+            }
+
+            if (modelItems.length > 0) {
+                await processFiles(modelItems);
             }
         };
 
@@ -918,35 +895,58 @@ export const ThreeViewer = ({
         setSelectedProps(finalProps);
     };
 
-    const processFiles = async (files: File[]) => {
-        if (!files.length || !sceneMgr.current) return;
-        console.log("[ThreeViewer] processFiles called with", files.length, "files");
+    const processFiles = async (items: (File | string)[]) => {
+        if (!items.length || !sceneMgr.current) return;
+        console.log("[ThreeViewer] processFiles called with", items.length, "items");
         setLoading(true);
         setStatus(t("loading"));
         setProgress(0);
         
         try {
             // 分离 nbim 和其他文件
-            const nbimFiles = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
-            const otherFiles = files.filter(f => !f.name.toLowerCase().endsWith('.nbim'));
-            console.log("[ThreeViewer] nbimFiles:", nbimFiles.length, "otherFiles:", otherFiles.length);
+            const nbimItems: (File | string)[] = [];
+            const otherItems: (File | string)[] = [];
+
+            for (const item of items) {
+                const path = typeof item === 'string' ? item.split('?')[0].split('#')[0] : item.name;
+                if (path.toLowerCase().endsWith('.nbim')) {
+                    nbimItems.push(item);
+                } else {
+                    otherItems.push(item);
+                }
+            }
+            
+            console.log("[ThreeViewer] nbimItems:", nbimItems.length, "otherItems:", otherItems.length);
 
             // 处理 nbim 文件
-            for (const file of nbimFiles) {
-                console.log("[ThreeViewer] Loading nbim:", file.name);
+            for (const item of nbimItems) {
                 if (sceneMgr.current) {
-                    await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
-                        setProgress(p);
-                        if(msg) setStatus(cleanStatus(msg));
-                    });
+                    if (typeof item === 'string') {
+                        console.log("[ThreeViewer] Fetching NBIM URL:", item);
+                        const response = await fetch(item);
+                        if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
+                        const blob = await response.blob();
+                        const fileName = item.split('?')[0].split('#')[0].split('/').pop() || 'model.nbim';
+                        const file = new File([blob], fileName);
+                        await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
+                            setProgress(p);
+                            if(msg) setStatus(cleanStatus(msg));
+                        });
+                    } else {
+                        console.log("[ThreeViewer] Loading NBIM File:", item.name);
+                        await (sceneMgr.current as any).loadNbim(item, (p: number, msg: string) => {
+                            setProgress(p);
+                            if(msg) setStatus(cleanStatus(msg));
+                        });
+                    }
                 }
             }
 
             // 处理其他模型文件 (glb, ifc, etc.)
-            if (otherFiles.length > 0) {
+            if (otherItems.length > 0) {
                 console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
                 const loadedObjects = await loadModelFiles(
-                    otherFiles, 
+                    otherItems, 
                     (p, msg) => {
                         setProgress(p);
                         if(msg) setStatus(cleanStatus(msg));
@@ -1003,18 +1003,8 @@ export const ThreeViewer = ({
                     setTimeout(() => sceneMgr.current?.fitView(), 500);
                 }
             } else {
-                console.log("[ThreeViewer] Fetching URL...");
-                // Assume other model formats via loadModelFiles (needs to support URL)
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const blob = await response.blob();
-                console.log("[ThreeViewer] Fetched blob size:", blob.size);
-                const fileName = urlPath.split('/').pop() || "model";
-                const file = new File([blob], fileName);
-                console.log("[ThreeViewer] Created file object:", fileName);
-                await processFiles([file]);
+                // 直接传递 URL 到 processFiles，让其内部处理或传递给加载器
+                await processFiles([url]);
             }
         } catch (err) {
             console.error("[ThreeViewer] handleOpenUrl error:", err);
