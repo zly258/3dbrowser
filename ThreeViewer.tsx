@@ -684,8 +684,12 @@ export const ThreeViewer = ({
 
             // Process URLs
             for (const url of urlsToLoad) {
+                console.log("[ThreeViewer] Loading URL:", url);
                 try {
-                    if (url.toLowerCase().endsWith('.json') || url.includes('tileset')) {
+                    const urlPath = url.split('?')[0].split('#')[0];
+                    console.log("[ThreeViewer] Parsed path:", urlPath);
+                    if (urlPath.toLowerCase().endsWith('.json') || urlPath.includes('tileset')) {
+                        console.log("[ThreeViewer] Detected as 3D Tiles");
                         // Assume 3D Tiles
                         mgrInstance.addTileset(url, (p, msg) => {
                             setProgress(p);
@@ -695,14 +699,21 @@ export const ThreeViewer = ({
                         setStatus(t("tileset_loaded"));
                         setTimeout(() => mgrInstance?.fitView(), 500);
                     } else {
+                        console.log("[ThreeViewer] Fetching URL...");
                         const response = await fetch(url);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
                         const blob = await response.blob();
-                        const fileName = url.substring(url.lastIndexOf('/') + 1) || "model";
+                        console.log("[ThreeViewer] Fetched blob size:", blob.size);
+                        const fileName = urlPath.split('/').pop() || "model";
                         const file = new File([blob], fileName);
+                        console.log("[ThreeViewer] Created file object:", fileName);
                         await processFiles([file]);
                     }
                 } catch (err) {
-                    console.error("Failed to load initial URL:", url, err);
+                    console.error("[ThreeViewer] Failed to load initial URL:", url, err);
+                    setToast({ message: `${t("failed")}: ${err instanceof Error ? err.message : String(err)}`, type: 'error' });
                 }
             }
         };
@@ -909,6 +920,7 @@ export const ThreeViewer = ({
 
     const processFiles = async (files: File[]) => {
         if (!files.length || !sceneMgr.current) return;
+        console.log("[ThreeViewer] processFiles called with", files.length, "files");
         setLoading(true);
         setStatus(t("loading"));
         setProgress(0);
@@ -917,9 +929,11 @@ export const ThreeViewer = ({
             // 分离 nbim 和其他文件
             const nbimFiles = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
             const otherFiles = files.filter(f => !f.name.toLowerCase().endsWith('.nbim'));
+            console.log("[ThreeViewer] nbimFiles:", nbimFiles.length, "otherFiles:", otherFiles.length);
 
             // 处理 nbim 文件
             for (const file of nbimFiles) {
+                console.log("[ThreeViewer] Loading nbim:", file.name);
                 if (sceneMgr.current) {
                     await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
                         setProgress(p);
@@ -930,6 +944,7 @@ export const ThreeViewer = ({
 
             // 处理其他模型文件 (glb, ifc, etc.)
             if (otherFiles.length > 0) {
+                console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
                 const loadedObjects = await loadModelFiles(
                     otherFiles, 
                     (p, msg) => {
@@ -940,6 +955,7 @@ export const ThreeViewer = ({
                     sceneSettings, // Pass settings
                     libPath
                 );
+                console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
                 for (const obj of loadedObjects) {
                     await sceneMgr.current.addModel(obj);
                 }
@@ -947,9 +963,10 @@ export const ThreeViewer = ({
             
             updateTree();
             setStatus(t("success"));
+            console.log("[ThreeViewer] processFiles completed successfully");
             setTimeout(() => sceneMgr.current?.fitView(), 100);
         } catch (err) {
-            console.error(err); 
+            console.error("[ThreeViewer] processFiles error:", err); 
             setStatus(t("failed")); 
             setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
         } finally { 
@@ -967,10 +984,14 @@ export const ThreeViewer = ({
         const url = window.prompt(t("menu_open_url"), "http://");
         if (!url || !url.startsWith("http")) return;
         
+        console.log("[ThreeViewer] handleOpenUrl called with:", url);
         setLoading(true);
         setStatus(t("processing") + "...");
         try {
-            if (url.toLowerCase().endsWith('.json') || url.includes('tileset')) {
+            const urlPath = url.split('?')[0].split('#')[0];
+            console.log("[ThreeViewer] Parsed path:", urlPath);
+            if (urlPath.toLowerCase().endsWith('.json') || urlPath.includes('tileset')) {
+                console.log("[ThreeViewer] Detected as 3D Tiles");
                 // Assume 3D Tiles
                 if (sceneMgr.current) {
                     sceneMgr.current.addTileset(url, (p, msg) => {
@@ -982,15 +1003,22 @@ export const ThreeViewer = ({
                     setTimeout(() => sceneMgr.current?.fitView(), 500);
                 }
             } else {
+                console.log("[ThreeViewer] Fetching URL...");
                 // Assume other model formats via loadModelFiles (needs to support URL)
                 const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const blob = await response.blob();
-                const fileName = url.substring(url.lastIndexOf('/') + 1) || "model";
+                console.log("[ThreeViewer] Fetched blob size:", blob.size);
+                const fileName = urlPath.split('/').pop() || "model";
                 const file = new File([blob], fileName);
+                console.log("[ThreeViewer] Created file object:", fileName);
                 await processFiles([file]);
             }
         } catch (err) {
-            console.error(err);
+            console.error("[ThreeViewer] handleOpenUrl error:", err);
+            setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
         } finally {
             setLoading(false);
@@ -1469,18 +1497,6 @@ export const ThreeViewer = ({
                         borderRadius: '4px',
                         backgroundColor: 'rgba(255,255,255,0.1)'
                     }}>
-                        <div style={{ 
-                            width: '18px', 
-                            height: '18px', 
-                            background: 'white', 
-                            color: theme.accent, 
-                            borderRadius: '3px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            fontWeight: '800', 
-                            fontSize: '10px' 
-                        }}>3D</div>
                         <span style={{ fontWeight: '600', letterSpacing: '0.5px' }}>3D BROWSER</span>
                     </div>
                 </div>

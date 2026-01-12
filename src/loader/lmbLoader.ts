@@ -160,7 +160,7 @@ export class LMBLoader extends Loader {
       loader.load(url, (data) => resolve(data as ArrayBuffer), onProgress, reject);
     });
 
-    const isCompressed = url.toLowerCase().endsWith("lmbz");
+    const isCompressed = url.split('?')[0].split('#')[0].toLowerCase().endsWith("lmbz");
     if (isCompressed) {
       try {
         const compressedData = new Uint8Array(buffer);
