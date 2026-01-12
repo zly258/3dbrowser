@@ -1,48 +1,21 @@
-非商业用途授权协议 (Non-Commercial Use License)
-
-版权所有 (c) 2026 zhangly1403@163.com
-
-特此授权任何获得本软件及相关文档文件（以下简称“软件”）副本的人员，在满足以下条件的前提下，可以免费使用、复制、修改、合并、发布及分发本软件：
-
-1. 非商业用途限制：
-本软件仅供个人学习、教育研究、非营利性项目或个人非商业用途使用。严禁在未经版权持有人（zhangly1403@163.com）明确书面许可的情况下，将本软件及其任何部分、衍生作品用于任何直接或间接的商业用途，包括但不限于：
-- 开发商业软件或产品。
-- 集成到商业服务中。
-- 用于提供营利性服务。
-- 销售或出租包含本软件的产品。
-- 任何产生收益的商业活动。
-
-2. 署名要求：
-所有本软件的使用者必须保留原始版权声明和署名。在任何分发或展示本软件的作品中，必须明确标注原始出处及作者信息。
-
-3. 包含声明：
-本软件的所有副本或实质性部分均应包含上述版权声明和本许可声明。
-
-4. 免责声明：
-本软件按“原样”提供，不作任何明示或暗示的保证，包括但不限于对适销性、特定用途的适用性和非侵权性的保证。在任何情况下，作者或版权持有人均不对因本软件或使用本软件而引起的任何索赔、损害或其他责任（无论是合同、侵权还是其他原因）负责。
-
-如需商业授权，请联系 zhangly1403@163.com 以获取正式的商业许可协议。
-
----
-
-Non-Commercial Use License
+MIT License
 
 Copyright (c) 2026 zhangly1403@163.com
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software under the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. NON-COMMERCIAL USE RESTRICTION:
-This software is provided for educational, research, and personal learning purposes only. Any commercial use, direct or indirect, is strictly prohibited without explicit written permission from the copyright holder (zhangly1403@163.com). This includes but is not limited to:
-- Commercial software or product development.
-- Integration into commercial services.
-- Providing revenue-generating services.
-- Sale or rental of products containing this software.
-- Any revenue-generating activities.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. ATTRIBUTION REQUIREMENT:
-All users of this software must provide proper attribution and retain the original copyright notice and this permission notice in all copies or substantial portions of the Software.
-
-3. DISCLAIMER:
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY.
-
-For commercial licensing inquiries, contact zhangly1403@163.com.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
