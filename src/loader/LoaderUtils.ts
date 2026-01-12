@@ -7,7 +7,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import { TFunc, ProgressCallback } from "../theme/Locales";
-import { SceneSettings, AxisOption } from "../utils/SceneManager";
+import { SceneSettings } from "../utils/SceneManager";
 import { loadIFC } from "./IFCLoader";
 import { OCCTLoader } from "./OCCTLoader";
 
@@ -18,80 +18,41 @@ export interface LoadedItem {
     object?: THREE.Object3D;
 }
 
-// 辅助函数：纠正上轴到Y轴向上
-const applyUpAxisCorrection = (object: THREE.Object3D, sourceAxis: AxisOption) => {
-    // 我们假设目标是+Y轴向上（Three.js标准）
-    const q = new THREE.Quaternion();
-    
-    switch (sourceAxis) {
-        case '+x':
-            // +X向上。我们需要X -> Y。绕Z轴旋转+90度。
-            q.setFromAxisAngle(new THREE.Vector3(0,0,1), Math.PI/2);
-            break;
-        case '-x':
-            // -X向上。我们需要-X -> Y。绕Z轴旋转-90度。
-            q.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI/2);
-            break;
-        case '+y':
-            // 已经是Y轴向上。
-            return;
-        case '-y':
-            // -Y向上。绕X轴旋转180度。
-            q.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI);
-            break;
-        case '+z':
-            // +Z向上（标准工程坐标）。绕X轴旋转-90度（右手坐标系）。
-            q.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
-            break;
-        case '-z':
-            // -Z向上。绕X轴旋转+90度。
-            q.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI/2);
-            break;
-    }
-
-    object.applyQuaternion(q);
-};
-
-
-
 export const loadModelFiles = async (
-    files: FileList | File[], 
+    files: (File | string)[], 
     onProgress: ProgressCallback, 
     t: TFunc,
-    settings: SceneSettings // 传递当前设置以读取轴配置
+    settings: SceneSettings
 ): Promise<THREE.Object3D[]> => {
     const loadedObjects: THREE.Object3D[] = [];
     const totalFiles = files.length;
 
     // 1. 加载所有文件
     for (let i = 0; i < totalFiles; i++) {
-        const file = files[i];
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        const url = URL.createObjectURL(file);
+        const fileOrUrl = files[i];
+        const isUrl = typeof fileOrUrl === 'string';
+        const fileName = isUrl ? (fileOrUrl as string).split('/').pop() || 'model' : (fileOrUrl as File).name;
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        const url = isUrl ? (fileOrUrl as string) : URL.createObjectURL(fileOrUrl as File);
         
         const fileBaseProgress = (i / totalFiles) * 100;
         const fileWeight = 100 / totalFiles;
 
         const updateFileProgress = (p: number, msg?: string) => {
             const safeP = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
-            // 如果子加载器提供消息，则使用它，否则使用默认值
-            const status = msg || `${t("reading")} ${file.name}`;
-            // 调整本地进度到全局权重
+            const status = msg || `${t("reading")} ${fileName}`;
             onProgress(Math.round(fileBaseProgress + (safeP * fileWeight / 100)), status);
         };
         
         updateFileProgress(0);
 
         let object: THREE.Object3D | null = null;
-        // 确定使用哪个轴设置
-        let axisSetting: AxisOption = '+y';
 
         try {
                 if (ext === 'lmb' || ext === 'lmbz') {
                     const loader = new LMBLoader();
                     loader.setEnableInstancing(settings.enableInstancing);
                     object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
-                    axisSetting = '+y'; 
                 } else if (ext === 'glb' || ext === 'gltf') {
                     const loader = new GLTFLoader();
                     const gltf = await new Promise<any>((resolve, reject) => {
@@ -101,7 +62,6 @@ export const loadModelFiles = async (
                         }, reject);
                     });
                     object = gltf.scene;
-                    axisSetting = '+y'; // GLB 默认使用 Y 轴向上
                 } else if (ext === 'fbx') {
                     const loader = new FBXLoader();
                     object = await new Promise<THREE.Group>((resolve, reject) => {
@@ -110,23 +70,19 @@ export const loadModelFiles = async (
                             else updateFileProgress(50);
                         }, reject);
                     });
-                    axisSetting = '+y'; // FBX 默认使用 Y 轴向上
                 } else if (ext === 'ifc') {
                     object = await loadIFC(url, updateFileProgress, t);
-                    axisSetting = '-z'; // 用户要求 IFC 默认使用 -z 向上
                 } else if (ext === 'obj') {
                     const loader = new OBJLoader();
                     object = await loader.loadAsync(url, (e) => {
                         if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
                     });
-                    axisSetting = '+y';
                 } else if (ext === 'stl') {
                     const loader = new STLLoader();
                     const geometry = await loader.loadAsync(url, (e) => {
                         if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
                     });
                     object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x888888 }));
-                    axisSetting = '+y';
                 } else if (ext === 'ply') {
                     const loader = new PLYLoader();
                     const geometry = await loader.loadAsync(url, (e) => {
@@ -136,34 +92,27 @@ export const loadModelFiles = async (
                         color: 0x888888, 
                         vertexColors: geometry.hasAttribute('color') 
                     }));
-                    axisSetting = '+y';
                 } else if (ext === '3mf') {
                     const loader = new ThreeMFLoader();
                     object = await loader.loadAsync(url, (e) => {
                         if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
                     });
-                    axisSetting = '+y';
                 } else if (ext === 'stp' || ext === 'step' || ext === 'igs' || ext === 'iges') {
-                    const buffer = await file.arrayBuffer();
+                    const buffer = isUrl ? await fetch(url).then(r => r.arrayBuffer()) : await (fileOrUrl as File).arrayBuffer();
                     const loader = new OCCTLoader();
                     object = await loader.load(buffer, t, (p, msg) => {
                         updateFileProgress(p, msg);
                     });
-                    axisSetting = '+z'; // CAD 常用 Z 轴向上
                 }
 
                 if (object) {
-                    object.name = file.name;
-                    
-                    // 应用轴向校正
-                    applyUpAxisCorrection(object, axisSetting);
-
+                    object.name = fileName;
                     loadedObjects.push(object);
                 }
             } catch(e) {
-                console.error(`加载${file.name}失败`, e);
+                console.error(`加载${fileName}失败`, e);
             } finally {
-                URL.revokeObjectURL(url);
+                if (!isUrl) URL.revokeObjectURL(url);
             }
     }
     

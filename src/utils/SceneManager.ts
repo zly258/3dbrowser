@@ -20,15 +20,12 @@ interface MeasurementRecord {
     group: THREE.Group;
 }
 
-export type AxisOption = '+x'|'-x'|'+y'|'-y'|'+z'|'-z';
-
 export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
     bgColor: string;
     enableInstancing: boolean; // 是否开启实例化 (BatchedMesh/InstancedMesh)
     viewCubeSize?: number;
-    appMode?: 'local' | 'remote';
 }
 
 export interface StructureTreeNode {

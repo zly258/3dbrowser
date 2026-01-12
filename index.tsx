@@ -83,59 +83,7 @@ const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: st
     <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme, fontFamily) }} />
 );
 
-// --- 关于弹窗 ---
-const AboutModal = ({ show, onClose, styles, theme, t }: { show: boolean, onClose: () => void, styles: any, theme: any, t: any }) => {
-    if (!show) return null;
-    return (
-        <div style={styles.modalOverlay}>
-            <div style={{ ...styles.modalContent, width: '450px', padding: '0' }}>
-                <div style={{ ...styles.floatingHeader, borderBottom: `1px solid ${theme.border}` }}>
-                    <span>{t('about')}</span>
-                    <div 
-                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: '50%' }} 
-                        onClick={onClose}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                        <IconClose size={18} />
-                    </div>
-                </div>
-                <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-                    <div style={{ 
-                        width: '64px', height: '64px', 
-                        background: theme.accent, 
-                        borderRadius: '4px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'white', fontWeight: '800', fontSize: '28px',
-                        boxShadow: `0 4px 12px ${theme.accent}40`
-                    }}>3D</div>
-                    <div style={{ textAlign: 'center' }}>
-                        <h2 style={{ margin: '0 0 5px 0', fontSize: '20px', color: theme.text }}>3D Browser</h2>
-                        <div style={{ fontSize: '12px', color: theme.textMuted }}>Version 1.0.0</div>
-                    </div>
-                    <div style={{ 
-                        width: '100%', 
-                        height: '1px', 
-                        background: `linear-gradient(to right, transparent, ${theme.border}, transparent)` 
-                    }} />
-                    <div style={{ fontSize: '13px', lineHeight: '1.6', color: theme.text, textAlign: 'center' }}>
-                        一个基于 Three.js 的高性能 3D 模型浏览器。<br/>
-                        支持多种三维格式加载。
-                    </div>
-                    <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: '10px' }}>
-                        © 2026 zhangly1403@163.com. All rights reserved.
-                    </div>
-                    <button 
-                        onClick={onClose}
-                        style={{ ...styles.btn, backgroundColor: theme.accent, color: 'white', border: 'none', padding: '8px 30px', marginTop: '10px' }}
-                    >
-                        {t('btn_confirm')}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
+// --- 全局样式注入 ---
 
 // --- 主应用 ---
 const App = () => {
@@ -176,16 +124,6 @@ const App = () => {
 
     const styles = useMemo(() => createStyles(theme, fontFamily), [theme, fontFamily]);
 
-    // 菜单模式状态 - 从localStorage恢复
-    const [menuMode, setMenuMode] = useState<'ribbon' | 'classic'>(() => {
-        try {
-            const saved = localStorage.getItem('3dbrowser_menuMode');
-            return (saved === 'ribbon' || saved === 'classic') ? saved : 'ribbon';
-        } catch {
-            return 'ribbon';
-        }
-    });
-
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
         try {
@@ -208,7 +146,6 @@ const App = () => {
     
     // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export'>('none');
-    const [showAbout, setShowAbout] = useState(false);
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
@@ -264,7 +201,6 @@ const App = () => {
                     bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
                     enableInstancing: typeof parsed.enableInstancing === 'boolean' ? parsed.enableInstancing : true,
                     viewCubeSize: typeof parsed.viewCubeSize === 'number' ? parsed.viewCubeSize : 100,
-                    appMode: (parsed.appMode === 'local' || parsed.appMode === 'remote') ? parsed.appMode : 'local',
                 };
             }
         } catch (e) { console.error("Failed to load sceneSettings", e); }
@@ -274,7 +210,6 @@ const App = () => {
             bgColor: theme.canvasBg,
             enableInstancing: true,
             viewCubeSize: 100,
-            appMode: 'local',
         };
     });
 
@@ -365,12 +300,6 @@ const App = () => {
 
     useEffect(() => {
         try {
-            localStorage.setItem('3dbrowser_menuMode', menuMode);
-        } catch (e) { console.error("Failed to save menuMode", e); }
-    }, [menuMode]);
-
-    useEffect(() => {
-        try {
             localStorage.setItem('3dbrowser_fontFamily', fontFamily);
         } catch (e) { console.error("Failed to save fontFamily", e); }
     }, [fontFamily]);
@@ -448,7 +377,7 @@ const App = () => {
             if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
                 const files = Array.from(e.dataTransfer.files);
                 // 检查格式支持
-                const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3ds', '.dae'];
+                const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3ds', '.dae', '.stp', '.step', '.igs', '.iges'];
                 const unsupportedFiles = files.filter(f => {
                     const ext = '.' + f.name.split('.').pop()?.toLowerCase();
                     return !supportedExtensions.includes(ext);
@@ -976,7 +905,7 @@ const App = () => {
         
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const files = Array.from(e.dataTransfer.files) as File[];
-            const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3mf'];
+            const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3mf', '.stp', '.step', '.igs', '.iges'];
             
             const validFiles = files.filter((file: File) => {
                 const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -1163,12 +1092,10 @@ const App = () => {
             >
              <GlobalStyle theme={theme} fontFamily={fontFamily} />
 
-             {/* Top MenuBar */}
              <MenuBar 
                 t={t}
                 themeType={themeMode}
                 setThemeType={setThemeMode}
-                menuMode={menuMode}
                 handleOpenFiles={handleOpenFiles}
                 handleOpenFolder={handleOpenFolder}
                 handleOpenUrl={handleOpenUrl}
@@ -1184,11 +1111,10 @@ const App = () => {
                 setShowProps={setShowProps}
                 showStats={showStats}
                 setShowStats={setShowStats}
-                handleAbout={() => setShowAbout(true)}
                 sceneMgr={sceneMgr.current}
                 styles={styles}
                 theme={theme}
-            />
+             />
 
              {/* Main Content Area: Flex Row */}
              <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
@@ -1323,21 +1249,12 @@ const App = () => {
                         <SettingsPanel 
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
-                            menuMode={menuMode} setMenuMode={setMenuMode}
                             accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
                             fontFamily={fontFamily} setFontFamily={setFontFamily}
                             styles={styles} theme={theme}
                         />
                     )}
-
-                    <AboutModal 
-                        show={showAbout} 
-                        onClose={() => setShowAbout(false)} 
-                        styles={styles} 
-                        theme={theme} 
-                        t={t} 
-                    />
                 </div>
 
                 {/* Right Sidebar: Properties */}
@@ -1435,6 +1352,31 @@ const App = () => {
                     )}
                     <div style={{ width: '1px', height: '12px', backgroundColor: 'rgba(255,255,255,0.3)' }} />
                     <div style={{ opacity: 0.9 }}>{lang === 'zh' ? '简体中文' : 'English'}</div>
+                    
+                    {/* Website Title/Logo */}
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px', 
+                        marginLeft: '8px',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(255,255,255,0.1)'
+                    }}>
+                        <div style={{ 
+                            width: '18px', 
+                            height: '18px', 
+                            background: 'white', 
+                            color: theme.accent, 
+                            borderRadius: '3px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            fontWeight: '800', 
+                            fontSize: '10px' 
+                        }}>3D</div>
+                        <span style={{ fontWeight: '600', letterSpacing: '0.5px' }}>3D BROWSER</span>
+                    </div>
                 </div>
              </div>
 

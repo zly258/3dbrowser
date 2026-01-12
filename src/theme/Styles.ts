@@ -71,111 +71,12 @@ export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Seg
     * { scrollbar-width: thin; scrollbar-color: #c2c2c2 ${theme.bg}; }
     body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${fontFamily}; -webkit-font-smoothing: antialiased; }
     * { box-sizing: border-box; }
-    /* Ribbon styles */
-    .ribbon-button-large { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; height: 72px; padding: 4px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 11px; gap: 4px; color: ${theme.text}; }
-    .ribbon-button-large:hover { background-color: ${theme.highlight}; border-color: ${theme.accent}40; }
-    .ribbon-button-small { display: flex; align-items: center; width: 100%; height: 22px; padding: 2px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; font-size: 11px; gap: 8px; color: ${theme.text}; }
-    .ribbon-button-small:hover { background-color: ${theme.highlight}; border-color: ${theme.accent}40; }
 `;
 
 export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => ({
     // Desktop / Shared
     container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily, userSelect: "none" as const, overflow: "hidden" },
     
-    // Ribbon UI Styles
-    ribbonContainer: {
-        display: "flex",
-        flexDirection: "column" as const,
-        backgroundColor: theme.headerBg,
-        borderBottom: `1px solid ${theme.border}`,
-        WebkitAppRegion: "drag" as any,
-        zIndex: 1000,
-        fontFamily,
-        boxShadow: "none",
-    },
-    ribbonTitleBar: {
-        height: "32px", 
-        display: "flex",
-        alignItems: "center",
-        padding: "0 0 0 10px",
-        fontSize: "12px", 
-        color: theme.text,
-        backgroundColor: theme.bg,
-    },
-    ribbonTabs: {
-        display: "flex", // Show tabs section
-        height: "30px",
-        backgroundColor: theme.bg,
-        borderBottom: `1px solid ${theme.border}`,
-        WebkitAppRegion: "no-drag" as any,
-    },
-    ribbonTab: (active: boolean, isFile: boolean = false) => ({
-        padding: "6px 16px", 
-        fontSize: "12px", 
-        textTransform: "uppercase" as const,
-        cursor: "pointer",
-        backgroundColor: isFile ? (active ? theme.highlight : "transparent") : (active ? theme.panelBg : "transparent"),
-        color: isFile ? (active ? theme.accent : theme.text) : (active ? theme.accent : theme.text),
-        border: active ? `1px solid ${theme.border}` : "1px solid transparent",
-        borderBottom: active ? `1px solid ${theme.panelBg}` : "1px solid transparent",
-        marginBottom: "-1px",
-        fontWeight: active ? "600" : "400",
-        zIndex: 2,
-        transition: "all 0.1s",
-    }),
-    ribbonContent: {
-        height: "92px", // Increased from 88px to fit checkboxes better
-        backgroundColor: theme.panelBg,
-        borderTop: `1px solid ${theme.border}`,
-        display: "flex",
-        padding: "2px 4px", 
-        gap: "0px", 
-        overflowX: "auto" as const,
-        overflowY: "hidden" as const, // Force no vertical scroll
-        WebkitAppRegion: "no-drag" as any,
-    },
-    ribbonPanel: {
-        display: "flex",
-        flexDirection: "column" as const,
-        borderRight: `1px solid ${theme.border}80`,
-        padding: "0", // Removed padding to let label fill width
-        minWidth: "64px", 
-        height: "100%",
-        position: "relative" as const,
-        flexShrink: 0
-    },
-    ribbonPanelContent: {
-        flex: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "4px", 
-        padding: "4px 8px" // Added padding here instead
-    },
-    ribbonPanelRows: {
-        display: "grid",
-        gridTemplateRows: "repeat(3, 1fr)", 
-        gridAutoFlow: "column",
-        gap: "0px", 
-        height: "100%",
-        minWidth: "max-content",
-        alignItems: "center"
-    },
-    ribbonPanelLabel: {
-        fontSize: "11px", 
-        color: theme.textMuted,
-        textAlign: "center" as const,
-        padding: "0px 4px 4px 4px", // Further reduced top padding, increased bottom
-        lineHeight: "1", // Ensure line height doesn't push text down
-        whiteSpace: "nowrap" as const,
-        width: "100%",
-        opacity: 0.8,
-        borderTop: `1px solid ${theme.border}30`,
-        backgroundColor: `${theme.bg}50`,
-        marginTop: "auto",
-        overflow: "visible" // Prevent bottom cutoff
-    },
-
     // Classic Menu Styles
     classicMenuBar: {
         display: "flex",
@@ -219,60 +120,6 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
         justifyContent: "space-between",
         backgroundColor: hover ? theme.itemHover : "transparent",
     }),
-
-    ribbonButtonLarge: (active: boolean = false, hover: boolean = false) => ({
-        display: "flex",
-        flexDirection: "column" as const,
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 8px", 
-        height: "calc(100% - 4px)",
-        gap: "2px", 
-        cursor: "pointer",
-        borderRadius: "4px",
-        backgroundColor: active ? theme.highlight : (hover ? theme.itemHover : "transparent"),
-        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}40` : "1px solid transparent"),
-        transition: "all 0.1s",
-    }),
-    ribbonButtonMedium: (active: boolean, hover: boolean = false) => ({
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 8px", 
-        cursor: "pointer",
-        borderRadius: "4px",
-        width: "auto",
-        minWidth: "32px", 
-        height: "22px", 
-        backgroundColor: active ? theme.highlight : (hover ? theme.itemHover : "transparent"),
-        border: active ? `1px solid ${theme.accent}40` : (hover ? `1px solid ${theme.accent}40` : "1px solid transparent"),
-        transition: "all 0.1s",
-        fontSize: "11px", 
-    }),
-    ribbonButtonSmall: (active: boolean, hover: boolean = false) => ({
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "24px", 
-        height: "22px", 
-        cursor: "pointer",
-        borderRadius: "0px",
-        backgroundColor: active ? theme.highlight : (hover ? "rgba(128, 128, 128, 0.1)" : "transparent"),
-        border: active ? `1px solid ${theme.accent}80` : "1px solid transparent",
-        transition: "all 0.1s",
-    }),
-    ribbonCheckbox: {
-        display: "flex",
-        alignItems: "center",
-        gap: "4px", 
-        padding: "0 6px", 
-        fontSize: "11px", 
-        cursor: "pointer",
-        height: "22px", 
-        ":hover": {
-            backgroundColor: theme.itemHover
-        }
-    },
     
     statusBar: {
         height: "24px",
