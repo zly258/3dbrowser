@@ -2,8 +2,8 @@
 
 <div align="center">
   <h1>Professional 3D Model Viewer</h1>
-  <p><em>Modern Cross-platform 3D model viewer with a professional ribbon interface</em></p>
-  <p><strong>Version 1.0.0</strong></p>
+  <p><em>Modern Cross-platform 3D model viewer with a clean classic interface</em></p>
+  <p><strong>Version 1.1.0</strong></p>
   <div>
     <a href="#english">English</a> | <a href="#chinese">中文</a>
   </div>
@@ -22,7 +22,7 @@
 ## Key Features
 
 - **Cross-Platform Desktop App**: High-performance desktop application powered by **Electron**, supporting Windows and Linux.
-- **Ribbon Interface**: Modern ribbon-style UI similar to professional CAD software, enhancing workflow efficiency.
+- **Clean Classic Interface**: Intuitive menu-driven UI designed for focus and productivity.
 - **High-Performance Rendering**: Powered by **NBIM** and **BatchedMesh** technologies, capable of smoothly rendering over 100,000 independent meshes with minimal draw calls.
 - **Multi-format Support**: Load and display various 3D model formats including IFC, GLB/GLTF, 3D Tiles, FBX, OBJ, and LMB.
 - **3D Tiles Streaming**: Efficient loading solution for large-scale geospatial data.
@@ -93,7 +93,7 @@ npm run electron:build -- --win
 ## Core Components
 
 - **SceneManager.ts**: Core 3D engine handling scene management, rendering, and camera controls.
-- **MenuBar.tsx**: Ribbon-style interface with file operations, view dropdown menu, and tool access.
+- **MenuBar.tsx**: Classic menu-driven interface with file operations, view controls, and tool access.
 - **ToolPanels.tsx**: Measurement, clipping, and export tool panels.
 - **SceneTree.tsx**: Hierarchical view of scene objects with selection and real-time search support.
 - **PropertiesPanel.tsx**: Object properties and measurement results display.
@@ -177,7 +177,7 @@ Users assume all risks when using this project. The author assumes no responsibi
 ## 特色功能
 
 - **跨平台桌面端**: 基于 **Electron** 的高性能桌面应用程序，支持 Windows 和 Linux 系统。
-- **功能区界面**: 类似专业 CAD 软件的现代功能区界面，提升工作效率。
+- **经典简洁界面**: 直观的菜单驱动界面，专为高效工作流设计。
 - **高性能渲染**: 采用 **NBIM** 与 **BatchedMesh** 技术，支持 10 万+ 独立网格（Mesh）的流畅渲染，极大地降低了绘制调用（Draw Calls）。
 - **多格式支持**: 支持 IFC、GLB/GLTF、3D Tiles、FBX、OBJ、LMB 等多种 3D 文件格式。
 - **3D Tiles 流式加载**: 针对大规模地理空间数据的高效加载方案。
@@ -249,7 +249,7 @@ npm run electron:build -- --win
 ## 核心组件
 
 - **SceneManager.ts**: 核心 3D 引擎，集成 NBIM 解析、BatchedMesh 优化管理及相机控制。
-- **MenuBar.tsx**: 功能区界面，提供文件操作、视图下拉菜单和工具访问。
+- **MenuBar.tsx**: 经典菜单界面，提供文件操作、视图控制和工具访问。
 - **ToolPanels.tsx**: 测量、剖切和导出工具面板。
 - **SceneTree.tsx**: 场景对象层级视图，支持对象选择与实时搜索。
 - **PropertiesPanel.tsx**: 对象属性和测量结果显示。

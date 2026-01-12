@@ -109,7 +109,6 @@ sceneMgr.fitView();
 | `viewCubeSize` | `number` | `100` | Size of the navigation cube. |
 | `bgColor` | `string` | `#ffffff` | Scene background color. |
 | `enableInstancing`| `boolean`| `true` | Enable GPU instancing for LMB. |
-| `appMode` | `'local' \| 'remote'` | `'local'` | UI mode (file vs URL). |
 
 ### 5. React Integration
 
@@ -266,7 +265,6 @@ sceneMgr.fitView();
 | `viewCubeSize` | `number` | `100` | 导航方块大小。 |
 | `bgColor` | `string` | `#ffffff` | 场景背景颜色。 |
 | `enableInstancing`| `boolean`| `true` | 开启 LMB 实例化渲染。 |
-| `appMode` | `'local' \| 'remote'` | `'local'` | UI 模式（本地 vs 远程）。 |
 
 ### 5. React 集成
 

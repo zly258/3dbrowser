@@ -106,6 +106,10 @@ export class OCCTLoader {
         }
 
         if (onProgress) onProgress(100, t('model_loaded'));
+
+        // Apply axis correction (Z-up to Y-up)
+        group.rotateX(-Math.PI / 2);
+        
         return group;
     }
 }

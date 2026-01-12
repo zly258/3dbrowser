@@ -2,7 +2,7 @@
 import React from "react";
 import { IconClose } from "../theme/Icons";
 import { TFunc, Lang } from "../theme/Locales";
-import { SceneSettings, AxisOption } from "../utils/SceneManager";
+import { SceneSettings } from "../utils/SceneManager";
 
 interface SettingsModalProps {
     t: TFunc;
@@ -19,8 +19,6 @@ interface SettingsModalProps {
     setFontFamily: (f: string) => void;
     accentColor: string;
     setAccentColor: (c: string) => void;
-    menuMode: 'ribbon' | 'classic';
-    setMenuMode: (m: 'ribbon' | 'classic') => void;
     styles: any;
     theme: any;
 }
@@ -45,7 +43,6 @@ const Row = ({ label, children, theme }: { label: string, children?: React.React
 
 export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
     t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, accentColor, setAccentColor,
-    menuMode, setMenuMode,
     showStats, setShowStats, fontFamily, setFontFamily, styles, theme 
 }) => {
     return (
@@ -100,56 +97,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                                 }}
                                 style={{ width: 40, height: 24, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
                             />
-                        </Row>
-
-                        <Row label={t("st_menu_mode")} theme={theme}>
-                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:0, border:`1px solid ${theme.border}`}}>
-                                <button 
-                                    onClick={() => setMenuMode('ribbon')}
-                                    style={{
-                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
-                                        background: menuMode === 'ribbon' ? theme.accent : 'transparent',
-                                        color: menuMode === 'ribbon' ? 'white' : theme.text
-                                    }}
-                                >
-                                    {t("menu_ribbon")}
-                                </button>
-                                <button 
-                                    onClick={() => setMenuMode('classic')}
-                                    style={{
-                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
-                                        background: menuMode === 'classic' ? theme.accent : 'transparent',
-                                        color: menuMode === 'classic' ? 'white' : theme.text
-                                    }}
-                                >
-                                    {t("menu_classic")}
-                                </button>
-                            </div>
-                        </Row>
-
-                        <Row label={t("st_app_mode")} theme={theme}>
-                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:0, border:`1px solid ${theme.border}`}}>
-                                <button 
-                                    onClick={() => onUpdate({ appMode: 'local' })}
-                                    style={{
-                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
-                                        background: (settings.appMode || 'local') === 'local' ? theme.accent : 'transparent',
-                                        color: (settings.appMode || 'local') === 'local' ? 'white' : theme.text
-                                    }}
-                                >
-                                    {t("mode_local")}
-                                </button>
-                                <button 
-                                    onClick={() => onUpdate({ appMode: 'remote' })}
-                                    style={{
-                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
-                                        background: settings.appMode === 'remote' ? theme.accent : 'transparent',
-                                        color: settings.appMode === 'remote' ? 'white' : theme.text
-                                    }}
-                                >
-                                    {t("mode_remote")}
-                                </button>
-                            </div>
                         </Row>
 
                         <Row label={t("st_lang")} theme={theme}>
