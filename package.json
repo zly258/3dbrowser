@@ -16,10 +16,10 @@
   "type": "module",
   "main": "./dist/3dbrowser.umd.js",
   "module": "./dist/3dbrowser.es.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/src/index.d.ts",
       "import": "./dist/3dbrowser.es.js",
       "require": "./dist/3dbrowser.umd.js"
     }
@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npx tsc -p tsconfig.lib.json",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder"
