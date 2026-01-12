@@ -30,11 +30,33 @@ import { ThreeViewer } from '@zhangly1403/3dbrowser';
 function App() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <ThreeViewer />
+      <ThreeViewer 
+        defaultTheme="dark"
+        defaultLang="en"
+        accentColor="#0078D4"
+        showStats={true}
+        onSelect={(uuid, object) => console.log('Selected:', uuid, object)}
+      />
     </div>
   );
 }
 ```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
+| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable |
+| `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
+| `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
+| `accentColor` | `string` | `"#0078D4"` | UI accent color |
+| `showStats` | `boolean` | `true` | Show performance statistics panel |
+| `showOutline` | `boolean` | `true` | Show scene structure outline panel |
+| `showProperties` | `boolean` | `true` | Show object properties panel |
+| `initialSettings` | `Partial<SceneSettings>` | - | Initial scene settings (lighting, bg, etc.) |
+| `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
+| `onLoad` | `(manager: SceneManager) => void` | - | Callback when the scene manager is initialized |
 
 ## Advanced Usage
 
@@ -89,11 +111,33 @@ import { ThreeViewer } from '@zhangly1403/3dbrowser';
 function App() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <ThreeViewer />
+      <ThreeViewer 
+        defaultTheme="dark"
+        defaultLang="zh"
+        accentColor="#0078D4"
+        showStats={true}
+        onSelect={(uuid, object) => console.log('选中对象:', uuid, object)}
+      />
     </div>
   );
 }
 ```
+
+## Props 详细说明
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|---------|-------------|
+| `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
+| `disabledMenus` | `string[]` | `[]` | 需要禁用的菜单 ID 列表 |
+| `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
+| `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
+| `accentColor` | `string` | `"#0078D4"` | 界面强调色 |
+| `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
+| `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
+| `showProperties` | `boolean` | `true` | 是否显示属性面板 |
+| `initialSettings` | `Partial<SceneSettings>` | - | 初始场景设置（光照、背景等） |
+| `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
+| `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
 
 ## 许可证
 
