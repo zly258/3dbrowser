@@ -123,7 +123,7 @@ The simplest way to use this library is through the `ThreeViewer` component, whi
 | Property | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `allowDragOpen` | `boolean` | `true` | Whether to allow opening files by dragging them into the viewer. |
-| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `help`, `about`. |
+| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`. |
 
 **Usage Example:**
 
@@ -277,7 +277,7 @@ sceneMgr.fitView();
 | 属性 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽文件到浏览器来打开模型。 |
-| `disabledMenus` | `string[]` | `[]` | 要禁用的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `help`, `about`。 |
+| `disabledMenus` | `string[]` | `[]` | 要禁用的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`。 |
 
 **使用示例:**
 

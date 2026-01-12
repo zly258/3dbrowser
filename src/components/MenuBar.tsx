@@ -217,16 +217,12 @@ export const MenuBar: React.FC<any> = (props) => {
                     {(close) => (
                         <>
                             {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('settings')} />}
-                        </>
-                    )}
-                </ClassicMenuItem>
-            )}
-
-            {!isHidden('help') && (
-                <ClassicMenuItem label={t('menu_about')} styles={styles} theme={theme} enabled={!isDisabled('help')}>
-                    {(close) => (
-                        <>
-                            {!isHidden('about') && <ClassicSubItem label={t('menu_about')} onClick={() => { props.onOpenAbout(); close(); }} styles={styles} enabled={!isDisabled('about')} />}
+                            {!isHidden('about') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('menu_about')} onClick={() => { props.onOpenAbout(); close(); }} styles={styles} enabled={!isDisabled('about')} />
+                                </>
+                            )}
                         </>
                     )}
                 </ClassicMenuItem>

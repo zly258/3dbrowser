@@ -27,3 +27,4 @@ refs/**
 dist*/
 electron-runtime/
 build/
+example/
