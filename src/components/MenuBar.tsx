@@ -103,11 +103,9 @@ const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }: Sub
 export const MenuBar: React.FC<any> = (props) => {
     const {
         t, styles, theme,
-        hiddenMenus = [],
-        disabledMenus = []
+        hiddenMenus = []
     } = props;
 
-    const isDisabled = (id: string) => disabledMenus.includes(id);
     const isHidden = (id: string) => (hiddenMenus || []).includes(id);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -134,22 +132,22 @@ export const MenuBar: React.FC<any> = (props) => {
             />
 
             {!isHidden('file') && (
-                <ClassicMenuItem label={t('menu_file')} styles={styles} theme={theme} enabled={!isDisabled('file')}>
+                <ClassicMenuItem label={t('menu_file')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('open_file')} />}
-                            {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('open_folder')} />}
-                            {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('open_url')} />}
+                            {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} />}
+                            {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} />}
+                            {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); close(); props.handleView('se'); }} styles={styles} />}
                             {!isHidden('export') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool('export'); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('export')} />
+                                    <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool('export'); close(); props.handleView('se'); }} styles={styles} />
                                 </>
                             )}
                             {!isHidden('clear') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear(); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('clear')} />
+                                    <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear(); close(); props.handleView('se'); }} styles={styles} />
                                 </>
                             )}
                         </>
@@ -158,24 +156,24 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('view') && (
-                <ClassicMenuItem label={t('view')} styles={styles} theme={theme} enabled={!isDisabled('view')}>
+                <ClassicMenuItem label={t('view')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('fit_view') && <ClassicSubItem label={t('menu_fit_view')} onClick={() => { props.sceneMgr?.fitView(); close(); }} styles={styles} enabled={!isDisabled('fit_view')} />}
+                            {!isHidden('fit_view') && <ClassicSubItem label={t('menu_fit_view')} onClick={() => { props.sceneMgr?.fitView(); close(); }} styles={styles} />}
                             {!isHidden('views') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('view_front')} onClick={() => { props.handleView('front'); close(); }} styles={styles} enabled={!isDisabled('view_front')} />
-                                    <ClassicSubItem label={t('view_back')} onClick={() => { props.handleView('back'); close(); }} styles={styles} enabled={!isDisabled('view_back')} />
-                                    <ClassicSubItem label={t('view_top')} onClick={() => { props.handleView('top'); close(); }} styles={styles} enabled={!isDisabled('view_top')} />
-                                    <ClassicSubItem label={t('view_bottom')} onClick={() => { props.handleView('bottom'); close(); }} styles={styles} enabled={!isDisabled('view_bottom')} />
-                                    <ClassicSubItem label={t('view_left')} onClick={() => { props.handleView('left'); close(); }} styles={styles} enabled={!isDisabled('view_left')} />
-                                    <ClassicSubItem label={t('view_right')} onClick={() => { props.handleView('right'); close(); }} styles={styles} enabled={!isDisabled('view_right')} />
+                                    <ClassicSubItem label={t('view_front')} onClick={() => { props.handleView('front'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_back')} onClick={() => { props.handleView('back'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_top')} onClick={() => { props.handleView('top'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_bottom')} onClick={() => { props.handleView('bottom'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_left')} onClick={() => { props.handleView('left'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_right')} onClick={() => { props.handleView('right'); close(); }} styles={styles} />
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('view_se')} onClick={() => { props.handleView('se'); close(); }} styles={styles} enabled={!isDisabled('view_se')} />
-                                    <ClassicSubItem label={t('view_sw')} onClick={() => { props.handleView('sw'); close(); }} styles={styles} enabled={!isDisabled('view_sw')} />
-                                    <ClassicSubItem label={t('view_ne')} onClick={() => { props.handleView('ne'); close(); }} styles={styles} enabled={!isDisabled('view_ne')} />
-                                    <ClassicSubItem label={t('view_nw')} onClick={() => { props.handleView('nw'); close(); }} styles={styles} enabled={!isDisabled('view_nw')} />
+                                    <ClassicSubItem label={t('view_se')} onClick={() => { props.handleView('se'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_sw')} onClick={() => { props.handleView('sw'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_ne')} onClick={() => { props.handleView('ne'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_nw')} onClick={() => { props.handleView('nw'); close(); }} styles={styles} />
                                 </>
                             )}
                         </>
@@ -184,16 +182,17 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('interface') && (
-                <ClassicMenuItem label={t('interface_display')} styles={styles} theme={theme} enabled={!isDisabled('interface')}>
+                <ClassicMenuItem label={t('interface_display')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('outline') && <ClassicSubItem label={t('interface_outline')} checked={props.showOutline} onClick={() => { props.setShowOutline(!props.showOutline); close(); }} styles={styles} enabled={!isDisabled('outline')} />}
-                            {!isHidden('props') && <ClassicSubItem label={t('interface_props')} checked={props.showProps} onClick={() => { props.setShowProps(!props.showProps); close(); }} styles={styles} enabled={!isDisabled('props')} />}
-                            {!isHidden('stats') && <ClassicSubItem label={t('st_monitor')} checked={props.showStats} onClick={() => { props.setShowStats(!props.showStats); close(); }} styles={styles} enabled={!isDisabled('stats')} />}
+                            {!isHidden('outline') && <ClassicSubItem label={t('interface_outline')} checked={props.showOutline} onClick={() => { props.setShowOutline(!props.showOutline); close(); }} styles={styles} />}
+                            {!isHidden('props') && <ClassicSubItem label={t('interface_props')} checked={props.showProps} onClick={() => { props.setShowProps(!props.showProps); close(); }} styles={styles} />}
+                            {!isHidden('stats') && <ClassicSubItem label={t('st_monitor')} checked={props.showStats} onClick={() => { props.setShowStats(!props.showStats); close(); }} styles={styles} />}
+                            {!isHidden('show_delete') && <ClassicSubItem label={t('st_show_delete')} checked={props.showDeleteButton} onClick={() => { props.setShowDeleteButton(!props.showDeleteButton); close(); }} styles={styles} />}
                             {!isHidden('pick') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('op_pick')} checked={props.pickEnabled} onClick={() => { props.setPickEnabled(!props.pickEnabled); close(); }} styles={styles} enabled={!isDisabled('pick')} />
+                                    <ClassicSubItem label={t('op_pick')} checked={props.pickEnabled} onClick={() => { props.setPickEnabled(!props.pickEnabled); close(); }} styles={styles} />
                                 </>
                             )}
                         </>
@@ -202,25 +201,25 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('tool') && (
-                <ClassicMenuItem label={t('tool')} styles={styles} theme={theme} enabled={!isDisabled('tool')}>
+                <ClassicMenuItem label={t('tool')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('measure')} />}
-                            {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool('clip'); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('clip')} />}
+                            {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); props.handleView('se'); }} styles={styles} />}
+                            {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool('clip'); close(); props.handleView('se'); }} styles={styles} />}
                         </>
                     )}
                 </ClassicMenuItem>
             )}
 
             {!isHidden('settings_panel') && (
-                <ClassicMenuItem label={t('settings')} styles={styles} theme={theme} enabled={!isDisabled('settings_panel')}>
+                <ClassicMenuItem label={t('settings')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); props.handleView('se'); }} styles={styles} enabled={!isDisabled('settings')} />}
+                            {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); props.handleView('se'); }} styles={styles} />}
                             {!isHidden('about') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('menu_about')} onClick={() => { props.onOpenAbout(); close(); }} styles={styles} enabled={!isDisabled('about')} />
+                                    <ClassicSubItem label={t('menu_about')} onClick={() => { props.onOpenAbout(); close(); }} styles={styles} />
                                 </>
                             )}
                         </>

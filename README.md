@@ -54,13 +54,14 @@ function App() {
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
-| `disabledMenus` | `string[]` | `[]` | List of menu IDs to disable |
+| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`. |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
 | `accentColor` | `string` | `"#0078D4"` | UI accent color |
 | `showStats` | `boolean` | `true` | Show performance statistics panel |
 | `showOutline` | `boolean` | `true` | Show scene structure outline panel |
 | `showProperties` | `boolean` | `true` | Show object properties panel |
+| `showDeleteButton` | `boolean` | `true` | Show delete button in tree nodes |
 | `initialSettings` | `Partial<SceneSettings>` | - | Initial scene settings (lighting, bg, etc.) |
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or File objects to load on mount |
 | `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
@@ -144,13 +145,14 @@ function App() {
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
-| `disabledMenus` | `string[]` | `[]` | 需要禁用的菜单 ID 列表 |
+| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`。 |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
 | `accentColor` | `string` | `"#0078D4"` | 界面强调色 |
 | `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
 | `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
-| `showProperties` | `boolean` | `true` | 是否显示属性面板 |
+| `showProperties` | `boolean` | `true` | 是否显示对象属性面板 |
+| `showDeleteButton` | `boolean` | `true` | 是否显示树节点删除按钮 |
 | `initialSettings` | `Partial<SceneSettings>` | - | 初始场景设置（光照、背景等） |
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的文件（URL 或 File 对象） |
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |

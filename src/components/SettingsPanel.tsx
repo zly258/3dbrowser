@@ -15,6 +15,8 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
+    showDeleteButton: boolean;
+    setShowDeleteButton: (v: boolean) => void;
     fontFamily: string;
     setFontFamily: (f: string) => void;
     accentColor: string;
@@ -43,7 +45,7 @@ const Row = ({ label, children, theme }: { label: string, children?: React.React
 
 export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
     t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, accentColor, setAccentColor,
-    showStats, setShowStats, fontFamily, setFontFamily, styles, theme 
+    showStats, setShowStats, showDeleteButton, setShowDeleteButton, fontFamily, setFontFamily, styles, theme 
 }) => {
     return (
         <div style={styles.modalOverlay}>
@@ -127,6 +129,9 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                         </Row>
                         <Row label={t("st_monitor")} theme={theme}>
                              <input type="checkbox" checked={showStats} onChange={(e) => setShowStats(e.target.checked)} style={{accentColor: theme.accent}} />
+                        </Row>
+                        <Row label={t("st_show_delete")} theme={theme}>
+                             <input type="checkbox" checked={showDeleteButton} onChange={(e) => setShowDeleteButton(e.target.checked)} style={{accentColor: theme.accent}} />
                         </Row>
                     </Section>
 

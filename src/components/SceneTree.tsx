@@ -82,11 +82,15 @@ interface SceneTreeProps {
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
     onDelete: (uuid: string) => void;
+    showDeleteButton?: boolean;
     styles: any;
     theme: any;
 }
 
-export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, styles, theme }) => {
+export const SceneTree: React.FC<SceneTreeProps> = ({ 
+    t, sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, 
+    showDeleteButton = true, styles, theme 
+}) => {
     const [searchQuery, setSearchQuery] = useState("");
     
     // 过滤树结构的辅助函数
@@ -247,7 +251,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({ t, sceneMgr, treeRoot, set
                             <div style={{ ...styles.nodeLabel, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
 
                             {/* Delete button for file nodes */}
-                            {node.isFileNode && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
+                            {showDeleteButton && node.isFileNode && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
                                 <div 
                                     onClick={(e) => handleDelete(e, node.uuid)}
                                     style={{
