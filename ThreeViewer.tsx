@@ -88,7 +88,6 @@ const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: st
 
 export interface ThreeViewerProps {
     allowDragOpen?: boolean;
-    disabledMenus?: string[];
     hiddenMenus?: string[];
     libPath?: string;
     defaultTheme?: 'dark' | 'light';
@@ -97,6 +96,7 @@ export interface ThreeViewerProps {
     showStats?: boolean;
     showOutline?: boolean;
     showProperties?: boolean;
+    showDeleteButton?: boolean;
     initialSettings?: Partial<SceneSettings>;
     initialFiles?: (string | File) | (string | File)[];
     onSelect?: (uuid: string, object: any) => void;
@@ -106,7 +106,6 @@ export interface ThreeViewerProps {
 // --- 主应用 ---
 export const ThreeViewer = ({ 
     allowDragOpen = true, 
-    disabledMenus = [],
     hiddenMenus = [],
     libPath = './libs',
     defaultTheme,
@@ -115,6 +114,7 @@ export const ThreeViewer = ({
     showStats: propShowStats,
     showOutline: propShowOutline,
     showProperties: propShowProperties,
+    showDeleteButton: propShowDeleteButton,
      initialSettings,
      initialFiles,
      onSelect: propOnSelect,
@@ -222,6 +222,15 @@ export const ThreeViewer = ({
         if (propShowProperties !== undefined) return propShowProperties;
         try {
             const saved = localStorage.getItem('3dbrowser_showProps');
+            return saved !== null ? saved === 'true' : true;
+        } catch {
+            return true;
+        }
+    });
+    const [showDeleteButton, setShowDeleteButton] = useState(() => {
+        if (propShowDeleteButton !== undefined) return propShowDeleteButton;
+        try {
+            const saved = localStorage.getItem('3dbrowser_showDeleteButton');
             return saved !== null ? saved === 'true' : true;
         } catch {
             return true;
@@ -1231,11 +1240,18 @@ export const ThreeViewer = ({
                 showProps={showProps}
                 setShowProps={setShowProps}
                 showStats={showStats}
-                setShowStats={setShowStats}
+                setShowStats={(v) => {
+                    setShowStats(v);
+                    localStorage.setItem('3dbrowser_showStats', String(v));
+                }}
+                showDeleteButton={showDeleteButton}
+                setShowDeleteButton={(v) => {
+                    setShowDeleteButton(v);
+                    localStorage.setItem('3dbrowser_showDeleteButton', String(v));
+                }}
                 sceneMgr={sceneMgr.current}
                 styles={styles}
                 theme={theme}
-                disabledMenus={disabledMenus}
                 hiddenMenus={hiddenMenus}
                 onOpenAbout={() => setIsAboutOpen(true)}
              />
@@ -1275,6 +1291,7 @@ export const ThreeViewer = ({
                                 onSelect={(uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
                                 onDelete={handleDeleteObject}
+                                showDeleteButton={showDeleteButton}
                                 styles={styles}
                                 theme={theme}
                             />
@@ -1375,6 +1392,11 @@ export const ThreeViewer = ({
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
                             accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
+                            showDeleteButton={showDeleteButton} 
+                            setShowDeleteButton={(v) => {
+                                setShowDeleteButton(v);
+                                localStorage.setItem('3dbrowser_showDeleteButton', String(v));
+                            }}
                             fontFamily={fontFamily} setFontFamily={setFontFamily}
                             styles={styles} theme={theme}
                         />
