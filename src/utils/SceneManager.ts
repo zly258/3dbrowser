@@ -13,7 +13,7 @@ import type { OctreeNode } from "./octree";
 
 export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 
-interface MeasurementRecord {
+export interface MeasurementRecord {
     id: string;
     type: string;
     val: string;

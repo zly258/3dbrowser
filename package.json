@@ -16,10 +16,10 @@
   "type": "module",
   "main": "./dist/3dbrowser.umd.js",
   "module": "./dist/3dbrowser.es.js",
-  "types": "./dist/src/index.d.ts",
+  "types": "./dist/ThreeViewer.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
+      "types": "./dist/ThreeViewer.d.ts",
       "import": "./dist/3dbrowser.es.js",
       "require": "./dist/3dbrowser.umd.js"
     }
@@ -30,9 +30,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck",
-    "preview": "vite preview",
+      "dev": "vite",
+      "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && npx @microsoft/api-extractor run --local && node -e \"require('fs').rmSync('dist/src', { recursive: true, force: true })\"",
+      "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder"
   },
