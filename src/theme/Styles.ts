@@ -54,7 +54,9 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
     }
 };
 
-export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => `
+export const DEFAULT_FONT = "'Segoe UI', 'Microsoft YaHei', sans-serif";
+
+export const createGlobalStyle = (theme: ThemeColors) => `
     @keyframes fadeInDown {
         from { opacity: 0; transform: translate(-50%, -20px); }
         to { opacity: 1; transform: translate(-50%, 0); }
@@ -69,13 +71,13 @@ export const createGlobalStyle = (theme: ThemeColors, fontFamily: string = "'Seg
     ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
     ::-webkit-scrollbar-corner { background: ${theme.bg}; }
     * { scrollbar-width: thin; scrollbar-color: #c2c2c2 ${theme.bg}; }
-    body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${fontFamily}; -webkit-font-smoothing: antialiased; }
+    body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${DEFAULT_FONT}; -webkit-font-smoothing: antialiased; }
     * { box-sizing: border-box; }
 `;
 
-export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI', 'Microsoft YaHei', sans-serif") => ({
+export const createStyles = (theme: ThemeColors) => ({
     // Desktop / Shared
-    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily, userSelect: "none" as const, overflow: "hidden" },
+    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none" as const, overflow: "hidden" },
     
     // Classic Menu Styles
     classicMenuBar: {
@@ -123,8 +125,8 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
     
     statusBar: {
         height: "24px",
-        backgroundColor: theme.accent,
-        color: "#ffffff",
+        backgroundColor: "#ffffff",
+        color: "#444444",
         display: "flex",
         alignItems: "center",
         padding: "0 12px",
@@ -431,7 +433,6 @@ export const createStyles = (theme: ThemeColors, fontFamily: string = "'Segoe UI
     rangeSlider: {
         flex: 1,
         cursor: 'pointer',
-        accentColor: theme.accent,
         height: '4px',
         outline: 'none',
     },
