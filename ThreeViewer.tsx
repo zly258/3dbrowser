@@ -227,15 +227,8 @@ export const ThreeViewer = ({
             return true;
         }
     });
-    const [showDeleteButton, setShowDeleteButton] = useState(() => {
-        if (propShowDeleteButton !== undefined) return propShowDeleteButton;
-        try {
-            const saved = localStorage.getItem('3dbrowser_showDeleteButton');
-            return saved !== null ? saved === 'true' : true;
-        } catch {
-            return true;
-        }
-    });
+
+    const showDeleteButton = propShowDeleteButton !== undefined ? propShowDeleteButton : true;
 
     // Settings State (mirrors SceneManager) - 从localStorage恢复
     const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
@@ -1244,11 +1237,6 @@ export const ThreeViewer = ({
                     setShowStats(v);
                     localStorage.setItem('3dbrowser_showStats', String(v));
                 }}
-                showDeleteButton={showDeleteButton}
-                setShowDeleteButton={(v) => {
-                    setShowDeleteButton(v);
-                    localStorage.setItem('3dbrowser_showDeleteButton', String(v));
-                }}
                 sceneMgr={sceneMgr.current}
                 styles={styles}
                 theme={theme}
@@ -1392,11 +1380,6 @@ export const ThreeViewer = ({
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
                             accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
-                            showDeleteButton={showDeleteButton} 
-                            setShowDeleteButton={(v) => {
-                                setShowDeleteButton(v);
-                                localStorage.setItem('3dbrowser_showDeleteButton', String(v));
-                            }}
                             fontFamily={fontFamily} setFontFamily={setFontFamily}
                             styles={styles} theme={theme}
                         />

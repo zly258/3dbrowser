@@ -188,7 +188,6 @@ export const MenuBar: React.FC<any> = (props) => {
                             {!isHidden('outline') && <ClassicSubItem label={t('interface_outline')} checked={props.showOutline} onClick={() => { props.setShowOutline(!props.showOutline); close(); }} styles={styles} />}
                             {!isHidden('props') && <ClassicSubItem label={t('interface_props')} checked={props.showProps} onClick={() => { props.setShowProps(!props.showProps); close(); }} styles={styles} />}
                             {!isHidden('stats') && <ClassicSubItem label={t('st_monitor')} checked={props.showStats} onClick={() => { props.setShowStats(!props.showStats); close(); }} styles={styles} />}
-                            {!isHidden('show_delete') && <ClassicSubItem label={t('st_show_delete')} checked={props.showDeleteButton} onClick={() => { props.setShowDeleteButton(!props.showDeleteButton); close(); }} styles={styles} />}
                             {!isHidden('pick') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
