@@ -658,7 +658,7 @@ export const loadIFC = async (
     console.log(`Loaded ${meshCount} meshes from IFC.`);
     onProgress(100, t("success"));
     
-    // Apply axis correction (-Z-up to Y-up as requested by user)
+    // Apply axis correction
     rootGroup.rotateX(Math.PI / 2);
 
     return rootGroup;
