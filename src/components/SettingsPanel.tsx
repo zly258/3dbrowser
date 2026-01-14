@@ -15,10 +15,6 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
-    fontFamily: string;
-    setFontFamily: (f: string) => void;
-    accentColor: string;
-    setAccentColor: (c: string) => void;
     styles: any;
     theme: any;
 }
@@ -42,8 +38,8 @@ const Row = ({ label, children, theme }: { label: string, children?: React.React
 );
 
 export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
-    t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode, accentColor, setAccentColor,
-    showStats, setShowStats, fontFamily, setFontFamily, styles, theme 
+    t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode,
+    showStats, setShowStats, styles, theme 
 }) => {
     return (
         <div style={styles.modalOverlay}>
@@ -87,18 +83,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                             </div>
                         </Row>
 
-                        <Row label={t("st_accent_color")} theme={theme}>
-                            <input 
-                                type="color" 
-                                value={accentColor} 
-                                onChange={(e) => {
-                                    setAccentColor(e.target.value);
-                                    localStorage.setItem('3dbrowser_accentColor', e.target.value);
-                                }}
-                                style={{ width: 40, height: 24, border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
-                            />
-                        </Row>
-
                         <Row label={t("st_lang")} theme={theme}>
                             <select 
                                 style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:0}}
@@ -107,19 +91,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                             >
                                 <option value="zh">简体中文</option>
                                 <option value="en">English</option>
-                            </select>
-                        </Row>
-                        <Row label={t("st_font_family")} theme={theme}>
-                            <select 
-                                style={{background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding:2, borderRadius:0}}
-                                value={fontFamily}
-                                onChange={(e) => setFontFamily(e.target.value)}
-                            >
-                                <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
-                                <option value="'SimSun', serif">宋体</option>
-                                <option value="'SimHei', sans-serif">黑体</option>
-                                <option value="'Arial', sans-serif">Arial</option>
-                                <option value="'Times New Roman', serif">Times New Roman</option>
                             </select>
                         </Row>
                         <Row label={t("st_bg")} theme={theme}>

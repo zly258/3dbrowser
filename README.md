@@ -35,7 +35,6 @@ function App() {
       <ThreeViewer 
         defaultTheme="dark"
         defaultLang="en"
-        accentColor="#0078D4"
         showStats={true}
         initialFiles={[
           "https://example.com/models/building.glb"
@@ -57,7 +56,6 @@ function App() {
 | `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`. |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
-| `accentColor` | `string` | `"#0078D4"` | UI accent color |
 | `showStats` | `boolean` | `true` | Show performance statistics panel |
 | `showOutline` | `boolean` | `true` | Show scene structure outline panel |
 | `showProperties` | `boolean` | `true` | Show object properties panel |
@@ -125,7 +123,6 @@ function App() {
       <ThreeViewer 
         defaultTheme="dark"
         defaultLang="zh"
-        accentColor="#0078D4"
         showStats={true}
         initialFiles={[
           "https://example.com/models/building.glb",
@@ -148,7 +145,6 @@ function App() {
 | `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`。 |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
-| `accentColor` | `string` | `"#0078D4"` | 界面强调色 |
 | `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
 | `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
 | `showProperties` | `boolean` | `true` | 是否显示对象属性面板 |

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
 import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
-import { createStyles, createGlobalStyle, themes, ThemeColors } from "./src/theme/Styles";
+import { createStyles, createGlobalStyle, themes, ThemeColors, DEFAULT_FONT } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
@@ -56,7 +56,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 <div style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text,
-                    fontFamily: "'Microsoft YaHei', sans-serif", gap: '20px', padding: '40px', textAlign: 'center'
+                    fontFamily: DEFAULT_FONT, gap: '20px', padding: '40px', textAlign: 'center'
                 }}>
                     <div style={{ fontSize: '64px' }}>⚠️</div>
                     <h1 style={{ fontSize: '24px', margin: 0 }}>应用发生错误</h1>
@@ -80,8 +80,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 // --- 全局样式注入 ---
-const GlobalStyle = ({ theme, fontFamily }: { theme: ThemeColors, fontFamily: string }) => (
-    <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme, fontFamily) }} />
+const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
+    <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme) }} />
 );
 
 // --- 全局样式注入 ---
@@ -92,7 +92,6 @@ export interface ThreeViewerProps {
     libPath?: string;
     defaultTheme?: 'dark' | 'light';
     defaultLang?: Lang;
-    accentColor?: string;
     showStats?: boolean;
     showOutline?: boolean;
     showProperties?: boolean;
@@ -110,7 +109,6 @@ export const ThreeViewer = ({
     libPath = './libs',
     defaultTheme,
     defaultLang,
-    accentColor: propAccentColor,
     showStats: propShowStats,
     showOutline: propShowOutline,
     showProperties: propShowProperties,
@@ -131,33 +129,11 @@ export const ThreeViewer = ({
         }
     });
 
-    // 主题颜色状态
-    const [accentColor, setAccentColor] = useState(() => {
-        if (propAccentColor) return propAccentColor;
-        try {
-            const saved = localStorage.getItem('3dbrowser_accentColor');
-            return saved || "#0078D4";
-        } catch {
-            return "#0078D4";
-        }
-    });
-
     const theme = useMemo(() => {
-        const baseTheme = themes[themeMode];
-        return { ...baseTheme, accent: accentColor };
-    }, [themeMode, accentColor]);
+        return themes[themeMode];
+    }, [themeMode]);
 
-    // 字体设置状态 - 从localStorage恢复
-    const [fontFamily, setFontFamily] = useState(() => {
-        try {
-            const saved = localStorage.getItem('3dbrowser_fontFamily');
-            return saved || "'Microsoft YaHei', sans-serif";
-        } catch {
-            return "'Microsoft YaHei', sans-serif";
-        }
-    });
-
-    const styles = useMemo(() => createStyles(theme, fontFamily), [theme, fontFamily]);
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
@@ -343,12 +319,6 @@ export const ThreeViewer = ({
             localStorage.setItem('3dbrowser_lang', lang);
         } catch (e) { console.error("Failed to save lang", e); }
     }, [lang]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_fontFamily', fontFamily);
-        } catch (e) { console.error("Failed to save fontFamily", e); }
-    }, [fontFamily]);
 
     // 持久化场景设置
     useEffect(() => {
@@ -1213,7 +1183,7 @@ export const ThreeViewer = ({
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
-             <GlobalStyle theme={theme} fontFamily={fontFamily} />
+             <GlobalStyle theme={theme} />
 
              <MenuBar 
                 t={t}
@@ -1378,9 +1348,7 @@ export const ThreeViewer = ({
                         <SettingsPanel 
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
-                            accentColor={accentColor} setAccentColor={setAccentColor}
                             showStats={showStats} setShowStats={setShowStats}
-                            fontFamily={fontFamily} setFontFamily={setFontFamily}
                             styles={styles} theme={theme}
                         />
                     )}

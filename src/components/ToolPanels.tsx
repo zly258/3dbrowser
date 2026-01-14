@@ -451,7 +451,7 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
                         backgroundColor: format === opt.id ? `${theme.accent}15` : 'transparent',
                         transition: 'all 0.2s'
                     }}>
-                        <input type="radio" name="exportFmt" checked={format === opt.id} onChange={() => setFormat(opt.id)} style={{marginRight: 10, accentColor: theme.accent}}/>
+                        <input type="radio" name="exportFmt" checked={format === opt.id} onChange={() => setFormat(opt.id)} style={{marginRight: 10}}/>
                         <div>
                             <div style={{color: theme.text, fontWeight:'bold', fontSize:14}}>{opt.label}</div>
                             <div style={{fontSize:11, color: theme.textMuted}}>{opt.desc}</div>
