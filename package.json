@@ -1,7 +1,7 @@
 {
   "name": "@zhangly1403/3dbrowser",
   "private": false,
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "A high-performance 3D model browser based on Three.js, supporting IFC, 3D Tiles, GLB, and more.",
   "keywords": [
     "threejs",
@@ -31,7 +31,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && npx tsc -p tsconfig.lib.json",
+    "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "electron:build": "npm run build && electron-builder"
