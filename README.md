@@ -24,6 +24,13 @@ Professional 3D model viewer library for React and Web applications. Built with 
 npm install @zhangly1403/3dbrowser
 ```
 
+## Assets Setup
+
+You need to copy the `libs` folder from the package to your project's public directory. This folder contains the required WASM and worker files for decoding IFC and OCC files.
+
+1. Copy `node_modules/@zhangly1403/3dbrowser/dist/libs` to your project's `public/libs` folder.
+2. Specify the `libPath` prop in the component if you placed them in a different location (default is `./libs`).
+
 ## Quick Usage
 
 ```tsx
@@ -33,6 +40,7 @@ function App() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <ThreeViewer 
+        libPath="/libs" // Path to the libs folder in your public directory
         defaultTheme="dark"
         defaultLang="en"
         showStats={true}
@@ -52,6 +60,7 @@ function App() {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
+| `libPath` | `string` | `'./libs'` | Path to the folder containing WASM/Worker files (relative to window.location) |
 | `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
 | `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`. |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
@@ -112,6 +121,13 @@ This project is intended for learning and research purposes only. **Commercial u
 npm install @zhangly1403/3dbrowser
 ```
 
+## 静态资源配置
+
+您需要将包中的 `libs` 文件夹复制到您项目的 public 目录下。该文件夹包含了解码 IFC 和 OCC 文件所需的 WASM 和 worker 文件。
+
+1. 复制 `node_modules/@zhangly1403/3dbrowser/dist/libs` 到您项目的 `public/libs` 文件夹。
+2. 如果放置在其他位置，请在组件中指定 `libPath` 属性（默认为 `./libs`）。
+
 ## 快速上手
 
 ```tsx
@@ -121,6 +137,7 @@ function App() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <ThreeViewer 
+        libPath="/libs" // public 目录下的 libs 文件夹路径
         defaultTheme="dark"
         defaultLang="zh"
         showStats={true}
@@ -141,6 +158,7 @@ function App() {
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
+| `libPath` | `string` | `'./libs'` | 包含 WASM/Worker 文件的文件夹路径（相对于 window.location） |
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
 | `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`。 |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
