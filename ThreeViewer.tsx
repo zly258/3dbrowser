@@ -507,7 +507,7 @@ export const ThreeViewer = ({
                 name: node.name,
                 type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
                 depth,
-                children: (node.children || []).map((c: any) => convertNode(c, depth + 1, isFileNode)),
+                children: (node.children || []).map((c: any) => convertNode(c, depth + 1, false)),
                 expanded: depth < 1,
                 visible: node.visible !== false,
                 object: node,
