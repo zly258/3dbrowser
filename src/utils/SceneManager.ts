@@ -2266,20 +2266,27 @@ export class SceneManager {
             const mat = new THREE.MeshBasicMaterial({
                 color: colors[i],
                 transparent: true,
-                opacity: 0.15,
+                opacity: 0.3, // 提高不透明度，使半透明效果更明显
                 side: THREE.DoubleSide,
                 depthWrite: false,
                 polygonOffset: true,
-                polygonOffsetFactor: -4, // 增加偏移量，确保在大场景下也能有效解决闪烁
+                polygonOffsetFactor: -4, 
                 polygonOffsetUnits: -4,
-                clippingPlanes: [] // 辅助面本身不被裁剪
+                clippingPlanes: [] 
             });
             const mesh = new THREE.Mesh(geom, mat);
             mesh.visible = false;
+            mesh.renderOrder = 9999; // 提高渲染顺序，减少与模型的闪烁冲突
             
             // 添加边框
             const edges = new THREE.EdgesGeometry(geom);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: colors[i], transparent: true, opacity: 0.5 }));
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ 
+                color: colors[i], 
+                transparent: true, 
+                opacity: 0.8, // 边框也调亮一点
+                depthWrite: false
+            }));
+            line.renderOrder = 10000;
             mesh.add(line);
             
             this.clipPlaneHelpers.push(mesh);
@@ -2363,11 +2370,12 @@ export class SceneManager {
         helper.visible = isEnabled;
         helper.scale.set(size, size, 1);
         
-        // 设置位置：在对应轴向上设置为 dist，其他轴向对齐中心
+        // 设置位置：在对应轴向上设置为 dist，增加一个微小的偏移量 (1mm) 以减少与模型表面的闪烁
         const pos = new THREE.Vector3(center.x, center.y, center.z);
-        if (normal.x !== 0) pos.x = dist;
-        else if (normal.y !== 0) pos.y = dist;
-        else if (normal.z !== 0) pos.z = dist;
+        const epsilon = 0.001; 
+        if (normal.x !== 0) pos.x = dist + (normal.x * epsilon);
+        else if (normal.y !== 0) pos.y = dist + (normal.y * epsilon);
+        else if (normal.z !== 0) pos.z = dist + (normal.z * epsilon);
         
         helper.position.copy(pos);
         
