@@ -51,6 +51,7 @@ export class SceneManager {
     helpersGroup: THREE.Group;
     measureGroup: THREE.Group;
     ghostGroup: THREE.Group; // 渐进式加载时的占位边框组
+    clipHelpersGroup: THREE.Group; // 剖切面辅助组
     
     // 灯光
     ambientLight: THREE.AmbientLight;
@@ -79,6 +80,7 @@ export class SceneManager {
     
     // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
+    clipPlaneHelpers: THREE.Mesh[] = [];
     
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
     
@@ -170,6 +172,10 @@ export class SceneManager {
         this.ghostGroup = new THREE.Group();
         this.ghostGroup.name = "Ghost";
         this.scene.add(this.ghostGroup);
+
+        this.clipHelpersGroup = new THREE.Group();
+        this.clipHelpersGroup.name = "ClipHelpers";
+        this.scene.add(this.clipHelpersGroup);
 
         // 相机
         const frustumSize = 100;
@@ -366,7 +372,36 @@ export class SceneManager {
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
 
-        const toLoad = this.chunks.filter(c => !c.loaded && !this.processingChunks.has(c.id) && this.frustum.intersectsBox(c.bounds));
+        // 增加视锥体预加载边距 (Padding)
+        // 通过稍微扩大 c.bounds 来实现预加载
+        const padding = 0.2; // 20% 边距
+
+        const toLoad: any[] = [];
+        const isClippingActive = this.renderer.clippingPlanes.length > 0;
+
+        this.chunks.forEach(c => {
+            // 使用带 padding 的包围盒进行视锥体相交测试
+            const paddedBounds = c.bounds.clone();
+            const size = new THREE.Vector3();
+            paddedBounds.getSize(size);
+            paddedBounds.expandByVector(size.multiplyScalar(padding));
+
+            const inFrustum = this.frustum.intersectsBox(paddedBounds);
+            const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
+            const shouldBeVisible = inFrustum && !isClipped;
+
+            if (c.loaded) {
+                // 更新已加载分块的可见性 (对齐 refs，优化渲染)
+                const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
+                if (optimizedGroup) {
+                    const bm = optimizedGroup.getObjectByName(c.id);
+                    if (bm) bm.visible = shouldBeVisible;
+                }
+            } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
+                // 加入待加载队列
+                toLoad.push(c);
+            }
+        });
         
         if (toLoad.length > 0) {
             // 优先加载距离相机近的分块
@@ -735,7 +770,14 @@ export class SceneManager {
             });
         }
 
-        this.sceneBounds = this.computeTotalBounds();
+        this.sceneBounds = this.computeTotalBounds(false);
+        // 缓存完整包围盒，确保剖切等功能使用稳定的范围
+        this.precomputedBounds = this.sceneBounds.clone();
+        // 如果有 globalOffset，precomputedBounds 存储的是原始坐标，需要把 offset 加回去
+        if (this.globalOffset.length() > 0) {
+            this.precomputedBounds.translate(this.globalOffset);
+        }
+
         this.updateSettings(this.settings);
         if (onProgress) onProgress(100, "模型已加入加载队列");
     }
@@ -966,6 +1008,7 @@ export class SceneManager {
         this.structureRoot.children.push(tilesNode);
         this.nodeMap.set(tilesNode.id, [tilesNode]);
         
+        this.updateSceneBounds();
         // 如需，应用当前设置
         this.updateSettings(this.settings);
         
@@ -1493,6 +1536,8 @@ export class SceneManager {
                 }
             }
         });
+
+        this.updateSceneBounds();
     }
 
     highlightObject(uuid: string | null) {
@@ -1678,49 +1723,116 @@ export class SceneManager {
         return null;
     }
 
-    computeTotalBounds(): THREE.Box3 {
+    computeTotalBounds(onlyVisible: boolean = false, forceRecompute: boolean = false): THREE.Box3 {
+        // 优先使用缓存
+        if (!onlyVisible && !forceRecompute && !this.precomputedBounds.isEmpty()) {
+            const box = this.precomputedBounds.clone();
+            if (this.globalOffset.length() > 0) {
+                box.translate(this.globalOffset.clone().negate());
+            }
+            return box;
+        }
+
         const totalBox = new THREE.Box3();
+        
+        // 确保矩阵最新
         this.contentGroup.updateMatrixWorld(true);
-        this.contentGroup.traverse(child => {
-            if (child.visible) {
-                if ((child as THREE.Mesh).isMesh) {
-                    const box = new THREE.Box3().setFromObject(child);
-                    if (!box.isEmpty()) totalBox.union(box);
-                } else if ((child as any).isBatchedMesh) {
-                    const bm = child as THREE.BatchedMesh;
-                    // 对 BatchedMesh，我们需要遍历其所有实例
-                    const count = bm.count;
-                    const matrix = new THREE.Matrix4();
-                    const box = new THREE.Box3();
-                    // 这里简化处理：使用 BatchedMesh 的边界
-                    // 注意：Three.js BatchedMesh 没有内置的 getBoundingBox，
-                    // 实际项目中可能需要预计算或从几何体计算
-                    if (bm.geometry.boundingBox) {
-                        for (let i = 0; i < count; i++) {
-                            if (bm.getVisibleAt(i)) {
-                                bm.getMatrixAt(i, matrix);
-                                box.copy(bm.geometry.boundingBox).applyMatrix4(matrix);
-                                totalBox.union(box);
-                            }
+
+        // 遍历 contentGroup 下的所有模型节点
+        this.contentGroup.traverse(obj => {
+            // 如果只计算可见物，跳过隐藏节点
+            if (onlyVisible && !obj.visible) return;
+
+            // 1. 处理 3D Tileset (特殊对象，通常作为根组处理)
+            // 如果已经处理过 Tileset，我们可以跳过它的子节点以避免重复计算或精度问题
+            if (obj.name === "3D Tileset" && this.tilesRenderer) {
+                const tilesBox = new THREE.Box3();
+                if ((this.tilesRenderer as any).getBounds) {
+                    (this.tilesRenderer as any).getBounds(tilesBox);
+                    if (!tilesBox.isEmpty() && this.globalOffset.length() > 0) {
+                        if (Math.abs(tilesBox.min.x) > 100000 || Math.abs(tilesBox.min.y) > 100000) {
+                            tilesBox.translate(this.globalOffset.clone().negate());
                         }
                     }
+                    if (!tilesBox.isEmpty()) totalBox.union(tilesBox);
+                }
+                // 跳过子节点遍历，因为 getBounds 已经包含了全部
+                obj.traverse(child => { if (child !== obj) (child as any)._skipTraverse = true; });
+            }
+            // 2. 处理普通 Mesh (如果不是 Tileset 的子节点)
+            else if ((obj as THREE.Mesh).isMesh && !(obj as any)._skipTraverse) {
+                const mesh = obj as THREE.Mesh;
+                if (mesh.geometry) {
+                    const box = new THREE.Box3().setFromObject(mesh);
+                    if (!box.isEmpty()) totalBox.union(box);
+                }
+            }
+            // 3. 处理 BatchedMesh
+            else if ((obj as any).isBatchedMesh && !(obj as any)._skipTraverse) {
+                const bm = obj as any;
+                if (bm.computeBoundingBox) {
+                    bm.computeBoundingBox();
+                    if (bm.boundingBox) {
+                        const box = bm.boundingBox.clone().applyMatrix4(bm.matrixWorld);
+                        totalBox.union(box);
+                    }
+                } else {
+                    const box = new THREE.Box3().setFromObject(bm);
+                    if (!box.isEmpty()) totalBox.union(box);
                 }
             }
         });
+
+        // 清理标记
+        this.contentGroup.traverse(obj => { delete (obj as any)._skipTraverse; });
+
+        // 4. NBIM 分块补偿 (用于极大型模型在未完全加载时的范围占位)
+        if (this.chunks.length > 0) {
+            this.chunks.forEach(c => {
+                if (!onlyVisible || c.loaded) {
+                    totalBox.union(c.bounds);
+                }
+            });
+        }
+
+        // 最终兜底
+        if (totalBox.isEmpty() && !this.precomputedBounds.isEmpty()) {
+            const fallback = this.precomputedBounds.clone();
+            if (this.globalOffset.length() > 0) {
+                fallback.translate(this.globalOffset.clone().negate());
+            }
+            return fallback;
+        }
+
         return totalBox;
     }
 
     updateSceneBounds() {
-        this.sceneBounds = this.computeTotalBounds();
+        // 更新场景包围盒时，如果是为了渲染辅助物或计算范围，通常使用完整范围更稳定
+        // 但为了 fitView 等功能，我们可能需要可见范围。
+        // 这里强制重新计算完整包围盒，并更新预计算值，以防物体增删后范围滞后
+        const fullBox = this.computeTotalBounds(false, true);
+        this.precomputedBounds = fullBox.clone();
+        if (this.globalOffset.length() > 0) {
+            this.precomputedBounds.translate(this.globalOffset);
+        }
+
+        const visibleBox = this.computeTotalBounds(true);
+        
+        if (visibleBox.isEmpty()) {
+            this.sceneBounds.copy(fullBox);
+        } else {
+            this.sceneBounds.copy(visibleBox);
+        }
     }
 
     fitView(keepOrientation = false) {
         this.contentGroup.updateMatrixWorld(true);
-        let box = this.computeTotalBounds();
+        let box = this.computeTotalBounds(true);
         
-        // 关键改进：如果计算出的包围盒为空（可能模型还没加载完），使用预计算的包围盒
-        if (box.isEmpty() && !this.precomputedBounds.isEmpty()) {
-            box = this.precomputedBounds.clone();
+        // 如果可见部分为空，尝试使用完整包围盒
+        if (box.isEmpty()) {
+            box = this.computeTotalBounds(false);
         }
 
         this.sceneBounds = box.clone(); 
@@ -1849,6 +1961,9 @@ export class SceneManager {
         if (this.measureType === 'none') return null;
 
         this.currentMeasurePoints.push(point);
+        // addMarker 会创建一个临时的点显示在 measureGroup 中
+        // 我们不需要在这里手动 addMarker，因为 updatePreviewLine 已经处理了点的显示
+        // 或者我们可以只在这里添加一个临时的点
         this.addMarker(point, this.measureGroup); 
 
         // 检查完成状态
@@ -2139,16 +2254,55 @@ export class SceneManager {
             new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
             new THREE.Plane(new THREE.Vector3(0, 0, -1), 0),
         ];
-        this.renderer.clippingPlanes = []; 
+        this.renderer.clippingPlanes = [];
+
+        // 创建剖切面辅助可视化
+        const colors = [0xff0000, 0xff0000, 0x00ff00, 0x00ff00, 0x0000ff, 0x0000ff];
+        this.clipPlaneHelpers = [];
+        this.clipHelpersGroup.clear();
+
+        for (let i = 0; i < 6; i++) {
+            const geom = new THREE.PlaneGeometry(1, 1);
+            const mat = new THREE.MeshBasicMaterial({
+                color: colors[i],
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -4, // 增加偏移量，确保在大场景下也能有效解决闪烁
+                polygonOffsetUnits: -4,
+                clippingPlanes: [] // 辅助面本身不被裁剪
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.visible = false;
+            
+            // 添加边框
+            const edges = new THREE.EdgesGeometry(geom);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: colors[i], transparent: true, opacity: 0.5 }));
+            mesh.add(line);
+            
+            this.clipPlaneHelpers.push(mesh);
+            this.clipHelpersGroup.add(mesh);
+        }
     }
 
     setClippingEnabled(enabled: boolean) {
         this.renderer.clippingPlanes = enabled ? this.clippingPlanes : [];
+        if (!enabled) {
+            this.clipPlaneHelpers.forEach(h => h.visible = false);
+        }
     }
 
     updateClippingPlanes(bounds: THREE.Box3, values: {x:number[], y:number[], z:number[]}, active: {x:boolean, y:boolean, z:boolean}) {
+        if (bounds.isEmpty()) return;
         const { min, max } = bounds;
         const size = max.clone().sub(min);
+        const center = bounds.getCenter(new THREE.Vector3());
+        
+        // 辅助面大小：设置为包围盒对角线长度，既足够大又避免过大导致精度问题
+        const diagonal = size.length();
+        const helperSize = diagonal > 0 ? diagonal * 1.2 : 1000;
         
         const xMin = min.x + (values.x[0] / 100) * size.x;
         const xMax = min.x + (values.x[1] / 100) * size.x;
@@ -2157,29 +2311,92 @@ export class SceneManager {
         const zMin = min.z + (values.z[0] / 100) * size.z;
         const zMax = min.z + (values.z[1] / 100) * size.z;
 
+        const isEnabled = this.renderer.clippingPlanes.length > 0;
+
+        // X Axis
         if (active.x) {
             this.clippingPlanes[0].constant = -xMin;
             this.clippingPlanes[1].constant = xMax;
+            
+            this.updatePlaneHelper(0, new THREE.Vector3(1, 0, 0), xMin, center, helperSize, isEnabled);
+            this.updatePlaneHelper(1, new THREE.Vector3(-1, 0, 0), xMax, center, helperSize, isEnabled);
         } else {
             this.clippingPlanes[0].constant = Infinity;
             this.clippingPlanes[1].constant = Infinity;
+            this.clipPlaneHelpers[0].visible = false;
+            this.clipPlaneHelpers[1].visible = false;
         }
 
+        // Y Axis
         if (active.y) {
             this.clippingPlanes[2].constant = -yMin;
             this.clippingPlanes[3].constant = yMax;
+            
+            this.updatePlaneHelper(2, new THREE.Vector3(0, 1, 0), yMin, center, helperSize, isEnabled);
+            this.updatePlaneHelper(3, new THREE.Vector3(0, -1, 0), yMax, center, helperSize, isEnabled);
         } else {
             this.clippingPlanes[2].constant = Infinity;
             this.clippingPlanes[3].constant = Infinity;
+            this.clipPlaneHelpers[2].visible = false;
+            this.clipPlaneHelpers[3].visible = false;
         }
 
+        // Z Axis
         if (active.z) {
             this.clippingPlanes[4].constant = -zMin;
             this.clippingPlanes[5].constant = zMax;
+            
+            this.updatePlaneHelper(4, new THREE.Vector3(0, 0, 1), zMin, center, helperSize, isEnabled);
+            this.updatePlaneHelper(5, new THREE.Vector3(0, 0, -1), zMax, center, helperSize, isEnabled);
         } else {
             this.clippingPlanes[4].constant = Infinity;
             this.clippingPlanes[5].constant = Infinity;
+            this.clipPlaneHelpers[4].visible = false;
+            this.clipPlaneHelpers[5].visible = false;
         }
+    }
+
+    private updatePlaneHelper(idx: number, normal: THREE.Vector3, dist: number, center: THREE.Vector3, size: number, isEnabled: boolean) {
+        const helper = this.clipPlaneHelpers[idx];
+        if (!helper) return;
+
+        helper.visible = isEnabled;
+        helper.scale.set(size, size, 1);
+        
+        // 设置位置：在对应轴向上设置为 dist，其他轴向对齐中心
+        const pos = new THREE.Vector3(center.x, center.y, center.z);
+        if (normal.x !== 0) pos.x = dist;
+        else if (normal.y !== 0) pos.y = dist;
+        else if (normal.z !== 0) pos.z = dist;
+        
+        helper.position.copy(pos);
+        
+        // 设置旋转使其面向法线
+        helper.lookAt(pos.clone().add(normal));
+    }
+
+    /**
+     * 检查包围盒是否完全被当前剖切面裁剪掉
+     * 如果包围盒完全在任意一个激活的剖切面的“背面”，则认为被裁剪
+     */
+    private isBoxClipped(box: THREE.Box3): boolean {
+        for (const plane of this.clippingPlanes) {
+            if (plane.constant === Infinity) continue;
+            
+            // 获取包围盒在平面法线方向上的最大点
+            // 如果最大点都在平面负方向，说明整个盒子都在平面外
+            const planeNormal = plane.normal;
+            const maxPoint = new THREE.Vector3(
+                planeNormal.x > 0 ? box.max.x : box.min.x,
+                planeNormal.y > 0 ? box.max.y : box.min.y,
+                planeNormal.z > 0 ? box.max.z : box.min.z
+            );
+            
+            if (plane.distanceToPoint(maxPoint) < 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     getStats() {
