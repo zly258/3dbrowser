@@ -90,7 +90,7 @@ const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }: Sub
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {checked !== undefined && (
-                    <div style={styles.checkboxCustom(checked, hover)}>
+                    <div style={styles.checkboxCustom(checked)}>
                         {checked && <div style={styles.checkboxCheckmark}>✓</div>}
                     </div>
                 )}
@@ -135,19 +135,19 @@ export const MenuBar: React.FC<any> = (props) => {
                 <ClassicMenuItem label={t('menu_file')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} />}
-                            {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); props.handleView('se'); }} styles={styles} />}
-                            {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); close(); props.handleView('se'); }} styles={styles} />}
+                            {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} styles={styles} />}
+                            {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); }} styles={styles} />}
+                            {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); close(); }} styles={styles} />}
                             {!isHidden('export') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool('export'); close(); props.handleView('se'); }} styles={styles} />
+                                    <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool('export'); close(); }} styles={styles} />
                                 </>
                             )}
                             {!isHidden('clear') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                    <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear(); close(); props.handleView('se'); }} styles={styles} />
+                                    <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear(); close(); }} styles={styles} />
                                 </>
                             )}
                         </>
@@ -203,8 +203,8 @@ export const MenuBar: React.FC<any> = (props) => {
                 <ClassicMenuItem label={t('tool')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); props.handleView('se'); }} styles={styles} />}
-                            {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool('clip'); close(); props.handleView('se'); }} styles={styles} />}
+                            {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); }} styles={styles} />}
+                            {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool('clip'); close(); }} styles={styles} />}
                         </>
                     )}
                 </ClassicMenuItem>
@@ -214,7 +214,7 @@ export const MenuBar: React.FC<any> = (props) => {
                 <ClassicMenuItem label={t('settings')} styles={styles} theme={theme}>
                     {(close) => (
                         <>
-                            {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); props.handleView('se'); }} styles={styles} />}
+                            {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); }} styles={styles} />}
                             {!isHidden('about') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />

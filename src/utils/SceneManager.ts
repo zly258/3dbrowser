@@ -224,7 +224,7 @@ export class SceneManager {
         const markerGeo = new THREE.BufferGeometry();
         markerGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
         const markerMat = new THREE.PointsMaterial({ 
-            color: 0xffff00, 
+            color: 0xff0000, 
             size: 8, 
             sizeAttenuation: false, 
             map: this.dotTexture,
@@ -244,6 +244,10 @@ export class SceneManager {
         // 射线投射
         this.raycaster = new THREE.Raycaster();
         this.raycaster.params.Points.threshold = 10; 
+        // @ts-ignore
+        if (!this.raycaster.params.Line) this.raycaster.params.Line = { threshold: 1 };
+        // @ts-ignore
+        this.raycaster.params.Line.threshold = 2; 
 
         this.mouse = new THREE.Vector2();
 
@@ -356,7 +360,7 @@ export class SceneManager {
             this.onChunkProgress(loadedCount, totalCount);
         }
 
-        if (this.processingChunks.size >= 6) return;
+        if (this.processingChunks.size >= 12) return;
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
@@ -372,7 +376,7 @@ export class SceneManager {
                 return centerA.distanceToSquared(this.camera.position) - centerB.distanceToSquared(this.camera.position);
             });
 
-            const batch = toLoad.slice(0, 3);
+            const batch = toLoad.slice(0, 6);
             batch.forEach(chunk => this.loadChunk(chunk));
         }
     }
@@ -1895,7 +1899,7 @@ export class SceneManager {
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineDashedMaterial({ 
-            color: 0xffff00, 
+            color: 0xff0000, 
             dashSize: 5, 
             gapSize: 2, 
             depthTest: false 
@@ -1915,7 +1919,9 @@ export class SceneManager {
         this.currentMeasurePoints.forEach(p => this.addMarker(p, group));
 
         let valStr = "";
+        let displayVal = "";
         let typeStr = this.measureType; 
+        let labelPos = new THREE.Vector3();
 
         if (this.measureType === 'dist') {
             const p1 = this.currentMeasurePoints[0];
@@ -1926,8 +1932,10 @@ export class SceneManager {
             const dy = Math.abs(p2.y - p1.y);
             const dz = Math.abs(p2.z - p1.z);
 
-            valStr = `${dist.toFixed(3)} (Δx:${dx.toFixed(2)}, Δy:${dy.toFixed(2)}, Δz:${dz.toFixed(2)})`;
+            displayVal = dist.toFixed(3);
+            valStr = `${displayVal} (Δx:${dx.toFixed(2)}, Δy:${dy.toFixed(2)}, Δz:${dz.toFixed(2)})`;
             this.addLine(this.currentMeasurePoints, group);
+            labelPos.copy(p1).add(p2).multiplyScalar(0.5);
         } else if (this.measureType === 'angle') {
             const p1 = this.currentMeasurePoints[0];
             const center = this.currentMeasurePoints[1];
@@ -1935,12 +1943,20 @@ export class SceneManager {
             const v1 = p1.clone().sub(center).normalize();
             const v2 = p2.clone().sub(center).normalize();
             const angle = v1.angleTo(v2) * (180 / Math.PI);
-            valStr = angle.toFixed(2) + "°";
+            displayVal = angle.toFixed(2) + "°";
+            valStr = displayVal;
             this.addLine(this.currentMeasurePoints, group);
+            labelPos.copy(center);
         } else {
             const p = this.currentMeasurePoints[0];
-            valStr = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
+            displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
+            valStr = displayVal;
+            labelPos.copy(p);
         }
+
+        // 添加数字显示标签
+        const label = this.createLabel(displayVal, labelPos);
+        group.add(label);
 
         this.measureGroup.add(group);
         this.measureRecords.set(id, { id, type: typeStr, val: valStr, group });
@@ -1951,9 +1967,120 @@ export class SceneManager {
         return { id, type: typeStr, val: valStr };
     }
 
+    private createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return new THREE.Sprite();
+
+        // 提高分辨率以获得更清晰的文字
+        const fontSize = 48;
+        const padding = 24;
+        ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
+        const textWidth = ctx.measureText(text).width;
+        
+        canvas.width = textWidth + padding * 2;
+        canvas.height = fontSize + padding;
+
+        // 绘制带阴影的背景
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
+        
+        const radius = 8;
+        // @ts-ignore
+        if (ctx.roundRect) {
+            // @ts-ignore
+            ctx.roundRect(5, 5, canvas.width - 10, canvas.height - 10, radius);
+        } else {
+            ctx.rect(5, 5, canvas.width - 10, canvas.height - 10);
+        }
+        ctx.fill();
+
+        // 绘制边框
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 绘制文字
+        ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        
+        const spriteMaterial = new THREE.SpriteMaterial({ 
+            map: texture, 
+            depthTest: false,
+            sizeAttenuation: false // 关键：使文字不受相机缩放影响
+        });
+        
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.position.copy(position);
+        
+        // 由于 sizeAttenuation 为 false，scale 现在代表在屏幕空间占用的比例 (0.0 到 1.0)
+        // 我们设定一个合适的大小，例如占据屏幕高度的 3%
+        const baseScale = 0.035;
+        sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
+        sprite.renderOrder = 1001;
+        sprite.userData = { type: 'label' };
+        
+        return sprite;
+    }
+
+    highlightMeasurement(id: string | null) {
+        this.measureRecords.forEach((record, rid) => {
+            const isHighlighted = rid === id;
+            const color = isHighlighted ? 0x00ff00 : 0xff0000; // 高亮绿色，普通红色
+            
+            record.group.traverse(child => {
+                if (child instanceof THREE.Line) {
+                    (child.material as THREE.LineBasicMaterial).color.set(color);
+                } else if (child instanceof THREE.Points) {
+                    (child.material as THREE.PointsMaterial).color.set(color);
+                } else if (child instanceof THREE.Sprite) {
+                    // 对于 Sprite，由于是 Canvas 贴图，如果要变色可能需要重新生成贴图
+                    // 这里我们简单调整下材质的 color
+                    (child.material as THREE.SpriteMaterial).color.set(isHighlighted ? 0x00ff00 : 0xffffff);
+                }
+            });
+        });
+    }
+
+    pickMeasurement(clientX: number, clientY: number): string | null {
+        const rect = this.canvas.getBoundingClientRect();
+        this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        // 增加阈值以便更容易选中线
+        const oldThreshold = this.raycaster.params.Line?.threshold || 0;
+        if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = 5;
+
+        const intersects = this.raycaster.intersectObjects(this.measureGroup.children, true);
+        
+        if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = oldThreshold;
+
+        if (intersects.length > 0) {
+            // 找到所属的 Group (其名字为 measure_xxx)
+            let obj = intersects[0].object;
+            while (obj.parent && !obj.name.startsWith("measure_")) {
+                obj = obj.parent;
+            }
+            if (obj.name.startsWith("measure_")) {
+                return obj.name;
+            }
+        }
+        return null;
+    }
+
     addMarker(point: THREE.Vector3, parent: THREE.Object3D) {
         const markerGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([point.x, point.y, point.z], 3));
-        const markerMat = new THREE.PointsMaterial({ color: 0xffff00, size: 8, map: this.dotTexture, transparent: true, alphaTest: 0.5, depthTest: false });
+        const markerMat = new THREE.PointsMaterial({ color: 0xff0000, size: 8, map: this.dotTexture, transparent: true, alphaTest: 0.5, depthTest: false });
         const marker = new THREE.Points(markerGeo, markerMat);
         marker.renderOrder = 999;
         parent.add(marker);
@@ -1961,7 +2088,7 @@ export class SceneManager {
 
     addLine(points: THREE.Vector3[], parent: THREE.Object3D) {
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ color: 0xffff00, depthTest: false, linewidth: 2 });
+        const material = new THREE.LineBasicMaterial({ color: 0xff0000, depthTest: false, linewidth: 2 });
         const line = new THREE.Line(geometry, material);
         line.renderOrder = 998;
         parent.add(line);

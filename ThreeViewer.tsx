@@ -163,6 +163,7 @@ export const ThreeViewer = ({
     const [measureType, setMeasureType] = useState<MeasureType>('none');
     // 存储历史记录: { id, type, val }
     const [measureHistory, setMeasureHistory] = useState<any[]>([]);
+    const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
 
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
@@ -681,16 +682,32 @@ export const ThreeViewer = ({
 
         const handleClick = (e: MouseEvent) => {
             // 测量点击
-            if (activeTool === 'measure' && measureType !== 'none') {
-                const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
-                if (intersect) {
-                    const record = mgr.addMeasurePoint(intersect.point);
-                    if (record) {
-                        // 当前段测量完成
-                        const localizedRecord = {...record, type: (t as any)[`measure_${record.type}`] || record.type };
-                        setMeasureHistory(prev => [localizedRecord, ...prev]);
+            if (activeTool === 'measure') {
+                if (measureType !== 'none') {
+                    // 如果选择了测量类型，优先进行测量点拾取
+                    const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
+                    if (intersect) {
+                        const record = mgr.addMeasurePoint(intersect.point);
+                        if (record) {
+                            // 当前段测量完成
+                            const localizedRecord = {...record, type: record.type };
+                            setMeasureHistory(prev => [localizedRecord, ...prev]);
+                        }
+                        return; // 已经处理了测量点，不再尝试选中旧测量线
                     }
                 }
+
+                // 只有在没点中模型点，或者没选择测量类型时，才尝试选中已有的测量线进行高亮或操作
+                const mId = mgr.pickMeasurement(e.clientX, e.clientY);
+                if (mId) {
+                    setHighlightedMeasureId(mId);
+                    mgr.highlightMeasurement(mId);
+                    return;
+                }
+
+                // 如果什么都没点中，清除高亮
+                setHighlightedMeasureId(null);
+                mgr.highlightMeasurement(null);
                 return;
             }
             if(pickEnabled) {
@@ -707,12 +724,23 @@ export const ThreeViewer = ({
             mgr.highlightObject(selectedUuid);
         };
 
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (activeTool === 'measure' && measureType !== 'none') {
+                    setMeasureType('none');
+                    mgr.startMeasurement('none');
+                }
+            }
+        };
+
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("keydown", handleKeyDown);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("keydown", handleKeyDown);
         };
     }, [pickEnabled, selectedUuid, activeTool, measureType]);
 
@@ -724,6 +752,8 @@ export const ThreeViewer = ({
         // 清理非当前工具的状态
         if (activeTool !== 'measure') {
             mgr.clearMeasurementPreview();
+            mgr.highlightMeasurement(null);
+            setHighlightedMeasureId(null);
             setMeasureType('none');
         }
 
@@ -1323,8 +1353,25 @@ export const ThreeViewer = ({
                             t={t} sceneMgr={sceneMgr.current} 
                             measureType={measureType} setMeasureType={setMeasureType}
                             measureHistory={measureHistory}
-                            onDelete={(id: string) => { sceneMgr.current?.removeMeasurement(id); setMeasureHistory(prev => prev.filter(i => i.id !== id)); }}
-                            onClear={() => { sceneMgr.current?.clearAllMeasurements(); setMeasureHistory([]); }}
+                            highlightedId={highlightedMeasureId}
+                            onHighlight={(id: string) => {
+                                setHighlightedMeasureId(id);
+                                sceneMgr.current?.highlightMeasurement(id);
+                            }}
+                            onDelete={(id: string) => { 
+                                sceneMgr.current?.removeMeasurement(id); 
+                                setMeasureHistory(prev => prev.filter(i => i.id !== id)); 
+                                if (highlightedMeasureId === id) {
+                                    setHighlightedMeasureId(null);
+                                    sceneMgr.current?.highlightMeasurement(null);
+                                }
+                            }}
+                            onClear={() => { 
+                                sceneMgr.current?.clearAllMeasurements(); 
+                                setMeasureHistory([]); 
+                                setHighlightedMeasureId(null);
+                                setMeasureType('none');
+                            }}
                             onClose={() => setActiveTool('none')}
                             styles={styles} theme={theme}
                         />

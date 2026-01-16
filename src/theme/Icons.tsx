@@ -21,7 +21,8 @@ import {
   Link,
   Type,
   Minus,
-  Square
+  Square,
+  Play
 } from 'lucide-react';
 
 // Consistent icon size and style
@@ -64,6 +65,7 @@ export const IconLang = (props: any) => withThemeIcon(Globe, props);
 export const IconLink = (props: any) => withThemeIcon(Link, props);
 export const IconMinimize = (props: any) => withThemeIcon(Minus, props);
 export const IconMaximize = (props: any) => withThemeIcon(Square, { ...props, size: (props.size || iconSize) - 4 });
+export const IconPlay = (props: any) => withThemeIcon(Play, props);
 
 // CAD Style View Icons
 export const IconViewTop = (props: any) => (
