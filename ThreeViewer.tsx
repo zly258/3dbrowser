@@ -777,13 +777,26 @@ export const ThreeViewer = ({
         if (activeTool === 'clip' && sceneMgr.current) {
             sceneMgr.current.setClippingEnabled(clipEnabled);
             if (clipEnabled) {
-                const box = sceneMgr.current.computeTotalBounds();
+                // 使用当前场景中可见物体的包围盒，这样剖切范围会随着场景内容自动调整
+                // 如果没有可见物体，则回退到完整包围盒
+                let box = sceneMgr.current.computeTotalBounds(true);
+                if (box.isEmpty()) {
+                    box = sceneMgr.current.computeTotalBounds(false);
+                }
+                
                 if (!box.isEmpty()) {
                     sceneMgr.current.updateClippingPlanes(box, clipValues, clipActive);
                 }
             }
         }
     }, [clipEnabled, clipValues, clipActive, activeTool]);
+
+    // 测量类型同步
+    useEffect(() => {
+        if (sceneMgr.current) {
+            sceneMgr.current.startMeasurement(measureType);
+        }
+    }, [measureType]);
 
 
     // --- 处理函数 ---
