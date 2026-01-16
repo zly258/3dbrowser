@@ -3,6 +3,8 @@ import React from "react";
 import { IconClose } from "../theme/Icons";
 import { TFunc, Lang } from "../theme/Locales";
 import { SceneSettings } from "../utils/SceneManager";
+import { Slider } from "./CommonUI";
+import { Checkbox } from "./ToolPanels";
 
 interface SettingsModalProps {
     t: TFunc;
@@ -97,37 +99,47 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                             <input type="color" value={settings.bgColor} onChange={(e) => onUpdate({bgColor: e.target.value})} />
                         </Row>
                         <Row label={t("st_monitor")} theme={theme}>
-                             <input type="checkbox" checked={showStats} onChange={(e) => setShowStats(e.target.checked)} style={{accentColor: theme.accent}} />
+                             <Checkbox 
+                                checked={showStats} 
+                                onChange={(val: boolean) => setShowStats(val)} 
+                                styles={styles} 
+                                theme={theme}
+                             />
                         </Row>
                     </Section>
 
                     <Section title={t("st_viewport")} theme={theme}>
                         <Row label={`${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`} theme={theme}>
-                            <input type="range" min="80" max="300" step="10" 
+                            <Slider min={80} max={300} step={10} 
                                 value={settings.viewCubeSize || 100} 
-                                onChange={(e) => onUpdate({viewCubeSize: parseInt(e.target.value)})} 
-                                style={styles.rangeSlider}/>
+                                onChange={(val: number) => onUpdate({viewCubeSize: val})} 
+                                theme={theme}/>
                         </Row>
                     </Section>
 
                     <Section title={t("st_import_settings")} theme={theme}>
                         <Row label={t("st_instancing")} theme={theme}>
-                             <input type="checkbox" checked={settings.enableInstancing} onChange={(e) => onUpdate({enableInstancing: e.target.checked})} style={{accentColor: theme.accent}} />
+                             <Checkbox 
+                                checked={settings.enableInstancing} 
+                                onChange={(val: boolean) => onUpdate({enableInstancing: val})} 
+                                styles={styles} 
+                                theme={theme}
+                             />
                         </Row>
                     </Section>
 
                     <Section title={t("st_lighting")} theme={theme}>
                         <Row label={`${t("st_ambient")} (${settings.ambientInt.toFixed(1)})`} theme={theme}>
-                            <input type="range" min="0" max="5" step="0.1" 
+                            <Slider min={0} max={5} step={0.1} 
                                 value={settings.ambientInt} 
-                                onChange={(e) => onUpdate({ambientInt: parseFloat(e.target.value)})} 
-                                style={styles.rangeSlider}/>
+                                onChange={(val: number) => onUpdate({ambientInt: val})} 
+                                theme={theme}/>
                         </Row>
                         <Row label={`${t("st_dir")} (${settings.dirInt.toFixed(1)})`} theme={theme}>
-                            <input type="range" min="0" max="5" step="0.1" 
+                            <Slider min={0} max={5} step={0.1} 
                                 value={settings.dirInt} 
-                                onChange={(e) => onUpdate({dirInt: parseFloat(e.target.value)})} 
-                                style={styles.rangeSlider}/>
+                                onChange={(val: number) => onUpdate({dirInt: val})} 
+                                theme={theme}/>
                         </Row>
                     </Section>
                 </div>
