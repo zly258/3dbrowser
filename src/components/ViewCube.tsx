@@ -30,11 +30,28 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         const height = cubeSize;
 
         // Renderer
+        const canvas = canvasRef.current;
+        // Pre-initialize WebGL2 context to set state BEFORE Three.js constructor
+        // This prevents INVALID_OPERATION during internal texture initialization
+        const gl = canvas.getContext('webgl2', { 
+            antialias: true, 
+            alpha: true,
+            preserveDrawingBuffer: false
+        });
+        
+        if (gl) {
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        }
+
         const renderer = new THREE.WebGLRenderer({
-            canvas: canvasRef.current,
+            canvas: canvas,
+            context: gl || undefined,
             antialias: true,
             alpha: true,
+            precision: 'mediump'
         });
+        
         renderer.setSize(width, height);
         renderer.setPixelRatio(window.devicePixelRatio);
         rendererRef.current = renderer;
