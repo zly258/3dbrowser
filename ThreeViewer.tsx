@@ -55,7 +55,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             return (
                 <div style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text,
+                    height: '100%', width: '100%', backgroundColor: theme.bg, color: theme.text,
                     fontFamily: DEFAULT_FONT, gap: '20px', padding: '40px', textAlign: 'center'
                 }}>
                     <div style={{ fontSize: '64px' }}>⚠️</div>
@@ -145,6 +145,13 @@ export const ThreeViewer = ({
             return 'zh';
         }
     });
+
+    // 监听外部语言切换
+    useEffect(() => {
+        if (defaultLang && defaultLang !== lang) {
+            setLang(defaultLang);
+        }
+    }, [defaultLang]);
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
@@ -273,22 +280,40 @@ export const ThreeViewer = ({
         return msg.replace(/:\s*\d+%/g, '').replace(/\(\d+%\)/g, '').replace(/\d+%/g, '').trim();
     };
     
+    const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
+
     // 全局错误捕获
     useEffect(() => {
         const handleError = (event: ErrorEvent) => {
-            console.error("Global Error:", event.error);
+            // Ignore empty errors or ResizeObserver loop limit errors
+            const message = event.message || "";
+            if (!message && !event.error) return;
+            if (message.includes("ResizeObserver loop completed") || message.includes("ResizeObserver loop limit")) {
+                return;
+            }
+            
+            console.error("Global Error:", event.error || message);
             setErrorState({
                 isOpen: true,
                 title: t("failed"),
-                message: event.message || "An unexpected error occurred"
+                message: message || "An unexpected error occurred",
+                detail: event.error?.stack || ""
             });
         };
         const handleRejection = (event: PromiseRejectionEvent) => {
+            if (!event.reason) return;
+            
+            const message = event.reason?.message || String(event.reason);
+            if (message.includes("ResizeObserver loop completed") || message.includes("ResizeObserver loop limit")) {
+                return;
+            }
+
             console.error("Unhandled Rejection:", event.reason);
             setErrorState({
                 isOpen: true,
                 title: t("failed"),
-                message: event.reason?.message || String(event.reason) || "A promise was rejected without reason"
+                message: message || "A promise was rejected without reason",
+                detail: event.reason?.stack || ""
             });
         };
         window.addEventListener('error', handleError);
@@ -297,16 +322,7 @@ export const ThreeViewer = ({
             window.removeEventListener('error', handleError);
             window.removeEventListener('unhandledrejection', handleRejection);
         };
-    }, [lang]);
-
-    useEffect(() => {
-        if (toast) {
-            const timer = setTimeout(() => setToast(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [toast]);
-
-    const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
+    }, [lang, t]);
 
     // 持久化主题和语言设置
     useEffect(() => {
@@ -371,23 +387,35 @@ export const ThreeViewer = ({
         return mb.toFixed(1) + ' MB';
     };
 
-    // --- 视口稳健自适应 ---
     // 1. 使用 ResizeObserver 处理容器尺寸变化
     useEffect(() => {
         if (!viewportRef.current || !sceneMgr.current) return;
         
+        let resizeId: number;
         const observer = new ResizeObserver(() => {
-             sceneMgr.current?.resize();
+             // 使用 requestAnimationFrame 避免 "ResizeObserver loop limit exceeded" 错误
+             cancelAnimationFrame(resizeId);
+             resizeId = requestAnimationFrame(() => {
+                sceneMgr.current?.resize();
+             });
         });
         
         observer.observe(viewportRef.current);
 
-        // 全局拖拽支持
+        return () => {
+            observer.disconnect();
+            cancelAnimationFrame(resizeId);
+        };
+    }, []);
+
+    // 2. 全局拖拽支持
+    useEffect(() => {
         const handleDragOver = (e: DragEvent) => {
             if (!allowDragOpen) return;
             e.preventDefault();
             e.stopPropagation();
         };
+
         const handleDrop = async (e: DragEvent) => {
             if (!allowDragOpen) return;
             e.preventDefault();
@@ -425,13 +453,12 @@ export const ThreeViewer = ({
         window.addEventListener('drop', handleDrop);
 
         return () => {
-            observer.disconnect();
             window.removeEventListener('dragover', handleDragOver);
             window.removeEventListener('drop', handleDrop);
         };
-    }, [lang, allowDragOpen]);
+    }, [lang, allowDragOpen, t]);
 
-    // 2. 当布局状态变化时强制触发一次 resize（修复“场景未占满剩余空间”的问题）
+    // 3. 当布局状态变化时强制触发一次 resize
     useEffect(() => {
         if (sceneMgr.current) {
             // Use requestAnimationFrame to ensure the DOM reflow has completed
@@ -1317,7 +1344,7 @@ export const ThreeViewer = ({
                 }}>
                     <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
                     
-                    <ViewCube sceneMgr={mgrInstance} theme={theme} />
+                    <ViewCube sceneMgr={mgrInstance} theme={theme} lang={lang} />
 
                     {/* Toast Notification */}
                     {toast && (

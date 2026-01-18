@@ -77,7 +77,7 @@ export const createGlobalStyle = (theme: ThemeColors) => `
 
 export const createStyles = (theme: ThemeColors) => ({
     // Desktop / Shared
-    container: { display: "flex", flexDirection: "column" as const, height: "100vh", width: "100vw", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none" as const, overflow: "hidden" },
+    container: { display: "flex", flexDirection: "column" as const, height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none" as const, overflow: "hidden" },
     
     // Classic Menu Styles
     classicMenuBar: {

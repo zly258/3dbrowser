@@ -1,13 +1,15 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { SceneManager } from "../utils/SceneManager";
+import { getTranslation, Lang } from "../theme/Locales";
 
 interface ViewCubeProps {
     sceneMgr: SceneManager | null;
     theme: any;
+    lang?: Lang;
 }
 
-export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
+export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh' }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -18,7 +20,8 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
     const mouse = useRef(new THREE.Vector2());
     const hoveredPart = useRef<THREE.Mesh | null>(null);
 
-    const cubeSize = sceneMgr?.settings.viewCubeSize || 100;
+    const cubeSize = sceneMgr?.settings?.viewCubeSize || 100;
+    const t = (key: string) => getTranslation(lang as Lang, key);
 
     useEffect(() => {
         if (!canvasRef.current || !containerRef.current) return;
@@ -76,7 +79,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
                     context.rotate((rotation * Math.PI) / 180);
                 }
                 context.fillStyle = '#333333';
-                context.font = 'bold 54px "Microsoft YaHei", sans-serif';
+                context.font = lang === 'zh' ? 'bold 54px "Microsoft YaHei", sans-serif' : 'bold 32px Arial, sans-serif';
                 context.textAlign = 'center';
                 context.textBaseline = 'middle';
                 context.fillText(text, 0, 0);
@@ -132,12 +135,12 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
         const offset = 0.5;
 
         // Faces (SceneManager: Z up, Y- front)
-        createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, "前");
-        createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, offset, 0), "back", faceColor, "后", 180);
-        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, offset), "top", faceColor, "顶", 270);
-        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, -offset), "bottom", faceColor, "底");
-        createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(-offset, 0, 0), "left", faceColor, "左", 90);
-        createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(offset, 0, 0), "right", faceColor, "右", 270);
+        createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, t("cube_front"));
+        createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, offset, 0), "back", faceColor, t("cube_back"), 180);
+        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, offset), "top", faceColor, t("cube_top"), 270);
+        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, -offset), "bottom", faceColor, t("cube_bottom"));
+        createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(-offset, 0, 0), "left", faceColor, t("cube_left"), 90);
+        createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(offset, 0, 0), "right", faceColor, t("cube_right"), 270);
 
         // Edges
         // Top edges (Z = offset)
@@ -195,7 +198,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme }) => {
                 }
             });
         };
-    }, [sceneMgr, cubeSize]);
+    }, [sceneMgr, cubeSize, lang]);
 
     const handleMouseMove = (event: React.MouseEvent) => {
         if (!canvasRef.current || !sceneRef.current || !cameraRef.current || !cubeRef.current) return;
