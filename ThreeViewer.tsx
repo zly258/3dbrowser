@@ -59,9 +59,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                     fontFamily: DEFAULT_FONT, gap: '20px', padding: '40px', textAlign: 'center'
                 }}>
                     <div style={{ fontSize: '64px' }}>⚠️</div>
-                    <h1 style={{ fontSize: '24px', margin: 0 }}>应用发生错误</h1>
+                    <h1 style={{ fontSize: '24px', margin: 0 }}>{t("error_title")}</h1>
                     <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6' }}>
-                        抱歉，程序运行过程中遇到了未预期的错误。您可以尝试重新加载页面，或联系开发人员。
+                        {t("error_msg")}
                     </p>
                     <button 
                         onClick={() => window.location.reload()}
@@ -70,7 +70,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                             border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
                         }}
                     >
-                        重新加载页面
+                        {t("error_reload")}
                     </button>
                 </div>
             );
@@ -288,7 +288,9 @@ export const ThreeViewer = ({
             // Ignore empty errors or ResizeObserver loop limit errors
             const message = event.message || "";
             if (!message && !event.error) return;
-            if (message.includes("ResizeObserver loop completed") || message.includes("ResizeObserver loop limit")) {
+            if (message.includes("ResizeObserver loop completed") || 
+                message.includes("ResizeObserver loop limit") ||
+                message.includes("texImage3D: FLIP_Y or PREMULTIPLY_ALPHA")) {
                 return;
             }
             
@@ -304,7 +306,9 @@ export const ThreeViewer = ({
             if (!event.reason) return;
             
             const message = event.reason?.message || String(event.reason);
-            if (message.includes("ResizeObserver loop completed") || message.includes("ResizeObserver loop limit")) {
+            if (message.includes("ResizeObserver loop completed") || 
+                message.includes("ResizeObserver loop limit") ||
+                message.includes("texImage3D: FLIP_Y or PREMULTIPLY_ALPHA")) {
                 return;
             }
 

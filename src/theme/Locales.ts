@@ -136,6 +136,9 @@ const resources: Record<Lang, Record<string, string>> = {
         about_author: "Author",
         about_license: "License",
         about_license_nc: "Non-commercial Use Only",
+        error_title: "Application Error",
+        error_msg: "Sorry, the application encountered an unexpected error. You can try reloading the page or contact the developer.",
+        error_reload: "Reload Page",
     },
     zh: {
         home: "首页",
@@ -266,6 +269,9 @@ const resources: Record<Lang, Record<string, string>> = {
         about_author: "作者",
         about_license: "授权协议",
         about_license_nc: "仅限非商业用途",
+        error_title: "应用发生错误",
+        error_msg: "抱歉，程序运行过程中遇到了未预期的错误。您可以尝试重新加载页面，或联系开发人员。",
+        error_reload: "重新加载页面",
     }
 };
 
