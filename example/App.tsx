@@ -49,7 +49,6 @@ const App: React.FC = () => {
             <div style={headerStyle}>
                 <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007acc', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span>{t.title}</span>
-                    <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal' }}>v1.4.3</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
