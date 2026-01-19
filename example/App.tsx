@@ -76,7 +76,7 @@ const App: React.FC = () => {
             <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <ThreeViewer 
                     allowDragOpen={true}
-                    libPath="/libs"
+                    libPath="./libs"
                     showStats={true}
                     defaultLang={lang}
                 />
