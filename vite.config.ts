@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => {
           formats: ['es', 'umd']
         },
         rollupOptions: {
-          external: ['react', 'react-dom', 'three'],
+          external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'three'],
           output: {
             globals: {
               react: 'React',
