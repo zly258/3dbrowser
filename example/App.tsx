@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import ThreeViewer from '../ThreeViewer';
+import { ThreeViewer } from '@zhangly1403/3dbrowser';
 
 const App: React.FC = () => {
     const [lang, setLang] = useState<'zh' | 'en'>('zh');
