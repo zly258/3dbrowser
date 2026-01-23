@@ -25,18 +25,18 @@ import {
   Play
 } from 'lucide-react';
 
-// Consistent icon size and style
+// 统一图标尺寸与样式
 const iconSize = 18;
-const iconStrokeWidth = 1.5; // Back to standard thickness
+const iconStrokeWidth = 1.5; // 使用标准线宽
 
-// Simple helper for monochromatic icons
+// 单色图标的简单封装
 const withThemeIcon = (Icon: any, props: any) => {
   const { size, color, ...rest } = props;
   return (
     <Icon 
       size={size || iconSize} 
       strokeWidth={iconStrokeWidth} 
-      color={color || "currentColor"} // Default to parent's text color
+      color={color || "currentColor"} // 默认继承父级文字颜色
       {...rest}
     />
   );
@@ -67,7 +67,7 @@ export const IconMinimize = (props: any) => withThemeIcon(Minus, props);
 export const IconMaximize = (props: any) => withThemeIcon(Square, { ...props, size: (props.size || iconSize) - 4 });
 export const IconPlay = (props: any) => withThemeIcon(Play, props);
 
-// CAD Style View Icons
+// CAD 风格视图图标
 export const IconViewTop = (props: any) => (
   <svg width={props.size || iconSize} height={props.size || iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={iconStrokeWidth} strokeLinecap="round" strokeLinejoin="round" {...props}>
     <rect x="3" y="3" width="18" height="18" rx="1" />

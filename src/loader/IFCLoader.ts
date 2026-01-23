@@ -3,12 +3,12 @@ import * as WebIFC from "web-ifc";
 import { ProgressCallback, TFunc } from "../theme/Locales";
 
 export const loadIFC = async (
-    url: string, 
+    input: string | File | ArrayBuffer,
     onProgress: ProgressCallback, 
     t: TFunc,
     libPath: string = './libs'
 ): Promise<THREE.Group> => {
-    // 初始化web-ifc API
+    // 初始化 web-ifc API
     const ifcApi = new WebIFC.IfcAPI();
     
     // 设置WASM路径，使用相对路径以适配打包后的环境
@@ -17,31 +17,36 @@ export const loadIFC = async (
     
     await ifcApi.Init();
     
-    // 声明静态变量用于进度显示
-    let staticDownloadCounter = 0;
-    
-    // 使用FileLoader获取文件数据以支持进度事件
-    const loader = new THREE.FileLoader();
-    loader.setResponseType('arraybuffer');
-    
-    const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-        loader.load(
-            url,
-            (data) => resolve(data as ArrayBuffer),
-            (event) => {
-                if (event.total > 0) {
-                    const downloadPercent = (event.loaded / event.total) * 100;
-                    // 下载阶段显示实际下载进度，不限制在40%
-                    onProgress(downloadPercent, `${t("reading")}...`);
-                } else {
-                    // 如果无法获取总量，使用递增方式
-                    staticDownloadCounter = (staticDownloadCounter || 0) + 5;
-                    onProgress(Math.min(35, staticDownloadCounter), `${t("reading")}...`);
-                }
-            },
-            reject
-        );
-    });
+    let buffer: ArrayBuffer;
+    if (typeof input !== "string") {
+        if (input instanceof ArrayBuffer) {
+            buffer = input;
+        } else {
+            onProgress(5, `${t("reading")}...`);
+            buffer = await input.arrayBuffer();
+            onProgress(25, `${t("reading")}...`);
+        }
+    } else {
+        const loader = new THREE.FileLoader();
+        loader.setResponseType("arraybuffer");
+        let staticReadCounter = 0;
+        buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+            loader.load(
+                input,
+                (data) => resolve(data as ArrayBuffer),
+                (event) => {
+                    if (event.total > 0) {
+                        const readPercent = (event.loaded / event.total) * 100;
+                        onProgress(readPercent, `${t("reading")}...`);
+                    } else {
+                        staticReadCounter = staticReadCounter + 5;
+                        onProgress(Math.min(35, staticReadCounter), `${t("reading")}...`);
+                    }
+                },
+                reject
+            );
+        });
+    }
 
     const data = new Uint8Array(buffer);
 
@@ -51,13 +56,13 @@ export const loadIFC = async (
     const modelID = ifcApi.OpenModel(data, {
         COORDINATE_TO_ORIGIN: true,
         CIRCLE_SEGMENTS: 12,
-        MEMORY_LIMIT: 1073741824 // 1GB
+        MEMORY_LIMIT: 1073741824 // 1GB（内存限制）
     });
     
     const rootGroup = new THREE.Group();
     rootGroup.name = "IFC模型";
     
-    // 1. 构建属性映射表 (Object ID -> [PropertySet ID, ...])
+    // 1. 构建属性映射表（对象 ID -> 属性集 ID 列表）
     // 这样可以在点击时快速查找属性，无需每次遍历所有关系
     const propertyMap = new Map<number, number[]>();
     
@@ -72,8 +77,8 @@ export const loadIFC = async (
             const id = lines.get(i);
             const rel = ifcApi.GetLine(modelID, id);
             
-            // rel.RelatedObjects是ID数组（或单个引用，通常为数组）
-            // rel.RelatingPropertyDefinition是属性集ID
+            // rel.RelatedObjects：对象 ID 数组（有时为单个引用，但通常是数组）
+            // rel.RelatingPropertyDefinition：属性集 ID
             
             if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
                 const psetID = rel.RelatingPropertyDefinition?.value;
@@ -193,7 +198,7 @@ export const loadIFC = async (
         const elements = containmentMap.get(expressID);
         if (elements) {
             for (const elementID of elements) {
-                // 构件可能还会进一步分解（例如 Curtain Wall 分解为 Panels 和 Mullions）
+                // 构件可能还会进一步分解（例如幕墙 Curtain Wall 分解为面板 Panels 与竖梃/横梁 Mullions）
                 // 所以对构件也进行递归解析，以捕获其可能的子零件
                 parseSpatialRecursive(elementID, currentParent);
             }
@@ -211,7 +216,7 @@ export const loadIFC = async (
                     parseSpatialRecursive(projects.get(i), rootGroup);
                 }
             } else {
-                // 如果没有 IfcProject (非标准文件)，尝试从所有 IfcSite 或 IfcBuilding 开始
+                // 如果没有 IfcProject（非标准文件），尝试从 IfcSite / IfcBuilding 开始
                 const sites = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCSITE);
                 for (let i = 0; i < sites.size(); i++) {
                     parseSpatialRecursive(sites.get(i), rootGroup);
@@ -603,8 +608,8 @@ export const loadIFC = async (
             geometry.setAttribute('normal', new THREE.BufferAttribute(normFloats, 3));
             geometry.setIndex(new THREE.BufferAttribute(indices, 1));
             
-            // 在几何体上存储ExpressID以供选择逻辑使用
-            geometry.userData = { expressID };
+            // 在几何体上存储 ExpressID/BimId 以供选择逻辑使用
+            geometry.userData = { expressID, bimId: String(expressID) };
 
             const transform = placedGeom.flatTransformation; 
             dummyMatrix.fromArray(transform);
@@ -624,7 +629,8 @@ export const loadIFC = async (
             mesh.matrix.fromArray(transform);
             mesh.matrixWorldNeedsUpdate = true; 
             
-            mesh.userData.expressID = expressID; 
+            mesh.userData.expressID = expressID;
+            mesh.userData.bimId = String(expressID);
             
             // 附加图层信息
             if (layerMap.has(expressID)) {
@@ -658,7 +664,7 @@ export const loadIFC = async (
     console.log(`Loaded ${meshCount} meshes from IFC.`);
     onProgress(100, t("success"));
     
-    // Apply axis correction
+    // 轴向修正
     rootGroup.rotateX(Math.PI / 2);
 
     return rootGroup;

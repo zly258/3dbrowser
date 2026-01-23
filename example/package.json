@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@zhangly1403/3dbrowser": "file:./local-pkg/zhangly1403-3dbrowser-1.4.5.tgz",
+    "@zhangly1403/3dbrowser": "file:./3dbrowser-lib",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

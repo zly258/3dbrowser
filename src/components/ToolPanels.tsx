@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { IconClose, IconClear, IconPlay } from "../theme/Icons";
 import { Button, PanelSection, Slider, DualSlider } from "./CommonUI";
 
-// --- Generic Floating Panel ---
+// --- 通用浮动面板 ---
 interface FloatingPanelProps {
     title: string;
     onClose?: () => void; 
@@ -12,25 +12,25 @@ interface FloatingPanelProps {
     height?: number;
     x?: number;
     y?: number;
-    resizable?: boolean; // New prop for controlling resizability
-    movable?: boolean;   // New prop for controlling movability
+    resizable?: boolean; // 是否允许缩放
+    movable?: boolean;   // 是否允许拖拽
     styles: any;
     theme: any;
-    storageId?: string; // ID for localStorage persistence
+    storageId?: string; // localStorage 持久化标识
 }
 
 export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, children, width = 300, height = 200, x = 100, y = 100, resizable = false, movable = true, styles, theme, storageId }) => {
     const panelRef = useRef<HTMLDivElement>(null);
-    // Initialize position from localStorage or props
+    // 从 localStorage 或 props 初始化位置
     const [pos, setPos] = useState(() => {
         if (storageId) {
             try {
                 const saved = localStorage.getItem(`panel_${storageId}`);
                 if (saved) {
                     const parsed = JSON.parse(saved);
-                    // Basic validation to ensure panel is somewhat on screen
+                    // 基础校验，避免面板初始位置跑到屏幕外
                     if (parsed.pos && typeof parsed.pos.x === 'number' && typeof parsed.pos.y === 'number') {
-                        // Clamp to prevent loading off-screen if window size changed
+                        // 限制范围：窗口尺寸变化时，避免加载到屏幕外
                         const loadedX = Math.min(Math.max(0, parsed.pos.x), window.innerWidth - 50);
                         const loadedY = Math.min(Math.max(0, parsed.pos.y), window.innerHeight - 50);
                         return { x: loadedX, y: loadedY };
@@ -63,17 +63,17 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
     const startPos = useRef({ x: 0, y: 0 });
     const startSize = useRef({ w: 0, h: 0 });
     
-    // Refs to track current state for handleUp saving without stale closures
+    // 用 ref 保持最新状态，避免 handleUp 保存时闭包过期
     const currentPosRef = useRef(pos);
     const currentSizeRef = useRef(size);
     
     const animationFrame = useRef<number>(0);
 
-    // Sync refs
+    // 同步 ref
     useEffect(() => { currentPosRef.current = pos; }, [pos]);
     useEffect(() => { currentSizeRef.current = size; }, [size]);
 
-    // Optimized Drag/Resize Handler with Clamping
+    // 拖拽/缩放处理（带范围限制）
     useEffect(() => {
         const handleMove = (e: MouseEvent) => {
             if (!isDragging.current && !isResizing.current) return;
@@ -90,7 +90,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
                     let newX = startPos.current.x + dx;
                     let newY = startPos.current.y + dy;
 
-                    // Clamping logic: keep panel within parent bounds
+                    // 限制范围：确保面板始终在父容器/窗口内
                     let limitW = window.innerWidth;
                     let limitH = window.innerHeight;
                     
@@ -116,7 +116,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
         };
 
         const handleUp = () => {
-            // Save state on drag end
+            // 拖拽/缩放结束时保存状态
             if ((isDragging.current || isResizing.current) && storageId) {
                 try {
                     const stateToSave = {
@@ -140,7 +140,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
             document.removeEventListener('mouseup', handleUp);
             if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
         };
-    }, [size, storageId]); // Dependency on size to recalculate bounds correctly
+    }, [size, storageId]); // 依赖 size，确保范围计算正确
 
     const onHeaderDown = (e: React.MouseEvent) => {
         if (e.button !== 0 || !movable) return;
@@ -195,7 +195,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
     );
 };
 
-// --- Custom Checkbox Component ---
+// --- 自定义复选框组件 ---
 export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any) => {
     return (
         <label 
@@ -220,10 +220,10 @@ export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any
 };
 
 
-// --- Specific Tools ---
+// --- 具体工具 ---
 
 export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory, onDelete, onClear, onClose, styles, theme, highlightedId, onHighlight }: any) => {
-    // Group measurements by type
+    // 按类型分组测量记录
     const groupedHistory = useMemo(() => {
         const groups: Record<string, any[]> = {
             'dist': [],

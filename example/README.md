@@ -64,13 +64,12 @@ function App() {
 |------|------|---------|-------------|
 | `libPath` | `string` | `'./libs'` | Path to the folder containing WASM/Worker files (relative to window.location) |
 | `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
-| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`. |
+| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`. |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
 | `showStats` | `boolean` | `true` | Show performance statistics panel |
 | `showOutline` | `boolean` | `true` | Show scene structure outline panel |
 | `showProperties` | `boolean` | `true` | Show object properties panel |
-| `showDeleteButton` | `boolean` | `true` | Show delete button in tree nodes |
 | `initialSettings` | `Partial<SceneSettings>` | - | Initial scene settings (lighting, bg, etc.) |
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or File objects to load on mount |
 | `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
@@ -162,13 +161,12 @@ function App() {
 |------|------|---------|-------------|
 | `libPath` | `string` | `'./libs'` | 包含 WASM/Worker 文件的文件夹路径（相对于 window.location） |
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
-| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `show_delete`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`。 |
+| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `settings_panel`, `settings`, `about`。 |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
 | `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
 | `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
 | `showProperties` | `boolean` | `true` | 是否显示对象属性面板 |
-| `showDeleteButton` | `boolean` | `true` | 是否显示树节点删除按钮 |
 | `initialSettings` | `Partial<SceneSettings>` | - | 初始场景设置（光照、背景等） |
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的文件（URL 或 File 对象） |
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |

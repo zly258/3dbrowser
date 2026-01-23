@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { SceneManager } from "../utils/SceneManager";
-import { IconTrash, IconChevronRight, IconChevronDown } from "../theme/Icons";
+import { IconChevronRight, IconChevronDown } from "../theme/Icons";
 import { Checkbox } from "./ToolPanels";
 
 interface TreeNode {
@@ -18,12 +17,12 @@ interface TreeNode {
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
-    // 检测TilesRenderer。通常是一个Group，但在用户数据中有'tilesRenderer'属性，或者是我们传递的渲染器返回的组
-    // 在我们的SceneManager中，我们将其命名为"3D Tileset"
+    // 检测 3D Tiles 渲染器：通常是一个 Group，但 userData 中可能带有 'tilesRenderer'，或由渲染器返回的组
+    // 在 SceneManager 中我们将其命名为 "3D Tileset"
     
     // 检查是否为瓦片集包装器
     let isTiles = object.name === "3D Tileset"; 
-    // 或者检查对象上是否有tilesRenderer属性（取决于版本）
+    // 或者直接检查对象是否带有 tilesRenderer 属性（取决于版本）
     
     const isMesh = object.isMesh;
     
@@ -33,7 +32,7 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
         type: isTiles ? 'TILES' : isMesh ? 'MESH' : 'GROUP',
         depth,
         children: [],
-        expanded: depth < 2, // 默认展开前几层
+        expanded: false,
         visible: object.visible !== false,
         object
     };
@@ -75,21 +74,19 @@ const flattenTree = (nodes: TreeNode[], result: TreeNode[] = [], parentIsLast: b
 
 interface SceneTreeProps {
     t: (key: string) => string;
-    sceneMgr: SceneManager | null;
     treeRoot: TreeNode[];
     setTreeRoot: React.Dispatch<React.SetStateAction<TreeNode[]>>;
     selectedUuid: string | null;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
-    onDelete: (uuid: string) => void;
-    showDeleteButton?: boolean;
+    onModelContextMenu?: (uuid: string, clientX: number, clientY: number) => void;
     styles: any;
     theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({ 
-    t, sceneMgr, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, 
-    showDeleteButton = true, styles, theme 
+    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility,
+    onModelContextMenu, styles, theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     
@@ -121,9 +118,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const [containerHeight, setContainerHeight] = useState(400);
 
-    // 用于跟踪删除按钮悬停状态的状态
-    const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
-
     useEffect(() => {
         if(containerRef.current) {
             const resizeObserver = new ResizeObserver((entries) => {
@@ -145,16 +139,22 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         setTreeRoot(prev => toggle(prev));
     };
 
+    const setAllExpanded = (expanded: boolean) => {
+        const update = (nodes: TreeNode[]): TreeNode[] => {
+            return nodes.map(n => ({
+                ...n,
+                expanded,
+                children: n.children.length > 0 ? update(n.children) : n.children
+            }));
+        };
+        setTreeRoot(prev => update(prev));
+    };
+
     const handleCheckbox = (e: React.MouseEvent, node: TreeNode) => {
         e.stopPropagation();
         const newVisible = !node.visible;
         onToggleVisibility(node.uuid, newVisible);
     };
-
-    const handleDelete = (e: React.MouseEvent, uuid: string) => {
-        e.stopPropagation();
-        onDelete(uuid);
-    }
 
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
@@ -165,6 +165,22 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                    <button
+                        style={{ ...styles.btn, padding: '3px 8px', fontSize: 11 }}
+                        onClick={() => setAllExpanded(true)}
+                        type="button"
+                    >
+                        {t("expand_all")}
+                    </button>
+                    <button
+                        style={{ ...styles.btn, padding: '3px 8px', fontSize: 11 }}
+                        onClick={() => setAllExpanded(false)}
+                        type="button"
+                    >
+                        {t("collapse_all")}
+                    </button>
+                </div>
                 <input
                     type="text"
                     placeholder={t("search_nodes")}
@@ -194,8 +210,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                     ...(node.uuid === selectedUuid ? styles.treeNodeSelected : {})
                                 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
-                                onMouseEnter={() => setHoveredUuid(node.uuid)}
-                                onMouseLeave={() => setHoveredUuid(null)}
+                                onContextMenu={(e) => {
+                                    if (!node.isFileNode || !onModelContextMenu) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onModelContextMenu(node.uuid, e.clientX, e.clientY);
+                                }}
                         >
                             {/* Connection Lines */}
                             {node.depth > 0 && (
@@ -249,21 +269,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             />
                             
                             <div style={{ ...styles.nodeLabel, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
-
-                            {/* Delete button for file nodes */}
-                            {showDeleteButton && node.isFileNode && (node.uuid === hoveredUuid || node.uuid === selectedUuid) && (
-                                <div 
-                                    onClick={(e) => handleDelete(e, node.uuid)}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        width: 20, height: 20, cursor: 'pointer', color: theme.danger,
-                                        marginLeft: 5
-                                    }}
-                                    title="Delete File"
-                                >
-                                    <IconTrash width={16} height={16} />
-                                </div>
-                            )}
                         </div>
                     ))}
                 </div>

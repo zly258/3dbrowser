@@ -29,10 +29,9 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         const width = cubeSize;
         const height = cubeSize;
 
-        // Renderer
+        // 渲染器
         const canvas = canvasRef.current;
-        // Pre-initialize WebGL2 context to set state BEFORE Three.js constructor
-        // This prevents INVALID_OPERATION during internal texture initialization
+        // 预先初始化 WebGL2 上下文，先设置状态再创建 Three.js 渲染器，避免内部纹理初始化触发 INVALID_OPERATION
         const gl = canvas.getContext('webgl2', { 
             antialias: true, 
             alpha: true,
@@ -56,40 +55,40 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         renderer.setPixelRatio(window.devicePixelRatio);
         rendererRef.current = renderer;
 
-        // Scene
+        // 场景
         const scene = new THREE.Scene();
         sceneRef.current = scene;
 
-        // Camera
+        // 相机
         const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
         camera.position.set(0, 0, 3.5);
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
-        // Lights
+        // 灯光
         const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
         scene.add(ambientLight);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
         dirLight.position.set(5, 5, 5);
         scene.add(dirLight);
 
-        // Cube Group
+        // 立方体组
         const cubeGroup = new THREE.Group();
         scene.add(cubeGroup);
         cubeRef.current = cubeGroup;
 
-        // Create Face Texture
+        // 生成面贴图
         const createFaceTexture = (text: string, rotation: number = 0) => {
             const canvas = document.createElement('canvas');
             canvas.width = 128;
             canvas.height = 128;
             const context = canvas.getContext('2d');
             if (context) {
-                // Background
+                // 背景
                 context.fillStyle = '#f8f9fa';
                 context.fillRect(0, 0, 128, 128);
                 
-                // Text
+                // 文字
                 context.save();
                 context.translate(64, 64);
                 if (rotation !== 0) {
@@ -102,7 +101,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
                 context.fillText(text, 0, 0);
                 context.restore();
                 
-                // Border
+                // 边框
                 context.strokeStyle = '#cccccc';
                 context.lineWidth = 4;
                 context.strokeRect(2, 2, 124, 124);
@@ -115,7 +114,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         const edgeColor = 0xf8f9fa;
         const cornerColor = 0xf8f9fa;
 
-        // Create Cube Parts
+        // 创建立方体部件
         const createPart = (size: THREE.Vector3, pos: THREE.Vector3, name: string, color: number, text?: string, rotation: number = 0) => {
             const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
             let material;
@@ -138,7 +137,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.copy(pos);
             mesh.name = name;
-            // Store original color/opacity for hover effect
+            // 保存初始颜色/透明度，用于悬停恢复
             mesh.userData.originalOpacity = material.opacity;
             mesh.userData.originalColor = material.color.clone();
             mesh.userData.isFace = !!text;
@@ -151,7 +150,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         const cornerSize = 0.12;
         const offset = 0.5;
 
-        // Faces (SceneManager: Z up, Y- front)
+        // 面（SceneManager：Z 向上，Y- 为前）
         createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, t("cube_front"));
         createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, offset, 0), "back", faceColor, t("cube_back"), 180);
         createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, offset), "top", faceColor, t("cube_top"), 270);
@@ -159,24 +158,24 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(-offset, 0, 0), "left", faceColor, t("cube_left"), 90);
         createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(offset, 0, 0), "right", faceColor, t("cube_right"), 270);
 
-        // Edges
-        // Top edges (Z = offset)
+        // 边
+        // 顶部边（Z = offset）
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, -offset, offset), "top-front", edgeColor);
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, offset, offset), "top-back", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(-offset, 0, offset), "top-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(offset, 0, offset), "top-right", edgeColor);
-        // Bottom edges (Z = -offset)
+        // 底部边（Z = -offset）
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, -offset, -offset), "bottom-front", edgeColor);
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, offset, -offset), "bottom-back", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(-offset, 0, -offset), "bottom-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(offset, 0, -offset), "bottom-right", edgeColor);
-        // Middle edges (Z = 0)
+        // 中间边（Z = 0）
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(-offset, -offset, 0), "front-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(offset, -offset, 0), "front-right", edgeColor);
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(-offset, offset, 0), "back-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(offset, offset, 0), "back-right", edgeColor);
 
-        // Corners
+        // 角
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, -offset, offset), "top-front-left", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(offset, -offset, offset), "top-front-right", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, offset, offset), "top-back-left", cornerColor);
@@ -186,13 +185,13 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, offset, -offset), "bottom-back-left", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(offset, offset, -offset), "bottom-back-right", cornerColor);
 
-        // Animation Loop
+        // 动画循环
         let animationId: number;
         const animate = () => {
             animationId = requestAnimationFrame(animate);
 
             if (sceneMgr && cubeRef.current) {
-                // Sync rotation with main camera
+                // 与主相机旋转保持同步
                 cubeRef.current.quaternion.copy(sceneMgr.camera.quaternion).invert();
             }
 
@@ -200,7 +199,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
         };
         animate();
 
-        // Cleanup
+        // 清理
         return () => {
             cancelAnimationFrame(animationId);
             renderer.dispose();
@@ -238,7 +237,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
                 hoveredPart.current = mesh;
                 const mat = mesh.material as THREE.MeshPhongMaterial;
                 mat.opacity = 1.0;
-                mat.color.set(0x0078d4); // Highlight color
+                mat.color.set(0x0078d4); // 高亮色
             }
             containerRef.current!.style.cursor = 'pointer';
         } else {
@@ -280,21 +279,19 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh'
     const handleViewChange = (viewName: string) => {
         if (!sceneMgr) return;
         
-        // Map cube part names to SceneManager view names
-        // SceneManager views: 'top', 'bottom', 'front', 'back', 'left', 'right', 'se', 'sw', 'ne', 'nw'
+        // 将立方体部件名称映射为 SceneManager 视图名称
+        // SceneManager 支持：'top', 'bottom', 'front', 'back', 'left', 'right', 'se', 'sw', 'ne', 'nw'
         
         let targetView = viewName;
         
-        // Map some composite names to supported views if necessary
-        // The SceneManager's setView is currently limited to 10 views.
-        // I might need to extend it or map my 26 parts to these 10.
+        // 将部分组合部件映射到当前支持的视图
         
         if (viewName === "top-front-right") targetView = "se";
         else if (viewName === "top-front-left") targetView = "sw";
         else if (viewName === "top-back-right") targetView = "ne";
         else if (viewName === "top-back-left") targetView = "nw";
         
-        // For others, just try to use the name or a fallback
+        // 其它情况直接使用名称（或回退）
         sceneMgr.setView(targetView);
     };
 

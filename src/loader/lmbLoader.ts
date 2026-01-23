@@ -1,8 +1,18 @@
 import * as THREE from "three";
 import { Loader, FileLoader, LoadingManager } from "three";
-import pako from "pako";
 
 // --- 工具函数 --
+
+const LMB_EXPRESS_ID_START = 1000000;
+const LMB_SCALE_SNAP_1 = 0.01;
+const LMB_SCALE_SNAP_2 = 0.02;
+
+const NORMAL_INV_PRECISION = 1.0 / 511.0;
+const NORMAL_COMPONENT_MASK = 0x3ff;
+const NORMAL_SHIFT_X = 20;
+const NORMAL_SHIFT_Y = 10;
+const NORMAL_SIGN_THRESHOLD = 512;
+const NORMAL_SIGN_OFFSET = 1024;
 
 export const setMaterialProperties = (material: THREE.Material) => {
   if (!material) return;
@@ -38,18 +48,17 @@ export function decompressVertice(baseVertex: Float32Array, vertexScale: Float32
 }
 
 export const decodeNormal = (packed: number) => {
-  const INV_NORMAL_PRECISION = 1.0 / 511.0;
-  let x = (packed >> 20) & 0x3ff;
-  let y = (packed >> 10) & 0x3ff;
-  let z = packed & 0x3ff;
+  let x = (packed >> NORMAL_SHIFT_X) & NORMAL_COMPONENT_MASK;
+  let y = (packed >> NORMAL_SHIFT_Y) & NORMAL_COMPONENT_MASK;
+  let z = packed & NORMAL_COMPONENT_MASK;
 
-  x = x >= 512 ? x - 1024 : x;
-  y = y >= 512 ? y - 1024 : y;
-  z = z >= 512 ? z - 1024 : z;
+  x = x >= NORMAL_SIGN_THRESHOLD ? x - NORMAL_SIGN_OFFSET : x;
+  y = y >= NORMAL_SIGN_THRESHOLD ? y - NORMAL_SIGN_OFFSET : y;
+  z = z >= NORMAL_SIGN_THRESHOLD ? z - NORMAL_SIGN_OFFSET : z;
 
-  let nx = x * INV_NORMAL_PRECISION;
-  let ny = y * INV_NORMAL_PRECISION;
-  let nz = z * INV_NORMAL_PRECISION;
+  let nx = x * NORMAL_INV_PRECISION;
+  let ny = y * NORMAL_INV_PRECISION;
+  let nz = z * NORMAL_INV_PRECISION;
 
   const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
   if (length > 0) {
@@ -78,8 +87,8 @@ export const extractScaleFromMatrix3 = (matrix: Float32Array) => {
   const sz = Math.sqrt(matrix[6] * matrix[6] + matrix[7] * matrix[7] + matrix[8] * matrix[8]);
 
   const processScale = (scale: number) => {
-    if (Math.abs(scale - 0.01) < 1e-6) return 0.01;
-    if (Math.abs(scale - 0.02) < 1e-6) return 0.02;
+    if (Math.abs(scale - LMB_SCALE_SNAP_1) < 1e-6) return LMB_SCALE_SNAP_1;
+    if (Math.abs(scale - LMB_SCALE_SNAP_2) < 1e-6) return LMB_SCALE_SNAP_2;
     return scale;
   };
 
@@ -139,17 +148,11 @@ export const composeMatrixByMatrix3 = (matrix: Float32Array, position: Float32Ar
 
 export class LMBLoader extends Loader {
   manager: LoadingManager;
-  enableInstancing: boolean = true;
-  private static expressIdCounter = 1000000; // LMB 使用较大的起始值以避免与 IFC 冲突
+  private static expressIdCounter = LMB_EXPRESS_ID_START;
 
   constructor(manager?: LoadingManager) {
     super(manager);
     this.manager = manager || THREE.DefaultLoadingManager;
-  }
-
-  setEnableInstancing(value: boolean) {
-    this.enableInstancing = value;
-    return this;
   }
 
   async loadAsync(url: string, onProgress?: (progress: any) => void): Promise<THREE.Group> {
@@ -161,16 +164,7 @@ export class LMBLoader extends Loader {
     });
 
     const isCompressed = url.split('?')[0].split('#')[0].toLowerCase().endsWith("lmbz");
-    if (isCompressed) {
-      try {
-        const compressedData = new Uint8Array(buffer);
-        const decompressedData = pako.inflate(compressedData);
-        buffer = decompressedData.buffer;
-      } catch (error) {
-        console.error("Decompression error:", error);
-        throw new Error("Failed to decompress file");
-      }
-    }
+    if (isCompressed) throw new Error("不支持 lmbz 压缩格式，请使用 .lmb");
 
     return this.parse(buffer, onProgress);
   }
@@ -179,7 +173,7 @@ export class LMBLoader extends Loader {
     const view = new DataView(buffer);
     let offset = 0;
     
-    // 1. Header
+    // 1. 文件头
     const position = new Float32Array(3);
     for (let i = 0; i < 3; i++) {
       position[i] = view.getFloat32(offset, true);
@@ -194,7 +188,7 @@ export class LMBLoader extends Loader {
     let currentStep = 0;
     const totalSteps = colorCount + nodeCount;
 
-    // 2. Colors
+    // 2. 颜色表
     const colors: number[] = [];
     for (let i = 0; i < colorCount; i++) {
       onProgress(currentStep / totalSteps);
@@ -216,7 +210,7 @@ export class LMBLoader extends Loader {
 
     // 材质
     const materials = colors.map((color) => {
-      // Phong材质对CAD颜色表现稳定
+      // Phong 材质对 CAD 颜色表现更稳定
       const material = new THREE.MeshPhongMaterial({
         color: new THREE.Color(parseColor(color)),
         side: THREE.DoubleSide,
@@ -227,7 +221,7 @@ export class LMBLoader extends Loader {
       return material;
     });
 
-    // 3. Nodes
+    // 3. 节点数据
     for (let i = 0; i < nodeCount; i++) {
       onProgress(currentStep / totalSteps);
       currentStep++;
@@ -244,8 +238,9 @@ export class LMBLoader extends Loader {
       // 使用节点名称（如果可用）
       const nodeName = node.name && node.name.length > 0 ? node.name : `Node_${i}`;
       const expressID = LMBLoader.expressIdCounter++;
+      geometry.userData = { expressID, bimId: String(expressID) };
 
-      if (node.instances.length > 0 && this.enableInstancing) {
+      if (node.instances.length > 0) {
         const instancedMesh = new THREE.InstancedMesh(
           geometry,
           materials[node.colorIndex],
@@ -253,6 +248,7 @@ export class LMBLoader extends Loader {
         );
         instancedMesh.name = nodeName;
         instancedMesh.userData.expressID = expressID;
+        instancedMesh.userData.bimId = String(expressID);
         
         const nodeMatrix = composeMatrixByMatrix3(node.matrix, node.position);
         instancedMesh.setMatrixAt(0, nodeMatrix);
@@ -270,25 +266,12 @@ export class LMBLoader extends Loader {
         const mesh = new THREE.Mesh(geometry, materials[node.colorIndex]);
         mesh.name = nodeName;
         mesh.userData.expressID = expressID;
+        mesh.userData.bimId = String(expressID);
 
         const matrix = composeMatrixByMatrix3(node.matrix, node.position);
         mesh.applyMatrix4(matrix);
 
         root.add(mesh);
-
-        // 如果禁用了实例化但存在实例，则为每个实例创建独立的 Mesh
-        if (node.instances.length > 0 && !this.enableInstancing) {
-          node.instances.forEach((instance: any, idx: number) => {
-            const instanceMesh = new THREE.Mesh(geometry, materials[instance.colorIndex]);
-            instanceMesh.name = nodeName;
-            instanceMesh.userData.expressID = LMBLoader.expressIdCounter++;
-            
-            const instanceMatrix = composeMatrixByMatrix3(instance.matrix, instance.position);
-            instanceMesh.applyMatrix4(instanceMatrix);
-            
-            root.add(instanceMesh);
-          });
-        }
       }
 
       offset = node.nextOffset;

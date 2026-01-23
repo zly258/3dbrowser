@@ -9,7 +9,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
 import { MenuBar } from "./src/components/MenuBar";
-import { SceneTree, buildTree } from "./src/components/SceneTree";
+import { SceneTree } from "./src/components/SceneTree";
 import { MeasurePanel, ClipPanel, ExportPanel, FloatingPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
@@ -95,7 +95,6 @@ export interface ThreeViewerProps {
     showStats?: boolean;
     showOutline?: boolean;
     showProperties?: boolean;
-    showDeleteButton?: boolean;
     initialSettings?: Partial<SceneSettings>;
     initialFiles?: (string | File) | (string | File)[];
     onSelect?: (uuid: string, object: any) => void;
@@ -112,7 +111,6 @@ export const ThreeViewer = ({
     showStats: propShowStats,
     showOutline: propShowOutline,
     showProperties: propShowProperties,
-    showDeleteButton: propShowDeleteButton,
      initialSettings,
      initialFiles,
      onSelect: propOnSelect,
@@ -155,8 +153,10 @@ export const ThreeViewer = ({
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
-    const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
+    const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
+    const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
     const [selectedProps, setSelectedProps] = useState<any>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; open: boolean; source: 'canvas' | 'tree'; targetUuid: string | null }>({ x: 0, y: 0, open: false, source: 'canvas', targetUuid: null });
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -212,15 +212,12 @@ export const ThreeViewer = ({
         }
     });
 
-    const showDeleteButton = propShowDeleteButton !== undefined ? propShowDeleteButton : true;
-
     // Settings State (mirrors SceneManager) - 从localStorage恢复
     const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
         let baseSettings = {
             ambientInt: 2.0,
             dirInt: 1.0,
             bgColor: theme.canvasBg,
-            enableInstancing: true,
             viewCubeSize: 100,
         };
         try {
@@ -231,7 +228,6 @@ export const ThreeViewer = ({
                     ambientInt: typeof parsed.ambientInt === 'number' ? parsed.ambientInt : 2.0,
                     dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
                     bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
-                    enableInstancing: typeof parsed.enableInstancing === 'boolean' ? parsed.enableInstancing : true,
                     viewCubeSize: typeof parsed.viewCubeSize === 'number' ? parsed.viewCubeSize : 100,
                 };
             }
@@ -428,7 +424,7 @@ export const ThreeViewer = ({
             if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
                 const files = Array.from(e.dataTransfer.files);
                 // 检查格式支持
-                const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3ds', '.dae', '.stp', '.step', '.igs', '.iges'];
+                const supportedExtensions = ['.lmb', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3ds', '.dae', '.stp', '.step', '.igs', '.iges'];
                 const unsupportedFiles = files.filter(f => {
                     const ext = '.' + f.name.split('.').pop()?.toLowerCase();
                     return !supportedExtensions.includes(ext);
@@ -576,10 +572,10 @@ export const ThreeViewer = ({
         if (!sceneMgr.current) return;
         
         const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-        const node = sceneMgr.current.nodeMap.get(uuid);
+        const nodes = sceneMgr.current.getStructureNodes(uuid);
 
-        if (obj || node) {
-            const name = (obj as any)?.name || (node as any)?.name || "Item";
+        if (obj || nodes) {
+            const name = (obj as any)?.name || nodes?.[0]?.name || "Item";
             
             setConfirmState({
                 isOpen: true,
@@ -594,11 +590,12 @@ export const ThreeViewer = ({
                         await sceneMgr.current?.removeModel(uuid);
 
                         // If selected, deselect
-                        if (selectedUuid === uuid) {
-                            setSelectedUuid(null);
-                            setSelectedProps(null);
-                            sceneMgr.current?.highlightObject(null);
-                        }
+                        setSelectedUuids(prev => {
+                            const next = prev.filter(id => id !== uuid);
+                            sceneMgr.current?.highlightObjects(next);
+                            if (next.length === 0) setSelectedProps(null);
+                            return next;
+                        });
 
                         // Refresh tree
                         updateTree();
@@ -743,7 +740,7 @@ export const ThreeViewer = ({
             }
             if(pickEnabled) {
                 const result = mgr.pick(e.clientX, e.clientY);
-                handleSelect(result ? result.object : null, result ? result.intersect : null);
+                handleSelect(result ? result.object : null, result ? result.intersect : null, e.ctrlKey);
             }
         };
 
@@ -752,7 +749,16 @@ export const ThreeViewer = ({
                 mgr.updateMeasureHover(e.clientX, e.clientY);
                 return;
             }
-            mgr.highlightObject(selectedUuid);
+        };
+
+        const handleContextMenu = (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setContextMenu({ x: e.clientX, y: e.clientY, open: true, source: 'canvas', targetUuid: null });
+        };
+
+        const handleGlobalClick = () => {
+            setContextMenu(prev => prev.open ? { ...prev, open: false } : prev);
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -761,19 +767,26 @@ export const ThreeViewer = ({
                     setMeasureType('none');
                     mgr.startMeasurement('none');
                 }
+                setSelectedUuids([]);
+                setSelectedProps(null);
+                mgr.highlightObjects([]);
             }
         };
 
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
+        canvas.addEventListener("contextmenu", handleContextMenu);
         window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("click", handleGlobalClick);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
+            canvas.removeEventListener("contextmenu", handleContextMenu);
             window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("click", handleGlobalClick);
         };
-    }, [pickEnabled, selectedUuid, activeTool, measureType]);
+    }, [pickEnabled, selectedUuids, activeTool, measureType]);
 
     // 工具状态同步
     useEffect(() => {
@@ -832,13 +845,13 @@ export const ThreeViewer = ({
 
     // --- 处理函数 ---
 
-    const handleSelect = async (obj: any, intersect?: THREE.Intersection | null) => {
+    const handleSelect = async (obj: any, intersect?: THREE.Intersection | null, isMultiSelect: boolean = false) => {
         if (!sceneMgr.current) return;
         
         if (!obj) {
-            setSelectedUuid(null);
+            setSelectedUuids([]);
             setSelectedProps(null);
-            sceneMgr.current.highlightObject(null);
+            sceneMgr.current.highlightObjects([]);
             return;
         }
 
@@ -846,13 +859,28 @@ export const ThreeViewer = ({
         const uuid = obj.uuid || obj.id;
         if (!uuid) return;
 
-        setSelectedUuid(uuid);
-        sceneMgr.current.highlightObject(uuid);
+        const nextUuids = isMultiSelect
+            ? (selectedUuids.includes(uuid) ? selectedUuids.filter(id => id !== uuid) : [...selectedUuids, uuid])
+            : [uuid];
+        setSelectedUuids(nextUuids);
+        sceneMgr.current.highlightObjects(nextUuids);
         
-        if (propOnSelect) propOnSelect(uuid, obj);
+        const focusUuid = nextUuids.length > 0 ? nextUuids[nextUuids.length - 1] : null;
+        if (!focusUuid) {
+            setSelectedProps(null);
+            return;
+        }
+        
+        if (propOnSelect) propOnSelect(focusUuid, obj);
         
         // 尝试获取真实的 Object3D 以获得更多几何信息
-        let realObj = obj instanceof THREE.Object3D ? obj : sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
+        let realObj = focusUuid === uuid && obj instanceof THREE.Object3D
+            ? obj
+            : sceneMgr.current.contentGroup.getObjectByProperty("uuid", focusUuid);
+        if (!realObj) {
+            const nodes = sceneMgr.current.getStructureNodes(focusUuid);
+            if (nodes && nodes.length > 0) realObj = nodes[0] as any;
+        }
         
         // 如果还是没找到，可能是优化后的对象，尝试从 SceneManager 获取
         if (!realObj && sceneMgr.current) {
@@ -868,7 +896,7 @@ export const ThreeViewer = ({
 
         basicProps[t("prop_name")] = target.name || "Unnamed";
         basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
-        basicProps[t("prop_id")] = uuid.substring(0, 8) + "..."; 
+        basicProps[t("prop_id")] = focusUuid; 
         
         if (target.getWorldPosition) {
             const worldPos = new THREE.Vector3();
@@ -938,6 +966,11 @@ export const ThreeViewer = ({
             finalProps["IFC Properties"] = ifcProps;
         }
 
+        const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
+        if (nbimProps) {
+            finalProps["BIM 属性"] = nbimProps;
+        }
+
         setSelectedProps(finalProps);
     };
 
@@ -1003,7 +1036,10 @@ export const ThreeViewer = ({
                 );
                 console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
                 for (const obj of loadedObjects) {
-                    await sceneMgr.current.addModel(obj);
+                    await sceneMgr.current.addModel(obj, (p: number, msg: string) => {
+                        setProgress(p);
+                        if (msg) setStatus(cleanStatus(msg));
+                    });
                 }
             }
             
@@ -1072,7 +1108,7 @@ export const ThreeViewer = ({
         
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const files = Array.from(e.dataTransfer.files) as File[];
-            const supportedExtensions = ['.lmb', '.lmbz', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3mf', '.stp', '.step', '.igs', '.iges'];
+            const supportedExtensions = ['.lmb', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3mf', '.stp', '.step', '.igs', '.iges'];
             
             const validFiles = files.filter((file: File) => {
                 const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -1080,7 +1116,7 @@ export const ThreeViewer = ({
             });
 
             if (validFiles.length < files.length) {
-                setToast({ message: t("unsupported_format"), type: 'warning' });
+                setToast({ message: t("unsupported_format"), type: 'info' });
             }
 
             if (validFiles.length > 0) {
@@ -1236,7 +1272,7 @@ export const ThreeViewer = ({
                 
                 try {
                     await sceneMgr.current?.clear();
-                    setSelectedUuid(null);
+                    setSelectedUuids([]);
                     setSelectedProps(null);
                     setMeasureHistory([]);
                     updateTree();
@@ -1316,14 +1352,12 @@ export const ThreeViewer = ({
                         <div style={{ flex: 1, overflow: 'hidden' }}>
                             <SceneTree 
                                 t={t}
-                                sceneMgr={sceneMgr.current} 
                                 treeRoot={treeRoot} 
                                 setTreeRoot={setTreeRoot} 
                                 selectedUuid={selectedUuid}
                                 onSelect={(uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
-                                onDelete={handleDeleteObject}
-                                showDeleteButton={showDeleteButton}
+                                onModelContextMenu={(uuid, x, y) => setContextMenu({ x, y, open: true, source: 'tree', targetUuid: uuid })}
                                 styles={styles}
                                 theme={theme}
                             />
@@ -1347,6 +1381,82 @@ export const ThreeViewer = ({
                     overflow: 'hidden'
                 }}>
                     <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
+
+                    {contextMenu.open && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                left: contextMenu.x,
+                                top: contextMenu.y,
+                                backgroundColor: theme.panelBg,
+                                color: theme.text,
+                                border: `1px solid ${theme.border}`,
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                                zIndex: 20000,
+                                minWidth: 160
+                            }}
+                            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {contextMenu.source === 'canvas' ? (
+                                <>
+                                    <div
+                                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: `1px solid ${theme.border}` }}
+                                        onClick={() => {
+                                            sceneMgr.current?.setAllVisibility(true);
+                                            updateTree();
+                                            setContextMenu(prev => ({ ...prev, open: false }));
+                                        }}
+                                    >
+                                        {t("ctx_show_all")}
+                                    </div>
+                                    <div
+                                        style={{
+                                            padding: '10px 12px',
+                                            cursor: selectedUuids.length > 0 ? 'pointer' : 'not-allowed',
+                                            opacity: selectedUuids.length > 0 ? 1 : 0.5,
+                                            borderBottom: `1px solid ${theme.border}`
+                                        }}
+                                        onClick={() => {
+                                            if (!sceneMgr.current || selectedUuids.length === 0) return;
+                                            sceneMgr.current.isolateObjects(selectedUuids);
+                                            updateTree();
+                                            setContextMenu(prev => ({ ...prev, open: false }));
+                                        }}
+                                    >
+                                        {t("ctx_isolate_selection")}
+                                    </div>
+                                    <div
+                                        style={{
+                                            padding: '10px 12px',
+                                            cursor: selectedUuids.length > 0 ? 'pointer' : 'not-allowed',
+                                            opacity: selectedUuids.length > 0 ? 1 : 0.5
+                                        }}
+                                        onClick={() => {
+                                            if (!sceneMgr.current || selectedUuids.length === 0) return;
+                                            sceneMgr.current.hideObjects(selectedUuids);
+                                            updateTree();
+                                            setContextMenu(prev => ({ ...prev, open: false }));
+                                        }}
+                                    >
+                                        {t("ctx_hide_selection")}
+                                    </div>
+                                </>
+                            ) : (
+                                <div
+                                    style={{ padding: '10px 12px', cursor: 'pointer', color: theme.danger }}
+                                    onClick={() => {
+                                        if (!contextMenu.targetUuid) return;
+                                        handleDeleteObject(contextMenu.targetUuid);
+                                        setContextMenu(prev => ({ ...prev, open: false }));
+                                    }}
+                                >
+                                    {t("delete_item")}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     
                     <ViewCube sceneMgr={mgrInstance} theme={theme} lang={lang} />
 
@@ -1525,7 +1635,8 @@ export const ThreeViewer = ({
                     )}
                     {selectedUuid && (
                         <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: '1px solid rgba(255,255,255,0.3)' }}>
-                            {t("prop_id")}: {selectedUuid.substring(0, 8)}...
+                            {t("prop_id")}: {selectedUuid}
+                            {selectedUuids.length > 1 ? ` (${selectedUuids.length})` : ''}
                         </span>
                     )}
                 </div>

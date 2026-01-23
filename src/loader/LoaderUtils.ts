@@ -67,9 +67,8 @@ export const loadModelFiles = async (
 
         try {
                 console.log(`[LoaderUtils] Dispatching loader for ext: ${ext}`);
-                if (ext === 'lmb' || ext === 'lmbz') {
+                if (ext === 'lmb') {
                     const loader = new LMBLoader();
-                    loader.setEnableInstancing(settings.enableInstancing);
                     object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
                 } else if (ext === 'glb' || ext === 'gltf') {
                     const loader = new GLTFLoader();
@@ -96,7 +95,7 @@ export const loadModelFiles = async (
                         });
                     });
                 } else if (ext === 'ifc') {
-                    object = await loadIFC(url, updateFileProgress, t, libPath);
+                    object = await loadIFC(isUrl ? url : (fileOrUrl as File), updateFileProgress, t, libPath);
                 } else if (ext === 'obj') {
                     const loader = new OBJLoader();
                     object = await loader.loadAsync(url, (e) => {

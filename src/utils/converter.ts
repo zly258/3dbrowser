@@ -44,9 +44,9 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
   const _v3 = new THREE.Vector3();
   const _m4 = new THREE.Matrix4();
 
-  // 根对象可能已居中（应用了偏移），所以updateMatrixWorld确保
-  // 我们捕获视觉状态（在原点居中）。
-  // 这对GLB精度有好处。
+  // 根对象可能已居中（已应用偏移），因此需要调用 updateMatrixWorld 确保矩阵最新
+  // 这里捕获的是当前视觉状态（以原点居中）
+  // 这有助于提升导出 GLB 的数值精度
   root.updateMatrixWorld(true);
 
   root.traverse((obj) => {
@@ -385,7 +385,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
     }
     parts.push(colorsBuffer);
 
-    // 4. Nodes
+    // 4. 节点
     for (let i = 0; i < meshes.length; i++) {
         const percent = Math.floor((i / meshes.length) * 100);
         if(i % 10 === 0) onProgress(`Encoding mesh ${i+1}/${meshes.length} (${percent}%)`);
@@ -409,14 +409,13 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const paddingLen = (4 - ((2 + nameBytes.length) % 4)) % 4;
         if(paddingLen > 0) parts.push(new Uint8Array(paddingLen).buffer);
 
-        // 变换（矩阵3x3）+ 位置
-        // 如果mesh的matrixWorld中有旋转/缩放，需要分解
-        // 但LMB存储3x3矩阵和位置。
-        // 我们将旋转*缩放存储在3x3中，位置存储在3f中。
+        // 变换（矩阵 3x3）+ 位置
+        // 如果 mesh 的 matrixWorld 中包含旋转/缩放，需要分解
+        // LMB 以 3x3 矩阵存储旋转*缩放，并用 3f 存储位置
         const m = mesh.matrixWorld;
         const e = m.elements;
-        // matrixWorld是列优先：0,1,2（x轴），4,5,6（y轴），8,9,10（z轴），12,13,14（位置）
-        // LMB加载器期望矩阵有9个浮点数。
+        // matrixWorld 为列主序：0,1,2（X 轴），4,5,6（Y 轴），8,9,10（Z 轴），12,13,14（位置）
+        // LMB 加载器期望 9 个浮点数矩阵
         const matBuf = new ArrayBuffer(9 * 4);
         const matView = new DataView(matBuf);
         // 我们写入旋转/缩放矩阵
@@ -426,8 +425,8 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
 
         const posBuf = new ArrayBuffer(3 * 4);
         const posView = new DataView(posBuf);
-        // 写入相对于根的位置。由于我们将容器移动到原点，matrixWorld位置相对于场景是局部的。
-        // 我们已经在头部写入了globalOffset。
+        // 写入相对于根的位置：容器已移动到原点，因此 matrixWorld 的位置相对场景为局部值
+        // 头部已写入 globalOffset，用于还原到原始坐标
         posView.setFloat32(0, e[12], true);
         posView.setFloat32(4, e[13], true);
         posView.setFloat32(8, e[14], true);

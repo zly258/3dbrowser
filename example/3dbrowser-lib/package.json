@@ -1,0 +1,104 @@
+{
+  "name": "@zhangly1403/3dbrowser",
+  "private": false,
+  "version": "1.4.5",
+  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, 3D Tiles, GLB, and more.",
+  "keywords": [
+    "threejs",
+    "bim",
+    "ifc",
+    "3dtiles",
+    "3d-viewer",
+    "browser"
+  ],
+  "license": "CC-BY-NC-4.0",
+  "author": "zhangly1403@163.com",
+  "type": "module",
+  "main": "./dist/3dbrowser.umd.js",
+  "module": "./dist/3dbrowser.es.js",
+  "types": "./dist/ThreeViewer.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/ThreeViewer.d.ts",
+      "import": "./dist/3dbrowser.es.js",
+      "require": "./dist/3dbrowser.umd.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && npx @microsoft/api-extractor run --local && node -e \"require('fs').rmSync('dist/src', { recursive: true, force: true })\"",
+    "postbuild": "node -e \"const fs = require('fs'); const path = require('path'); const target = path.join('example', '3dbrowser-lib'); if (fs.existsSync(target)) { console.log('Removing existing ' + target + '...'); fs.rmSync(target, { recursive: true, force: true }); } fs.mkdirSync(target, { recursive: true }); console.log('Copying package files to ' + target + '...'); fs.copyFileSync('package.json', path.join(target, 'package.json')); if (fs.existsSync('README.md')) fs.copyFileSync('README.md', path.join(target, 'README.md')); if (fs.existsSync('LICENSE')) fs.copyFileSync('LICENSE', path.join(target, 'LICENSE')); console.log('Copying dist to ' + path.join(target, 'dist') + '...'); fs.cpSync('dist', path.join(target, 'dist'), { recursive: true });\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "3d-tiles-renderer": "0.3.31",
+    "lucide-react": "^0.562.0",
+    "occt-import-js": "^0.0.23",
+    "pako": "^2.1.0",
+    "terser": "^5.44.1",
+    "three": "^0.181.2",
+    "web-ifc": "^0.0.74"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "electronDist": "electron-runtime",
+    "appId": "com.3dbrowser.app",
+    "productName": "3D Browser",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "3D Browser"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Graphics"
+    }
+  }
+}

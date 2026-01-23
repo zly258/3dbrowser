@@ -24,7 +24,6 @@ export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
     bgColor: string;
-    enableInstancing: boolean; // 是否开启实例化 (BatchedMesh/InstancedMesh)
     viewCubeSize?: number;
 }
 
@@ -33,7 +32,7 @@ export interface StructureTreeNode {
     name: string;
     type: 'Mesh' | 'Group';
     children?: StructureTreeNode[];
-    bimId?: number;
+    bimId?: string;
     chunkId?: string;
     visible?: boolean;
     userData?: any;
@@ -60,14 +59,15 @@ export class SceneManager {
 
     // 结构树
     structureRoot: StructureTreeNode = { id: 'root', name: 'Root', type: 'Group', children: [] };
-    private componentCounter = 0;
     private nodeMap = new Map<string, StructureTreeNode[]>();
+    private bimIdToNodeIds = new Map<string, string[]>();
 
     // 引用
     tilesRenderer: TilesRenderer | null = null;
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh; 
-    private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 Uuid
+    private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
+    private highlightedUuids: Set<string> = new Set();
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -98,7 +98,6 @@ export class SceneManager {
         ambientInt: 2.0,
         dirInt: 1.0,
         bgColor: "#1e1e1e",
-        enableInstancing: true,
         viewCubeSize: 100,
     };
 
@@ -112,10 +111,13 @@ export class SceneManager {
     // 渐进式加载状态 (对齐 refs)
     private chunks: any[] = [];
     private processingChunks = new Set<string>();
+    private cancelledChunkIds = new Set<string>();
     private frustum = new THREE.Frustum();
     private projScreenMatrix = new THREE.Matrix4();
     private logicTimer: number = 0;
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
+    private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
+    private nbimPropsByOriginalUuid: Map<string, Record<string, any>> = new Map();
     private sharedMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xffffff,
         roughness: 0.6,
@@ -196,6 +198,11 @@ export class SceneManager {
         this.controls.enableDamping = false;
         this.controls.screenSpacePanning = true;
         this.controls.maxPolarAngle = Math.PI;
+        this.controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.PAN,
+            RIGHT: THREE.MOUSE.NONE
+        };
         
         // 灯光
         this.ambientLight = new THREE.AmbientLight(0xffffff, this.settings.ambientInt); 
@@ -366,27 +373,32 @@ export class SceneManager {
             this.onChunkProgress(loadedCount, totalCount);
         }
 
-        if (this.processingChunks.size >= 12) return;
+        if (this.processingChunks.size >= 48) return;
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
 
-        // 增加视锥体预加载边距 (Padding)
-        // 通过稍微扩大 c.bounds 来实现预加载
+        // 增加视锥体预加载边距（通过稍微扩大 c.bounds 来实现预加载）
         const padding = 0.2; // 20% 边距
+        const cameraPos = this.camera.position;
+        const tmpSize = new THREE.Vector3();
 
         const toLoad: any[] = [];
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
 
         this.chunks.forEach(c => {
-            // 使用带 padding 的包围盒进行视锥体相交测试
-            const paddedBounds = c.bounds.clone();
-            const size = new THREE.Vector3();
-            paddedBounds.getSize(size);
-            paddedBounds.expandByVector(size.multiplyScalar(padding));
+            // 使用带预加载边距的包围盒进行视锥体相交测试（缓存 paddedBounds/center，减少每帧分配）
+            if (!c.paddedBounds || c._padding !== padding) {
+                const pb = c.bounds.clone();
+                pb.getSize(tmpSize);
+                pb.expandByVector(tmpSize.multiplyScalar(padding));
+                c.paddedBounds = pb;
+                c._padding = padding;
+            }
+            if (!c.center) c.center = c.bounds.getCenter(new THREE.Vector3());
 
-            const inFrustum = this.frustum.intersectsBox(paddedBounds);
+            const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
             const shouldBeVisible = inFrustum && !isClipped;
 
@@ -406,12 +418,10 @@ export class SceneManager {
         if (toLoad.length > 0) {
             // 优先加载距离相机近的分块
             toLoad.sort((a, b) => {
-                const centerA = a.bounds.getCenter(new THREE.Vector3());
-                const centerB = b.bounds.getCenter(new THREE.Vector3());
-                return centerA.distanceToSquared(this.camera.position) - centerB.distanceToSquared(this.camera.position);
+                return a.center.distanceToSquared(cameraPos) - b.center.distanceToSquared(cameraPos);
             });
 
-            const batch = toLoad.slice(0, 6);
+            const batch = toLoad.slice(0, 24);
             batch.forEach(chunk => this.loadChunk(chunk));
         }
     }
@@ -428,10 +438,24 @@ export class SceneManager {
                 // 来自 loadNbim 的远程分块
                 const file = this.nbimFiles.get(chunk.nbimFileId)!;
                 const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
-                bm = this.parseChunkBinaryV7(buffer, this.sharedMaterial);
+                const meta = this.nbimMeta.get(chunk.nbimFileId);
+                const version = meta?.version ?? 7;
+                if (version >= 8) {
+                    bm = this.parseChunkBinaryV8(buffer, this.sharedMaterial, chunk.originalUuid, meta?.bimIdTable || []);
+                } else {
+                    bm = this.parseChunkBinaryV7(buffer, this.sharedMaterial, chunk.originalUuid);
+                }
             }
 
             if (bm) {
+                if (this.cancelledChunkIds.has(chunk.id) || !this.chunks.some(c => c.id === chunk.id)) {
+                    if ((bm as any).geometry) (bm as any).geometry.dispose();
+                    if ((bm as any).material) {
+                        const materials = Array.isArray((bm as any).material) ? (bm as any).material : [(bm as any).material];
+                        materials.forEach((m: any) => m.dispose && m.dispose());
+                    }
+                    return;
+                }
                 bm.name = chunk.id;
                 bm.userData.chunkId = chunk.id;
                 
@@ -478,6 +502,7 @@ export class SceneManager {
             }
 
             chunk.loaded = true;
+            this.cancelledChunkIds.delete(chunk.id);
 
             // 移除鬼影
             const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
@@ -498,6 +523,7 @@ export class SceneManager {
             name: object.name || `Object_${object.id}`,
             type: (object as any).isMesh ? 'Mesh' : 'Group',
             children: [],
+            bimId: object.userData?.bimId ? String(object.userData.bimId) : (object.userData?.expressID !== undefined ? String(object.userData.expressID) : undefined),
             userData: { ...object.userData }
         };
         
@@ -525,7 +551,7 @@ export class SceneManager {
                 name: obj.name || `Object_${obj.id}`,
                 type: (obj as any).isMesh ? 'Mesh' : 'Group',
                 children: [],
-                bimId: obj.userData?.expressID,
+                bimId: obj.userData?.expressID !== undefined ? String(obj.userData.expressID) : undefined,
                 userData: { ...obj.userData }
             };
             
@@ -581,7 +607,7 @@ export class SceneManager {
                         id: child.uuid,
                         name: child.name,
                         type: 'Mesh',
-                        bimId: expressID,
+                        bimId: String(expressID),
                         userData: { ...child.userData }
                     };
                     layerNode.children!.push(node);
@@ -642,6 +668,16 @@ export class SceneManager {
             if (node.children) node.children.forEach(markOriginalUuid);
         };
         markOriginalUuid(modelRoot);
+
+        const indexBimIds = (node: StructureTreeNode) => {
+            if (node.bimId) {
+                const key = `${object.uuid}::${node.bimId}`;
+                if (!this.bimIdToNodeIds.has(key)) this.bimIdToNodeIds.set(key, []);
+                this.bimIdToNodeIds.get(key)!.push(node.id);
+            }
+            if (node.children) node.children.forEach(indexBimIds);
+        };
+        indexBimIds(modelRoot);
         
         // 如果根节点名字是 Root 且有子节点，则打平（防止嵌套 Root）
         if (modelRoot.name === 'Root' && modelRoot.children && modelRoot.children.length > 0) {
@@ -668,6 +704,10 @@ export class SceneManager {
                 if (mesh.userData.expressID !== undefined) {
                     this.componentMap.set(mesh.userData.expressID, mesh);
                 }
+                if (!mesh.userData.bimId) {
+                    if (mesh.userData.expressID !== undefined) mesh.userData.bimId = String(mesh.userData.expressID);
+                    else mesh.userData.bimId = mesh.uuid;
+                }
                 if (mesh.material) {
                     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
                     materials.forEach(mat => {
@@ -682,43 +722,58 @@ export class SceneManager {
         const fileGroup = new THREE.Group();
         fileGroup.name = `file_${object.uuid}`;
         fileGroup.userData.originalUuid = object.uuid;
+        object.userData.originalUuid = object.uuid;
         fileGroup.add(object);
 
-        // 如果开启了实例化（默认），则设为不可见，仅用于数据查询和备份
-        // 如果关闭了实例化，则直接显示原始对象
-        if (this.settings.enableInstancing) {
-            object.visible = false;
-        } else {
-            object.visible = true;
-        }
+        object.visible = false;
         this.contentGroup.add(fileGroup);
 
-        // 3. 八叉树划分与分块优化 (仅在开启实例化时进行)
-        if (!this.settings.enableInstancing) {
-            if (onProgress) onProgress(100, "加载完成 (已禁用实例化)");
-            this.fitView();
-            return;
-        }
-
-        if (onProgress) onProgress(10, "正在进行空间划分...");
+        if (onProgress) onProgress(10, "正在收集构件...");
         
         const items = collectItems(object);
         if (items.length > 0) {
+            if (onProgress) onProgress(20, `已收集 ${items.length} 个构件，正在计算八叉树...`);
             const bounds = new THREE.Box3();
-            items.forEach(item => {
-                if (!item.geometry.boundingBox) item.geometry.computeBoundingBox();
-                const itemBox = item.geometry.boundingBox!.clone().applyMatrix4(item.matrix);
-                bounds.union(itemBox);
-            });
+            const tmpMin = new THREE.Vector3();
+            const tmpMax = new THREE.Vector3();
+            const tmpScale = new THREE.Vector3();
 
-            const octree = buildOctree(items, bounds, { maxItemsPerNode: 1000, maxDepth: 4 });
+            for (const item of items) {
+                const center = item.center;
+                let r = 0;
+                const geo = item.geometry;
+                if (!geo.boundingSphere) geo.computeBoundingSphere();
+                if (geo.boundingSphere) {
+                    tmpScale.setFromMatrixScale(item.matrix);
+                    const maxScale = Math.max(tmpScale.x, tmpScale.y, tmpScale.z);
+                    r = geo.boundingSphere.radius * maxScale;
+                }
+                tmpMin.set(center.x - r, center.y - r, center.z - r);
+                tmpMax.set(center.x + r, center.y + r, center.z + r);
+                bounds.expandByPoint(tmpMin);
+                bounds.expandByPoint(tmpMax);
+            }
+
+            bounds.min.subScalar(0.1);
+            bounds.max.addScalar(0.1);
+
+            if (onProgress) onProgress(35, "正在计算八叉树...");
+
+            const maxItemsPerNode = 1500;
+            const maxDepth = 5;
+            const octree = buildOctree(items, bounds, { maxItemsPerNode, maxDepth });
             const leafNodes = collectLeafNodes(octree);
             
             // 4. 注册分块并显示鬼影
             const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+            const edgesGeo = new THREE.EdgesGeometry(boxGeo);
             const boxMat = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 });
 
             leafNodes.forEach((node, index) => {
+                if (onProgress && leafNodes.length > 0) {
+                    const step = Math.max(1, Math.floor(leafNodes.length / 20));
+                    if (index % step === 0) onProgress(40 + Math.floor((index / leafNodes.length) * 50), `正在生成分块... (${index + 1}/${leafNodes.length})`);
+                }
                 const chunkId = `${object.uuid}_chunk_${index}`;
                 const chunkBounds = node.bounds.clone();
                 
@@ -728,7 +783,7 @@ export class SceneManager {
                     if (treeNodes) {
                         treeNodes.forEach(treeNode => {
                             if (treeNode.bimId === undefined) {
-                                treeNode.bimId = ++this.componentCounter;
+                                treeNode.bimId = treeNode.id;
                             }
                             treeNode.chunkId = chunkId;
                         });
@@ -739,6 +794,8 @@ export class SceneManager {
                 this.chunks.push({
                     id: chunkId,
                     bounds: chunkBounds,
+                    paddedBounds: null,
+                    center: chunkBounds.getCenter(new THREE.Vector3()),
                     loaded: false,
                     node: node, // 存储节点数据以便后续加载
                     groupName: `optimized_${object.uuid}`,
@@ -752,7 +809,7 @@ export class SceneManager {
                 chunkBounds.getCenter(center);
 
                 const edges = new THREE.LineSegments(
-                    new THREE.EdgesGeometry(boxGeo),
+                    edgesGeo,
                     boxMat
                 );
                 edges.name = `ghost_${chunkId}`;
@@ -768,6 +825,7 @@ export class SceneManager {
                     child.userData.isOptimized = true;
                 }
             });
+            if (onProgress) onProgress(95, "分块准备完成");
         }
 
         this.sceneBounds = this.computeTotalBounds(false);
@@ -875,6 +933,8 @@ export class SceneManager {
         this.chunks = this.chunks.filter(c => {
             const isMatch = c.originalUuid === uuid || c.originalUuid === originalUuid || c.id.startsWith(uuid);
             if (isMatch) {
+                this.cancelledChunkIds.add(c.id);
+                this.processingChunks.delete(c.id);
                 const ghost = this.ghostGroup.getObjectByName(`ghost_${c.id}`);
                 if (ghost) {
                     this.ghostGroup.remove(ghost);
@@ -938,8 +998,8 @@ export class SceneManager {
         renderer.setResolutionFromRenderer(this.camera, this.renderer);
 
         // 从当前配置动态设置
-        renderer.errorTarget = 16; // 默认 SSE
-        renderer.lruCache.maxSize = 500 * 1024 * 1024; // 默认 500MB
+        renderer.errorTarget = 16; // 默认屏幕空间误差阈值
+        renderer.lruCache.maxSize = 500 * 1024 * 1024; // 默认缓存 500MB
 
         (renderer.group as any).name = "3D Tileset"; // 确保大纲能识别
 
@@ -958,8 +1018,7 @@ export class SceneManager {
             }
         };
 
-        // 错误处理: 3d-tiles-renderer 没有直接的 onError，但我们可以通过 fetch 检查或监听特定的错误
-        // 这里的简单实现是检查 tileset 结构是否加载成功
+        // 错误处理：3d-tiles-renderer 没有直接的 onError，这里用超时检查 tileset 是否成功解析
         setTimeout(() => {
             if (!(renderer as any).tileset && !hasError) {
                 hasError = true;
@@ -1066,14 +1125,14 @@ export class SceneManager {
 
     private getColorByComponentType(name: string): number {
         const n = name.toLowerCase();
-        if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // blue-200
-        if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // blue-300
-        if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // gray-200
-        if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // gray-100
-        return 0x94a3b8; // gray-400
+        if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // 蓝色（浅）
+        if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // 蓝色（中）
+        if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // 灰色（浅）
+        if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // 灰色（更浅）
+        return 0x94a3b8; // 灰色（中）
     }
 
-    // --- NBIM 导入/导出功能 (对齐 refs V7 逻辑) ---
+    // --- NBIM 导入/导出功能 ---
     private generateChunkBinaryV7(items: any[]): ArrayBuffer {
         const uniqueGeos: THREE.BufferGeometry[] = [];
         const geoMap = new Map<THREE.BufferGeometry, number>();
@@ -1086,17 +1145,17 @@ export class SceneManager {
         });
 
         // 计算大小
-        let size = 4; // Geo Count
+        let size = 4; // 几何体数量
         for (const geo of uniqueGeos) {
             const vertCount = geo.attributes.position.count;
             const index = geo.index;
             const indexCount = index ? index.count : 0;
-            size += 4 + 4 + (vertCount * 12) + (vertCount * 12); // vertCount, indexCount, pos, norm
+            size += 4 + 4 + (vertCount * 12) + (vertCount * 12); // 顶点数、索引数、坐标、法线
             if (indexCount > 0) size += indexCount * 4; 
         }
         
-        size += 4; // Instance Count
-        size += items.length * (4 + 4 + 4 + 64 + 4); // ID, Type, Color, Matrix, GeoID
+        size += 4; // 实例数量
+        size += items.length * (4 + 4 + 4 + 64 + 4); // BIMId/索引、类型、颜色、矩阵、几何体索引
 
         const buffer = new ArrayBuffer(size);
         const dv = new DataView(buffer);
@@ -1136,10 +1195,13 @@ export class SceneManager {
         for (const item of items) {
             const treeNodes = this.nodeMap.get(item.uuid);
             const firstNode = treeNodes?.[0];
-            const id = firstNode?.bimId || 0;
+            const idStr = item.bimId ?? firstNode?.bimId ?? "0";
+            const parsed = Number.parseInt(idStr, 10);
+            const id = Number.isFinite(parsed) ? parsed : 0;
             const typeStr = this.guessType(firstNode?.name || "");
             dv.setUint32(offset, id, true); offset += 4;
-            dv.setUint32(offset, this.getTypeIndex(typeStr), true); offset += 4;
+            const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
+            dv.setUint32(offset, typeIndex, true); offset += 4;
             dv.setUint32(offset, item.color, true); offset += 4;
             
             const elements = item.matrix.elements;
@@ -1154,7 +1216,86 @@ export class SceneManager {
         return buffer;
     }
 
-    private parseChunkBinaryV7(buffer: ArrayBuffer, material: THREE.Material): THREE.BatchedMesh | null {
+    private generateChunkBinaryV8(items: any[], bimIdToIndex: Map<string, number>): ArrayBuffer {
+        const uniqueGeos: THREE.BufferGeometry[] = [];
+        const geoMap = new Map<THREE.BufferGeometry, number>();
+        
+        items.forEach(item => {
+            if (item.geometry && !geoMap.has(item.geometry)) {
+                geoMap.set(item.geometry, uniqueGeos.length);
+                uniqueGeos.push(item.geometry);
+            }
+        });
+
+        let size = 4;
+        for (const geo of uniqueGeos) {
+            const vertCount = geo.attributes.position.count;
+            const index = geo.index;
+            const indexCount = index ? index.count : 0;
+            size += 4 + 4 + (vertCount * 12) + (vertCount * 12);
+            if (indexCount > 0) size += indexCount * 4;
+        }
+
+        size += 4;
+        size += items.length * (4 + 4 + 4 + 64 + 4);
+
+        const buffer = new ArrayBuffer(size);
+        const dv = new DataView(buffer);
+        let offset = 0;
+
+        dv.setUint32(offset, uniqueGeos.length, true); offset += 4;
+        for (const geo of uniqueGeos) {
+            const pos = geo.getAttribute('position');
+            const norm = geo.getAttribute('normal');
+            const count = pos.count;
+            const index = geo.index;
+            const indexCount = index ? index.count : 0;
+            
+            dv.setUint32(offset, count, true); offset += 4;
+            dv.setUint32(offset, indexCount, true); offset += 4;
+            
+            for (let i = 0; i < count; i++) {
+                dv.setFloat32(offset, pos.getX(i), true); offset += 4;
+                dv.setFloat32(offset, pos.getY(i), true); offset += 4;
+                dv.setFloat32(offset, pos.getZ(i), true); offset += 4;
+            }
+            for (let i = 0; i < count; i++) {
+                dv.setFloat32(offset, norm.getX(i), true); offset += 4;
+                dv.setFloat32(offset, norm.getY(i), true); offset += 4;
+                dv.setFloat32(offset, norm.getZ(i), true); offset += 4;
+            }
+            if (index && indexCount > 0) {
+                for (let i = 0; i < indexCount; i++) {
+                    dv.setUint32(offset, index.getX(i), true); offset += 4;
+                }
+            }
+        }
+
+        dv.setUint32(offset, items.length, true); offset += 4;
+        for (const item of items) {
+            const treeNodes = this.nodeMap.get(item.uuid);
+            const firstNode = treeNodes?.[0];
+            const bimId = item.bimId || firstNode?.bimId || firstNode?.id || item.uuid;
+            const bimIdIndex = bimIdToIndex.get(bimId) ?? 0;
+            const typeStr = this.guessType(firstNode?.name || "");
+            dv.setUint32(offset, bimIdIndex, true); offset += 4;
+            const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
+            dv.setUint32(offset, typeIndex, true); offset += 4;
+            dv.setUint32(offset, item.color, true); offset += 4;
+
+            const elements = item.matrix.elements;
+            for (let k = 0; k < 16; k++) {
+                dv.setFloat32(offset, elements[k], true); offset += 4;
+            }
+
+            const geoId = geoMap.get(item.geometry) || 0;
+            dv.setUint32(offset, geoId, true); offset += 4;
+        }
+
+        return buffer;
+    }
+
+    private parseChunkBinaryV7(buffer: ArrayBuffer, material: THREE.Material, originalUuid: string): THREE.BatchedMesh | null {
         const dv = new DataView(buffer);
         let offset = 0;
 
@@ -1195,12 +1336,13 @@ export class SceneManager {
         const matrix = new THREE.Matrix4();
         const color = new THREE.Color();
         const batchIdToUuid = new Map<number, string>();
+        const batchIdToBimId = new Map<number, string>();
         const batchIdToColor = new Map<number, number>();
         const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
 
         for (let i = 0; i < instanceCount; i++) {
-            const bimId = dv.getUint32(offset, true); offset += 4;
-            dv.getUint32(offset, true); offset += 4; // Type
+            const bimIdNum = dv.getUint32(offset, true); offset += 4;
+            dv.getUint32(offset, true); offset += 4; // 类型
             const hex = dv.getUint32(offset, true); offset += 4;
             color.setHex(hex);
 
@@ -1213,12 +1355,92 @@ export class SceneManager {
             bm.setMatrixAt(instId, matrix);
             bm.setColorAt(instId, color);
             
-            batchIdToUuid.set(instId, `bim_${bimId}`);
+            const bimId = String(bimIdNum);
+            const key = `${originalUuid}::${bimId}`;
+            const nodeIds = this.bimIdToNodeIds.get(key);
+            batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+            batchIdToBimId.set(instId, bimId);
             batchIdToColor.set(instId, hex);
             batchIdToGeometry.set(instId, geometries[geoIdx]);
         }
 
         bm.userData.batchIdToUuid = batchIdToUuid;
+        bm.userData.batchIdToBimId = batchIdToBimId;
+        bm.userData.batchIdToColor = batchIdToColor;
+        bm.userData.batchIdToGeometry = batchIdToGeometry;
+        return bm;
+    }
+
+    private parseChunkBinaryV8(buffer: ArrayBuffer, material: THREE.Material, originalUuid: string, bimIdTable: string[]): THREE.BatchedMesh | null {
+        const dv = new DataView(buffer);
+        let offset = 0;
+
+        const geoCount = dv.getUint32(offset, true); offset += 4;
+        const geometries: THREE.BufferGeometry[] = [];
+        
+        for (let i = 0; i < geoCount; i++) {
+            const vertCount = dv.getUint32(offset, true); offset += 4;
+            const indexCount = dv.getUint32(offset, true); offset += 4;
+            
+            const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
+            const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
+            
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+            geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
+            
+            if (indexCount > 0) {
+                const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
+                geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+            }
+            geometries.push(geo);
+        }
+
+        const instanceCount = dv.getUint32(offset, true); offset += 4;
+        
+        let totalVerts = 0;
+        let totalIndices = 0;
+        geometries.forEach(g => {
+            totalVerts += g.attributes.position.count;
+            if (g.index) totalIndices += g.index.count;
+        });
+        
+        const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
+        const geoIds = geometries.map(g => bm.addGeometry(g));
+
+        const matrix = new THREE.Matrix4();
+        const color = new THREE.Color();
+        const batchIdToUuid = new Map<number, string>();
+        const batchIdToBimId = new Map<number, string>();
+        const batchIdToColor = new Map<number, number>();
+        const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
+
+        for (let i = 0; i < instanceCount; i++) {
+            const bimIdIndex = dv.getUint32(offset, true); offset += 4;
+            dv.getUint32(offset, true); offset += 4; // 类型
+            const hex = dv.getUint32(offset, true); offset += 4;
+            color.setHex(hex);
+
+            for (let k = 0; k < 16; k++) {
+                matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
+            }
+            const geoIdx = dv.getUint32(offset, true); offset += 4;
+
+            const instId = bm.addInstance(geoIds[geoIdx]);
+            bm.setMatrixAt(instId, matrix);
+            bm.setColorAt(instId, color);
+
+            const bimId = bimIdTable[bimIdIndex] ?? String(bimIdIndex);
+            const key = `${originalUuid}::${bimId}`;
+            const nodeIds = this.bimIdToNodeIds.get(key);
+            batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+            batchIdToBimId.set(instId, bimId);
+            batchIdToColor.set(instId, hex);
+            batchIdToGeometry.set(instId, geometries[geoIdx]);
+        }
+
+        bm.userData.batchIdToUuid = batchIdToUuid;
+        bm.userData.batchIdToBimId = batchIdToBimId;
         bm.userData.batchIdToColor = batchIdToColor;
         bm.userData.batchIdToGeometry = batchIdToGeometry;
         return bm;
@@ -1226,6 +1448,53 @@ export class SceneManager {
 
     async exportNbim() {
         if (this.chunks.length === 0) throw new Error("无模型数据可导出");
+
+        const bimIdTable: string[] = [""];
+        const bimIdToIndex = new Map<string, number>();
+        const addBimId = (bimId?: string) => {
+            if (!bimId) return;
+            if (bimIdToIndex.has(bimId)) return;
+            const idx = bimIdTable.length;
+            bimIdTable.push(bimId);
+            bimIdToIndex.set(bimId, idx);
+        };
+        const traverseBimIds = (node: StructureTreeNode) => {
+            addBimId(node.bimId);
+            if (node.children) node.children.forEach(traverseBimIds);
+        };
+        traverseBimIds(this.structureRoot);
+
+        const ifcApiByModel = new Map<string, { ifcApi: any; modelID: number }>();
+        this.contentGroup.traverse(obj => {
+            if (obj.userData?.ifcAPI && obj.userData?.modelID !== undefined && obj.userData?.originalUuid) {
+                ifcApiByModel.set(String(obj.userData.originalUuid), { ifcApi: obj.userData.ifcAPI, modelID: obj.userData.modelID });
+            }
+        });
+
+        const bimProperties: Record<string, any> = {};
+        const fillBimProperties = (node: StructureTreeNode) => {
+            const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
+            if (node.bimId) {
+                const key = `${originalUuid}::${node.bimId}`;
+                if (!bimProperties[key]) {
+                    bimProperties[key] = { uuid: node.id, name: node.name };
+                    const expressID = node.userData?.expressID;
+                    if (expressID !== undefined && ifcApiByModel.has(originalUuid)) {
+                        try {
+                            const { ifcApi, modelID } = ifcApiByModel.get(originalUuid)!;
+                            const entity = ifcApi.GetLine(modelID, Number(expressID));
+                            if (entity) {
+                                bimProperties[key].ifcType = entity.is_a || '';
+                                bimProperties[key].globalId = entity.GlobalId?.value || '';
+                                bimProperties[key].ifcName = entity.Name?.value || '';
+                            }
+                        } catch {}
+                    }
+                }
+            }
+            if (node.children) node.children.forEach(fillBimProperties);
+        };
+        fillBimProperties(this.structureRoot);
 
         const chunkBlobs: Uint8Array[] = [];
         const exportChunks = this.chunks.map(c => ({
@@ -1240,16 +1509,91 @@ export class SceneManager {
 
         let currentOffset = 1024;
 
+        const decodeV7 = (buffer: ArrayBuffer) => {
+            const dv = new DataView(buffer);
+            let offset = 0;
+            const geoCount = dv.getUint32(offset, true); offset += 4;
+            const geometries: THREE.BufferGeometry[] = [];
+            for (let i = 0; i < geoCount; i++) {
+                const vertCount = dv.getUint32(offset, true); offset += 4;
+                const indexCount = dv.getUint32(offset, true); offset += 4;
+                const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
+                const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+                geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
+                if (indexCount > 0) {
+                    const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
+                    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+                }
+                geometries.push(geo);
+            }
+            const instanceCount = dv.getUint32(offset, true); offset += 4;
+            const matrix = new THREE.Matrix4();
+            const instances: any[] = [];
+            for (let i = 0; i < instanceCount; i++) {
+                const bimIdNum = dv.getUint32(offset, true); offset += 4;
+                const typeIndex = dv.getUint32(offset, true); offset += 4;
+                const color = dv.getUint32(offset, true); offset += 4;
+                for (let k = 0; k < 16; k++) {
+                    matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
+                }
+                const geoIdx = dv.getUint32(offset, true); offset += 4;
+                instances.push({ bimId: String(bimIdNum), typeIndex, color, matrix: matrix.clone(), geometry: geometries[geoIdx] });
+            }
+            return instances;
+        };
+
+        const decodeV8 = (buffer: ArrayBuffer, table: string[]) => {
+            const dv = new DataView(buffer);
+            let offset = 0;
+            const geoCount = dv.getUint32(offset, true); offset += 4;
+            const geometries: THREE.BufferGeometry[] = [];
+            for (let i = 0; i < geoCount; i++) {
+                const vertCount = dv.getUint32(offset, true); offset += 4;
+                const indexCount = dv.getUint32(offset, true); offset += 4;
+                const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
+                const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
+                geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
+                if (indexCount > 0) {
+                    const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
+                    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+                }
+                geometries.push(geo);
+            }
+            const instanceCount = dv.getUint32(offset, true); offset += 4;
+            const matrix = new THREE.Matrix4();
+            const instances: any[] = [];
+            for (let i = 0; i < instanceCount; i++) {
+                const bimIdIndex = dv.getUint32(offset, true); offset += 4;
+                const typeIndex = dv.getUint32(offset, true); offset += 4;
+                const color = dv.getUint32(offset, true); offset += 4;
+                for (let k = 0; k < 16; k++) {
+                    matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
+                }
+                const geoIdx = dv.getUint32(offset, true); offset += 4;
+                instances.push({ bimId: table[bimIdIndex] ?? String(bimIdIndex), typeIndex, color, matrix: matrix.clone(), geometry: geometries[geoIdx] });
+            }
+            return instances;
+        };
+
         for (let i = 0; i < this.chunks.length; i++) {
             const chunk = this.chunks[i];
             const exportChunk = exportChunks[i];
             
             let buffer: ArrayBuffer;
             if (chunk.node) {
-                buffer = this.generateChunkBinaryV7(chunk.node.items);
+                buffer = this.generateChunkBinaryV8(chunk.node.items, bimIdToIndex);
             } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
                 const file = this.nbimFiles.get(chunk.nbimFileId)!;
-                buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+                const raw = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+                const meta = this.nbimMeta.get(chunk.nbimFileId);
+                const version = meta?.version ?? 7;
+                const instances = version >= 8 ? decodeV8(raw, meta?.bimIdTable || []) : decodeV7(raw);
+                const items = instances.map(inst => ({ uuid: "", bimId: inst.bimId, typeIndex: inst.typeIndex, color: inst.color, matrix: inst.matrix, geometry: inst.geometry }));
+                buffer = this.generateChunkBinaryV8(items, bimIdToIndex);
             } else {
                 continue;
             }
@@ -1268,7 +1612,9 @@ export class SceneManager {
                 max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
             },
             chunks: exportChunks,
-            structureTree: this.structureRoot
+            structureTree: this.structureRoot,
+            bimIdTable,
+            bimProperties
         };
 
         const manifestStr = JSON.stringify(manifest);
@@ -1276,8 +1622,8 @@ export class SceneManager {
 
         const header = new ArrayBuffer(1024);
         const dv = new DataView(header);
-        dv.setUint32(0, 0x4D49424E, true); // Magic 'NBIM'
-        dv.setUint32(4, 7, true);          // Version 7
+        dv.setUint32(0, 0x4D49424E, true); // 文件标识 'NBIM'
+        dv.setUint32(4, 8, true);          // 版本 8
         dv.setUint32(8, currentOffset, true); 
         dv.setUint32(12, manifestBytes.byteLength, true);
 
@@ -1303,6 +1649,8 @@ export class SceneManager {
         
         const magic = dv.getUint32(0, true);
         if (magic !== 0x4D49424E) throw new Error("不是有效的 NBIM 文件");
+
+        const version = dv.getUint32(4, true);
         
         const manifestOffset = dv.getUint32(8, true);
         const manifestLen = dv.getUint32(12, true);
@@ -1311,6 +1659,8 @@ export class SceneManager {
         const manifestBlob = file.slice(manifestOffset, manifestOffset + manifestLen);
         const manifestText = await manifestBlob.text();
         const manifest = JSON.parse(manifestText);
+
+        this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
         
         // 设置或更新场景包围盒
         if (manifest.globalBounds) {
@@ -1346,6 +1696,7 @@ export class SceneManager {
         }
 
         const rootId = modelRoot?.id || fileId;
+        this.nbimPropsByOriginalUuid.set(rootId, manifest.bimProperties || {});
 
         // 为 NBIM 创建一个容器组
         const fileGroup = new THREE.Group();
@@ -1360,6 +1711,11 @@ export class SceneManager {
                 node.userData.originalUuid = rootId;
                 if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
                 this.nodeMap.get(node.id)!.push(node);
+                if (node.bimId) {
+                    const key = `${rootId}::${node.bimId}`;
+                    if (!this.bimIdToNodeIds.has(key)) this.bimIdToNodeIds.set(key, []);
+                    this.bimIdToNodeIds.get(key)!.push(node.id);
+                }
                 if (node.children) node.children.forEach(traverse);
             };
             traverse(modelRoot);
@@ -1464,11 +1820,15 @@ export class SceneManager {
             this.sceneBounds.makeEmpty();
             this.precomputedBounds.makeEmpty();
             this.nbimFiles.clear();
+            this.nbimMeta.clear();
+            this.nbimPropsByOriginalUuid.clear();
             this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
             this.nodeMap.clear();
+            this.bimIdToNodeIds.clear();
             this.chunks = [];
+            this.processingChunks.clear();
+            this.cancelledChunkIds.clear();
             this.componentMap.clear();
-            this.componentCounter = 0;
             
             // 6. 重置全局偏移
             this.globalOffset.set(0, 0, 0);
@@ -1478,6 +1838,55 @@ export class SceneManager {
             console.error("清空场景失败:", error);
             throw error;
         }
+    }
+
+    getStructureNodes(id: string): StructureTreeNode[] | undefined {
+        return this.nodeMap.get(id);
+    }
+
+    getNbimProperties(id: string): any | null {
+        const node = this.nodeMap.get(id)?.[0];
+        if (!node || !node.bimId) return null;
+        const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
+        if (!originalUuid) return null;
+        const map = this.nbimPropsByOriginalUuid.get(originalUuid);
+        if (!map) return null;
+        const key = `${originalUuid}::${node.bimId}`;
+        return map[key] || null;
+    }
+
+    setAllVisibility(visible: boolean) {
+        const setNodeVisible = (n: StructureTreeNode) => {
+            n.visible = visible;
+            if (n.children) n.children.forEach(setNodeVisible);
+        };
+        if (this.structureRoot.children) this.structureRoot.children.forEach(setNodeVisible);
+
+        this.optimizedMapping.forEach((mappings) => {
+            mappings.forEach(m => {
+                m.mesh.setVisibleAt(m.instanceId, visible);
+            });
+        });
+
+        this.contentGroup.traverse(o => {
+            if (o.name === "Helpers" || o.name === "Measure") return;
+            if ((o as THREE.Mesh).isMesh && o.userData.isOptimized) {
+                o.visible = false;
+                return;
+            }
+            o.visible = visible;
+        });
+
+        this.updateSceneBounds();
+    }
+
+    hideObjects(uuids: string[]) {
+        uuids.forEach(id => this.setObjectVisibility(id, false));
+    }
+
+    isolateObjects(uuids: string[]) {
+        this.setAllVisibility(false);
+        uuids.forEach(id => this.setObjectVisibility(id, true));
     }
 
     setObjectVisibility(uuid: string, visible: boolean) {
@@ -1541,46 +1950,92 @@ export class SceneManager {
     }
 
     highlightObject(uuid: string | null) {
-        if (this.lastSelectedUuid === uuid) return;
+        this.highlightObjects(uuid ? [uuid] : []);
+    }
 
-        // 1. 清除之前的状态
-        if (this.lastSelectedUuid) {
-            const prevMappings = this.optimizedMapping.get(this.lastSelectedUuid);
-            if (prevMappings) {
-                prevMappings.forEach(m => {
-                    m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-                    if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
-                });
-            }
-        } else {
-            // 如果没有记录，全量清除一次 (兜底)
-            this.optimizedMapping.forEach((mappings) => {
+    highlightObjects(uuids: string[]) {
+        const target = new Set(uuids.filter(Boolean));
+
+        const restoreOne = (id: string) => {
+            const mappings = this.optimizedMapping.get(id);
+            if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
                     if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
                 });
-            });
+            }
+        };
+
+        const applyOne = (id: string) => {
+            const mappings = this.optimizedMapping.get(id);
+            if (mappings) {
+                mappings.forEach(m => {
+                    m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
+                    if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
+                });
+            }
+        };
+
+        for (const prev of this.highlightedUuids) {
+            if (!target.has(prev)) restoreOne(prev);
+        }
+        for (const next of target) {
+            if (!this.highlightedUuids.has(next)) applyOne(next);
         }
 
+        this.highlightedUuids = target;
         this.selectionBox.visible = false;
         this.highlightMesh.visible = false;
-        this.lastSelectedUuid = uuid;
-        
-        if (!uuid) return;
+        this.lastSelectedUuid = uuids.length > 0 ? uuids[uuids.length - 1] : null;
 
-        // 2. 处理 BatchedMesh 高亮 (NBIM/优化模式)
-        const mappings = this.optimizedMapping.get(uuid);
-        if (mappings && mappings.length > 0) {
-            mappings.forEach(m => {
-                m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
-                if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
-            });
+        if (target.size === 0) return;
 
-            // 使用第一个映射实例来设置高亮外形
-            const m = mappings[0];
+        const union = new THREE.Box3();
+        const tmpBox = new THREE.Box3();
+        const tmpMat = new THREE.Matrix4();
+
+        const addObjectBounds = (id: string) => {
+            const mappings = this.optimizedMapping.get(id);
+            if (mappings && mappings.length > 0) {
+                const m = mappings[0];
+                if (m.geometry) {
+                    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+                    tmpBox.copy(m.geometry.boundingBox!);
+                    m.mesh.getMatrixAt(m.instanceId, tmpMat);
+                    tmpMat.premultiply(m.mesh.matrixWorld);
+                    tmpBox.applyMatrix4(tmpMat);
+                    union.union(tmpBox);
+                }
+                return;
+            }
+
+            const obj = this.contentGroup.getObjectByProperty("uuid", id);
+            if (!obj) return;
+            obj.updateMatrixWorld(true);
+            if (obj.userData.boundingBox) {
+                tmpBox.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
+            } else {
+                tmpBox.setFromObject(obj);
+            }
+            union.union(tmpBox);
+        };
+
+        for (const id of target) addObjectBounds(id);
+
+        if (!union.isEmpty()) {
+            this.selectionBox.box.copy(union);
+            this.selectionBox.visible = true;
+        }
+
+        const focusId = this.lastSelectedUuid;
+        if (!focusId) return;
+
+        const focusMappings = this.optimizedMapping.get(focusId);
+        if (focusMappings && focusMappings.length > 0) {
+            const m = focusMappings[0];
             if (m.geometry) {
                 this.highlightMesh.geometry = m.geometry;
-                
+
                 const matrix = new THREE.Matrix4();
                 m.mesh.getMatrixAt(m.instanceId, matrix);
                 matrix.premultiply(m.mesh.matrixWorld);
@@ -1590,64 +2045,29 @@ export class SceneManager {
                 const worldScale = new THREE.Vector3();
                 matrix.decompose(worldPos, worldQuat, worldScale);
 
-                if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-                const center = new THREE.Vector3();
-                m.geometry.boundingBox!.getCenter(center);
-                
-                if (center.length() > 10000) {
-                    this.highlightMesh.position.set(0, 0, 0);
-                    const pureRotationMatrix = matrix.clone().setPosition(0, 0, 0);
-                    pureRotationMatrix.decompose(worldPos, worldQuat, worldScale);
-                    this.highlightMesh.quaternion.copy(worldQuat);
-                    this.highlightMesh.scale.copy(worldScale);
-                    
-                    const bmPos = new THREE.Vector3();
-                    const bmQuat = new THREE.Quaternion();
-                    const bmScale = new THREE.Vector3();
-                    m.mesh.matrixWorld.decompose(bmPos, bmQuat, bmScale);
-                    this.highlightMesh.position.add(bmPos);
-                } else {
-                    this.highlightMesh.position.copy(worldPos);
-                    this.highlightMesh.quaternion.copy(worldQuat);
-                    this.highlightMesh.scale.copy(worldScale);
-                }
-                
+                this.highlightMesh.position.copy(worldPos);
+                this.highlightMesh.quaternion.copy(worldQuat);
+                this.highlightMesh.scale.copy(worldScale);
                 this.highlightMesh.visible = true;
             }
-            return; 
+            return;
         }
 
-        // 3. 处理普通 Mesh 高亮
-        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-        if (!obj) return;
+        const focusObj = this.contentGroup.getObjectByProperty("uuid", focusId);
+        if (!focusObj) return;
+        if ((focusObj as THREE.Mesh).isMesh) {
+            focusObj.updateMatrixWorld(true);
+            this.highlightMesh.geometry = (focusObj as THREE.Mesh).geometry;
 
-        if ((obj as THREE.Mesh).isMesh) {
-            const mesh = obj as THREE.Mesh;
-            this.highlightMesh.geometry = mesh.geometry;
-            obj.updateMatrixWorld(true);
-            
             const worldPos = new THREE.Vector3();
             const worldQuat = new THREE.Quaternion();
             const worldScale = new THREE.Vector3();
-            obj.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+            focusObj.matrixWorld.decompose(worldPos, worldQuat, worldScale);
 
             this.highlightMesh.position.copy(worldPos);
             this.highlightMesh.quaternion.copy(worldQuat);
             this.highlightMesh.scale.copy(worldScale);
             this.highlightMesh.visible = true;
-        } 
-        else {
-            const box = new THREE.Box3();
-            if (obj.userData.boundingBox) {
-                box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
-            } else {
-                box.setFromObject(obj);
-            }
-
-            if (!box.isEmpty()) {
-                this.selectionBox.box.copy(box);
-                this.selectionBox.visible = true;
-            }
         }
     }
 
@@ -1904,11 +2324,14 @@ export class SceneManager {
     }
 
     setView(view: string) {
-        const box = this.computeTotalBounds();
+        let box = this.computeTotalBounds(true);
+        if (box.isEmpty()) box = this.computeTotalBounds(false);
         this.sceneBounds = box.clone();
         
-        const center = box.isEmpty() ? new THREE.Vector3(0,0,0) : box.getCenter(new THREE.Vector3());
-        const dist = 5000;
+        const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
+        const size = box.isEmpty() ? new THREE.Vector3(100, 100, 100) : box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dist = Math.max(maxDim * 2, 10);
 
         let pos = new THREE.Vector3();
         switch(view) {
@@ -2320,7 +2743,7 @@ export class SceneManager {
 
         const isEnabled = this.renderer.clippingPlanes.length > 0;
 
-        // X Axis
+        // X 轴
         if (active.x) {
             this.clippingPlanes[0].constant = -xMin;
             this.clippingPlanes[1].constant = xMax;
@@ -2334,7 +2757,7 @@ export class SceneManager {
             this.clipPlaneHelpers[1].visible = false;
         }
 
-        // Y Axis
+        // Y 轴
         if (active.y) {
             this.clippingPlanes[2].constant = -yMin;
             this.clippingPlanes[3].constant = yMax;
@@ -2348,7 +2771,7 @@ export class SceneManager {
             this.clipPlaneHelpers[3].visible = false;
         }
 
-        // Z Axis
+        // Z 轴
         if (active.z) {
             this.clippingPlanes[4].constant = -zMin;
             this.clippingPlanes[5].constant = zMax;

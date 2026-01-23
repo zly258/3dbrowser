@@ -37,7 +37,7 @@ export const Button: React.FC<ButtonProps> = ({
         gap: '6px',
         transition: 'all 0.2s',
         border: variant === 'ghost' ? 'none' : (active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`),
-        boxShadow: variant === 'ghost' ? 'none' : 'none', // Remove default black border/shadow if requested
+        boxShadow: variant === 'ghost' ? 'none' : 'none', // 不使用默认的黑色描边/阴影
         ...style
     };
 
@@ -70,7 +70,7 @@ export const PanelSection = ({ title, children, theme, style }: any) => (
     </div>
 );
 
-// --- Unified Slider Styles ---
+// --- 统一滑块样式 ---
 const SLIDER_TRACK_HEIGHT = 4;
 const SLIDER_THUMB_SIZE = 14;
 

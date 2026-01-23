@@ -53,7 +53,7 @@ export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeom
 
   const geometry = new THREE.BufferGeometry();
   
-  // 1. 复制 position
+  // 1. 复制坐标（position）
   const posAttr = source.getAttribute('position');
   const positions = new Float32Array(posAttr.count * 3);
   for (let i = 0; i < posAttr.count; i++) {
@@ -63,7 +63,7 @@ export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeom
   }
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-  // 2. 复制 normal (如果不存在则重新计算)
+  // 2. 复制法线（normal；不存在则重新计算）
   const normAttr = source.getAttribute('normal');
   if (normAttr) {
     const normals = new Float32Array(normAttr.count * 3);
@@ -77,7 +77,7 @@ export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeom
     geometry.computeVertexNormals();
   }
 
-  // 3. 复制 index (如果不存在则生成)
+  // 3. 复制索引（index；不存在则生成）
   if (source.getIndex()) {
     const sourceIndex = source.getIndex()!;
     const indices = new Uint32Array(sourceIndex.count);
@@ -87,7 +87,7 @@ export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeom
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   }
 
-  // 4. 移除冗余属性 (uv, uv2, color 等)，确保 BatchedMesh 兼容性
+  // 4. 移除冗余属性（uv/uv2/color 等），确保 BatchedMesh 兼容性
   geometry.deleteAttribute('uv');
   geometry.deleteAttribute('uv2');
   geometry.deleteAttribute('color');
@@ -137,11 +137,11 @@ function extractColor(mesh: THREE.Mesh): number {
  */
 function getColorByComponentType(name: string): number {
   const n = name.toLowerCase();
-  if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // blue-200
-  if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // blue-300
-  if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // gray-200
-  if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // gray-100
-  return 0x94a3b8; // gray-400
+  if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // 蓝色（浅）
+  if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // 蓝色（中）
+  if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // 灰色（浅）
+  if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // 灰色（更浅）
+  return 0x94a3b8; // 灰色（中）
 }
 
 /**
@@ -153,9 +153,9 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
   const items: OctreeItem[] = [];
   const _m4 = new THREE.Matrix4();
 
-  // 根对象可能已居中（应用了偏移），所以updateMatrixWorld确保
-  // 我们捕获视觉状态（在原点居中）。
-  // 这对GLB精度有好处。
+  // 根对象可能已居中（已应用偏移），因此需要调用 updateMatrixWorld 确保矩阵最新
+  // 这里捕获的是当前视觉状态（以原点居中）
+  // 这有助于提升导出 GLB 的数值精度
   root.updateMatrixWorld(true);
 
   root.traverse((obj) => {

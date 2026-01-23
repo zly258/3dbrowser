@@ -55,7 +55,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
     }
     parts.push(colorsBuffer);
 
-    // 4. Nodes
+    // 4. 节点
     for (let i = 0; i < meshes.length; i++) {
         const percent = Math.floor((i / meshes.length) * 100);
         if(i % 10 === 0) onProgress(`Encoding mesh ${i+1}/${meshes.length} (${percent}%)`);
@@ -162,7 +162,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
         const alignmentPadding = (4 - (currentOffset % 4)) % 4;
         if(alignmentPadding > 0) parts.push(new Uint8Array(alignmentPadding));
         
-        // 法线数据（Uint32 Packed）
+        // 法线数据（Uint32 打包）
         const normBuf = new Uint8Array(vertCount * 4);
         const nView = new DataView(normBuf.buffer, normBuf.byteOffset, normBuf.byteLength);
         for(let k=0; k<vertCount; k++) {
@@ -172,7 +172,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
                 ny = normAttr.getY(k);
                 nz = normAttr.getZ(k);
             }
-            // 编码法线 (10-10-10 bit)
+            // 编码法线（10-10-10 位）
             const scale = 511.0;
             let x = Math.round(nx * scale);
             let y = Math.round(ny * scale);

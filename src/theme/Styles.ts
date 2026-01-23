@@ -36,18 +36,18 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
         shadow: "rgba(0, 0, 0, 0.5)"
     },
     light: {
-        bg: "#ffffff", // Office 2013 White
+        bg: "#ffffff", // 办公风格白色
         panelBg: "#ffffff",
-        headerBg: "#f3f3f3", // Light gray for tabs area
-        border: "#d2d2d2", // Office 2013 border color
+        headerBg: "#f3f3f3", // 标签区域浅灰
+        border: "#d2d2d2", // 办公风格边框色
         text: "#444444",
         textLight: "#000000",
         textMuted: "#666666",
-        accent: "#2b579a", // Office 2013 Blue (Word style)
+        accent: "#2b579a", // 办公风格蓝（文字应用风格）
         highlight: "#cfe3ff",
         itemHover: "#e1e1e1",
-        success: "#217346", // Excel green
-        warning: "#d24726", // PPT orange
+        success: "#217346", // 成功绿
+        warning: "#d24726", // 警告橙
         danger: "#a4262c",
         canvasBg: "#ffffff",
         shadow: "rgba(0, 0, 0, 0.15)"
@@ -76,17 +76,17 @@ export const createGlobalStyle = (theme: ThemeColors) => `
 `;
 
 export const createStyles = (theme: ThemeColors) => ({
-    // Desktop / Shared
+    // 桌面端 / 通用
     container: { display: "flex", flexDirection: "column" as const, height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none" as const, overflow: "hidden" },
     
-    // Classic Menu Styles
+    // 传统菜单样式
     classicMenuBar: {
         display: "flex",
         alignItems: "center",
         backgroundColor: theme.bg,
         borderBottom: `1px solid ${theme.border}`,
         padding: "0 8px",
-        height: "28px",
+        height: "26px",
         gap: "4px",
         WebkitAppRegion: "no-drag" as any,
     },
@@ -167,7 +167,7 @@ export const createStyles = (theme: ThemeColors) => ({
         backgroundColor: theme.itemHover,
         color: theme.text,
     },
-    // Checkbox Style
+    // 复选框样式
     checkboxContainer: {
         display: "flex",
         alignItems: "center",
@@ -214,7 +214,8 @@ export const createStyles = (theme: ThemeColors) => ({
         color: theme.text,
     },
     floatingHeader: {
-        padding: "8px 12px", 
+        height: "29px",
+        padding: "0 12px",
         backgroundColor: theme.headerBg, 
         borderBottom: `1px solid ${theme.border}`,
         cursor: "default",
@@ -245,7 +246,7 @@ export const createStyles = (theme: ThemeColors) => ({
         background: 'transparent'
     },
 
-    // Tree Styles
+    // 树形结构样式
     treeContainer: {
         flex: 1,              
         height: "100%",       
@@ -284,7 +285,7 @@ export const createStyles = (theme: ThemeColors) => ({
         textOverflow: "ellipsis"
     },
 
-    // Properties
+    // 属性面板
     list: {
         flex: 1,
         overflowY: "auto" as const,
@@ -330,7 +331,7 @@ export const createStyles = (theme: ThemeColors) => ({
         cursor: "text"
     },
     
-    // UI Elements
+    // 通用 UI 元素
     btn: {
         backgroundColor: theme.bg,
         color: theme.text,
@@ -352,7 +353,7 @@ export const createStyles = (theme: ThemeColors) => ({
         borderColor: theme.accent,
     },
     
-    // View Grid Button
+    // 视图宫格按钮
     viewGridBtn: {
         display: 'flex',
         flexDirection: 'column' as const,
@@ -370,7 +371,7 @@ export const createStyles = (theme: ThemeColors) => ({
         gap: '4px'
     },
     
-    // Modal Overlay
+    // 弹窗遮罩
     modalOverlay: {
         position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: theme.bg === '#ffffff' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
@@ -390,7 +391,7 @@ export const createStyles = (theme: ThemeColors) => ({
         color: theme.text
     },
 
-    // Loading
+    // 加载遮罩
     overlay: {
         position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: theme.bg === '#ffffff' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)', 
@@ -419,7 +420,7 @@ export const createStyles = (theme: ThemeColors) => ({
         transition: 'width 0.2s ease-out'
     },
     
-    // Slider
+    // 滑块
     sliderRow: {
         display: 'flex',
         alignItems: 'center',
@@ -438,7 +439,7 @@ export const createStyles = (theme: ThemeColors) => ({
         outline: 'none',
     },
     
-    // Stats HUD (Top Center)
+    // 统计 HUD（顶部居中）
     statsOverlay: {
         position: "absolute" as const,
         top: "8px",
@@ -471,5 +472,5 @@ export const createStyles = (theme: ThemeColors) => ({
     }
 });
 
-// Deprecated: Default export for backward compatibility, but now we use createStyles
+// 已废弃：仅用于兼容旧的默认导出，当前请使用 createStyles
 export const colors = themes.dark;

@@ -117,17 +117,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                         </Row>
                     </Section>
 
-                    <Section title={t("st_import_settings")} theme={theme}>
-                        <Row label={t("st_instancing")} theme={theme}>
-                             <Checkbox 
-                                checked={settings.enableInstancing} 
-                                onChange={(val: boolean) => onUpdate({enableInstancing: val})} 
-                                styles={styles} 
-                                theme={theme}
-                             />
-                        </Row>
-                    </Section>
-
                     <Section title={t("st_lighting")} theme={theme}>
                         <Row label={`${t("st_ambient")} (${settings.ambientInt.toFixed(1)})`} theme={theme}>
                             <Slider min={0} max={5} step={0.1} 
