@@ -136,6 +136,7 @@ export class SceneManager {
     private chunkPadding = 0.2;
     private maxConcurrentChunkLoads = 96;
     private maxChunkLoadsPerFrame = 48;
+    private chunkLoadingEnabled = true;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -368,6 +369,7 @@ export class SceneManager {
     }
 
     private checkCullingAndLoad() {
+        if (!this.chunkLoadingEnabled) return;
         if (this.chunks.length === 0) return;
 
         const totalCount = this.chunks.length;
@@ -537,6 +539,17 @@ export class SceneManager {
         } finally {
             this.processingChunks.delete(chunk.id);
         }
+    }
+
+    setChunkLoadingEnabled(enabled: boolean) {
+        this.chunkLoadingEnabled = enabled;
+        if (enabled) this.checkCullingAndLoad();
+    }
+
+    setContentVisible(visible: boolean) {
+        this.contentGroup.visible = visible;
+        this.ghostGroup.visible = visible;
+        this.renderer.render(this.scene, this.camera);
     }
 
     private buildSceneGraph(object: THREE.Object3D): StructureTreeNode {
@@ -870,6 +883,7 @@ export class SceneManager {
 
         this.updateSettings(this.settings);
         if (onProgress) onProgress(100, "模型已加入加载队列");
+        this.checkCullingAndLoad();
     }
 
     removeObject(uuid: string) {
@@ -1866,6 +1880,7 @@ export class SceneManager {
 
         this.fitView();
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
+        this.checkCullingAndLoad();
     }
 
     async clear() {
@@ -1931,6 +1946,9 @@ export class SceneManager {
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
             this.componentMap.clear();
+            this.chunkLoadingEnabled = true;
+            this.contentGroup.visible = true;
+            this.ghostGroup.visible = true;
             
             // 6. 重置全局偏移
             this.globalOffset.set(0, 0, 0);

@@ -988,6 +988,8 @@ export const ThreeViewer = ({
     const processFiles = async (items: (File | string)[]) => {
         if (!items.length || !sceneMgr.current) return;
         console.log("[ThreeViewer] processFiles called with", items.length, "items");
+        (sceneMgr.current as any).setChunkLoadingEnabled?.(true);
+        (sceneMgr.current as any).setContentVisible?.(true);
         setLoading(true);
         setStatus(t("loading"));
         setProgress(0);
@@ -1087,6 +1089,9 @@ export const ThreeViewer = ({
             return;
         }
 
+        (sceneMgr.current as any).setChunkLoadingEnabled?.(false);
+        (sceneMgr.current as any).setContentVisible?.(false);
+
         setLoading(true);
         setStatus(t("processing") + "...");
         setProgress(0);
@@ -1111,6 +1116,12 @@ export const ThreeViewer = ({
             setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
         } finally {
+            try {
+                await sceneMgr.current?.clear();
+                updateTree();
+            } catch {}
+            (sceneMgr.current as any).setChunkLoadingEnabled?.(true);
+            (sceneMgr.current as any).setContentVisible?.(true);
             setLoading(false);
         }
     };
