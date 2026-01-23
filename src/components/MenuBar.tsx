@@ -110,6 +110,7 @@ export const MenuBar: React.FC<any> = (props) => {
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const folderInputRef = React.useRef<HTMLInputElement>(null);
+    const batchConvertInputRef = React.useRef<HTMLInputElement>(null);
 
     return (
         <div style={styles.classicMenuBar}>
@@ -121,6 +122,14 @@ export const MenuBar: React.FC<any> = (props) => {
                 multiple 
                 accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleOpenFiles} 
+            />
+            <input 
+                type="file" 
+                ref={batchConvertInputRef} 
+                style={{ display: 'none' }} 
+                multiple 
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                onChange={props.handleBatchConvert} 
             />
             <input 
                 type="file" 
@@ -138,6 +147,12 @@ export const MenuBar: React.FC<any> = (props) => {
                             {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} styles={styles} />}
                             {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); }} styles={styles} />}
                             {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl(); close(); }} styles={styles} />}
+                            {!isHidden('batch_convert') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('menu_batch_convert')} onClick={() => { batchConvertInputRef.current?.click(); close(); }} styles={styles} />
+                                </>
+                            )}
                             {!isHidden('export') && (
                                 <>
                                     <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />

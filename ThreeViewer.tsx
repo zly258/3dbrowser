@@ -559,6 +559,17 @@ export const ThreeViewer = ({
         setTreeRoot(roots);
     }, [])
 
+    const setAllTreeExpanded = useCallback((expanded: boolean) => {
+        const update = (nodes: any[]): any[] => {
+            return nodes.map(n => ({
+                ...n,
+                expanded,
+                children: n.children && n.children.length > 0 ? update(n.children) : n.children
+            }));
+        };
+        setTreeRoot(prev => update(prev));
+    }, []);
+
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
         
@@ -982,66 +993,7 @@ export const ThreeViewer = ({
         setProgress(0);
         
         try {
-            // 分离 nbim 和其他文件
-            const nbimItems: (File | string)[] = [];
-            const otherItems: (File | string)[] = [];
-
-            for (const item of items) {
-                const path = typeof item === 'string' ? item.split('?')[0].split('#')[0] : item.name;
-                if (path.toLowerCase().endsWith('.nbim')) {
-                    nbimItems.push(item);
-                } else {
-                    otherItems.push(item);
-                }
-            }
-            
-            console.log("[ThreeViewer] nbimItems:", nbimItems.length, "otherItems:", otherItems.length);
-
-            // 处理 nbim 文件
-            for (const item of nbimItems) {
-                if (sceneMgr.current) {
-                    if (typeof item === 'string') {
-                        console.log("[ThreeViewer] Fetching NBIM URL:", item);
-                        const response = await fetch(item);
-                        if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
-                        const blob = await response.blob();
-                        const fileName = item.split('?')[0].split('#')[0].split('/').pop() || 'model.nbim';
-                        const file = new File([blob], fileName);
-                        await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
-                            setProgress(p);
-                            if(msg) setStatus(cleanStatus(msg));
-                        });
-                    } else {
-                        console.log("[ThreeViewer] Loading NBIM File:", item.name);
-                        await (sceneMgr.current as any).loadNbim(item, (p: number, msg: string) => {
-                            setProgress(p);
-                            if(msg) setStatus(cleanStatus(msg));
-                        });
-                    }
-                }
-            }
-
-            // 处理其他模型文件 (glb, ifc, etc.)
-            if (otherItems.length > 0) {
-                console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
-                const loadedObjects = await loadModelFiles(
-                    otherItems, 
-                    (p, msg) => {
-                        setProgress(p);
-                        if(msg) setStatus(cleanStatus(msg));
-                    }, 
-                    t,
-                    sceneSettings, // Pass settings
-                    libPath
-                );
-                console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
-                for (const obj of loadedObjects) {
-                    await sceneMgr.current.addModel(obj, (p: number, msg: string) => {
-                        setProgress(p);
-                        if (msg) setStatus(cleanStatus(msg));
-                    });
-                }
-            }
+            await loadItemsIntoScene(items);
             
             updateTree();
             setStatus(t("success"));
@@ -1056,10 +1008,111 @@ export const ThreeViewer = ({
         }
     };
 
+    const loadItemsIntoScene = async (items: (File | string)[]) => {
+        if (!items.length || !sceneMgr.current) return;
+
+        const nbimItems: (File | string)[] = [];
+        const otherItems: (File | string)[] = [];
+
+        for (const item of items) {
+            const path = typeof item === 'string' ? item.split('?')[0].split('#')[0] : item.name;
+            if (path.toLowerCase().endsWith('.nbim')) {
+                nbimItems.push(item);
+            } else {
+                otherItems.push(item);
+            }
+        }
+        
+        console.log("[ThreeViewer] nbimItems:", nbimItems.length, "otherItems:", otherItems.length);
+
+        for (const item of nbimItems) {
+            if (!sceneMgr.current) return;
+            if (typeof item === 'string') {
+                console.log("[ThreeViewer] Fetching NBIM URL:", item);
+                const response = await fetch(item);
+                if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
+                const blob = await response.blob();
+                const fileName = item.split('?')[0].split('#')[0].split('/').pop() || 'model.nbim';
+                const file = new File([blob], fileName);
+                await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
+                    setProgress(p);
+                    if (msg) setStatus(cleanStatus(msg));
+                });
+            } else {
+                console.log("[ThreeViewer] Loading NBIM File:", item.name);
+                await (sceneMgr.current as any).loadNbim(item, (p: number, msg: string) => {
+                    setProgress(p);
+                    if (msg) setStatus(cleanStatus(msg));
+                });
+            }
+        }
+
+        if (otherItems.length > 0) {
+            console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
+            const loadedObjects = await loadModelFiles(
+                otherItems, 
+                (p, msg) => {
+                    setProgress(p);
+                    if (msg) setStatus(cleanStatus(msg));
+                }, 
+                t,
+                sceneSettings,
+                libPath
+            );
+            console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
+            for (const obj of loadedObjects) {
+                if (!sceneMgr.current) return;
+                await sceneMgr.current.addModel(obj, (p: number, msg: string) => {
+                    setProgress(p);
+                    if (msg) setStatus(cleanStatus(msg));
+                });
+            }
+        }
+    };
+
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
         await processFiles(Array.from(e.target.files));
         e.target.value = ""; 
+    };
+
+    const handleBatchConvert = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files?.length || !sceneMgr.current) return;
+        const files = Array.from(e.target.files);
+        e.target.value = "";
+
+        const invalid = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
+        if (invalid.length > 0) {
+            setToast({ message: t("unsupported_format"), type: 'info' });
+            return;
+        }
+
+        setLoading(true);
+        setStatus(t("processing") + "...");
+        setProgress(0);
+        setActiveTool('none');
+
+        try {
+            await sceneMgr.current.clear();
+            setSelectedUuids([]);
+            setSelectedProps(null);
+            setMeasureHistory([]);
+            updateTree();
+
+            await loadItemsIntoScene(files);
+            updateTree();
+
+            setStatus(t("processing") + "...");
+            await sceneMgr.current.exportNbim();
+            setStatus(t("success"));
+            setToast({ message: t("success"), type: 'success' });
+        } catch (err) {
+            console.error("[ThreeViewer] handleBatchConvert error:", err);
+            setStatus(t("failed"));
+            setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleOpenUrl = async () => {
@@ -1300,6 +1353,7 @@ export const ThreeViewer = ({
                 themeType={themeMode}
                 setThemeType={setThemeMode}
                 handleOpenFiles={handleOpenFiles}
+                handleBatchConvert={handleBatchConvert}
                 handleOpenFolder={handleOpenFolder}
                 handleOpenUrl={handleOpenUrl}
                 handleView={handleView}
@@ -1444,16 +1498,41 @@ export const ThreeViewer = ({
                                     </div>
                                 </>
                             ) : (
-                                <div
-                                    style={{ padding: '10px 12px', cursor: 'pointer', color: theme.danger }}
-                                    onClick={() => {
-                                        if (!contextMenu.targetUuid) return;
-                                        handleDeleteObject(contextMenu.targetUuid);
-                                        setContextMenu(prev => ({ ...prev, open: false }));
-                                    }}
-                                >
-                                    {t("delete_item")}
-                                </div>
+                                <>
+                                    <div
+                                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: `1px solid ${theme.border}` }}
+                                        onClick={() => {
+                                            setAllTreeExpanded(true);
+                                            setContextMenu(prev => ({ ...prev, open: false }));
+                                        }}
+                                    >
+                                        {t("expand_all")}
+                                    </div>
+                                    <div
+                                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: `1px solid ${theme.border}` }}
+                                        onClick={() => {
+                                            setAllTreeExpanded(false);
+                                            setContextMenu(prev => ({ ...prev, open: false }));
+                                        }}
+                                    >
+                                        {t("collapse_all")}
+                                    </div>
+                                    <div
+                                        style={{
+                                            padding: '10px 12px',
+                                            cursor: contextMenu.targetUuid ? 'pointer' : 'not-allowed',
+                                            opacity: contextMenu.targetUuid ? 1 : 0.5,
+                                            color: theme.danger
+                                        }}
+                                        onClick={() => {
+                                            if (!contextMenu.targetUuid) return;
+                                            handleDeleteObject(contextMenu.targetUuid);
+                                            setContextMenu(prev => ({ ...prev, open: false }));
+                                        }}
+                                    >
+                                        {t("delete_item")}
+                                    </div>
+                                </>
                             )}
                         </div>
                     )}

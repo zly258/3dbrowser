@@ -139,17 +139,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         setTreeRoot(prev => toggle(prev));
     };
 
-    const setAllExpanded = (expanded: boolean) => {
-        const update = (nodes: TreeNode[]): TreeNode[] => {
-            return nodes.map(n => ({
-                ...n,
-                expanded,
-                children: n.children.length > 0 ? update(n.children) : n.children
-            }));
-        };
-        setTreeRoot(prev => update(prev));
-    };
-
     const handleCheckbox = (e: React.MouseEvent, node: TreeNode) => {
         e.stopPropagation();
         const newVisible = !node.visible;
@@ -165,22 +154,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                    <button
-                        style={{ ...styles.btn, padding: '3px 8px', fontSize: 11 }}
-                        onClick={() => setAllExpanded(true)}
-                        type="button"
-                    >
-                        {t("expand_all")}
-                    </button>
-                    <button
-                        style={{ ...styles.btn, padding: '3px 8px', fontSize: 11 }}
-                        onClick={() => setAllExpanded(false)}
-                        type="button"
-                    >
-                        {t("collapse_all")}
-                    </button>
-                </div>
                 <input
                     type="text"
                     placeholder={t("search_nodes")}

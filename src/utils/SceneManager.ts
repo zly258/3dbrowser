@@ -131,6 +131,11 @@ export class SceneManager {
     onChunkProgress?: (loaded: number, total: number) => void;
 
     private lastReportedProgress = { loaded: -1, total: -1 };
+    private chunkTotalCount = 0;
+    private chunkLoadedCount = 0;
+    private chunkPadding = 0.2;
+    private maxConcurrentChunkLoads = 96;
+    private maxChunkLoadsPerFrame = 48;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -336,8 +341,9 @@ export class SceneManager {
 
     resize() {
         if (!this.canvas) return;
-        const w = this.canvas.clientWidth;
-        const h = this.canvas.clientHeight;
+        const rect = this.canvas.getBoundingClientRect();
+        const w = Math.max(1, Math.round(rect.width));
+        const h = Math.max(1, Math.round(rect.height));
         
         // 确保大小为正数
         if (w === 0 || h === 0) return;
@@ -364,35 +370,36 @@ export class SceneManager {
     private checkCullingAndLoad() {
         if (this.chunks.length === 0) return;
 
-        // 计算加载进度
-        const loadedCount = this.chunks.filter(c => c.loaded).length;
         const totalCount = this.chunks.length;
+        if (this.chunkTotalCount !== totalCount) {
+            this.chunkTotalCount = totalCount;
+            this.chunkLoadedCount = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
+        }
+        const loadedCount = this.chunkLoadedCount;
         
         if (this.onChunkProgress && (loadedCount !== this.lastReportedProgress.loaded || totalCount !== this.lastReportedProgress.total)) {
             this.lastReportedProgress = { loaded: loadedCount, total: totalCount };
             this.onChunkProgress(loadedCount, totalCount);
         }
 
-        if (this.processingChunks.size >= 48) return;
+        if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
 
         // 增加视锥体预加载边距（通过稍微扩大 c.bounds 来实现预加载）
-        const padding = 0.2; // 20% 边距
+        const padding = this.chunkPadding;
         const cameraPos = this.camera.position;
-        const tmpSize = new THREE.Vector3();
 
         const toLoad: any[] = [];
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
 
         this.chunks.forEach(c => {
-            // 使用带预加载边距的包围盒进行视锥体相交测试（缓存 paddedBounds/center，减少每帧分配）
             if (!c.paddedBounds || c._padding !== padding) {
+                const size = c.bounds.getSize(new THREE.Vector3());
                 const pb = c.bounds.clone();
-                pb.getSize(tmpSize);
-                pb.expandByVector(tmpSize.multiplyScalar(padding));
+                pb.expandByVector(size.multiplyScalar(padding));
                 c.paddedBounds = pb;
                 c._padding = padding;
             }
@@ -403,11 +410,15 @@ export class SceneManager {
             const shouldBeVisible = inFrustum && !isClipped;
 
             if (c.loaded) {
-                // 更新已加载分块的可见性 (对齐 refs，优化渲染)
-                const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
-                if (optimizedGroup) {
-                    const bm = optimizedGroup.getObjectByName(c.id);
-                    if (bm) bm.visible = shouldBeVisible;
+                if (c.mesh) {
+                    c.mesh.visible = shouldBeVisible;
+                } else {
+                    const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
+                    const bm = optimizedGroup?.getObjectByName(c.id);
+                    if (bm) {
+                        c.mesh = bm;
+                        bm.visible = shouldBeVisible;
+                    }
                 }
             } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
                 // 加入待加载队列
@@ -421,8 +432,9 @@ export class SceneManager {
                 return a.center.distanceToSquared(cameraPos) - b.center.distanceToSquared(cameraPos);
             });
 
-            const batch = toLoad.slice(0, 24);
-            batch.forEach(chunk => this.loadChunk(chunk));
+            const available = this.maxConcurrentChunkLoads - this.processingChunks.size;
+            const count = Math.min(available, this.maxChunkLoadsPerFrame, toLoad.length);
+            for (let i = 0; i < count; i++) this.loadChunk(toLoad[i]);
         }
     }
 
@@ -430,6 +442,7 @@ export class SceneManager {
         this.processingChunks.add(chunk.id);
         try {
             let bm: THREE.BatchedMesh | null = null;
+            let loadedNow = false;
             
             if (chunk.node) {
                 // 来自 addModel 的本地分块
@@ -478,6 +491,8 @@ export class SceneManager {
                 }
                 
                 optimizedGroup.add(bm);
+                chunk.mesh = bm;
+                loadedNow = true;
 
                 // 建立映射 (对齐 refs，记录原始颜色以便高亮恢复)
                 const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
@@ -501,7 +516,14 @@ export class SceneManager {
                 }
             }
 
-            chunk.loaded = true;
+            if (loadedNow && !chunk.loaded) {
+                chunk.loaded = true;
+                this.chunkLoadedCount++;
+                if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
+                    this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
+                    this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
+                }
+            }
             this.cancelledChunkIds.delete(chunk.id);
 
             // 移除鬼影
@@ -791,10 +813,14 @@ export class SceneManager {
                 });
 
                 // 注册到 chunks 列表
+                const paddedBounds = chunkBounds.clone();
+                const padSize = chunkBounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
+                paddedBounds.expandByVector(padSize);
                 this.chunks.push({
                     id: chunkId,
                     bounds: chunkBounds,
-                    paddedBounds: null,
+                    paddedBounds,
+                    _padding: this.chunkPadding,
                     center: chunkBounds.getCenter(new THREE.Vector3()),
                     loaded: false,
                     node: node, // 存储节点数据以便后续加载
@@ -817,6 +843,12 @@ export class SceneManager {
                 edges.position.copy(center);
                 this.ghostGroup.add(edges);
             });
+
+            this.chunkTotalCount = this.chunks.length;
+            if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
+                this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
+                this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
+            }
 
             // 隐藏原始网格中的 Mesh 标记优化
             object.traverse(child => {
@@ -1612,12 +1644,68 @@ export class SceneManager {
                 max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
             },
             chunks: exportChunks,
-            structureTree: this.structureRoot,
+            structureTree: (() => {
+                const sanitizeUserData = (ud: any) => {
+                    if (!ud || typeof ud !== 'object') return undefined;
+                    const out: any = {};
+                    if (ud.originalUuid !== undefined) out.originalUuid = String(ud.originalUuid);
+                    if (ud.expressID !== undefined) out.expressID = ud.expressID;
+                    if (ud.modelID !== undefined) out.modelID = ud.modelID;
+                    return Object.keys(out).length > 0 ? out : undefined;
+                };
+
+                const srcRoot: any = this.structureRoot;
+                const rootCopy: any = {
+                    id: srcRoot?.id,
+                    name: srcRoot?.name,
+                    type: srcRoot?.type,
+                    visible: srcRoot?.visible !== false,
+                    children: []
+                };
+                if (srcRoot?.bimId !== undefined) rootCopy.bimId = srcRoot.bimId;
+                if (srcRoot?.chunkId !== undefined) rootCopy.chunkId = srcRoot.chunkId;
+                const rootUd = sanitizeUserData(srcRoot?.userData);
+                if (rootUd) rootCopy.userData = rootUd;
+
+                const stack: Array<{ src: any; dst: any }> = [{ src: srcRoot, dst: rootCopy }];
+                while (stack.length > 0) {
+                    const { src, dst } = stack.pop()!;
+                    const children = Array.isArray(src?.children) ? src.children : [];
+                    for (const child of children) {
+                        const childCopy: any = {
+                            id: child?.id,
+                            name: child?.name,
+                            type: child?.type,
+                            visible: child?.visible !== false,
+                            children: []
+                        };
+                        if (child?.bimId !== undefined) childCopy.bimId = child.bimId;
+                        if (child?.chunkId !== undefined) childCopy.chunkId = child.chunkId;
+                        const ud = sanitizeUserData(child?.userData);
+                        if (ud) childCopy.userData = ud;
+                        dst.children.push(childCopy);
+                        stack.push({ src: child, dst: childCopy });
+                    }
+                }
+                return rootCopy;
+            })(),
             bimIdTable,
             bimProperties
         };
 
-        const manifestStr = JSON.stringify(manifest);
+        let manifestStr: string;
+        try {
+            manifestStr = JSON.stringify(manifest);
+        } catch (e) {
+            const minimalManifest = {
+                globalBounds: manifest.globalBounds,
+                chunks: manifest.chunks,
+                structureTree: { id: this.structureRoot.id, name: this.structureRoot.name, type: this.structureRoot.type, children: this.structureRoot.children ? [] : [] },
+                bimIdTable: manifest.bimIdTable,
+                bimProperties: {}
+            };
+            manifestStr = JSON.stringify(minimalManifest);
+        }
         const manifestBytes = new TextEncoder().encode(manifestStr);
 
         const header = new ArrayBuffer(1024);
@@ -1738,9 +1826,16 @@ export class SceneManager {
             }
 
             const chunkId = c.id;
+            const center = bounds.getCenter(new THREE.Vector3());
+            const paddedBounds = bounds.clone();
+            const padSize = bounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
+            paddedBounds.expandByVector(padSize);
             this.chunks.push({
                 id: chunkId,
                 bounds: bounds,
+                paddedBounds,
+                _padding: this.chunkPadding,
+                center,
                 loaded: false,
                 byteOffset: c.byteOffset,
                 byteLength: c.byteLength,
@@ -1752,8 +1847,6 @@ export class SceneManager {
             // 显示鬼影
             const size = new THREE.Vector3();
             bounds.getSize(size);
-            const center = new THREE.Vector3();
-            bounds.getCenter(center);
 
             const edges = new THREE.LineSegments(
                 new THREE.EdgesGeometry(boxGeo),
@@ -1764,6 +1857,12 @@ export class SceneManager {
             edges.position.copy(center);
             this.ghostGroup.add(edges);
         });
+
+        this.chunkTotalCount = this.chunks.length;
+        if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
+            this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
+            this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
+        }
 
         this.fitView();
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
@@ -1826,6 +1925,9 @@ export class SceneManager {
             this.nodeMap.clear();
             this.bimIdToNodeIds.clear();
             this.chunks = [];
+            this.chunkTotalCount = 0;
+            this.chunkLoadedCount = 0;
+            this.lastReportedProgress = { loaded: -1, total: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
             this.componentMap.clear();
