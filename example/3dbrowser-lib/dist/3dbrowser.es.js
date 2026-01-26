@@ -11868,4192 +11868,2507 @@ function collectLeafNodes(node, leaves = []) {
   return leaves;
 }
 
-/*! pako 2.1.0 https://github.com/nodeca/pako @license (MIT AND Zlib) */
-const Z_FIXED$1 = 4;
-const Z_BINARY = 0;
-const Z_TEXT = 1;
-const Z_UNKNOWN$1 = 2;
-function zero$1(buf) {
-  let len = buf.length;
-  while (--len >= 0) {
-    buf[len] = 0;
+class SceneManager {
+  constructor(canvas) {
+    this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
+    this.nodeMap = /* @__PURE__ */ new Map();
+    this.bimIdToNodeIds = /* @__PURE__ */ new Map();
+    this.tilesRenderer = null;
+    this.lastSelectedUuid = null;
+    this.highlightedUuids = /* @__PURE__ */ new Set();
+    this.measureType = "none";
+    this.currentMeasurePoints = [];
+    this.previewLine = null;
+    this.measureRecords = /* @__PURE__ */ new Map();
+    this.clippingPlanes = [];
+    this.clipPlaneHelpers = [];
+    this.sceneCenter = new THREE.Vector3();
+    this.globalOffset = new THREE.Vector3();
+    this.componentMap = /* @__PURE__ */ new Map();
+    this.optimizedMapping = /* @__PURE__ */ new Map();
+    this.settings = {
+      ambientInt: 2,
+      dirInt: 1,
+      bgColor: "#1e1e1e",
+      viewCubeSize: 100
+    };
+    this.sceneBounds = new THREE.Box3();
+    this.precomputedBounds = new THREE.Box3();
+    this.chunks = [];
+    this.processingChunks = /* @__PURE__ */ new Set();
+    this.cancelledChunkIds = /* @__PURE__ */ new Set();
+    this.frustum = new THREE.Frustum();
+    this.projScreenMatrix = new THREE.Matrix4();
+    this.logicTimer = 0;
+    this.nbimFiles = /* @__PURE__ */ new Map();
+    this.nbimMeta = /* @__PURE__ */ new Map();
+    this.nbimPropsByOriginalUuid = /* @__PURE__ */ new Map();
+    this.sharedMaterial = new THREE.MeshStandardMaterial({
+      color: 16777215,
+      roughness: 0.6,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+    this.lastReportedProgress = { loaded: -1, total: -1 };
+    this.chunkTotalCount = 0;
+    this.chunkLoadedCount = 0;
+    this.chunkPadding = 0.2;
+    this.maxConcurrentChunkLoads = 96;
+    this.maxChunkLoadsPerFrame = 48;
+    this.chunkLoadingEnabled = true;
+    this.canvas = canvas;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    this.dotTexture = this.createCircleTexture();
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      logarithmicDepthBuffer: true,
+      precision: "highp",
+      powerPreference: "high-performance"
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(width, height, false);
+    this.renderer.setClearColor(this.settings.bgColor);
+    this.renderer.localClippingEnabled = true;
+    this.scene = new THREE.Scene();
+    this.contentGroup = new THREE.Group();
+    this.contentGroup.name = "Content";
+    this.scene.add(this.contentGroup);
+    this.helpersGroup = new THREE.Group();
+    this.helpersGroup.name = "Helpers";
+    this.scene.add(this.helpersGroup);
+    this.measureGroup = new THREE.Group();
+    this.measureGroup.name = "Measure";
+    this.scene.add(this.measureGroup);
+    this.ghostGroup = new THREE.Group();
+    this.ghostGroup.name = "Ghost";
+    this.scene.add(this.ghostGroup);
+    this.clipHelpersGroup = new THREE.Group();
+    this.clipHelpersGroup.name = "ClipHelpers";
+    this.scene.add(this.clipHelpersGroup);
+    const frustumSize = 100;
+    const aspect = width / height;
+    this.camera = new THREE.OrthographicCamera(
+      frustumSize * aspect / -2,
+      frustumSize * aspect / 2,
+      frustumSize / 2,
+      frustumSize / -2,
+      0.1,
+      2e5
+    );
+    this.camera.up.set(0, 0, 1);
+    this.camera.position.set(1e3, 1e3, 1e3);
+    this.camera.lookAt(0, 0, 0);
+    this.controls = new OrbitControls(this.camera, canvas);
+    this.controls.enableDamping = false;
+    this.controls.screenSpacePanning = true;
+    this.controls.maxPolarAngle = Math.PI;
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.PAN,
+      RIGHT: THREE.MOUSE.NONE
+    };
+    this.ambientLight = new THREE.AmbientLight(16777215, this.settings.ambientInt);
+    this.scene.add(this.ambientLight);
+    this.dirLight = new THREE.DirectionalLight(16777215, this.settings.dirInt);
+    this.dirLight.position.set(50, 50, 100);
+    this.scene.add(this.dirLight);
+    this.backLight = new THREE.DirectionalLight(16777215, 0.8);
+    this.backLight.position.set(-50, -50, -10);
+    this.scene.add(this.backLight);
+    const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+    this.selectionBox = new THREE.Box3Helper(box, new THREE.Color(16776960));
+    this.selectionBox.visible = false;
+    this.helpersGroup.add(this.selectionBox);
+    const highlightMat = new THREE.MeshBasicMaterial({
+      color: 16755200,
+      transparent: true,
+      opacity: 0.4,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    this.highlightMesh = new THREE.Mesh(new THREE.BufferGeometry(), highlightMat);
+    this.highlightMesh.visible = false;
+    this.highlightMesh.renderOrder = 999;
+    this.helpersGroup.add(this.highlightMesh);
+    const markerGeo = new THREE.BufferGeometry();
+    markerGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
+    const markerMat = new THREE.PointsMaterial({
+      color: 16711680,
+      size: 8,
+      sizeAttenuation: false,
+      map: this.dotTexture,
+      transparent: true,
+      alphaTest: 0.5,
+      depthTest: false
+    });
+    this.tempMarker = new THREE.Points(markerGeo, markerMat);
+    this.tempMarker.visible = false;
+    this.tempMarker.renderOrder = 1e3;
+    this.helpersGroup.add(this.tempMarker);
+    this.setupClipping();
+    this.raycaster = new THREE.Raycaster();
+    this.raycaster.params.Points.threshold = 10;
+    if (!this.raycaster.params.Line) this.raycaster.params.Line = { threshold: 1 };
+    this.raycaster.params.Line.threshold = 2;
+    this.mouse = new THREE.Vector2();
+    this.logicTimer = window.setInterval(() => {
+      this.checkCullingAndLoad();
+    }, 300);
+    this.animate = this.animate.bind(this);
+    requestAnimationFrame(this.animate);
   }
-}
-const STORED_BLOCK = 0;
-const STATIC_TREES = 1;
-const DYN_TREES = 2;
-const MIN_MATCH$1 = 3;
-const MAX_MATCH$1 = 258;
-const LENGTH_CODES$1 = 29;
-const LITERALS$1 = 256;
-const L_CODES$1 = LITERALS$1 + 1 + LENGTH_CODES$1;
-const D_CODES$1 = 30;
-const BL_CODES$1 = 19;
-const HEAP_SIZE$1 = 2 * L_CODES$1 + 1;
-const MAX_BITS$1 = 15;
-const Buf_size = 16;
-const MAX_BL_BITS = 7;
-const END_BLOCK = 256;
-const REP_3_6 = 16;
-const REPZ_3_10 = 17;
-const REPZ_11_138 = 18;
-const extra_lbits = (
-  /* extra bits for each length code */
-  new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0])
-);
-const extra_dbits = (
-  /* extra bits for each distance code */
-  new Uint8Array([0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13])
-);
-const extra_blbits = (
-  /* extra bits for each bit length code */
-  new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 7])
-);
-const bl_order = new Uint8Array([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
-const DIST_CODE_LEN = 512;
-const static_ltree = new Array((L_CODES$1 + 2) * 2);
-zero$1(static_ltree);
-const static_dtree = new Array(D_CODES$1 * 2);
-zero$1(static_dtree);
-const _dist_code = new Array(DIST_CODE_LEN);
-zero$1(_dist_code);
-const _length_code = new Array(MAX_MATCH$1 - MIN_MATCH$1 + 1);
-zero$1(_length_code);
-const base_length = new Array(LENGTH_CODES$1);
-zero$1(base_length);
-const base_dist = new Array(D_CODES$1);
-zero$1(base_dist);
-function StaticTreeDesc(static_tree, extra_bits, extra_base, elems, max_length) {
-  this.static_tree = static_tree;
-  this.extra_bits = extra_bits;
-  this.extra_base = extra_base;
-  this.elems = elems;
-  this.max_length = max_length;
-  this.has_stree = static_tree && static_tree.length;
-}
-let static_l_desc;
-let static_d_desc;
-let static_bl_desc;
-function TreeDesc(dyn_tree, stat_desc) {
-  this.dyn_tree = dyn_tree;
-  this.max_code = 0;
-  this.stat_desc = stat_desc;
-}
-const d_code = (dist) => {
-  return dist < 256 ? _dist_code[dist] : _dist_code[256 + (dist >>> 7)];
-};
-const put_short = (s, w) => {
-  s.pending_buf[s.pending++] = w & 255;
-  s.pending_buf[s.pending++] = w >>> 8 & 255;
-};
-const send_bits = (s, value, length) => {
-  if (s.bi_valid > Buf_size - length) {
-    s.bi_buf |= value << s.bi_valid & 65535;
-    put_short(s, s.bi_buf);
-    s.bi_buf = value >> Buf_size - s.bi_valid;
-    s.bi_valid += length - Buf_size;
-  } else {
-    s.bi_buf |= value << s.bi_valid & 65535;
-    s.bi_valid += length;
+  updateSettings(newSettings) {
+    this.settings = { ...this.settings, ...newSettings };
+    this.ambientLight.intensity = this.settings.ambientInt;
+    this.dirLight.intensity = this.settings.dirInt;
+    this.renderer.setClearColor(this.settings.bgColor);
+    this.renderer.render(this.scene, this.camera);
   }
-};
-const send_code = (s, c, tree) => {
-  send_bits(
-    s,
-    tree[c * 2],
-    tree[c * 2 + 1]
-    /*.Len*/
-  );
-};
-const bi_reverse = (code, len) => {
-  let res = 0;
-  do {
-    res |= code & 1;
-    code >>>= 1;
-    res <<= 1;
-  } while (--len > 0);
-  return res >>> 1;
-};
-const bi_flush = (s) => {
-  if (s.bi_valid === 16) {
-    put_short(s, s.bi_buf);
-    s.bi_buf = 0;
-    s.bi_valid = 0;
-  } else if (s.bi_valid >= 8) {
-    s.pending_buf[s.pending++] = s.bi_buf & 255;
-    s.bi_buf >>= 8;
-    s.bi_valid -= 8;
-  }
-};
-const gen_bitlen = (s, desc) => {
-  const tree = desc.dyn_tree;
-  const max_code = desc.max_code;
-  const stree = desc.stat_desc.static_tree;
-  const has_stree = desc.stat_desc.has_stree;
-  const extra = desc.stat_desc.extra_bits;
-  const base = desc.stat_desc.extra_base;
-  const max_length = desc.stat_desc.max_length;
-  let h;
-  let n, m;
-  let bits;
-  let xbits;
-  let f;
-  let overflow = 0;
-  for (bits = 0; bits <= MAX_BITS$1; bits++) {
-    s.bl_count[bits] = 0;
-  }
-  tree[s.heap[s.heap_max] * 2 + 1] = 0;
-  for (h = s.heap_max + 1; h < HEAP_SIZE$1; h++) {
-    n = s.heap[h];
-    bits = tree[tree[n * 2 + 1] * 2 + 1] + 1;
-    if (bits > max_length) {
-      bits = max_length;
-      overflow++;
+  createCircleTexture() {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (context) {
+      context.beginPath();
+      context.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
+      context.fillStyle = "#ffffff";
+      context.fill();
     }
-    tree[n * 2 + 1] = bits;
-    if (n > max_code) {
-      continue;
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+  }
+  animate() {
+    requestAnimationFrame(this.animate);
+    if (this.controls) this.controls.update();
+    if (this.tilesRenderer) {
+      this.camera.updateMatrixWorld();
+      this.tilesRenderer.update();
     }
-    s.bl_count[bits]++;
-    xbits = 0;
-    if (n >= base) {
-      xbits = extra[n - base];
+    this.updateCameraClipping();
+    this.renderer.render(this.scene, this.camera);
+  }
+  updateCameraClipping() {
+    if (!this.sceneBounds || this.sceneBounds.isEmpty()) return;
+    const sphere = new THREE.Sphere();
+    this.sceneBounds.getBoundingSphere(sphere);
+    const dist = this.camera.position.distanceTo(sphere.center);
+    const range = sphere.radius * 20 + dist;
+    this.camera.near = -range;
+    this.camera.far = range;
+    this.camera.updateProjectionMatrix();
+  }
+  resize() {
+    if (!this.canvas) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    if (w === 0 || h === 0) return;
+    const aspect = w / h;
+    const cam = this.camera;
+    const frustumHeight = cam.top - cam.bottom;
+    const newWidth = frustumHeight * aspect;
+    cam.left = -newWidth / 2;
+    cam.right = newWidth / 2;
+    cam.updateProjectionMatrix();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(w, h, false);
+    this.renderer.render(this.scene, this.camera);
+  }
+  checkCullingAndLoad() {
+    if (!this.chunkLoadingEnabled) return;
+    if (this.chunks.length === 0) return;
+    const totalCount = this.chunks.length;
+    if (this.chunkTotalCount !== totalCount) {
+      this.chunkTotalCount = totalCount;
+      this.chunkLoadedCount = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
     }
-    f = tree[n * 2];
-    s.opt_len += f * (bits + xbits);
-    if (has_stree) {
-      s.static_len += f * (stree[n * 2 + 1] + xbits);
+    const loadedCount = this.chunkLoadedCount;
+    if (this.onChunkProgress && (loadedCount !== this.lastReportedProgress.loaded || totalCount !== this.lastReportedProgress.total)) {
+      this.lastReportedProgress = { loaded: loadedCount, total: totalCount };
+      this.onChunkProgress(loadedCount, totalCount);
+    }
+    if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
+    this.camera.updateMatrixWorld();
+    this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+    const padding = this.chunkPadding;
+    const cameraPos = this.camera.position;
+    const toLoad = [];
+    const isClippingActive = this.renderer.clippingPlanes.length > 0;
+    this.chunks.forEach((c) => {
+      if (!c.paddedBounds || c._padding !== padding) {
+        const size = c.bounds.getSize(new THREE.Vector3());
+        const pb = c.bounds.clone();
+        pb.expandByVector(size.multiplyScalar(padding));
+        c.paddedBounds = pb;
+        c._padding = padding;
+      }
+      if (!c.center) c.center = c.bounds.getCenter(new THREE.Vector3());
+      const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
+      const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
+      const shouldBeVisible = inFrustum && !isClipped;
+      if (c.loaded) {
+        if (c.mesh) {
+          c.mesh.visible = shouldBeVisible;
+        } else {
+          const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
+          const bm = optimizedGroup?.getObjectByName(c.id);
+          if (bm) {
+            c.mesh = bm;
+            bm.visible = shouldBeVisible;
+          }
+        }
+      } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
+        toLoad.push(c);
+      }
+    });
+    if (toLoad.length > 0) {
+      toLoad.sort((a, b) => {
+        return a.center.distanceToSquared(cameraPos) - b.center.distanceToSquared(cameraPos);
+      });
+      const available = this.maxConcurrentChunkLoads - this.processingChunks.size;
+      const count = Math.min(available, this.maxChunkLoadsPerFrame, toLoad.length);
+      for (let i = 0; i < count; i++) this.loadChunk(toLoad[i]);
     }
   }
-  if (overflow === 0) {
-    return;
-  }
-  do {
-    bits = max_length - 1;
-    while (s.bl_count[bits] === 0) {
-      bits--;
+  async loadChunk(chunk) {
+    this.processingChunks.add(chunk.id);
+    try {
+      let bm = null;
+      let loadedNow = false;
+      if (chunk.node) {
+        bm = createBatchedMeshFromItems(chunk.node.items, this.sharedMaterial);
+      } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
+        const file = this.nbimFiles.get(chunk.nbimFileId);
+        const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+        const meta = this.nbimMeta.get(chunk.nbimFileId);
+        const version = meta?.version ?? 7;
+        if (version >= 8) {
+          bm = this.parseChunkBinaryV8(buffer, this.sharedMaterial, chunk.originalUuid, meta?.bimIdTable || []);
+        } else {
+          bm = this.parseChunkBinaryV7(buffer, this.sharedMaterial, chunk.originalUuid);
+        }
+      }
+      if (bm) {
+        if (this.cancelledChunkIds.has(chunk.id) || !this.chunks.some((c) => c.id === chunk.id)) {
+          if (bm.geometry) bm.geometry.dispose();
+          if (bm.material) {
+            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+            materials.forEach((m) => m.dispose && m.dispose());
+          }
+          return;
+        }
+        bm.name = chunk.id;
+        bm.userData.chunkId = chunk.id;
+        if (chunk.nbimFileId) {
+          bm.position.sub(this.globalOffset);
+          bm.updateMatrixWorld(true);
+        }
+        let optimizedGroup = this.contentGroup.getObjectByName(chunk.groupName);
+        if (!optimizedGroup) {
+          optimizedGroup = new THREE.Group();
+          optimizedGroup.name = chunk.groupName;
+          optimizedGroup.userData.isOptimizedGroup = true;
+          optimizedGroup.userData.originalUuid = chunk.originalUuid;
+          this.contentGroup.add(optimizedGroup);
+        }
+        optimizedGroup.add(bm);
+        chunk.mesh = bm;
+        loadedNow = true;
+        const batchIdToUuid = bm.userData.batchIdToUuid;
+        const batchIdToColor = bm.userData.batchIdToColor;
+        const batchIdToGeometry = bm.userData.batchIdToGeometry;
+        if (batchIdToUuid) {
+          for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
+            if (!this.optimizedMapping.has(originalUuid)) {
+              this.optimizedMapping.set(originalUuid, []);
+            }
+            const originalColor = batchIdToColor?.get(batchId) ?? 16777215;
+            const geometry = batchIdToGeometry?.get(batchId);
+            this.optimizedMapping.get(originalUuid).push({
+              mesh: bm,
+              instanceId: batchId,
+              originalColor,
+              geometry
+            });
+          }
+        }
+      }
+      if (loadedNow && !chunk.loaded) {
+        chunk.loaded = true;
+        this.chunkLoadedCount++;
+        if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
+          this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
+          this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
+        }
+      }
+      this.cancelledChunkIds.delete(chunk.id);
+      const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
+      if (ghost) {
+        this.ghostGroup.remove(ghost);
+        if (ghost.geometry) ghost.geometry.dispose();
+      }
+    } catch (err) {
+      console.error(`加载分块 ${chunk.id} 失败:`, err);
+    } finally {
+      this.processingChunks.delete(chunk.id);
     }
-    s.bl_count[bits]--;
-    s.bl_count[bits + 1] += 2;
-    s.bl_count[max_length]--;
-    overflow -= 2;
-  } while (overflow > 0);
-  for (bits = max_length; bits !== 0; bits--) {
-    n = s.bl_count[bits];
-    while (n !== 0) {
-      m = s.heap[--h];
-      if (m > max_code) {
+  }
+  setChunkLoadingEnabled(enabled) {
+    this.chunkLoadingEnabled = enabled;
+    if (enabled) this.checkCullingAndLoad();
+  }
+  setContentVisible(visible) {
+    this.contentGroup.visible = visible;
+    this.ghostGroup.visible = visible;
+    this.renderer.render(this.scene, this.camera);
+  }
+  buildSceneGraph(object) {
+    const node = {
+      id: object.uuid,
+      name: object.name || `Object_${object.id}`,
+      type: object.isMesh ? "Mesh" : "Group",
+      children: [],
+      bimId: object.userData?.bimId ? String(object.userData.bimId) : object.userData?.expressID !== void 0 ? String(object.userData.expressID) : void 0,
+      userData: { ...object.userData }
+    };
+    if (!this.nodeMap.has(object.uuid)) this.nodeMap.set(object.uuid, []);
+    this.nodeMap.get(object.uuid).push(node);
+    for (const child of object.children) {
+      node.children.push(this.buildSceneGraph(child));
+    }
+    return node;
+  }
+  /**
+   * 构建基于 IFC 图层和空间结构的复合树
+   */
+  /**
+   * 构建基于 IFC 图层和空间结构的复合树
+   */
+  buildIFCStructure(object) {
+    const buildSpatialRecursive = (obj) => {
+      const node = {
+        id: obj.uuid,
+        name: obj.name || `Object_${obj.id}`,
+        type: obj.isMesh ? "Mesh" : "Group",
+        children: [],
+        bimId: obj.userData?.expressID !== void 0 ? String(obj.userData.expressID) : void 0,
+        userData: { ...obj.userData }
+      };
+      if (!this.nodeMap.has(obj.uuid)) this.nodeMap.set(obj.uuid, []);
+      this.nodeMap.get(obj.uuid).push(node);
+      for (const child of obj.children) {
+        node.children.push(buildSpatialRecursive(child));
+      }
+      return node;
+    };
+    const spatialRoot = buildSpatialRecursive(object);
+    const layerMap = object.userData.layerMap;
+    if (layerMap && layerMap.size > 0) {
+      const layerRoot = {
+        id: `layers_${object.uuid}`,
+        name: "图层结构 (Layers)",
+        type: "Group",
+        children: [],
+        userData: { originalUuid: object.uuid }
+      };
+      if (!this.nodeMap.has(layerRoot.id)) this.nodeMap.set(layerRoot.id, []);
+      this.nodeMap.get(layerRoot.id).push(layerRoot);
+      const layers = /* @__PURE__ */ new Map();
+      object.traverse((child) => {
+        if (child.isMesh && child.userData.expressID !== void 0) {
+          const expressID = child.userData.expressID;
+          const layerName = layerMap.get(expressID) || "未分类图层";
+          if (!layers.has(layerName)) {
+            const lNode = {
+              id: `layer_${layerName}_${object.uuid}`,
+              name: layerName,
+              type: "Group",
+              children: [],
+              userData: { originalUuid: object.uuid }
+            };
+            layers.set(layerName, lNode);
+            if (!this.nodeMap.has(lNode.id)) this.nodeMap.set(lNode.id, []);
+            this.nodeMap.get(lNode.id).push(lNode);
+          }
+          const layerNode = layers.get(layerName);
+          const node = {
+            id: child.uuid,
+            name: child.name,
+            type: "Mesh",
+            bimId: String(expressID),
+            userData: { ...child.userData }
+          };
+          layerNode.children.push(node);
+          if (!this.nodeMap.has(child.uuid)) this.nodeMap.set(child.uuid, []);
+          this.nodeMap.get(child.uuid).push(node);
+        }
+      });
+      layerRoot.children = Array.from(layers.values());
+      if (layerRoot.children.length > 0) {
+        const compositeRoot = {
+          id: `composite_${object.uuid}`,
+          name: object.name || "IFC Model",
+          type: "Group",
+          children: [spatialRoot, layerRoot],
+          userData: { originalUuid: object.uuid }
+        };
+        if (!this.nodeMap.has(compositeRoot.id)) this.nodeMap.set(compositeRoot.id, []);
+        this.nodeMap.get(compositeRoot.id).push(compositeRoot);
+        return compositeRoot;
+      }
+    }
+    return spatialRoot;
+  }
+  async addModel(object, onProgress) {
+    object.updateMatrixWorld(true);
+    const modelBox = new THREE.Box3().setFromObject(object);
+    if (!modelBox.isEmpty()) {
+      if (this.globalOffset.length() === 0) {
+        modelBox.getCenter(this.globalOffset);
+        console.log("初始化全局偏移以解决大坐标问题:", this.globalOffset);
+      }
+      object.position.sub(this.globalOffset);
+      object.updateMatrixWorld(true);
+    }
+    if (onProgress) onProgress(5, "正在构建场景树...");
+    let modelRoot;
+    if (object.userData.isIFC) {
+      modelRoot = this.buildIFCStructure(object);
+    } else {
+      modelRoot = this.buildSceneGraph(object);
+    }
+    const markOriginalUuid = (node) => {
+      if (!node.userData) node.userData = {};
+      node.userData.originalUuid = object.uuid;
+      if (node.children) node.children.forEach(markOriginalUuid);
+    };
+    markOriginalUuid(modelRoot);
+    const indexBimIds = (node) => {
+      if (node.bimId) {
+        const key = `${object.uuid}::${node.bimId}`;
+        if (!this.bimIdToNodeIds.has(key)) this.bimIdToNodeIds.set(key, []);
+        this.bimIdToNodeIds.get(key).push(node.id);
+      }
+      if (node.children) node.children.forEach(indexBimIds);
+    };
+    indexBimIds(modelRoot);
+    if (modelRoot.name === "Root" && modelRoot.children && modelRoot.children.length > 0) {
+      if (!this.structureRoot.children) this.structureRoot.children = [];
+      this.structureRoot.children.push(...modelRoot.children);
+    } else {
+      if (!this.structureRoot.children) this.structureRoot.children = [];
+      this.structureRoot.children.push(modelRoot);
+    }
+    modelBox.setFromObject(object);
+    if (!modelBox.isEmpty()) {
+      this.precomputedBounds.union(modelBox);
+      this.sceneBounds.copy(this.precomputedBounds);
+    }
+    const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    object.traverse((child) => {
+      if (child.isMesh) {
+        const mesh = child;
+        this.componentMap.set(mesh.uuid, mesh);
+        if (mesh.userData.expressID !== void 0) {
+          this.componentMap.set(mesh.userData.expressID, mesh);
+        }
+        if (!mesh.userData.bimId) {
+          if (mesh.userData.expressID !== void 0) mesh.userData.bimId = String(mesh.userData.expressID);
+          else mesh.userData.bimId = mesh.uuid;
+        }
+        if (mesh.material) {
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          materials.forEach((mat) => {
+            if (mat.map) mat.map.anisotropy = maxAnisotropy;
+          });
+        }
+      }
+    });
+    const fileGroup = new THREE.Group();
+    fileGroup.name = `file_${object.uuid}`;
+    fileGroup.userData.originalUuid = object.uuid;
+    object.userData.originalUuid = object.uuid;
+    fileGroup.add(object);
+    object.visible = false;
+    this.contentGroup.add(fileGroup);
+    if (onProgress) onProgress(10, "正在收集构件...");
+    const items = collectItems$1(object);
+    if (items.length > 0) {
+      if (onProgress) onProgress(20, `已收集 ${items.length} 个构件，正在计算八叉树...`);
+      const bounds = new THREE.Box3();
+      const tmpMin = new THREE.Vector3();
+      const tmpMax = new THREE.Vector3();
+      const tmpScale = new THREE.Vector3();
+      for (const item of items) {
+        const center = item.center;
+        let r = 0;
+        const geo = item.geometry;
+        if (!geo.boundingSphere) geo.computeBoundingSphere();
+        if (geo.boundingSphere) {
+          tmpScale.setFromMatrixScale(item.matrix);
+          const maxScale = Math.max(tmpScale.x, tmpScale.y, tmpScale.z);
+          r = geo.boundingSphere.radius * maxScale;
+        }
+        tmpMin.set(center.x - r, center.y - r, center.z - r);
+        tmpMax.set(center.x + r, center.y + r, center.z + r);
+        bounds.expandByPoint(tmpMin);
+        bounds.expandByPoint(tmpMax);
+      }
+      bounds.min.subScalar(0.1);
+      bounds.max.addScalar(0.1);
+      if (onProgress) onProgress(35, "正在计算八叉树...");
+      const maxItemsPerNode = 1500;
+      const maxDepth = 5;
+      const octree = buildOctree$1(items, bounds, { maxItemsPerNode, maxDepth });
+      const leafNodes = collectLeafNodes(octree);
+      const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+      const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+      const boxMat = new THREE.LineBasicMaterial({ color: 4674921, transparent: true, opacity: 0.3 });
+      leafNodes.forEach((node, index) => {
+        if (onProgress && leafNodes.length > 0) {
+          const step = Math.max(1, Math.floor(leafNodes.length / 20));
+          if (index % step === 0) onProgress(40 + Math.floor(index / leafNodes.length * 50), `正在生成分块... (${index + 1}/${leafNodes.length})`);
+        }
+        const chunkId = `${object.uuid}_chunk_${index}`;
+        const chunkBounds = node.bounds.clone();
+        node.items.forEach((item) => {
+          const treeNodes = this.nodeMap.get(item.uuid);
+          if (treeNodes) {
+            treeNodes.forEach((treeNode) => {
+              if (treeNode.bimId === void 0) {
+                treeNode.bimId = treeNode.id;
+              }
+              treeNode.chunkId = chunkId;
+            });
+          }
+        });
+        const paddedBounds = chunkBounds.clone();
+        const padSize = chunkBounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
+        paddedBounds.expandByVector(padSize);
+        this.chunks.push({
+          id: chunkId,
+          bounds: chunkBounds,
+          paddedBounds,
+          _padding: this.chunkPadding,
+          center: chunkBounds.getCenter(new THREE.Vector3()),
+          loaded: false,
+          node,
+          // 存储节点数据以便后续加载
+          groupName: `optimized_${object.uuid}`,
+          originalUuid: object.uuid
+        });
+        const size = new THREE.Vector3();
+        chunkBounds.getSize(size);
+        const center = new THREE.Vector3();
+        chunkBounds.getCenter(center);
+        const edges = new THREE.LineSegments(
+          edgesGeo,
+          boxMat
+        );
+        edges.name = `ghost_${chunkId}`;
+        edges.scale.copy(size);
+        edges.position.copy(center);
+        this.ghostGroup.add(edges);
+      });
+      this.chunkTotalCount = this.chunks.length;
+      if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
+        this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
+        this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
+      }
+      object.traverse((child) => {
+        if (child.isMesh) {
+          child.visible = false;
+          child.userData.isOptimized = true;
+        }
+      });
+      if (onProgress) onProgress(95, "分块准备完成");
+    }
+    this.sceneBounds = this.computeTotalBounds(false);
+    this.precomputedBounds = this.sceneBounds.clone();
+    if (this.globalOffset.length() > 0) {
+      this.precomputedBounds.translate(this.globalOffset);
+    }
+    this.updateSettings(this.settings);
+    if (onProgress) onProgress(100, "模型已加入加载队列");
+    this.checkCullingAndLoad();
+  }
+  removeObject(uuid) {
+    const nodes = this.nodeMap.get(uuid);
+    const originalUuid = nodes?.[0]?.userData?.originalUuid || uuid;
+    const optimizedGroupsToRemove = [];
+    this.contentGroup.traverse((child) => {
+      const isMatch = child.name === `optimized_${uuid}` || child.name === `file_${uuid}` || child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid || child.name.startsWith("optimized_") && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid) || child.name.startsWith("file_") && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid);
+      if (isMatch) {
+        optimizedGroupsToRemove.push(child);
+      }
+    });
+    optimizedGroupsToRemove.forEach((group) => {
+      group.traverse((child) => {
+        if (child.isBatchedMesh) {
+          const bm = child;
+          if (bm.geometry) bm.geometry.dispose();
+          if (bm.material) {
+            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+            materials.forEach((m) => m.dispose());
+          }
+        }
+      });
+      group.removeFromParent();
+    });
+    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+    const processRemoval = (o) => {
+      const id = o instanceof THREE.Object3D ? o.uuid : o.id;
+      const mappings = this.optimizedMapping.get(id);
+      if (mappings) {
+        mappings.forEach((m) => {
+          m.mesh.setVisibleAt(m.instanceId, false);
+        });
+        this.optimizedMapping.delete(id);
+      }
+      if (o instanceof THREE.Mesh) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          const materials = Array.isArray(o.material) ? o.material : [o.material];
+          materials.forEach((m) => m.dispose());
+        }
+      }
+      this.componentMap.delete(id);
+      if (o instanceof THREE.Object3D && o.userData.expressID !== void 0) {
+        this.componentMap.delete(o.userData.expressID);
+      }
+      const nodeInfos = this.nodeMap.get(id);
+      if (nodeInfos) {
+        nodeInfos.forEach((nodeInfo) => {
+          if (nodeInfo.bimId !== void 0) {
+            this.componentMap.delete(nodeInfo.bimId);
+          }
+        });
+      }
+      this.nodeMap.delete(id);
+    };
+    if (obj) {
+      obj.traverse(processRemoval);
+      obj.removeFromParent();
+    } else if (nodes && nodes.length > 0) {
+      const traverseNode = (n) => {
+        processRemoval(n);
+        if (n.children) n.children.forEach(traverseNode);
+      };
+      traverseNode(nodes[0]);
+    }
+    this.chunks = this.chunks.filter((c) => {
+      const isMatch = c.originalUuid === uuid || c.originalUuid === originalUuid || c.id.startsWith(uuid);
+      if (isMatch) {
+        this.cancelledChunkIds.add(c.id);
+        this.processingChunks.delete(c.id);
+        const ghost = this.ghostGroup.getObjectByName(`ghost_${c.id}`);
+        if (ghost) {
+          this.ghostGroup.remove(ghost);
+          if (ghost.geometry) ghost.geometry.dispose();
+        }
+        return false;
+      }
+      return true;
+    });
+    if (this.structureRoot) {
+      const filterNodes = (nodes2) => {
+        return nodes2.filter((n) => {
+          if (n.id === uuid) return false;
+          if (!this.nodeMap.has(n.id) && n.id !== "root") return false;
+          if (n.children) {
+            n.children = filterNodes(n.children);
+          }
+          return true;
+        });
+      };
+      if (this.structureRoot.id === uuid) {
+        this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
+      } else if (this.structureRoot.children) {
+        this.structureRoot.children = filterNodes(this.structureRoot.children);
+      }
+    }
+    this.precomputedBounds = this.computeTotalBounds();
+    if (this.precomputedBounds.isEmpty()) {
+      this.contentGroup.traverse((child) => {
+        if (child.isMesh && child.visible) {
+          const box = new THREE.Box3().setFromObject(child);
+          if (!box.isEmpty()) this.precomputedBounds.union(box);
+        }
+      });
+    }
+    this.updateSceneBounds();
+    if (this.onStructureUpdate) this.onStructureUpdate();
+    return true;
+  }
+  async removeModel(uuid) {
+    return this.removeObject(uuid);
+  }
+  addTileset(url, onProgress) {
+    if (this.tilesRenderer) {
+      this.tilesRenderer.dispose();
+      this.contentGroup.remove(this.tilesRenderer.group);
+    }
+    if (onProgress) onProgress(10, "正在初始化 TilesRenderer...");
+    const renderer = new TilesRenderer(url);
+    renderer.setCamera(this.camera);
+    renderer.setResolutionFromRenderer(this.camera, this.renderer);
+    renderer.errorTarget = 16;
+    renderer.lruCache.maxSize = 500 * 1024 * 1024;
+    renderer.group.name = "3D Tileset";
+    let loadedTiles = 0;
+    let hasError = false;
+    renderer.onLoadTileSet = () => {
+      if (onProgress) onProgress(50, "Tileset 结构已加载");
+    };
+    renderer.onLoadModel = () => {
+      loadedTiles++;
+      if (onProgress && !hasError) {
+        onProgress(Math.min(99, 50 + loadedTiles), `已加载瓦片: ${loadedTiles}`);
+      }
+    };
+    setTimeout(() => {
+      if (!renderer.tileset && !hasError) {
+        hasError = true;
+        if (onProgress) onProgress(0, "加载失败: 无法获取 Tileset 配置文件，请检查网络或路径。");
+      }
+    }, 1e4);
+    renderer.onLoadTile = (tile) => {
+      if (this.onTilesUpdate) this.onTilesUpdate();
+    };
+    renderer.onDisposeTile = (tile) => {
+      if (this.onTilesUpdate) this.onTilesUpdate();
+    };
+    this.contentGroup.add(renderer.group);
+    this.tilesRenderer = renderer;
+    renderer.group.position.copy(this.globalOffset.clone().negate());
+    renderer.group.name = "3D Tileset";
+    const buildTilesTree = (tile, depth = 0) => {
+      const node = {
+        id: tile.content?.uuid || THREE.MathUtils.generateUUID(),
+        name: tile.content?.name || `Tile_${tile.level}_${tile.x || 0}_${tile.y || 0}`,
+        type: "Group",
+        children: []
+      };
+      if (tile.children) {
+        node.children = tile.children.map((c) => buildTilesTree(c, depth + 1));
+      }
+      return node;
+    };
+    const tilesNode = {
+      id: renderer.group.uuid,
+      name: "3D Tileset",
+      type: "Group",
+      children: renderer.tileset ? [buildTilesTree(renderer.tileset.root)] : []
+    };
+    if (!this.structureRoot.children) this.structureRoot.children = [];
+    this.structureRoot.children.push(tilesNode);
+    this.nodeMap.set(tilesNode.id, [tilesNode]);
+    this.updateSceneBounds();
+    this.updateSettings(this.settings);
+    return renderer.group;
+  }
+  // --- 辅助功能 (对齐 refs) ---
+  getTypeIndex(type) {
+    const types = ["Generic", "Column", "Beam", "Slab", "Wall", "Window", "Door", "Pipe", "Duct"];
+    const idx = types.indexOf(type);
+    return idx === -1 ? 0 : idx;
+  }
+  guessType(name) {
+    const n = name.toLowerCase();
+    if (n.includes("col") || n.includes("柱")) return "Column";
+    if (n.includes("beam") || n.includes("梁")) return "Beam";
+    if (n.includes("slab") || n.includes("板")) return "Slab";
+    if (n.includes("wall") || n.includes("墙")) return "Wall";
+    if (n.includes("window") || n.includes("窗")) return "Window";
+    if (n.includes("door") || n.includes("门")) return "Door";
+    return "Generic";
+  }
+  extractColor(mesh) {
+    if (mesh.userData.color !== void 0) return mesh.userData.color;
+    const geo = mesh.geometry;
+    if (geo && geo.attributes.color) {
+      const colorAttr = geo.attributes.color;
+      if (colorAttr.count > 0) {
+        const r = colorAttr.getX(0);
+        const g = colorAttr.getY(0);
+        const b = colorAttr.getZ(0);
+        const color = new THREE.Color();
+        if (r > 1 || g > 1 || b > 1) color.setRGB(r / 255, g / 255, b / 255);
+        else color.setRGB(r, g, b);
+        return color.getHex();
+      }
+    }
+    const material = mesh.material;
+    if (Array.isArray(material)) {
+      for (const mat of material) {
+        if (mat.color) return mat.color.getHex();
+      }
+    } else if (material.color) {
+      return material.color.getHex();
+    }
+    return this.getColorByComponentType(mesh.name);
+  }
+  getColorByComponentType(name) {
+    const n = name.toLowerCase();
+    if (n.includes("col") || n.includes("柱")) return 12573694;
+    if (n.includes("beam") || n.includes("梁")) return 9684477;
+    if (n.includes("slab") || n.includes("板")) return 15067115;
+    if (n.includes("wall") || n.includes("墙")) return 15987958;
+    return 9741240;
+  }
+  // --- NBIM 导入/导出功能 ---
+  generateChunkBinaryV7(items) {
+    const uniqueGeos = [];
+    const geoMap = /* @__PURE__ */ new Map();
+    items.forEach((item) => {
+      if (item.geometry && !geoMap.has(item.geometry)) {
+        geoMap.set(item.geometry, uniqueGeos.length);
+        uniqueGeos.push(item.geometry);
+      }
+    });
+    let size = 4;
+    for (const geo of uniqueGeos) {
+      const vertCount = geo.attributes.position.count;
+      const index = geo.index;
+      const indexCount = index ? index.count : 0;
+      size += 4 + 4 + vertCount * 12 + vertCount * 12;
+      if (indexCount > 0) size += indexCount * 4;
+    }
+    size += 4;
+    size += items.length * (4 + 4 + 4 + 64 + 4);
+    const buffer = new ArrayBuffer(size);
+    const dv = new DataView(buffer);
+    let offset = 0;
+    dv.setUint32(offset, uniqueGeos.length, true);
+    offset += 4;
+    for (const geo of uniqueGeos) {
+      const pos = geo.getAttribute("position");
+      const norm = geo.getAttribute("normal");
+      const count = pos.count;
+      const index = geo.index;
+      const indexCount = index ? index.count : 0;
+      dv.setUint32(offset, count, true);
+      offset += 4;
+      dv.setUint32(offset, indexCount, true);
+      offset += 4;
+      for (let i = 0; i < count; i++) {
+        dv.setFloat32(offset, pos.getX(i), true);
+        offset += 4;
+        dv.setFloat32(offset, pos.getY(i), true);
+        offset += 4;
+        dv.setFloat32(offset, pos.getZ(i), true);
+        offset += 4;
+      }
+      for (let i = 0; i < count; i++) {
+        dv.setFloat32(offset, norm.getX(i), true);
+        offset += 4;
+        dv.setFloat32(offset, norm.getY(i), true);
+        offset += 4;
+        dv.setFloat32(offset, norm.getZ(i), true);
+        offset += 4;
+      }
+      if (index && indexCount > 0) {
+        for (let i = 0; i < indexCount; i++) {
+          dv.setUint32(offset, index.getX(i), true);
+          offset += 4;
+        }
+      }
+    }
+    dv.setUint32(offset, items.length, true);
+    offset += 4;
+    for (const item of items) {
+      const treeNodes = this.nodeMap.get(item.uuid);
+      const firstNode = treeNodes?.[0];
+      const idStr = item.bimId ?? firstNode?.bimId ?? "0";
+      const parsed = Number.parseInt(idStr, 10);
+      const id = Number.isFinite(parsed) ? parsed : 0;
+      const typeStr = this.guessType(firstNode?.name || "");
+      dv.setUint32(offset, id, true);
+      offset += 4;
+      const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
+      dv.setUint32(offset, typeIndex, true);
+      offset += 4;
+      dv.setUint32(offset, item.color, true);
+      offset += 4;
+      const elements = item.matrix.elements;
+      for (let k = 0; k < 16; k++) {
+        dv.setFloat32(offset, elements[k], true);
+        offset += 4;
+      }
+      const geoId = geoMap.get(item.geometry) || 0;
+      dv.setUint32(offset, geoId, true);
+      offset += 4;
+    }
+    return buffer;
+  }
+  generateChunkBinaryV8(items, bimIdToIndex) {
+    const uniqueGeos = [];
+    const geoMap = /* @__PURE__ */ new Map();
+    items.forEach((item) => {
+      if (item.geometry && !geoMap.has(item.geometry)) {
+        geoMap.set(item.geometry, uniqueGeos.length);
+        uniqueGeos.push(item.geometry);
+      }
+    });
+    let size = 4;
+    for (const geo of uniqueGeos) {
+      const vertCount = geo.attributes.position.count;
+      const index = geo.index;
+      const indexCount = index ? index.count : 0;
+      size += 4 + 4 + vertCount * 12 + vertCount * 12;
+      if (indexCount > 0) size += indexCount * 4;
+    }
+    size += 4;
+    size += items.length * (4 + 4 + 4 + 64 + 4);
+    const buffer = new ArrayBuffer(size);
+    const dv = new DataView(buffer);
+    let offset = 0;
+    dv.setUint32(offset, uniqueGeos.length, true);
+    offset += 4;
+    for (const geo of uniqueGeos) {
+      const pos = geo.getAttribute("position");
+      const norm = geo.getAttribute("normal");
+      const count = pos.count;
+      const index = geo.index;
+      const indexCount = index ? index.count : 0;
+      dv.setUint32(offset, count, true);
+      offset += 4;
+      dv.setUint32(offset, indexCount, true);
+      offset += 4;
+      for (let i = 0; i < count; i++) {
+        dv.setFloat32(offset, pos.getX(i), true);
+        offset += 4;
+        dv.setFloat32(offset, pos.getY(i), true);
+        offset += 4;
+        dv.setFloat32(offset, pos.getZ(i), true);
+        offset += 4;
+      }
+      for (let i = 0; i < count; i++) {
+        dv.setFloat32(offset, norm.getX(i), true);
+        offset += 4;
+        dv.setFloat32(offset, norm.getY(i), true);
+        offset += 4;
+        dv.setFloat32(offset, norm.getZ(i), true);
+        offset += 4;
+      }
+      if (index && indexCount > 0) {
+        for (let i = 0; i < indexCount; i++) {
+          dv.setUint32(offset, index.getX(i), true);
+          offset += 4;
+        }
+      }
+    }
+    dv.setUint32(offset, items.length, true);
+    offset += 4;
+    for (const item of items) {
+      const treeNodes = this.nodeMap.get(item.uuid);
+      const firstNode = treeNodes?.[0];
+      const bimId = item.bimId || firstNode?.bimId || firstNode?.id || item.uuid;
+      const bimIdIndex = bimIdToIndex.get(bimId) ?? 0;
+      const typeStr = this.guessType(firstNode?.name || "");
+      dv.setUint32(offset, bimIdIndex, true);
+      offset += 4;
+      const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
+      dv.setUint32(offset, typeIndex, true);
+      offset += 4;
+      dv.setUint32(offset, item.color, true);
+      offset += 4;
+      const elements = item.matrix.elements;
+      for (let k = 0; k < 16; k++) {
+        dv.setFloat32(offset, elements[k], true);
+        offset += 4;
+      }
+      const geoId = geoMap.get(item.geometry) || 0;
+      dv.setUint32(offset, geoId, true);
+      offset += 4;
+    }
+    return buffer;
+  }
+  parseChunkBinaryV7(buffer, material, originalUuid) {
+    const dv = new DataView(buffer);
+    let offset = 0;
+    const geoCount = dv.getUint32(offset, true);
+    offset += 4;
+    const geometries = [];
+    for (let i = 0; i < geoCount; i++) {
+      const vertCount = dv.getUint32(offset, true);
+      offset += 4;
+      const indexCount = dv.getUint32(offset, true);
+      offset += 4;
+      const posArr = new Float32Array(buffer, offset, vertCount * 3);
+      offset += vertCount * 12;
+      const normArr = new Float32Array(buffer, offset, vertCount * 3);
+      offset += vertCount * 12;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(posArr), 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normArr), 3));
+      if (indexCount > 0) {
+        const indexArr = new Uint32Array(buffer, offset, indexCount);
+        offset += indexCount * 4;
+        geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+      }
+      geometries.push(geo);
+    }
+    const instanceCount = dv.getUint32(offset, true);
+    offset += 4;
+    let totalVerts = 0;
+    let totalIndices = 0;
+    geometries.forEach((g) => {
+      totalVerts += g.attributes.position.count;
+      if (g.index) totalIndices += g.index.count;
+    });
+    const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
+    const geoIds = geometries.map((g) => bm.addGeometry(g));
+    const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    const batchIdToUuid = /* @__PURE__ */ new Map();
+    const batchIdToBimId = /* @__PURE__ */ new Map();
+    const batchIdToColor = /* @__PURE__ */ new Map();
+    const batchIdToGeometry = /* @__PURE__ */ new Map();
+    for (let i = 0; i < instanceCount; i++) {
+      const bimIdNum = dv.getUint32(offset, true);
+      offset += 4;
+      dv.getUint32(offset, true);
+      offset += 4;
+      const hex = dv.getUint32(offset, true);
+      offset += 4;
+      color.setHex(hex);
+      for (let k = 0; k < 16; k++) {
+        matrix.elements[k] = dv.getFloat32(offset, true);
+        offset += 4;
+      }
+      const geoIdx = dv.getUint32(offset, true);
+      offset += 4;
+      const instId = bm.addInstance(geoIds[geoIdx]);
+      bm.setMatrixAt(instId, matrix);
+      bm.setColorAt(instId, color);
+      const bimId = String(bimIdNum);
+      const key = `${originalUuid}::${bimId}`;
+      const nodeIds = this.bimIdToNodeIds.get(key);
+      batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+      batchIdToBimId.set(instId, bimId);
+      batchIdToColor.set(instId, hex);
+      batchIdToGeometry.set(instId, geometries[geoIdx]);
+    }
+    bm.userData.batchIdToUuid = batchIdToUuid;
+    bm.userData.batchIdToBimId = batchIdToBimId;
+    bm.userData.batchIdToColor = batchIdToColor;
+    bm.userData.batchIdToGeometry = batchIdToGeometry;
+    return bm;
+  }
+  parseChunkBinaryV8(buffer, material, originalUuid, bimIdTable) {
+    const dv = new DataView(buffer);
+    let offset = 0;
+    const geoCount = dv.getUint32(offset, true);
+    offset += 4;
+    const geometries = [];
+    for (let i = 0; i < geoCount; i++) {
+      const vertCount = dv.getUint32(offset, true);
+      offset += 4;
+      const indexCount = dv.getUint32(offset, true);
+      offset += 4;
+      const posArr = new Float32Array(buffer, offset, vertCount * 3);
+      offset += vertCount * 12;
+      const normArr = new Float32Array(buffer, offset, vertCount * 3);
+      offset += vertCount * 12;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(posArr), 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normArr), 3));
+      if (indexCount > 0) {
+        const indexArr = new Uint32Array(buffer, offset, indexCount);
+        offset += indexCount * 4;
+        geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+      }
+      geometries.push(geo);
+    }
+    const instanceCount = dv.getUint32(offset, true);
+    offset += 4;
+    let totalVerts = 0;
+    let totalIndices = 0;
+    geometries.forEach((g) => {
+      totalVerts += g.attributes.position.count;
+      if (g.index) totalIndices += g.index.count;
+    });
+    const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
+    const geoIds = geometries.map((g) => bm.addGeometry(g));
+    const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    const batchIdToUuid = /* @__PURE__ */ new Map();
+    const batchIdToBimId = /* @__PURE__ */ new Map();
+    const batchIdToColor = /* @__PURE__ */ new Map();
+    const batchIdToGeometry = /* @__PURE__ */ new Map();
+    for (let i = 0; i < instanceCount; i++) {
+      const bimIdIndex = dv.getUint32(offset, true);
+      offset += 4;
+      dv.getUint32(offset, true);
+      offset += 4;
+      const hex = dv.getUint32(offset, true);
+      offset += 4;
+      color.setHex(hex);
+      for (let k = 0; k < 16; k++) {
+        matrix.elements[k] = dv.getFloat32(offset, true);
+        offset += 4;
+      }
+      const geoIdx = dv.getUint32(offset, true);
+      offset += 4;
+      const instId = bm.addInstance(geoIds[geoIdx]);
+      bm.setMatrixAt(instId, matrix);
+      bm.setColorAt(instId, color);
+      const bimId = bimIdTable[bimIdIndex] ?? String(bimIdIndex);
+      const key = `${originalUuid}::${bimId}`;
+      const nodeIds = this.bimIdToNodeIds.get(key);
+      batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+      batchIdToBimId.set(instId, bimId);
+      batchIdToColor.set(instId, hex);
+      batchIdToGeometry.set(instId, geometries[geoIdx]);
+    }
+    bm.userData.batchIdToUuid = batchIdToUuid;
+    bm.userData.batchIdToBimId = batchIdToBimId;
+    bm.userData.batchIdToColor = batchIdToColor;
+    bm.userData.batchIdToGeometry = batchIdToGeometry;
+    return bm;
+  }
+  async exportNbim() {
+    if (this.chunks.length === 0) throw new Error("无模型数据可导出");
+    const bimIdTable = [""];
+    const bimIdToIndex = /* @__PURE__ */ new Map();
+    const addBimId = (bimId) => {
+      if (!bimId) return;
+      if (bimIdToIndex.has(bimId)) return;
+      const idx = bimIdTable.length;
+      bimIdTable.push(bimId);
+      bimIdToIndex.set(bimId, idx);
+    };
+    const traverseBimIds = (node) => {
+      addBimId(node.bimId);
+      if (node.children) node.children.forEach(traverseBimIds);
+    };
+    traverseBimIds(this.structureRoot);
+    const ifcApiByModel = /* @__PURE__ */ new Map();
+    this.contentGroup.traverse((obj) => {
+      if (obj.userData?.ifcAPI && obj.userData?.modelID !== void 0 && obj.userData?.originalUuid) {
+        ifcApiByModel.set(String(obj.userData.originalUuid), { ifcApi: obj.userData.ifcAPI, modelID: obj.userData.modelID });
+      }
+    });
+    const bimProperties = {};
+    const fillBimProperties = (node) => {
+      const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
+      if (node.bimId) {
+        const key = `${originalUuid}::${node.bimId}`;
+        if (!bimProperties[key]) {
+          bimProperties[key] = { uuid: node.id, name: node.name };
+          const expressID = node.userData?.expressID;
+          if (expressID !== void 0 && ifcApiByModel.has(originalUuid)) {
+            try {
+              const { ifcApi, modelID } = ifcApiByModel.get(originalUuid);
+              const entity = ifcApi.GetLine(modelID, Number(expressID));
+              if (entity) {
+                bimProperties[key].ifcType = entity.is_a || "";
+                bimProperties[key].globalId = entity.GlobalId?.value || "";
+                bimProperties[key].ifcName = entity.Name?.value || "";
+              }
+            } catch {
+            }
+          }
+        }
+      }
+      if (node.children) node.children.forEach(fillBimProperties);
+    };
+    fillBimProperties(this.structureRoot);
+    const chunkBlobs = [];
+    const exportChunks = this.chunks.map((c) => ({
+      id: c.id,
+      bounds: {
+        min: { x: c.bounds.min.x, y: c.bounds.min.y, z: c.bounds.min.z },
+        max: { x: c.bounds.max.x, y: c.bounds.max.y, z: c.bounds.max.z }
+      },
+      byteOffset: 0,
+      byteLength: 0
+    }));
+    let currentOffset = 1024;
+    const decodeV7 = (buffer) => {
+      const dv2 = new DataView(buffer);
+      let offset = 0;
+      const geoCount = dv2.getUint32(offset, true);
+      offset += 4;
+      const geometries = [];
+      for (let i = 0; i < geoCount; i++) {
+        const vertCount = dv2.getUint32(offset, true);
+        offset += 4;
+        const indexCount = dv2.getUint32(offset, true);
+        offset += 4;
+        const posArr = new Float32Array(buffer, offset, vertCount * 3);
+        offset += vertCount * 12;
+        const normArr = new Float32Array(buffer, offset, vertCount * 3);
+        offset += vertCount * 12;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(posArr), 3));
+        geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normArr), 3));
+        if (indexCount > 0) {
+          const indexArr = new Uint32Array(buffer, offset, indexCount);
+          offset += indexCount * 4;
+          geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+        }
+        geometries.push(geo);
+      }
+      const instanceCount = dv2.getUint32(offset, true);
+      offset += 4;
+      const matrix = new THREE.Matrix4();
+      const instances = [];
+      for (let i = 0; i < instanceCount; i++) {
+        const bimIdNum = dv2.getUint32(offset, true);
+        offset += 4;
+        const typeIndex = dv2.getUint32(offset, true);
+        offset += 4;
+        const color = dv2.getUint32(offset, true);
+        offset += 4;
+        for (let k = 0; k < 16; k++) {
+          matrix.elements[k] = dv2.getFloat32(offset, true);
+          offset += 4;
+        }
+        const geoIdx = dv2.getUint32(offset, true);
+        offset += 4;
+        instances.push({ bimId: String(bimIdNum), typeIndex, color, matrix: matrix.clone(), geometry: geometries[geoIdx] });
+      }
+      return instances;
+    };
+    const decodeV8 = (buffer, table) => {
+      const dv2 = new DataView(buffer);
+      let offset = 0;
+      const geoCount = dv2.getUint32(offset, true);
+      offset += 4;
+      const geometries = [];
+      for (let i = 0; i < geoCount; i++) {
+        const vertCount = dv2.getUint32(offset, true);
+        offset += 4;
+        const indexCount = dv2.getUint32(offset, true);
+        offset += 4;
+        const posArr = new Float32Array(buffer, offset, vertCount * 3);
+        offset += vertCount * 12;
+        const normArr = new Float32Array(buffer, offset, vertCount * 3);
+        offset += vertCount * 12;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(posArr), 3));
+        geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normArr), 3));
+        if (indexCount > 0) {
+          const indexArr = new Uint32Array(buffer, offset, indexCount);
+          offset += indexCount * 4;
+          geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
+        }
+        geometries.push(geo);
+      }
+      const instanceCount = dv2.getUint32(offset, true);
+      offset += 4;
+      const matrix = new THREE.Matrix4();
+      const instances = [];
+      for (let i = 0; i < instanceCount; i++) {
+        const bimIdIndex = dv2.getUint32(offset, true);
+        offset += 4;
+        const typeIndex = dv2.getUint32(offset, true);
+        offset += 4;
+        const color = dv2.getUint32(offset, true);
+        offset += 4;
+        for (let k = 0; k < 16; k++) {
+          matrix.elements[k] = dv2.getFloat32(offset, true);
+          offset += 4;
+        }
+        const geoIdx = dv2.getUint32(offset, true);
+        offset += 4;
+        instances.push({ bimId: table[bimIdIndex] ?? String(bimIdIndex), typeIndex, color, matrix: matrix.clone(), geometry: geometries[geoIdx] });
+      }
+      return instances;
+    };
+    for (let i = 0; i < this.chunks.length; i++) {
+      const chunk = this.chunks[i];
+      const exportChunk = exportChunks[i];
+      let buffer;
+      if (chunk.node) {
+        buffer = this.generateChunkBinaryV8(chunk.node.items, bimIdToIndex);
+      } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
+        const file = this.nbimFiles.get(chunk.nbimFileId);
+        const raw = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+        const meta = this.nbimMeta.get(chunk.nbimFileId);
+        const version = meta?.version ?? 7;
+        const instances = version >= 8 ? decodeV8(raw, meta?.bimIdTable || []) : decodeV7(raw);
+        const items = instances.map((inst) => ({ uuid: "", bimId: inst.bimId, typeIndex: inst.typeIndex, color: inst.color, matrix: inst.matrix, geometry: inst.geometry }));
+        buffer = this.generateChunkBinaryV8(items, bimIdToIndex);
+      } else {
         continue;
       }
-      if (tree[m * 2 + 1] !== bits) {
-        s.opt_len += (bits - tree[m * 2 + 1]) * tree[m * 2];
-        tree[m * 2 + 1] = bits;
-      }
-      n--;
+      const uint8 = new Uint8Array(buffer);
+      chunkBlobs.push(uint8);
+      exportChunk.byteOffset = currentOffset;
+      exportChunk.byteLength = uint8.byteLength;
+      currentOffset += uint8.byteLength;
     }
-  }
-};
-const gen_codes = (tree, max_code, bl_count) => {
-  const next_code = new Array(MAX_BITS$1 + 1);
-  let code = 0;
-  let bits;
-  let n;
-  for (bits = 1; bits <= MAX_BITS$1; bits++) {
-    code = code + bl_count[bits - 1] << 1;
-    next_code[bits] = code;
-  }
-  for (n = 0; n <= max_code; n++) {
-    let len = tree[n * 2 + 1];
-    if (len === 0) {
-      continue;
-    }
-    tree[n * 2] = bi_reverse(next_code[len]++, len);
-  }
-};
-const tr_static_init = () => {
-  let n;
-  let bits;
-  let length;
-  let code;
-  let dist;
-  const bl_count = new Array(MAX_BITS$1 + 1);
-  length = 0;
-  for (code = 0; code < LENGTH_CODES$1 - 1; code++) {
-    base_length[code] = length;
-    for (n = 0; n < 1 << extra_lbits[code]; n++) {
-      _length_code[length++] = code;
-    }
-  }
-  _length_code[length - 1] = code;
-  dist = 0;
-  for (code = 0; code < 16; code++) {
-    base_dist[code] = dist;
-    for (n = 0; n < 1 << extra_dbits[code]; n++) {
-      _dist_code[dist++] = code;
-    }
-  }
-  dist >>= 7;
-  for (; code < D_CODES$1; code++) {
-    base_dist[code] = dist << 7;
-    for (n = 0; n < 1 << extra_dbits[code] - 7; n++) {
-      _dist_code[256 + dist++] = code;
-    }
-  }
-  for (bits = 0; bits <= MAX_BITS$1; bits++) {
-    bl_count[bits] = 0;
-  }
-  n = 0;
-  while (n <= 143) {
-    static_ltree[n * 2 + 1] = 8;
-    n++;
-    bl_count[8]++;
-  }
-  while (n <= 255) {
-    static_ltree[n * 2 + 1] = 9;
-    n++;
-    bl_count[9]++;
-  }
-  while (n <= 279) {
-    static_ltree[n * 2 + 1] = 7;
-    n++;
-    bl_count[7]++;
-  }
-  while (n <= 287) {
-    static_ltree[n * 2 + 1] = 8;
-    n++;
-    bl_count[8]++;
-  }
-  gen_codes(static_ltree, L_CODES$1 + 1, bl_count);
-  for (n = 0; n < D_CODES$1; n++) {
-    static_dtree[n * 2 + 1] = 5;
-    static_dtree[n * 2] = bi_reverse(n, 5);
-  }
-  static_l_desc = new StaticTreeDesc(static_ltree, extra_lbits, LITERALS$1 + 1, L_CODES$1, MAX_BITS$1);
-  static_d_desc = new StaticTreeDesc(static_dtree, extra_dbits, 0, D_CODES$1, MAX_BITS$1);
-  static_bl_desc = new StaticTreeDesc(new Array(0), extra_blbits, 0, BL_CODES$1, MAX_BL_BITS);
-};
-const init_block = (s) => {
-  let n;
-  for (n = 0; n < L_CODES$1; n++) {
-    s.dyn_ltree[n * 2] = 0;
-  }
-  for (n = 0; n < D_CODES$1; n++) {
-    s.dyn_dtree[n * 2] = 0;
-  }
-  for (n = 0; n < BL_CODES$1; n++) {
-    s.bl_tree[n * 2] = 0;
-  }
-  s.dyn_ltree[END_BLOCK * 2] = 1;
-  s.opt_len = s.static_len = 0;
-  s.sym_next = s.matches = 0;
-};
-const bi_windup = (s) => {
-  if (s.bi_valid > 8) {
-    put_short(s, s.bi_buf);
-  } else if (s.bi_valid > 0) {
-    s.pending_buf[s.pending++] = s.bi_buf;
-  }
-  s.bi_buf = 0;
-  s.bi_valid = 0;
-};
-const smaller = (tree, n, m, depth) => {
-  const _n2 = n * 2;
-  const _m2 = m * 2;
-  return tree[_n2] < tree[_m2] || tree[_n2] === tree[_m2] && depth[n] <= depth[m];
-};
-const pqdownheap = (s, tree, k) => {
-  const v = s.heap[k];
-  let j = k << 1;
-  while (j <= s.heap_len) {
-    if (j < s.heap_len && smaller(tree, s.heap[j + 1], s.heap[j], s.depth)) {
-      j++;
-    }
-    if (smaller(tree, v, s.heap[j], s.depth)) {
-      break;
-    }
-    s.heap[k] = s.heap[j];
-    k = j;
-    j <<= 1;
-  }
-  s.heap[k] = v;
-};
-const compress_block = (s, ltree, dtree) => {
-  let dist;
-  let lc;
-  let sx = 0;
-  let code;
-  let extra;
-  if (s.sym_next !== 0) {
-    do {
-      dist = s.pending_buf[s.sym_buf + sx++] & 255;
-      dist += (s.pending_buf[s.sym_buf + sx++] & 255) << 8;
-      lc = s.pending_buf[s.sym_buf + sx++];
-      if (dist === 0) {
-        send_code(s, lc, ltree);
-      } else {
-        code = _length_code[lc];
-        send_code(s, code + LITERALS$1 + 1, ltree);
-        extra = extra_lbits[code];
-        if (extra !== 0) {
-          lc -= base_length[code];
-          send_bits(s, lc, extra);
+    const manifest = {
+      globalBounds: {
+        min: { x: this.sceneBounds.min.x, y: this.sceneBounds.min.y, z: this.sceneBounds.min.z },
+        max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
+      },
+      chunks: exportChunks,
+      structureTree: (() => {
+        const sanitizeUserData = (ud) => {
+          if (!ud || typeof ud !== "object") return void 0;
+          const out = {};
+          if (ud.originalUuid !== void 0) out.originalUuid = String(ud.originalUuid);
+          if (ud.expressID !== void 0) out.expressID = ud.expressID;
+          if (ud.modelID !== void 0) out.modelID = ud.modelID;
+          return Object.keys(out).length > 0 ? out : void 0;
+        };
+        const srcRoot = this.structureRoot;
+        const rootCopy = {
+          id: srcRoot?.id,
+          name: srcRoot?.name,
+          type: srcRoot?.type,
+          visible: srcRoot?.visible !== false,
+          children: []
+        };
+        if (srcRoot?.bimId !== void 0) rootCopy.bimId = srcRoot.bimId;
+        if (srcRoot?.chunkId !== void 0) rootCopy.chunkId = srcRoot.chunkId;
+        const rootUd = sanitizeUserData(srcRoot?.userData);
+        if (rootUd) rootCopy.userData = rootUd;
+        const stack = [{ src: srcRoot, dst: rootCopy }];
+        while (stack.length > 0) {
+          const { src, dst } = stack.pop();
+          const children = Array.isArray(src?.children) ? src.children : [];
+          for (const child of children) {
+            const childCopy = {
+              id: child?.id,
+              name: child?.name,
+              type: child?.type,
+              visible: child?.visible !== false,
+              children: []
+            };
+            if (child?.bimId !== void 0) childCopy.bimId = child.bimId;
+            if (child?.chunkId !== void 0) childCopy.chunkId = child.chunkId;
+            const ud = sanitizeUserData(child?.userData);
+            if (ud) childCopy.userData = ud;
+            dst.children.push(childCopy);
+            stack.push({ src: child, dst: childCopy });
+          }
         }
-        dist--;
-        code = d_code(dist);
-        send_code(s, code, dtree);
-        extra = extra_dbits[code];
-        if (extra !== 0) {
-          dist -= base_dist[code];
-          send_bits(s, dist, extra);
-        }
-      }
-    } while (sx < s.sym_next);
-  }
-  send_code(s, END_BLOCK, ltree);
-};
-const build_tree = (s, desc) => {
-  const tree = desc.dyn_tree;
-  const stree = desc.stat_desc.static_tree;
-  const has_stree = desc.stat_desc.has_stree;
-  const elems = desc.stat_desc.elems;
-  let n, m;
-  let max_code = -1;
-  let node;
-  s.heap_len = 0;
-  s.heap_max = HEAP_SIZE$1;
-  for (n = 0; n < elems; n++) {
-    if (tree[n * 2] !== 0) {
-      s.heap[++s.heap_len] = max_code = n;
-      s.depth[n] = 0;
-    } else {
-      tree[n * 2 + 1] = 0;
+        return rootCopy;
+      })(),
+      bimIdTable,
+      bimProperties
+    };
+    let manifestStr;
+    try {
+      manifestStr = JSON.stringify(manifest);
+    } catch (e) {
+      const minimalManifest = {
+        globalBounds: manifest.globalBounds,
+        chunks: manifest.chunks,
+        structureTree: { id: this.structureRoot.id, name: this.structureRoot.name, type: this.structureRoot.type, children: this.structureRoot.children ? [] : [] },
+        bimIdTable: manifest.bimIdTable,
+        bimProperties: {}
+      };
+      manifestStr = JSON.stringify(minimalManifest);
     }
-  }
-  while (s.heap_len < 2) {
-    node = s.heap[++s.heap_len] = max_code < 2 ? ++max_code : 0;
-    tree[node * 2] = 1;
-    s.depth[node] = 0;
-    s.opt_len--;
-    if (has_stree) {
-      s.static_len -= stree[node * 2 + 1];
-    }
-  }
-  desc.max_code = max_code;
-  for (n = s.heap_len >> 1; n >= 1; n--) {
-    pqdownheap(s, tree, n);
-  }
-  node = elems;
-  do {
-    n = s.heap[
-      1
-      /*SMALLEST*/
-    ];
-    s.heap[
-      1
-      /*SMALLEST*/
-    ] = s.heap[s.heap_len--];
-    pqdownheap(
-      s,
-      tree,
-      1
-      /*SMALLEST*/
-    );
-    m = s.heap[
-      1
-      /*SMALLEST*/
-    ];
-    s.heap[--s.heap_max] = n;
-    s.heap[--s.heap_max] = m;
-    tree[node * 2] = tree[n * 2] + tree[m * 2];
-    s.depth[node] = (s.depth[n] >= s.depth[m] ? s.depth[n] : s.depth[m]) + 1;
-    tree[n * 2 + 1] = tree[m * 2 + 1] = node;
-    s.heap[
-      1
-      /*SMALLEST*/
-    ] = node++;
-    pqdownheap(
-      s,
-      tree,
-      1
-      /*SMALLEST*/
-    );
-  } while (s.heap_len >= 2);
-  s.heap[--s.heap_max] = s.heap[
-    1
-    /*SMALLEST*/
-  ];
-  gen_bitlen(s, desc);
-  gen_codes(tree, max_code, s.bl_count);
-};
-const scan_tree = (s, tree, max_code) => {
-  let n;
-  let prevlen = -1;
-  let curlen;
-  let nextlen = tree[0 * 2 + 1];
-  let count = 0;
-  let max_count = 7;
-  let min_count = 4;
-  if (nextlen === 0) {
-    max_count = 138;
-    min_count = 3;
-  }
-  tree[(max_code + 1) * 2 + 1] = 65535;
-  for (n = 0; n <= max_code; n++) {
-    curlen = nextlen;
-    nextlen = tree[(n + 1) * 2 + 1];
-    if (++count < max_count && curlen === nextlen) {
-      continue;
-    } else if (count < min_count) {
-      s.bl_tree[curlen * 2] += count;
-    } else if (curlen !== 0) {
-      if (curlen !== prevlen) {
-        s.bl_tree[curlen * 2]++;
-      }
-      s.bl_tree[REP_3_6 * 2]++;
-    } else if (count <= 10) {
-      s.bl_tree[REPZ_3_10 * 2]++;
-    } else {
-      s.bl_tree[REPZ_11_138 * 2]++;
-    }
-    count = 0;
-    prevlen = curlen;
-    if (nextlen === 0) {
-      max_count = 138;
-      min_count = 3;
-    } else if (curlen === nextlen) {
-      max_count = 6;
-      min_count = 3;
-    } else {
-      max_count = 7;
-      min_count = 4;
-    }
-  }
-};
-const send_tree = (s, tree, max_code) => {
-  let n;
-  let prevlen = -1;
-  let curlen;
-  let nextlen = tree[0 * 2 + 1];
-  let count = 0;
-  let max_count = 7;
-  let min_count = 4;
-  if (nextlen === 0) {
-    max_count = 138;
-    min_count = 3;
-  }
-  for (n = 0; n <= max_code; n++) {
-    curlen = nextlen;
-    nextlen = tree[(n + 1) * 2 + 1];
-    if (++count < max_count && curlen === nextlen) {
-      continue;
-    } else if (count < min_count) {
-      do {
-        send_code(s, curlen, s.bl_tree);
-      } while (--count !== 0);
-    } else if (curlen !== 0) {
-      if (curlen !== prevlen) {
-        send_code(s, curlen, s.bl_tree);
-        count--;
-      }
-      send_code(s, REP_3_6, s.bl_tree);
-      send_bits(s, count - 3, 2);
-    } else if (count <= 10) {
-      send_code(s, REPZ_3_10, s.bl_tree);
-      send_bits(s, count - 3, 3);
-    } else {
-      send_code(s, REPZ_11_138, s.bl_tree);
-      send_bits(s, count - 11, 7);
-    }
-    count = 0;
-    prevlen = curlen;
-    if (nextlen === 0) {
-      max_count = 138;
-      min_count = 3;
-    } else if (curlen === nextlen) {
-      max_count = 6;
-      min_count = 3;
-    } else {
-      max_count = 7;
-      min_count = 4;
-    }
-  }
-};
-const build_bl_tree = (s) => {
-  let max_blindex;
-  scan_tree(s, s.dyn_ltree, s.l_desc.max_code);
-  scan_tree(s, s.dyn_dtree, s.d_desc.max_code);
-  build_tree(s, s.bl_desc);
-  for (max_blindex = BL_CODES$1 - 1; max_blindex >= 3; max_blindex--) {
-    if (s.bl_tree[bl_order[max_blindex] * 2 + 1] !== 0) {
-      break;
-    }
-  }
-  s.opt_len += 3 * (max_blindex + 1) + 5 + 5 + 4;
-  return max_blindex;
-};
-const send_all_trees = (s, lcodes, dcodes, blcodes) => {
-  let rank2;
-  send_bits(s, lcodes - 257, 5);
-  send_bits(s, dcodes - 1, 5);
-  send_bits(s, blcodes - 4, 4);
-  for (rank2 = 0; rank2 < blcodes; rank2++) {
-    send_bits(s, s.bl_tree[bl_order[rank2] * 2 + 1], 3);
-  }
-  send_tree(s, s.dyn_ltree, lcodes - 1);
-  send_tree(s, s.dyn_dtree, dcodes - 1);
-};
-const detect_data_type = (s) => {
-  let block_mask = 4093624447;
-  let n;
-  for (n = 0; n <= 31; n++, block_mask >>>= 1) {
-    if (block_mask & 1 && s.dyn_ltree[n * 2] !== 0) {
-      return Z_BINARY;
-    }
-  }
-  if (s.dyn_ltree[9 * 2] !== 0 || s.dyn_ltree[10 * 2] !== 0 || s.dyn_ltree[13 * 2] !== 0) {
-    return Z_TEXT;
-  }
-  for (n = 32; n < LITERALS$1; n++) {
-    if (s.dyn_ltree[n * 2] !== 0) {
-      return Z_TEXT;
-    }
-  }
-  return Z_BINARY;
-};
-let static_init_done = false;
-const _tr_init$1 = (s) => {
-  if (!static_init_done) {
-    tr_static_init();
-    static_init_done = true;
-  }
-  s.l_desc = new TreeDesc(s.dyn_ltree, static_l_desc);
-  s.d_desc = new TreeDesc(s.dyn_dtree, static_d_desc);
-  s.bl_desc = new TreeDesc(s.bl_tree, static_bl_desc);
-  s.bi_buf = 0;
-  s.bi_valid = 0;
-  init_block(s);
-};
-const _tr_stored_block$1 = (s, buf, stored_len, last) => {
-  send_bits(s, (STORED_BLOCK << 1) + (last ? 1 : 0), 3);
-  bi_windup(s);
-  put_short(s, stored_len);
-  put_short(s, ~stored_len);
-  if (stored_len) {
-    s.pending_buf.set(s.window.subarray(buf, buf + stored_len), s.pending);
-  }
-  s.pending += stored_len;
-};
-const _tr_align$1 = (s) => {
-  send_bits(s, STATIC_TREES << 1, 3);
-  send_code(s, END_BLOCK, static_ltree);
-  bi_flush(s);
-};
-const _tr_flush_block$1 = (s, buf, stored_len, last) => {
-  let opt_lenb, static_lenb;
-  let max_blindex = 0;
-  if (s.level > 0) {
-    if (s.strm.data_type === Z_UNKNOWN$1) {
-      s.strm.data_type = detect_data_type(s);
-    }
-    build_tree(s, s.l_desc);
-    build_tree(s, s.d_desc);
-    max_blindex = build_bl_tree(s);
-    opt_lenb = s.opt_len + 3 + 7 >>> 3;
-    static_lenb = s.static_len + 3 + 7 >>> 3;
-    if (static_lenb <= opt_lenb) {
-      opt_lenb = static_lenb;
-    }
-  } else {
-    opt_lenb = static_lenb = stored_len + 5;
-  }
-  if (stored_len + 4 <= opt_lenb && buf !== -1) {
-    _tr_stored_block$1(s, buf, stored_len, last);
-  } else if (s.strategy === Z_FIXED$1 || static_lenb === opt_lenb) {
-    send_bits(s, (STATIC_TREES << 1) + (last ? 1 : 0), 3);
-    compress_block(s, static_ltree, static_dtree);
-  } else {
-    send_bits(s, (DYN_TREES << 1) + (last ? 1 : 0), 3);
-    send_all_trees(s, s.l_desc.max_code + 1, s.d_desc.max_code + 1, max_blindex + 1);
-    compress_block(s, s.dyn_ltree, s.dyn_dtree);
-  }
-  init_block(s);
-  if (last) {
-    bi_windup(s);
-  }
-};
-const _tr_tally$1 = (s, dist, lc) => {
-  s.pending_buf[s.sym_buf + s.sym_next++] = dist;
-  s.pending_buf[s.sym_buf + s.sym_next++] = dist >> 8;
-  s.pending_buf[s.sym_buf + s.sym_next++] = lc;
-  if (dist === 0) {
-    s.dyn_ltree[lc * 2]++;
-  } else {
-    s.matches++;
-    dist--;
-    s.dyn_ltree[(_length_code[lc] + LITERALS$1 + 1) * 2]++;
-    s.dyn_dtree[d_code(dist) * 2]++;
-  }
-  return s.sym_next === s.sym_end;
-};
-var _tr_init_1 = _tr_init$1;
-var _tr_stored_block_1 = _tr_stored_block$1;
-var _tr_flush_block_1 = _tr_flush_block$1;
-var _tr_tally_1 = _tr_tally$1;
-var _tr_align_1 = _tr_align$1;
-var trees = {
-  _tr_init: _tr_init_1,
-  _tr_stored_block: _tr_stored_block_1,
-  _tr_flush_block: _tr_flush_block_1,
-  _tr_tally: _tr_tally_1,
-  _tr_align: _tr_align_1
-};
-const adler32 = (adler, buf, len, pos) => {
-  let s1 = adler & 65535 | 0, s2 = adler >>> 16 & 65535 | 0, n = 0;
-  while (len !== 0) {
-    n = len > 2e3 ? 2e3 : len;
-    len -= n;
-    do {
-      s1 = s1 + buf[pos++] | 0;
-      s2 = s2 + s1 | 0;
-    } while (--n);
-    s1 %= 65521;
-    s2 %= 65521;
-  }
-  return s1 | s2 << 16 | 0;
-};
-var adler32_1 = adler32;
-const makeTable = () => {
-  let c, table = [];
-  for (var n = 0; n < 256; n++) {
-    c = n;
-    for (var k = 0; k < 8; k++) {
-      c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
-    }
-    table[n] = c;
-  }
-  return table;
-};
-const crcTable = new Uint32Array(makeTable());
-const crc32 = (crc, buf, len, pos) => {
-  const t = crcTable;
-  const end = pos + len;
-  crc ^= -1;
-  for (let i = pos; i < end; i++) {
-    crc = crc >>> 8 ^ t[(crc ^ buf[i]) & 255];
-  }
-  return crc ^ -1;
-};
-var crc32_1 = crc32;
-var messages = {
-  2: "need dictionary",
-  /* Z_NEED_DICT       2  */
-  1: "stream end",
-  /* Z_STREAM_END      1  */
-  0: "",
-  /* Z_OK              0  */
-  "-1": "file error",
-  /* Z_ERRNO         (-1) */
-  "-2": "stream error",
-  /* Z_STREAM_ERROR  (-2) */
-  "-3": "data error",
-  /* Z_DATA_ERROR    (-3) */
-  "-4": "insufficient memory",
-  /* Z_MEM_ERROR     (-4) */
-  "-5": "buffer error",
-  /* Z_BUF_ERROR     (-5) */
-  "-6": "incompatible version"
-  /* Z_VERSION_ERROR (-6) */
-};
-var constants$2 = {
-  /* Allowed flush values; see deflate() and inflate() below for details */
-  Z_NO_FLUSH: 0,
-  Z_PARTIAL_FLUSH: 1,
-  Z_SYNC_FLUSH: 2,
-  Z_FULL_FLUSH: 3,
-  Z_FINISH: 4,
-  Z_BLOCK: 5,
-  Z_TREES: 6,
-  /* Return codes for the compression/decompression functions. Negative values
-  * are errors, positive values are used for special but normal events.
-  */
-  Z_OK: 0,
-  Z_STREAM_END: 1,
-  Z_NEED_DICT: 2,
-  Z_ERRNO: -1,
-  Z_STREAM_ERROR: -2,
-  Z_DATA_ERROR: -3,
-  Z_MEM_ERROR: -4,
-  Z_BUF_ERROR: -5,
-  //Z_VERSION_ERROR: -6,
-  /* compression levels */
-  Z_NO_COMPRESSION: 0,
-  Z_BEST_SPEED: 1,
-  Z_BEST_COMPRESSION: 9,
-  Z_DEFAULT_COMPRESSION: -1,
-  Z_FILTERED: 1,
-  Z_HUFFMAN_ONLY: 2,
-  Z_RLE: 3,
-  Z_FIXED: 4,
-  Z_DEFAULT_STRATEGY: 0,
-  /* Possible values of the data_type field (though see inflate()) */
-  Z_BINARY: 0,
-  Z_TEXT: 1,
-  //Z_ASCII:                1, // = Z_TEXT (deprecated)
-  Z_UNKNOWN: 2,
-  /* The deflate compression method */
-  Z_DEFLATED: 8
-  //Z_NULL:                 null // Use -1 or null inline, depending on var type
-};
-const { _tr_init, _tr_stored_block, _tr_flush_block, _tr_tally, _tr_align } = trees;
-const {
-  Z_NO_FLUSH: Z_NO_FLUSH$2,
-  Z_PARTIAL_FLUSH,
-  Z_FULL_FLUSH: Z_FULL_FLUSH$1,
-  Z_FINISH: Z_FINISH$3,
-  Z_BLOCK: Z_BLOCK$1,
-  Z_OK: Z_OK$3,
-  Z_STREAM_END: Z_STREAM_END$3,
-  Z_STREAM_ERROR: Z_STREAM_ERROR$2,
-  Z_DATA_ERROR: Z_DATA_ERROR$2,
-  Z_BUF_ERROR: Z_BUF_ERROR$1,
-  Z_DEFAULT_COMPRESSION: Z_DEFAULT_COMPRESSION$1,
-  Z_FILTERED,
-  Z_HUFFMAN_ONLY,
-  Z_RLE,
-  Z_FIXED,
-  Z_DEFAULT_STRATEGY: Z_DEFAULT_STRATEGY$1,
-  Z_UNKNOWN,
-  Z_DEFLATED: Z_DEFLATED$2
-} = constants$2;
-const MAX_MEM_LEVEL = 9;
-const MAX_WBITS$1 = 15;
-const DEF_MEM_LEVEL = 8;
-const LENGTH_CODES = 29;
-const LITERALS = 256;
-const L_CODES = LITERALS + 1 + LENGTH_CODES;
-const D_CODES = 30;
-const BL_CODES = 19;
-const HEAP_SIZE = 2 * L_CODES + 1;
-const MAX_BITS = 15;
-const MIN_MATCH = 3;
-const MAX_MATCH = 258;
-const MIN_LOOKAHEAD = MAX_MATCH + MIN_MATCH + 1;
-const PRESET_DICT = 32;
-const INIT_STATE = 42;
-const GZIP_STATE = 57;
-const EXTRA_STATE = 69;
-const NAME_STATE = 73;
-const COMMENT_STATE = 91;
-const HCRC_STATE = 103;
-const BUSY_STATE = 113;
-const FINISH_STATE = 666;
-const BS_NEED_MORE = 1;
-const BS_BLOCK_DONE = 2;
-const BS_FINISH_STARTED = 3;
-const BS_FINISH_DONE = 4;
-const OS_CODE = 3;
-const err$1 = (strm, errorCode) => {
-  strm.msg = messages[errorCode];
-  return errorCode;
-};
-const rank = (f) => {
-  return f * 2 - (f > 4 ? 9 : 0);
-};
-const zero = (buf) => {
-  let len = buf.length;
-  while (--len >= 0) {
-    buf[len] = 0;
-  }
-};
-const slide_hash = (s) => {
-  let n, m;
-  let p;
-  let wsize = s.w_size;
-  n = s.hash_size;
-  p = n;
-  do {
-    m = s.head[--p];
-    s.head[p] = m >= wsize ? m - wsize : 0;
-  } while (--n);
-  n = wsize;
-  p = n;
-  do {
-    m = s.prev[--p];
-    s.prev[p] = m >= wsize ? m - wsize : 0;
-  } while (--n);
-};
-let HASH_ZLIB = (s, prev, data) => (prev << s.hash_shift ^ data) & s.hash_mask;
-let HASH = HASH_ZLIB;
-const flush_pending = (strm) => {
-  const s = strm.state;
-  let len = s.pending;
-  if (len > strm.avail_out) {
-    len = strm.avail_out;
-  }
-  if (len === 0) {
-    return;
-  }
-  strm.output.set(s.pending_buf.subarray(s.pending_out, s.pending_out + len), strm.next_out);
-  strm.next_out += len;
-  s.pending_out += len;
-  strm.total_out += len;
-  strm.avail_out -= len;
-  s.pending -= len;
-  if (s.pending === 0) {
-    s.pending_out = 0;
-  }
-};
-const flush_block_only = (s, last) => {
-  _tr_flush_block(s, s.block_start >= 0 ? s.block_start : -1, s.strstart - s.block_start, last);
-  s.block_start = s.strstart;
-  flush_pending(s.strm);
-};
-const put_byte = (s, b) => {
-  s.pending_buf[s.pending++] = b;
-};
-const putShortMSB = (s, b) => {
-  s.pending_buf[s.pending++] = b >>> 8 & 255;
-  s.pending_buf[s.pending++] = b & 255;
-};
-const read_buf = (strm, buf, start, size) => {
-  let len = strm.avail_in;
-  if (len > size) {
-    len = size;
-  }
-  if (len === 0) {
-    return 0;
-  }
-  strm.avail_in -= len;
-  buf.set(strm.input.subarray(strm.next_in, strm.next_in + len), start);
-  if (strm.state.wrap === 1) {
-    strm.adler = adler32_1(strm.adler, buf, len, start);
-  } else if (strm.state.wrap === 2) {
-    strm.adler = crc32_1(strm.adler, buf, len, start);
-  }
-  strm.next_in += len;
-  strm.total_in += len;
-  return len;
-};
-const longest_match = (s, cur_match) => {
-  let chain_length = s.max_chain_length;
-  let scan = s.strstart;
-  let match;
-  let len;
-  let best_len = s.prev_length;
-  let nice_match = s.nice_match;
-  const limit = s.strstart > s.w_size - MIN_LOOKAHEAD ? s.strstart - (s.w_size - MIN_LOOKAHEAD) : 0;
-  const _win = s.window;
-  const wmask = s.w_mask;
-  const prev = s.prev;
-  const strend = s.strstart + MAX_MATCH;
-  let scan_end1 = _win[scan + best_len - 1];
-  let scan_end = _win[scan + best_len];
-  if (s.prev_length >= s.good_match) {
-    chain_length >>= 2;
-  }
-  if (nice_match > s.lookahead) {
-    nice_match = s.lookahead;
-  }
-  do {
-    match = cur_match;
-    if (_win[match + best_len] !== scan_end || _win[match + best_len - 1] !== scan_end1 || _win[match] !== _win[scan] || _win[++match] !== _win[scan + 1]) {
-      continue;
-    }
-    scan += 2;
-    match++;
-    do {
-    } while (_win[++scan] === _win[++match] && _win[++scan] === _win[++match] && _win[++scan] === _win[++match] && _win[++scan] === _win[++match] && _win[++scan] === _win[++match] && _win[++scan] === _win[++match] && _win[++scan] === _win[++match] && _win[++scan] === _win[++match] && scan < strend);
-    len = MAX_MATCH - (strend - scan);
-    scan = strend - MAX_MATCH;
-    if (len > best_len) {
-      s.match_start = cur_match;
-      best_len = len;
-      if (len >= nice_match) {
-        break;
-      }
-      scan_end1 = _win[scan + best_len - 1];
-      scan_end = _win[scan + best_len];
-    }
-  } while ((cur_match = prev[cur_match & wmask]) > limit && --chain_length !== 0);
-  if (best_len <= s.lookahead) {
-    return best_len;
-  }
-  return s.lookahead;
-};
-const fill_window = (s) => {
-  const _w_size = s.w_size;
-  let n, more, str;
-  do {
-    more = s.window_size - s.lookahead - s.strstart;
-    if (s.strstart >= _w_size + (_w_size - MIN_LOOKAHEAD)) {
-      s.window.set(s.window.subarray(_w_size, _w_size + _w_size - more), 0);
-      s.match_start -= _w_size;
-      s.strstart -= _w_size;
-      s.block_start -= _w_size;
-      if (s.insert > s.strstart) {
-        s.insert = s.strstart;
-      }
-      slide_hash(s);
-      more += _w_size;
-    }
-    if (s.strm.avail_in === 0) {
-      break;
-    }
-    n = read_buf(s.strm, s.window, s.strstart + s.lookahead, more);
-    s.lookahead += n;
-    if (s.lookahead + s.insert >= MIN_MATCH) {
-      str = s.strstart - s.insert;
-      s.ins_h = s.window[str];
-      s.ins_h = HASH(s, s.ins_h, s.window[str + 1]);
-      while (s.insert) {
-        s.ins_h = HASH(s, s.ins_h, s.window[str + MIN_MATCH - 1]);
-        s.prev[str & s.w_mask] = s.head[s.ins_h];
-        s.head[s.ins_h] = str;
-        str++;
-        s.insert--;
-        if (s.lookahead + s.insert < MIN_MATCH) {
-          break;
-        }
-      }
-    }
-  } while (s.lookahead < MIN_LOOKAHEAD && s.strm.avail_in !== 0);
-};
-const deflate_stored = (s, flush) => {
-  let min_block = s.pending_buf_size - 5 > s.w_size ? s.w_size : s.pending_buf_size - 5;
-  let len, left, have, last = 0;
-  let used = s.strm.avail_in;
-  do {
-    len = 65535;
-    have = s.bi_valid + 42 >> 3;
-    if (s.strm.avail_out < have) {
-      break;
-    }
-    have = s.strm.avail_out - have;
-    left = s.strstart - s.block_start;
-    if (len > left + s.strm.avail_in) {
-      len = left + s.strm.avail_in;
-    }
-    if (len > have) {
-      len = have;
-    }
-    if (len < min_block && (len === 0 && flush !== Z_FINISH$3 || flush === Z_NO_FLUSH$2 || len !== left + s.strm.avail_in)) {
-      break;
-    }
-    last = flush === Z_FINISH$3 && len === left + s.strm.avail_in ? 1 : 0;
-    _tr_stored_block(s, 0, 0, last);
-    s.pending_buf[s.pending - 4] = len;
-    s.pending_buf[s.pending - 3] = len >> 8;
-    s.pending_buf[s.pending - 2] = ~len;
-    s.pending_buf[s.pending - 1] = ~len >> 8;
-    flush_pending(s.strm);
-    if (left) {
-      if (left > len) {
-        left = len;
-      }
-      s.strm.output.set(s.window.subarray(s.block_start, s.block_start + left), s.strm.next_out);
-      s.strm.next_out += left;
-      s.strm.avail_out -= left;
-      s.strm.total_out += left;
-      s.block_start += left;
-      len -= left;
-    }
-    if (len) {
-      read_buf(s.strm, s.strm.output, s.strm.next_out, len);
-      s.strm.next_out += len;
-      s.strm.avail_out -= len;
-      s.strm.total_out += len;
-    }
-  } while (last === 0);
-  used -= s.strm.avail_in;
-  if (used) {
-    if (used >= s.w_size) {
-      s.matches = 2;
-      s.window.set(s.strm.input.subarray(s.strm.next_in - s.w_size, s.strm.next_in), 0);
-      s.strstart = s.w_size;
-      s.insert = s.strstart;
-    } else {
-      if (s.window_size - s.strstart <= used) {
-        s.strstart -= s.w_size;
-        s.window.set(s.window.subarray(s.w_size, s.w_size + s.strstart), 0);
-        if (s.matches < 2) {
-          s.matches++;
-        }
-        if (s.insert > s.strstart) {
-          s.insert = s.strstart;
-        }
-      }
-      s.window.set(s.strm.input.subarray(s.strm.next_in - used, s.strm.next_in), s.strstart);
-      s.strstart += used;
-      s.insert += used > s.w_size - s.insert ? s.w_size - s.insert : used;
-    }
-    s.block_start = s.strstart;
-  }
-  if (s.high_water < s.strstart) {
-    s.high_water = s.strstart;
-  }
-  if (last) {
-    return BS_FINISH_DONE;
-  }
-  if (flush !== Z_NO_FLUSH$2 && flush !== Z_FINISH$3 && s.strm.avail_in === 0 && s.strstart === s.block_start) {
-    return BS_BLOCK_DONE;
-  }
-  have = s.window_size - s.strstart;
-  if (s.strm.avail_in > have && s.block_start >= s.w_size) {
-    s.block_start -= s.w_size;
-    s.strstart -= s.w_size;
-    s.window.set(s.window.subarray(s.w_size, s.w_size + s.strstart), 0);
-    if (s.matches < 2) {
-      s.matches++;
-    }
-    have += s.w_size;
-    if (s.insert > s.strstart) {
-      s.insert = s.strstart;
-    }
-  }
-  if (have > s.strm.avail_in) {
-    have = s.strm.avail_in;
-  }
-  if (have) {
-    read_buf(s.strm, s.window, s.strstart, have);
-    s.strstart += have;
-    s.insert += have > s.w_size - s.insert ? s.w_size - s.insert : have;
-  }
-  if (s.high_water < s.strstart) {
-    s.high_water = s.strstart;
-  }
-  have = s.bi_valid + 42 >> 3;
-  have = s.pending_buf_size - have > 65535 ? 65535 : s.pending_buf_size - have;
-  min_block = have > s.w_size ? s.w_size : have;
-  left = s.strstart - s.block_start;
-  if (left >= min_block || (left || flush === Z_FINISH$3) && flush !== Z_NO_FLUSH$2 && s.strm.avail_in === 0 && left <= have) {
-    len = left > have ? have : left;
-    last = flush === Z_FINISH$3 && s.strm.avail_in === 0 && len === left ? 1 : 0;
-    _tr_stored_block(s, s.block_start, len, last);
-    s.block_start += len;
-    flush_pending(s.strm);
-  }
-  return last ? BS_FINISH_STARTED : BS_NEED_MORE;
-};
-const deflate_fast = (s, flush) => {
-  let hash_head;
-  let bflush;
-  for (; ; ) {
-    if (s.lookahead < MIN_LOOKAHEAD) {
-      fill_window(s);
-      if (s.lookahead < MIN_LOOKAHEAD && flush === Z_NO_FLUSH$2) {
-        return BS_NEED_MORE;
-      }
-      if (s.lookahead === 0) {
-        break;
-      }
-    }
-    hash_head = 0;
-    if (s.lookahead >= MIN_MATCH) {
-      s.ins_h = HASH(s, s.ins_h, s.window[s.strstart + MIN_MATCH - 1]);
-      hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
-      s.head[s.ins_h] = s.strstart;
-    }
-    if (hash_head !== 0 && s.strstart - hash_head <= s.w_size - MIN_LOOKAHEAD) {
-      s.match_length = longest_match(s, hash_head);
-    }
-    if (s.match_length >= MIN_MATCH) {
-      bflush = _tr_tally(s, s.strstart - s.match_start, s.match_length - MIN_MATCH);
-      s.lookahead -= s.match_length;
-      if (s.match_length <= s.max_lazy_match && s.lookahead >= MIN_MATCH) {
-        s.match_length--;
-        do {
-          s.strstart++;
-          s.ins_h = HASH(s, s.ins_h, s.window[s.strstart + MIN_MATCH - 1]);
-          hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
-          s.head[s.ins_h] = s.strstart;
-        } while (--s.match_length !== 0);
-        s.strstart++;
-      } else {
-        s.strstart += s.match_length;
-        s.match_length = 0;
-        s.ins_h = s.window[s.strstart];
-        s.ins_h = HASH(s, s.ins_h, s.window[s.strstart + 1]);
-      }
-    } else {
-      bflush = _tr_tally(s, 0, s.window[s.strstart]);
-      s.lookahead--;
-      s.strstart++;
-    }
-    if (bflush) {
-      flush_block_only(s, false);
-      if (s.strm.avail_out === 0) {
-        return BS_NEED_MORE;
-      }
-    }
-  }
-  s.insert = s.strstart < MIN_MATCH - 1 ? s.strstart : MIN_MATCH - 1;
-  if (flush === Z_FINISH$3) {
-    flush_block_only(s, true);
-    if (s.strm.avail_out === 0) {
-      return BS_FINISH_STARTED;
-    }
-    return BS_FINISH_DONE;
-  }
-  if (s.sym_next) {
-    flush_block_only(s, false);
-    if (s.strm.avail_out === 0) {
-      return BS_NEED_MORE;
-    }
-  }
-  return BS_BLOCK_DONE;
-};
-const deflate_slow = (s, flush) => {
-  let hash_head;
-  let bflush;
-  let max_insert;
-  for (; ; ) {
-    if (s.lookahead < MIN_LOOKAHEAD) {
-      fill_window(s);
-      if (s.lookahead < MIN_LOOKAHEAD && flush === Z_NO_FLUSH$2) {
-        return BS_NEED_MORE;
-      }
-      if (s.lookahead === 0) {
-        break;
-      }
-    }
-    hash_head = 0;
-    if (s.lookahead >= MIN_MATCH) {
-      s.ins_h = HASH(s, s.ins_h, s.window[s.strstart + MIN_MATCH - 1]);
-      hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
-      s.head[s.ins_h] = s.strstart;
-    }
-    s.prev_length = s.match_length;
-    s.prev_match = s.match_start;
-    s.match_length = MIN_MATCH - 1;
-    if (hash_head !== 0 && s.prev_length < s.max_lazy_match && s.strstart - hash_head <= s.w_size - MIN_LOOKAHEAD) {
-      s.match_length = longest_match(s, hash_head);
-      if (s.match_length <= 5 && (s.strategy === Z_FILTERED || s.match_length === MIN_MATCH && s.strstart - s.match_start > 4096)) {
-        s.match_length = MIN_MATCH - 1;
-      }
-    }
-    if (s.prev_length >= MIN_MATCH && s.match_length <= s.prev_length) {
-      max_insert = s.strstart + s.lookahead - MIN_MATCH;
-      bflush = _tr_tally(s, s.strstart - 1 - s.prev_match, s.prev_length - MIN_MATCH);
-      s.lookahead -= s.prev_length - 1;
-      s.prev_length -= 2;
-      do {
-        if (++s.strstart <= max_insert) {
-          s.ins_h = HASH(s, s.ins_h, s.window[s.strstart + MIN_MATCH - 1]);
-          hash_head = s.prev[s.strstart & s.w_mask] = s.head[s.ins_h];
-          s.head[s.ins_h] = s.strstart;
-        }
-      } while (--s.prev_length !== 0);
-      s.match_available = 0;
-      s.match_length = MIN_MATCH - 1;
-      s.strstart++;
-      if (bflush) {
-        flush_block_only(s, false);
-        if (s.strm.avail_out === 0) {
-          return BS_NEED_MORE;
-        }
-      }
-    } else if (s.match_available) {
-      bflush = _tr_tally(s, 0, s.window[s.strstart - 1]);
-      if (bflush) {
-        flush_block_only(s, false);
-      }
-      s.strstart++;
-      s.lookahead--;
-      if (s.strm.avail_out === 0) {
-        return BS_NEED_MORE;
-      }
-    } else {
-      s.match_available = 1;
-      s.strstart++;
-      s.lookahead--;
-    }
-  }
-  if (s.match_available) {
-    bflush = _tr_tally(s, 0, s.window[s.strstart - 1]);
-    s.match_available = 0;
-  }
-  s.insert = s.strstart < MIN_MATCH - 1 ? s.strstart : MIN_MATCH - 1;
-  if (flush === Z_FINISH$3) {
-    flush_block_only(s, true);
-    if (s.strm.avail_out === 0) {
-      return BS_FINISH_STARTED;
-    }
-    return BS_FINISH_DONE;
-  }
-  if (s.sym_next) {
-    flush_block_only(s, false);
-    if (s.strm.avail_out === 0) {
-      return BS_NEED_MORE;
-    }
-  }
-  return BS_BLOCK_DONE;
-};
-const deflate_rle = (s, flush) => {
-  let bflush;
-  let prev;
-  let scan, strend;
-  const _win = s.window;
-  for (; ; ) {
-    if (s.lookahead <= MAX_MATCH) {
-      fill_window(s);
-      if (s.lookahead <= MAX_MATCH && flush === Z_NO_FLUSH$2) {
-        return BS_NEED_MORE;
-      }
-      if (s.lookahead === 0) {
-        break;
-      }
-    }
-    s.match_length = 0;
-    if (s.lookahead >= MIN_MATCH && s.strstart > 0) {
-      scan = s.strstart - 1;
-      prev = _win[scan];
-      if (prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan]) {
-        strend = s.strstart + MAX_MATCH;
-        do {
-        } while (prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan] && prev === _win[++scan] && scan < strend);
-        s.match_length = MAX_MATCH - (strend - scan);
-        if (s.match_length > s.lookahead) {
-          s.match_length = s.lookahead;
-        }
-      }
-    }
-    if (s.match_length >= MIN_MATCH) {
-      bflush = _tr_tally(s, 1, s.match_length - MIN_MATCH);
-      s.lookahead -= s.match_length;
-      s.strstart += s.match_length;
-      s.match_length = 0;
-    } else {
-      bflush = _tr_tally(s, 0, s.window[s.strstart]);
-      s.lookahead--;
-      s.strstart++;
-    }
-    if (bflush) {
-      flush_block_only(s, false);
-      if (s.strm.avail_out === 0) {
-        return BS_NEED_MORE;
-      }
-    }
-  }
-  s.insert = 0;
-  if (flush === Z_FINISH$3) {
-    flush_block_only(s, true);
-    if (s.strm.avail_out === 0) {
-      return BS_FINISH_STARTED;
-    }
-    return BS_FINISH_DONE;
-  }
-  if (s.sym_next) {
-    flush_block_only(s, false);
-    if (s.strm.avail_out === 0) {
-      return BS_NEED_MORE;
-    }
-  }
-  return BS_BLOCK_DONE;
-};
-const deflate_huff = (s, flush) => {
-  let bflush;
-  for (; ; ) {
-    if (s.lookahead === 0) {
-      fill_window(s);
-      if (s.lookahead === 0) {
-        if (flush === Z_NO_FLUSH$2) {
-          return BS_NEED_MORE;
-        }
-        break;
-      }
-    }
-    s.match_length = 0;
-    bflush = _tr_tally(s, 0, s.window[s.strstart]);
-    s.lookahead--;
-    s.strstart++;
-    if (bflush) {
-      flush_block_only(s, false);
-      if (s.strm.avail_out === 0) {
-        return BS_NEED_MORE;
-      }
-    }
-  }
-  s.insert = 0;
-  if (flush === Z_FINISH$3) {
-    flush_block_only(s, true);
-    if (s.strm.avail_out === 0) {
-      return BS_FINISH_STARTED;
-    }
-    return BS_FINISH_DONE;
-  }
-  if (s.sym_next) {
-    flush_block_only(s, false);
-    if (s.strm.avail_out === 0) {
-      return BS_NEED_MORE;
-    }
-  }
-  return BS_BLOCK_DONE;
-};
-function Config(good_length, max_lazy, nice_length, max_chain, func) {
-  this.good_length = good_length;
-  this.max_lazy = max_lazy;
-  this.nice_length = nice_length;
-  this.max_chain = max_chain;
-  this.func = func;
-}
-const configuration_table = [
-  /*      good lazy nice chain */
-  new Config(0, 0, 0, 0, deflate_stored),
-  /* 0 store only */
-  new Config(4, 4, 8, 4, deflate_fast),
-  /* 1 max speed, no lazy matches */
-  new Config(4, 5, 16, 8, deflate_fast),
-  /* 2 */
-  new Config(4, 6, 32, 32, deflate_fast),
-  /* 3 */
-  new Config(4, 4, 16, 16, deflate_slow),
-  /* 4 lazy matches */
-  new Config(8, 16, 32, 32, deflate_slow),
-  /* 5 */
-  new Config(8, 16, 128, 128, deflate_slow),
-  /* 6 */
-  new Config(8, 32, 128, 256, deflate_slow),
-  /* 7 */
-  new Config(32, 128, 258, 1024, deflate_slow),
-  /* 8 */
-  new Config(32, 258, 258, 4096, deflate_slow)
-  /* 9 max compression */
-];
-const lm_init = (s) => {
-  s.window_size = 2 * s.w_size;
-  zero(s.head);
-  s.max_lazy_match = configuration_table[s.level].max_lazy;
-  s.good_match = configuration_table[s.level].good_length;
-  s.nice_match = configuration_table[s.level].nice_length;
-  s.max_chain_length = configuration_table[s.level].max_chain;
-  s.strstart = 0;
-  s.block_start = 0;
-  s.lookahead = 0;
-  s.insert = 0;
-  s.match_length = s.prev_length = MIN_MATCH - 1;
-  s.match_available = 0;
-  s.ins_h = 0;
-};
-function DeflateState() {
-  this.strm = null;
-  this.status = 0;
-  this.pending_buf = null;
-  this.pending_buf_size = 0;
-  this.pending_out = 0;
-  this.pending = 0;
-  this.wrap = 0;
-  this.gzhead = null;
-  this.gzindex = 0;
-  this.method = Z_DEFLATED$2;
-  this.last_flush = -1;
-  this.w_size = 0;
-  this.w_bits = 0;
-  this.w_mask = 0;
-  this.window = null;
-  this.window_size = 0;
-  this.prev = null;
-  this.head = null;
-  this.ins_h = 0;
-  this.hash_size = 0;
-  this.hash_bits = 0;
-  this.hash_mask = 0;
-  this.hash_shift = 0;
-  this.block_start = 0;
-  this.match_length = 0;
-  this.prev_match = 0;
-  this.match_available = 0;
-  this.strstart = 0;
-  this.match_start = 0;
-  this.lookahead = 0;
-  this.prev_length = 0;
-  this.max_chain_length = 0;
-  this.max_lazy_match = 0;
-  this.level = 0;
-  this.strategy = 0;
-  this.good_match = 0;
-  this.nice_match = 0;
-  this.dyn_ltree = new Uint16Array(HEAP_SIZE * 2);
-  this.dyn_dtree = new Uint16Array((2 * D_CODES + 1) * 2);
-  this.bl_tree = new Uint16Array((2 * BL_CODES + 1) * 2);
-  zero(this.dyn_ltree);
-  zero(this.dyn_dtree);
-  zero(this.bl_tree);
-  this.l_desc = null;
-  this.d_desc = null;
-  this.bl_desc = null;
-  this.bl_count = new Uint16Array(MAX_BITS + 1);
-  this.heap = new Uint16Array(2 * L_CODES + 1);
-  zero(this.heap);
-  this.heap_len = 0;
-  this.heap_max = 0;
-  this.depth = new Uint16Array(2 * L_CODES + 1);
-  zero(this.depth);
-  this.sym_buf = 0;
-  this.lit_bufsize = 0;
-  this.sym_next = 0;
-  this.sym_end = 0;
-  this.opt_len = 0;
-  this.static_len = 0;
-  this.matches = 0;
-  this.insert = 0;
-  this.bi_buf = 0;
-  this.bi_valid = 0;
-}
-const deflateStateCheck = (strm) => {
-  if (!strm) {
-    return 1;
-  }
-  const s = strm.state;
-  if (!s || s.strm !== strm || s.status !== INIT_STATE && //#ifdef GZIP
-  s.status !== GZIP_STATE && //#endif
-  s.status !== EXTRA_STATE && s.status !== NAME_STATE && s.status !== COMMENT_STATE && s.status !== HCRC_STATE && s.status !== BUSY_STATE && s.status !== FINISH_STATE) {
-    return 1;
-  }
-  return 0;
-};
-const deflateResetKeep = (strm) => {
-  if (deflateStateCheck(strm)) {
-    return err$1(strm, Z_STREAM_ERROR$2);
-  }
-  strm.total_in = strm.total_out = 0;
-  strm.data_type = Z_UNKNOWN;
-  const s = strm.state;
-  s.pending = 0;
-  s.pending_out = 0;
-  if (s.wrap < 0) {
-    s.wrap = -s.wrap;
-  }
-  s.status = //#ifdef GZIP
-  s.wrap === 2 ? GZIP_STATE : (
-    //#endif
-    s.wrap ? INIT_STATE : BUSY_STATE
-  );
-  strm.adler = s.wrap === 2 ? 0 : 1;
-  s.last_flush = -2;
-  _tr_init(s);
-  return Z_OK$3;
-};
-const deflateReset = (strm) => {
-  const ret = deflateResetKeep(strm);
-  if (ret === Z_OK$3) {
-    lm_init(strm.state);
-  }
-  return ret;
-};
-const deflateSetHeader = (strm, head) => {
-  if (deflateStateCheck(strm) || strm.state.wrap !== 2) {
-    return Z_STREAM_ERROR$2;
-  }
-  strm.state.gzhead = head;
-  return Z_OK$3;
-};
-const deflateInit2 = (strm, level, method, windowBits, memLevel, strategy) => {
-  if (!strm) {
-    return Z_STREAM_ERROR$2;
-  }
-  let wrap = 1;
-  if (level === Z_DEFAULT_COMPRESSION$1) {
-    level = 6;
-  }
-  if (windowBits < 0) {
-    wrap = 0;
-    windowBits = -windowBits;
-  } else if (windowBits > 15) {
-    wrap = 2;
-    windowBits -= 16;
-  }
-  if (memLevel < 1 || memLevel > MAX_MEM_LEVEL || method !== Z_DEFLATED$2 || windowBits < 8 || windowBits > 15 || level < 0 || level > 9 || strategy < 0 || strategy > Z_FIXED || windowBits === 8 && wrap !== 1) {
-    return err$1(strm, Z_STREAM_ERROR$2);
-  }
-  if (windowBits === 8) {
-    windowBits = 9;
-  }
-  const s = new DeflateState();
-  strm.state = s;
-  s.strm = strm;
-  s.status = INIT_STATE;
-  s.wrap = wrap;
-  s.gzhead = null;
-  s.w_bits = windowBits;
-  s.w_size = 1 << s.w_bits;
-  s.w_mask = s.w_size - 1;
-  s.hash_bits = memLevel + 7;
-  s.hash_size = 1 << s.hash_bits;
-  s.hash_mask = s.hash_size - 1;
-  s.hash_shift = ~~((s.hash_bits + MIN_MATCH - 1) / MIN_MATCH);
-  s.window = new Uint8Array(s.w_size * 2);
-  s.head = new Uint16Array(s.hash_size);
-  s.prev = new Uint16Array(s.w_size);
-  s.lit_bufsize = 1 << memLevel + 6;
-  s.pending_buf_size = s.lit_bufsize * 4;
-  s.pending_buf = new Uint8Array(s.pending_buf_size);
-  s.sym_buf = s.lit_bufsize;
-  s.sym_end = (s.lit_bufsize - 1) * 3;
-  s.level = level;
-  s.strategy = strategy;
-  s.method = method;
-  return deflateReset(strm);
-};
-const deflateInit = (strm, level) => {
-  return deflateInit2(strm, level, Z_DEFLATED$2, MAX_WBITS$1, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY$1);
-};
-const deflate$2 = (strm, flush) => {
-  if (deflateStateCheck(strm) || flush > Z_BLOCK$1 || flush < 0) {
-    return strm ? err$1(strm, Z_STREAM_ERROR$2) : Z_STREAM_ERROR$2;
-  }
-  const s = strm.state;
-  if (!strm.output || strm.avail_in !== 0 && !strm.input || s.status === FINISH_STATE && flush !== Z_FINISH$3) {
-    return err$1(strm, strm.avail_out === 0 ? Z_BUF_ERROR$1 : Z_STREAM_ERROR$2);
-  }
-  const old_flush = s.last_flush;
-  s.last_flush = flush;
-  if (s.pending !== 0) {
-    flush_pending(strm);
-    if (strm.avail_out === 0) {
-      s.last_flush = -1;
-      return Z_OK$3;
-    }
-  } else if (strm.avail_in === 0 && rank(flush) <= rank(old_flush) && flush !== Z_FINISH$3) {
-    return err$1(strm, Z_BUF_ERROR$1);
-  }
-  if (s.status === FINISH_STATE && strm.avail_in !== 0) {
-    return err$1(strm, Z_BUF_ERROR$1);
-  }
-  if (s.status === INIT_STATE && s.wrap === 0) {
-    s.status = BUSY_STATE;
-  }
-  if (s.status === INIT_STATE) {
-    let header = Z_DEFLATED$2 + (s.w_bits - 8 << 4) << 8;
-    let level_flags = -1;
-    if (s.strategy >= Z_HUFFMAN_ONLY || s.level < 2) {
-      level_flags = 0;
-    } else if (s.level < 6) {
-      level_flags = 1;
-    } else if (s.level === 6) {
-      level_flags = 2;
-    } else {
-      level_flags = 3;
-    }
-    header |= level_flags << 6;
-    if (s.strstart !== 0) {
-      header |= PRESET_DICT;
-    }
-    header += 31 - header % 31;
-    putShortMSB(s, header);
-    if (s.strstart !== 0) {
-      putShortMSB(s, strm.adler >>> 16);
-      putShortMSB(s, strm.adler & 65535);
-    }
-    strm.adler = 1;
-    s.status = BUSY_STATE;
-    flush_pending(strm);
-    if (s.pending !== 0) {
-      s.last_flush = -1;
-      return Z_OK$3;
-    }
-  }
-  if (s.status === GZIP_STATE) {
-    strm.adler = 0;
-    put_byte(s, 31);
-    put_byte(s, 139);
-    put_byte(s, 8);
-    if (!s.gzhead) {
-      put_byte(s, 0);
-      put_byte(s, 0);
-      put_byte(s, 0);
-      put_byte(s, 0);
-      put_byte(s, 0);
-      put_byte(s, s.level === 9 ? 2 : s.strategy >= Z_HUFFMAN_ONLY || s.level < 2 ? 4 : 0);
-      put_byte(s, OS_CODE);
-      s.status = BUSY_STATE;
-      flush_pending(strm);
-      if (s.pending !== 0) {
-        s.last_flush = -1;
-        return Z_OK$3;
-      }
-    } else {
-      put_byte(
-        s,
-        (s.gzhead.text ? 1 : 0) + (s.gzhead.hcrc ? 2 : 0) + (!s.gzhead.extra ? 0 : 4) + (!s.gzhead.name ? 0 : 8) + (!s.gzhead.comment ? 0 : 16)
+    const manifestBytes = new TextEncoder().encode(manifestStr);
+    const header = new ArrayBuffer(1024);
+    const dv = new DataView(header);
+    dv.setUint32(0, 1296646734, true);
+    dv.setUint32(4, 8, true);
+    dv.setUint32(8, currentOffset, true);
+    dv.setUint32(12, manifestBytes.byteLength, true);
+    const blobParts = [header, ...chunkBlobs, manifestBytes];
+    const finalBlob = new Blob(blobParts, { type: "application/octet-stream" });
+    const url = URL.createObjectURL(finalBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `model_${(/* @__PURE__ */ new Date()).getTime()}.nbim`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  async loadNbim(file, onProgress) {
+    const fileId = `nbim_${file.name}_${(/* @__PURE__ */ new Date()).getTime()}`;
+    this.nbimFiles.set(fileId, file);
+    if (onProgress) onProgress(10, "正在解析 NBIM 文件头...");
+    const headerBuffer = await file.slice(0, 1024).arrayBuffer();
+    const dv = new DataView(headerBuffer);
+    const magic = dv.getUint32(0, true);
+    if (magic !== 1296646734) throw new Error("不是有效的 NBIM 文件");
+    const version = dv.getUint32(4, true);
+    const manifestOffset = dv.getUint32(8, true);
+    const manifestLen = dv.getUint32(12, true);
+    if (onProgress) onProgress(20, "正在读取元数据...");
+    const manifestBlob = file.slice(manifestOffset, manifestOffset + manifestLen);
+    const manifestText = await manifestBlob.text();
+    const manifest = JSON.parse(manifestText);
+    this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
+    if (manifest.globalBounds) {
+      const newBounds = new THREE.Box3(
+        new THREE.Vector3(manifest.globalBounds.min.x, manifest.globalBounds.min.y, manifest.globalBounds.min.z),
+        new THREE.Vector3(manifest.globalBounds.max.x, manifest.globalBounds.max.y, manifest.globalBounds.max.z)
       );
-      put_byte(s, s.gzhead.time & 255);
-      put_byte(s, s.gzhead.time >> 8 & 255);
-      put_byte(s, s.gzhead.time >> 16 & 255);
-      put_byte(s, s.gzhead.time >> 24 & 255);
-      put_byte(s, s.level === 9 ? 2 : s.strategy >= Z_HUFFMAN_ONLY || s.level < 2 ? 4 : 0);
-      put_byte(s, s.gzhead.os & 255);
-      if (s.gzhead.extra && s.gzhead.extra.length) {
-        put_byte(s, s.gzhead.extra.length & 255);
-        put_byte(s, s.gzhead.extra.length >> 8 & 255);
+      if (this.globalOffset.length() === 0) {
+        newBounds.getCenter(this.globalOffset);
+        console.log("初始化全局偏移 (NBIM):", this.globalOffset);
       }
-      if (s.gzhead.hcrc) {
-        strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending, 0);
+      if (this.precomputedBounds.isEmpty()) {
+        this.precomputedBounds.copy(newBounds);
+      } else {
+        this.precomputedBounds.union(newBounds);
       }
-      s.gzindex = 0;
-      s.status = EXTRA_STATE;
+      this.sceneBounds.copy(this.precomputedBounds);
+    }
+    const modelRoot = manifest.structureTree;
+    if (!this.structureRoot.children) this.structureRoot.children = [];
+    if (modelRoot) {
+      if (modelRoot.children && modelRoot.name === "Root") {
+        this.structureRoot.children.push(...modelRoot.children);
+      } else {
+        this.structureRoot.children.push(modelRoot);
+      }
+    }
+    const rootId = modelRoot?.id || fileId;
+    this.nbimPropsByOriginalUuid.set(rootId, manifest.bimProperties || {});
+    const fileGroup = new THREE.Group();
+    fileGroup.name = `file_${rootId}`;
+    fileGroup.userData.originalUuid = rootId;
+    this.contentGroup.add(fileGroup);
+    if (modelRoot) {
+      const traverse = (node) => {
+        if (!node.userData) node.userData = {};
+        node.userData.originalUuid = rootId;
+        if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
+        this.nodeMap.get(node.id).push(node);
+        if (node.bimId) {
+          const key = `${rootId}::${node.bimId}`;
+          if (!this.bimIdToNodeIds.has(key)) this.bimIdToNodeIds.set(key, []);
+          this.bimIdToNodeIds.get(key).push(node.id);
+        }
+        if (node.children) node.children.forEach(traverse);
+      };
+      traverse(modelRoot);
+    }
+    if (onProgress) onProgress(30, "正在初始化分块...");
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const boxMat = new THREE.LineBasicMaterial({ color: 4674921, transparent: true, opacity: 0.3 });
+    manifest.chunks.forEach((c) => {
+      const bounds = new THREE.Box3(
+        new THREE.Vector3(c.bounds.min.x, c.bounds.min.y, c.bounds.min.z),
+        new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)
+      );
+      if (this.globalOffset.length() > 0) {
+        bounds.translate(this.globalOffset.clone().negate());
+      }
+      const chunkId = c.id;
+      const center = bounds.getCenter(new THREE.Vector3());
+      const paddedBounds = bounds.clone();
+      const padSize = bounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
+      paddedBounds.expandByVector(padSize);
+      this.chunks.push({
+        id: chunkId,
+        bounds,
+        paddedBounds,
+        _padding: this.chunkPadding,
+        center,
+        loaded: false,
+        byteOffset: c.byteOffset,
+        byteLength: c.byteLength,
+        nbimFileId: fileId,
+        groupName: `optimized_${rootId}`,
+        originalUuid: rootId
+      });
+      const size = new THREE.Vector3();
+      bounds.getSize(size);
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(boxGeo),
+        boxMat
+      );
+      edges.name = `ghost_${chunkId}`;
+      edges.scale.copy(size);
+      edges.position.copy(center);
+      this.ghostGroup.add(edges);
+    });
+    this.chunkTotalCount = this.chunks.length;
+    if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
+      this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
+      this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
+    }
+    this.fitView();
+    if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
+    this.checkCullingAndLoad();
+  }
+  async clear() {
+    console.log("开始清空场景...");
+    try {
+      const disposeObject = (obj) => {
+        if (obj.isMesh) {
+          const mesh = obj;
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) {
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach((m) => m.dispose());
+          }
+        } else if (obj.isBatchedMesh) {
+          const bm = obj;
+          if (bm.geometry) bm.geometry.dispose();
+          if (bm.material) {
+            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
+            materials.forEach((m) => m.dispose());
+          }
+        }
+      };
+      this.contentGroup.traverse(disposeObject);
+      while (this.contentGroup.children.length > 0) {
+        this.contentGroup.remove(this.contentGroup.children[0]);
+      }
+      if (this.tilesRenderer) {
+        this.tilesRenderer.dispose();
+        this.tilesRenderer = null;
+      }
+      this.ghostGroup.children.forEach(disposeObject);
+      this.ghostGroup.clear();
+      this.selectionBox.visible = false;
+      this.highlightMesh.visible = false;
+      this.clearAllMeasurements();
+      this.optimizedMapping.clear();
+      this.sceneBounds.makeEmpty();
+      this.precomputedBounds.makeEmpty();
+      this.nbimFiles.clear();
+      this.nbimMeta.clear();
+      this.nbimPropsByOriginalUuid.clear();
+      this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
+      this.nodeMap.clear();
+      this.bimIdToNodeIds.clear();
+      this.chunks = [];
+      this.chunkTotalCount = 0;
+      this.chunkLoadedCount = 0;
+      this.lastReportedProgress = { loaded: -1, total: -1 };
+      this.processingChunks.clear();
+      this.cancelledChunkIds.clear();
+      this.componentMap.clear();
+      this.chunkLoadingEnabled = true;
+      this.contentGroup.visible = true;
+      this.ghostGroup.visible = true;
+      this.globalOffset.set(0, 0, 0);
+      console.log("场景已清空");
+    } catch (error) {
+      console.error("清空场景失败:", error);
+      throw error;
     }
   }
-  if (s.status === EXTRA_STATE) {
-    if (s.gzhead.extra) {
-      let beg = s.pending;
-      let left = (s.gzhead.extra.length & 65535) - s.gzindex;
-      while (s.pending + left > s.pending_buf_size) {
-        let copy = s.pending_buf_size - s.pending;
-        s.pending_buf.set(s.gzhead.extra.subarray(s.gzindex, s.gzindex + copy), s.pending);
-        s.pending = s.pending_buf_size;
-        if (s.gzhead.hcrc && s.pending > beg) {
-          strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending - beg, beg);
-        }
-        s.gzindex += copy;
-        flush_pending(strm);
-        if (s.pending !== 0) {
-          s.last_flush = -1;
-          return Z_OK$3;
-        }
-        beg = 0;
-        left -= copy;
-      }
-      let gzhead_extra = new Uint8Array(s.gzhead.extra);
-      s.pending_buf.set(gzhead_extra.subarray(s.gzindex, s.gzindex + left), s.pending);
-      s.pending += left;
-      if (s.gzhead.hcrc && s.pending > beg) {
-        strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending - beg, beg);
-      }
-      s.gzindex = 0;
-    }
-    s.status = NAME_STATE;
+  getStructureNodes(id) {
+    return this.nodeMap.get(id);
   }
-  if (s.status === NAME_STATE) {
-    if (s.gzhead.name) {
-      let beg = s.pending;
-      let val;
-      do {
-        if (s.pending === s.pending_buf_size) {
-          if (s.gzhead.hcrc && s.pending > beg) {
-            strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending - beg, beg);
+  getNbimProperties(id) {
+    const node = this.nodeMap.get(id)?.[0];
+    if (!node || !node.bimId) return null;
+    const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
+    if (!originalUuid) return null;
+    const map = this.nbimPropsByOriginalUuid.get(originalUuid);
+    if (!map) return null;
+    const key = `${originalUuid}::${node.bimId}`;
+    return map[key] || null;
+  }
+  setAllVisibility(visible) {
+    const setNodeVisible = (n) => {
+      n.visible = visible;
+      if (n.children) n.children.forEach(setNodeVisible);
+    };
+    if (this.structureRoot.children) this.structureRoot.children.forEach(setNodeVisible);
+    this.optimizedMapping.forEach((mappings) => {
+      mappings.forEach((m) => {
+        m.mesh.setVisibleAt(m.instanceId, visible);
+      });
+    });
+    this.contentGroup.traverse((o) => {
+      if (o.name === "Helpers" || o.name === "Measure") return;
+      if (o.isMesh && o.userData.isOptimized) {
+        o.visible = false;
+        return;
+      }
+      o.visible = visible;
+    });
+    this.updateSceneBounds();
+  }
+  hideObjects(uuids) {
+    uuids.forEach((id) => this.setObjectVisibility(id, false));
+  }
+  isolateObjects(uuids) {
+    this.setAllVisibility(false);
+    uuids.forEach((id) => this.setObjectVisibility(id, true));
+  }
+  setObjectVisibility(uuid, visible) {
+    const nodes = this.nodeMap.get(uuid);
+    if (nodes) {
+      nodes.forEach((node) => {
+        const setVisibleRecursive = (n) => {
+          n.visible = visible;
+          if (n.children) n.children.forEach(setVisibleRecursive);
+          const otherNodes = this.nodeMap.get(n.id);
+          if (otherNodes) {
+            otherNodes.forEach((on) => on.visible = visible);
           }
-          flush_pending(strm);
-          if (s.pending !== 0) {
-            s.last_flush = -1;
-            return Z_OK$3;
+        };
+        setVisibleRecursive(node);
+      });
+    }
+    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+    if (!obj) {
+      if (nodes && nodes.length > 0) {
+        const updateMappingsRecursive = (n) => {
+          const mappings = this.optimizedMapping.get(n.id);
+          if (mappings) {
+            mappings.forEach((m) => {
+              m.mesh.setVisibleAt(m.instanceId, visible);
+            });
           }
-          beg = 0;
-        }
-        if (s.gzindex < s.gzhead.name.length) {
-          val = s.gzhead.name.charCodeAt(s.gzindex++) & 255;
+          if (n.children) n.children.forEach(updateMappingsRecursive);
+        };
+        updateMappingsRecursive(nodes[0]);
+      }
+      return;
+    }
+    obj.traverse((o) => {
+      if (o.name !== "Helpers" && o.name !== "Measure") {
+        if (o.isMesh && o.userData.isOptimized) {
+          o.visible = false;
         } else {
-          val = 0;
+          o.visible = visible;
         }
-        put_byte(s, val);
-      } while (val !== 0);
-      if (s.gzhead.hcrc && s.pending > beg) {
-        strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending - beg, beg);
+        const mappings = this.optimizedMapping.get(o.uuid);
+        if (mappings) {
+          mappings.forEach((m) => {
+            m.mesh.setVisibleAt(m.instanceId, visible);
+          });
+        }
       }
-      s.gzindex = 0;
-    }
-    s.status = COMMENT_STATE;
+    });
+    this.updateSceneBounds();
   }
-  if (s.status === COMMENT_STATE) {
-    if (s.gzhead.comment) {
-      let beg = s.pending;
-      let val;
-      do {
-        if (s.pending === s.pending_buf_size) {
-          if (s.gzhead.hcrc && s.pending > beg) {
-            strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending - beg, beg);
-          }
-          flush_pending(strm);
-          if (s.pending !== 0) {
-            s.last_flush = -1;
-            return Z_OK$3;
-          }
-          beg = 0;
+  highlightObject(uuid) {
+    this.highlightObjects(uuid ? [uuid] : []);
+  }
+  highlightObjects(uuids) {
+    const target = new Set(uuids.filter(Boolean));
+    const restoreOne = (id) => {
+      const mappings = this.optimizedMapping.get(id);
+      if (mappings) {
+        mappings.forEach((m) => {
+          m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
+          if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
+        });
+      }
+    };
+    const applyOne = (id) => {
+      const mappings = this.optimizedMapping.get(id);
+      if (mappings) {
+        mappings.forEach((m) => {
+          m.mesh.setColorAt(m.instanceId, new THREE.Color(16755200));
+          if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
+        });
+      }
+    };
+    for (const prev of this.highlightedUuids) {
+      if (!target.has(prev)) restoreOne(prev);
+    }
+    for (const next of target) {
+      if (!this.highlightedUuids.has(next)) applyOne(next);
+    }
+    this.highlightedUuids = target;
+    this.selectionBox.visible = false;
+    this.highlightMesh.visible = false;
+    this.lastSelectedUuid = uuids.length > 0 ? uuids[uuids.length - 1] : null;
+    if (target.size === 0) return;
+    const union = new THREE.Box3();
+    const tmpBox = new THREE.Box3();
+    const tmpMat = new THREE.Matrix4();
+    const addObjectBounds = (id) => {
+      const mappings = this.optimizedMapping.get(id);
+      if (mappings && mappings.length > 0) {
+        const m = mappings[0];
+        if (m.geometry) {
+          if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+          tmpBox.copy(m.geometry.boundingBox);
+          m.mesh.getMatrixAt(m.instanceId, tmpMat);
+          tmpMat.premultiply(m.mesh.matrixWorld);
+          tmpBox.applyMatrix4(tmpMat);
+          union.union(tmpBox);
         }
-        if (s.gzindex < s.gzhead.comment.length) {
-          val = s.gzhead.comment.charCodeAt(s.gzindex++) & 255;
+        return;
+      }
+      const obj = this.contentGroup.getObjectByProperty("uuid", id);
+      if (!obj) return;
+      obj.updateMatrixWorld(true);
+      if (obj.userData.boundingBox) {
+        tmpBox.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
+      } else {
+        tmpBox.setFromObject(obj);
+      }
+      union.union(tmpBox);
+    };
+    for (const id of target) addObjectBounds(id);
+    if (!union.isEmpty()) {
+      this.selectionBox.box.copy(union);
+      this.selectionBox.visible = true;
+    }
+    const focusId = this.lastSelectedUuid;
+    if (!focusId) return;
+    const focusMappings = this.optimizedMapping.get(focusId);
+    if (focusMappings && focusMappings.length > 0) {
+      const m = focusMappings[0];
+      if (m.geometry) {
+        this.highlightMesh.geometry = m.geometry;
+        const matrix = new THREE.Matrix4();
+        m.mesh.getMatrixAt(m.instanceId, matrix);
+        matrix.premultiply(m.mesh.matrixWorld);
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        const worldScale = new THREE.Vector3();
+        matrix.decompose(worldPos, worldQuat, worldScale);
+        this.highlightMesh.position.copy(worldPos);
+        this.highlightMesh.quaternion.copy(worldQuat);
+        this.highlightMesh.scale.copy(worldScale);
+        this.highlightMesh.visible = true;
+      }
+      return;
+    }
+    const focusObj = this.contentGroup.getObjectByProperty("uuid", focusId);
+    if (!focusObj) return;
+    if (focusObj.isMesh) {
+      focusObj.updateMatrixWorld(true);
+      this.highlightMesh.geometry = focusObj.geometry;
+      const worldPos = new THREE.Vector3();
+      const worldQuat = new THREE.Quaternion();
+      const worldScale = new THREE.Vector3();
+      focusObj.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+      this.highlightMesh.position.copy(worldPos);
+      this.highlightMesh.quaternion.copy(worldQuat);
+      this.highlightMesh.scale.copy(worldScale);
+      this.highlightMesh.visible = true;
+    }
+  }
+  pick(clientX, clientY) {
+    const intersect = this.getRayIntersects(clientX, clientY);
+    if (!intersect) return null;
+    return { object: intersect.object, intersect };
+  }
+  getRayIntersects(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouse.x = (clientX - rect.left) / rect.width * 2 - 1;
+    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const interactables = [];
+    this.contentGroup.traverse((o) => {
+      if (o.visible && (o.isMesh || o.isBatchedMesh)) {
+        if (o.userData.isOptimized) return;
+        interactables.push(o);
+      }
+    });
+    const intersects = this.raycaster.intersectObjects(interactables, false);
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      if (hit.object.isBatchedMesh) {
+        const bm = hit.object;
+        const batchId = hit.batchId !== void 0 ? hit.batchId : hit.instanceId;
+        if (batchId !== void 0) {
+          const originalUuid = bm.userData.batchIdToUuid?.get(batchId);
+          if (originalUuid) {
+            const originalObj = this.contentGroup.getObjectByProperty("uuid", originalUuid);
+            if (originalObj) {
+              hit.object = originalObj;
+            } else {
+              const nodes = this.nodeMap.get(originalUuid);
+              const node = nodes?.[0];
+              const proxy = new THREE.Object3D();
+              proxy.uuid = originalUuid;
+              if (node) {
+                proxy.name = node.name;
+                proxy.type = node.type;
+                proxy.isMesh = node.type === "Mesh";
+              }
+              proxy.getWorldPosition = (v) => {
+                const mat = new THREE.Matrix4();
+                bm.getMatrixAt(batchId, mat);
+                mat.premultiply(bm.matrixWorld);
+                return v.setFromMatrixPosition(mat);
+              };
+              proxy.position.setFromMatrixPosition(new THREE.Matrix4().getMatrixAt ? new THREE.Matrix4() : new THREE.Matrix4());
+              hit.object = proxy;
+            }
+          }
+        }
+      }
+      return hit;
+    }
+    return null;
+  }
+  computeTotalBounds(onlyVisible = false, forceRecompute = false) {
+    if (!onlyVisible && !forceRecompute && !this.precomputedBounds.isEmpty()) {
+      const box = this.precomputedBounds.clone();
+      if (this.globalOffset.length() > 0) {
+        box.translate(this.globalOffset.clone().negate());
+      }
+      return box;
+    }
+    const totalBox = new THREE.Box3();
+    this.contentGroup.updateMatrixWorld(true);
+    this.contentGroup.traverse((obj) => {
+      if (onlyVisible && !obj.visible) return;
+      if (obj.name === "3D Tileset" && this.tilesRenderer) {
+        const tilesBox = new THREE.Box3();
+        if (this.tilesRenderer.getBounds) {
+          this.tilesRenderer.getBounds(tilesBox);
+          if (!tilesBox.isEmpty() && this.globalOffset.length() > 0) {
+            if (Math.abs(tilesBox.min.x) > 1e5 || Math.abs(tilesBox.min.y) > 1e5) {
+              tilesBox.translate(this.globalOffset.clone().negate());
+            }
+          }
+          if (!tilesBox.isEmpty()) totalBox.union(tilesBox);
+        }
+        obj.traverse((child) => {
+          if (child !== obj) child._skipTraverse = true;
+        });
+      } else if (obj.isMesh && !obj._skipTraverse) {
+        const mesh = obj;
+        if (mesh.geometry) {
+          const box = new THREE.Box3().setFromObject(mesh);
+          if (!box.isEmpty()) totalBox.union(box);
+        }
+      } else if (obj.isBatchedMesh && !obj._skipTraverse) {
+        const bm = obj;
+        if (bm.computeBoundingBox) {
+          bm.computeBoundingBox();
+          if (bm.boundingBox) {
+            const box = bm.boundingBox.clone().applyMatrix4(bm.matrixWorld);
+            totalBox.union(box);
+          }
         } else {
-          val = 0;
-        }
-        put_byte(s, val);
-      } while (val !== 0);
-      if (s.gzhead.hcrc && s.pending > beg) {
-        strm.adler = crc32_1(strm.adler, s.pending_buf, s.pending - beg, beg);
-      }
-    }
-    s.status = HCRC_STATE;
-  }
-  if (s.status === HCRC_STATE) {
-    if (s.gzhead.hcrc) {
-      if (s.pending + 2 > s.pending_buf_size) {
-        flush_pending(strm);
-        if (s.pending !== 0) {
-          s.last_flush = -1;
-          return Z_OK$3;
+          const box = new THREE.Box3().setFromObject(bm);
+          if (!box.isEmpty()) totalBox.union(box);
         }
       }
-      put_byte(s, strm.adler & 255);
-      put_byte(s, strm.adler >> 8 & 255);
-      strm.adler = 0;
-    }
-    s.status = BUSY_STATE;
-    flush_pending(strm);
-    if (s.pending !== 0) {
-      s.last_flush = -1;
-      return Z_OK$3;
-    }
-  }
-  if (strm.avail_in !== 0 || s.lookahead !== 0 || flush !== Z_NO_FLUSH$2 && s.status !== FINISH_STATE) {
-    let bstate = s.level === 0 ? deflate_stored(s, flush) : s.strategy === Z_HUFFMAN_ONLY ? deflate_huff(s, flush) : s.strategy === Z_RLE ? deflate_rle(s, flush) : configuration_table[s.level].func(s, flush);
-    if (bstate === BS_FINISH_STARTED || bstate === BS_FINISH_DONE) {
-      s.status = FINISH_STATE;
-    }
-    if (bstate === BS_NEED_MORE || bstate === BS_FINISH_STARTED) {
-      if (strm.avail_out === 0) {
-        s.last_flush = -1;
-      }
-      return Z_OK$3;
-    }
-    if (bstate === BS_BLOCK_DONE) {
-      if (flush === Z_PARTIAL_FLUSH) {
-        _tr_align(s);
-      } else if (flush !== Z_BLOCK$1) {
-        _tr_stored_block(s, 0, 0, false);
-        if (flush === Z_FULL_FLUSH$1) {
-          zero(s.head);
-          if (s.lookahead === 0) {
-            s.strstart = 0;
-            s.block_start = 0;
-            s.insert = 0;
-          }
+    });
+    this.contentGroup.traverse((obj) => {
+      delete obj._skipTraverse;
+    });
+    if (this.chunks.length > 0) {
+      this.chunks.forEach((c) => {
+        if (!onlyVisible || c.loaded) {
+          totalBox.union(c.bounds);
         }
+      });
+    }
+    if (totalBox.isEmpty() && !this.precomputedBounds.isEmpty()) {
+      const fallback = this.precomputedBounds.clone();
+      if (this.globalOffset.length() > 0) {
+        fallback.translate(this.globalOffset.clone().negate());
       }
-      flush_pending(strm);
-      if (strm.avail_out === 0) {
-        s.last_flush = -1;
-        return Z_OK$3;
-      }
+      return fallback;
     }
+    return totalBox;
   }
-  if (flush !== Z_FINISH$3) {
-    return Z_OK$3;
-  }
-  if (s.wrap <= 0) {
-    return Z_STREAM_END$3;
-  }
-  if (s.wrap === 2) {
-    put_byte(s, strm.adler & 255);
-    put_byte(s, strm.adler >> 8 & 255);
-    put_byte(s, strm.adler >> 16 & 255);
-    put_byte(s, strm.adler >> 24 & 255);
-    put_byte(s, strm.total_in & 255);
-    put_byte(s, strm.total_in >> 8 & 255);
-    put_byte(s, strm.total_in >> 16 & 255);
-    put_byte(s, strm.total_in >> 24 & 255);
-  } else {
-    putShortMSB(s, strm.adler >>> 16);
-    putShortMSB(s, strm.adler & 65535);
-  }
-  flush_pending(strm);
-  if (s.wrap > 0) {
-    s.wrap = -s.wrap;
-  }
-  return s.pending !== 0 ? Z_OK$3 : Z_STREAM_END$3;
-};
-const deflateEnd = (strm) => {
-  if (deflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$2;
-  }
-  const status = strm.state.status;
-  strm.state = null;
-  return status === BUSY_STATE ? err$1(strm, Z_DATA_ERROR$2) : Z_OK$3;
-};
-const deflateSetDictionary = (strm, dictionary) => {
-  let dictLength = dictionary.length;
-  if (deflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$2;
-  }
-  const s = strm.state;
-  const wrap = s.wrap;
-  if (wrap === 2 || wrap === 1 && s.status !== INIT_STATE || s.lookahead) {
-    return Z_STREAM_ERROR$2;
-  }
-  if (wrap === 1) {
-    strm.adler = adler32_1(strm.adler, dictionary, dictLength, 0);
-  }
-  s.wrap = 0;
-  if (dictLength >= s.w_size) {
-    if (wrap === 0) {
-      zero(s.head);
-      s.strstart = 0;
-      s.block_start = 0;
-      s.insert = 0;
+  updateSceneBounds() {
+    const fullBox = this.computeTotalBounds(false, true);
+    this.precomputedBounds = fullBox.clone();
+    if (this.globalOffset.length() > 0) {
+      this.precomputedBounds.translate(this.globalOffset);
     }
-    let tmpDict = new Uint8Array(s.w_size);
-    tmpDict.set(dictionary.subarray(dictLength - s.w_size, dictLength), 0);
-    dictionary = tmpDict;
-    dictLength = s.w_size;
-  }
-  const avail = strm.avail_in;
-  const next = strm.next_in;
-  const input = strm.input;
-  strm.avail_in = dictLength;
-  strm.next_in = 0;
-  strm.input = dictionary;
-  fill_window(s);
-  while (s.lookahead >= MIN_MATCH) {
-    let str = s.strstart;
-    let n = s.lookahead - (MIN_MATCH - 1);
-    do {
-      s.ins_h = HASH(s, s.ins_h, s.window[str + MIN_MATCH - 1]);
-      s.prev[str & s.w_mask] = s.head[s.ins_h];
-      s.head[s.ins_h] = str;
-      str++;
-    } while (--n);
-    s.strstart = str;
-    s.lookahead = MIN_MATCH - 1;
-    fill_window(s);
-  }
-  s.strstart += s.lookahead;
-  s.block_start = s.strstart;
-  s.insert = s.lookahead;
-  s.lookahead = 0;
-  s.match_length = s.prev_length = MIN_MATCH - 1;
-  s.match_available = 0;
-  strm.next_in = next;
-  strm.input = input;
-  strm.avail_in = avail;
-  s.wrap = wrap;
-  return Z_OK$3;
-};
-var deflateInit_1 = deflateInit;
-var deflateInit2_1 = deflateInit2;
-var deflateReset_1 = deflateReset;
-var deflateResetKeep_1 = deflateResetKeep;
-var deflateSetHeader_1 = deflateSetHeader;
-var deflate_2$1 = deflate$2;
-var deflateEnd_1 = deflateEnd;
-var deflateSetDictionary_1 = deflateSetDictionary;
-var deflateInfo = "pako deflate (from Nodeca project)";
-var deflate_1$2 = {
-  deflateInit: deflateInit_1,
-  deflateInit2: deflateInit2_1,
-  deflateReset: deflateReset_1,
-  deflateResetKeep: deflateResetKeep_1,
-  deflateSetHeader: deflateSetHeader_1,
-  deflate: deflate_2$1,
-  deflateEnd: deflateEnd_1,
-  deflateSetDictionary: deflateSetDictionary_1,
-  deflateInfo
-};
-const _has = (obj, key) => {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-};
-var assign = function(obj) {
-  const sources = Array.prototype.slice.call(arguments, 1);
-  while (sources.length) {
-    const source = sources.shift();
-    if (!source) {
-      continue;
-    }
-    if (typeof source !== "object") {
-      throw new TypeError(source + "must be non-object");
-    }
-    for (const p in source) {
-      if (_has(source, p)) {
-        obj[p] = source[p];
-      }
-    }
-  }
-  return obj;
-};
-var flattenChunks = (chunks) => {
-  let len = 0;
-  for (let i = 0, l = chunks.length; i < l; i++) {
-    len += chunks[i].length;
-  }
-  const result = new Uint8Array(len);
-  for (let i = 0, pos = 0, l = chunks.length; i < l; i++) {
-    let chunk = chunks[i];
-    result.set(chunk, pos);
-    pos += chunk.length;
-  }
-  return result;
-};
-var common = {
-  assign,
-  flattenChunks
-};
-let STR_APPLY_UIA_OK = true;
-try {
-  String.fromCharCode.apply(null, new Uint8Array(1));
-} catch (__) {
-  STR_APPLY_UIA_OK = false;
-}
-const _utf8len = new Uint8Array(256);
-for (let q = 0; q < 256; q++) {
-  _utf8len[q] = q >= 252 ? 6 : q >= 248 ? 5 : q >= 240 ? 4 : q >= 224 ? 3 : q >= 192 ? 2 : 1;
-}
-_utf8len[254] = _utf8len[254] = 1;
-var string2buf = (str) => {
-  if (typeof TextEncoder === "function" && TextEncoder.prototype.encode) {
-    return new TextEncoder().encode(str);
-  }
-  let buf, c, c2, m_pos, i, str_len = str.length, buf_len = 0;
-  for (m_pos = 0; m_pos < str_len; m_pos++) {
-    c = str.charCodeAt(m_pos);
-    if ((c & 64512) === 55296 && m_pos + 1 < str_len) {
-      c2 = str.charCodeAt(m_pos + 1);
-      if ((c2 & 64512) === 56320) {
-        c = 65536 + (c - 55296 << 10) + (c2 - 56320);
-        m_pos++;
-      }
-    }
-    buf_len += c < 128 ? 1 : c < 2048 ? 2 : c < 65536 ? 3 : 4;
-  }
-  buf = new Uint8Array(buf_len);
-  for (i = 0, m_pos = 0; i < buf_len; m_pos++) {
-    c = str.charCodeAt(m_pos);
-    if ((c & 64512) === 55296 && m_pos + 1 < str_len) {
-      c2 = str.charCodeAt(m_pos + 1);
-      if ((c2 & 64512) === 56320) {
-        c = 65536 + (c - 55296 << 10) + (c2 - 56320);
-        m_pos++;
-      }
-    }
-    if (c < 128) {
-      buf[i++] = c;
-    } else if (c < 2048) {
-      buf[i++] = 192 | c >>> 6;
-      buf[i++] = 128 | c & 63;
-    } else if (c < 65536) {
-      buf[i++] = 224 | c >>> 12;
-      buf[i++] = 128 | c >>> 6 & 63;
-      buf[i++] = 128 | c & 63;
+    const visibleBox = this.computeTotalBounds(true);
+    if (visibleBox.isEmpty()) {
+      this.sceneBounds.copy(fullBox);
     } else {
-      buf[i++] = 240 | c >>> 18;
-      buf[i++] = 128 | c >>> 12 & 63;
-      buf[i++] = 128 | c >>> 6 & 63;
-      buf[i++] = 128 | c & 63;
+      this.sceneBounds.copy(visibleBox);
     }
   }
-  return buf;
-};
-const buf2binstring = (buf, len) => {
-  if (len < 65534) {
-    if (buf.subarray && STR_APPLY_UIA_OK) {
-      return String.fromCharCode.apply(null, buf.length === len ? buf : buf.subarray(0, len));
+  fitView(keepOrientation = false) {
+    this.contentGroup.updateMatrixWorld(true);
+    let box = this.computeTotalBounds(true);
+    if (box.isEmpty()) {
+      box = this.computeTotalBounds(false);
     }
+    this.sceneBounds = box.clone();
+    this.fitBox(box, !keepOrientation);
   }
-  let result = "";
-  for (let i = 0; i < len; i++) {
-    result += String.fromCharCode(buf[i]);
-  }
-  return result;
-};
-var buf2string = (buf, max) => {
-  const len = max || buf.length;
-  if (typeof TextDecoder === "function" && TextDecoder.prototype.decode) {
-    return new TextDecoder().decode(buf.subarray(0, max));
-  }
-  let i, out;
-  const utf16buf = new Array(len * 2);
-  for (out = 0, i = 0; i < len; ) {
-    let c = buf[i++];
-    if (c < 128) {
-      utf16buf[out++] = c;
-      continue;
-    }
-    let c_len = _utf8len[c];
-    if (c_len > 4) {
-      utf16buf[out++] = 65533;
-      i += c_len - 1;
-      continue;
-    }
-    c &= c_len === 2 ? 31 : c_len === 3 ? 15 : 7;
-    while (c_len > 1 && i < len) {
-      c = c << 6 | buf[i++] & 63;
-      c_len--;
-    }
-    if (c_len > 1) {
-      utf16buf[out++] = 65533;
-      continue;
-    }
-    if (c < 65536) {
-      utf16buf[out++] = c;
+  fitViewToObject(uuid) {
+    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+    if (!obj) return;
+    const box = new THREE.Box3();
+    if (obj.userData.boundingBox) {
+      box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
     } else {
-      c -= 65536;
-      utf16buf[out++] = 55296 | c >> 10 & 1023;
-      utf16buf[out++] = 56320 | c & 1023;
+      box.setFromObject(obj);
     }
+    if (!box.isEmpty()) this.fitBox(box);
   }
-  return buf2binstring(utf16buf, out);
-};
-var utf8border = (buf, max) => {
-  max = max || buf.length;
-  if (max > buf.length) {
-    max = buf.length;
-  }
-  let pos = max - 1;
-  while (pos >= 0 && (buf[pos] & 192) === 128) {
-    pos--;
-  }
-  if (pos < 0) {
-    return max;
-  }
-  if (pos === 0) {
-    return max;
-  }
-  return pos + _utf8len[buf[pos]] > max ? pos : max;
-};
-var strings = {
-  string2buf,
-  buf2string,
-  utf8border
-};
-function ZStream() {
-  this.input = null;
-  this.next_in = 0;
-  this.avail_in = 0;
-  this.total_in = 0;
-  this.output = null;
-  this.next_out = 0;
-  this.avail_out = 0;
-  this.total_out = 0;
-  this.msg = "";
-  this.state = null;
-  this.data_type = 2;
-  this.adler = 0;
-}
-var zstream = ZStream;
-const toString$1 = Object.prototype.toString;
-const {
-  Z_NO_FLUSH: Z_NO_FLUSH$1,
-  Z_SYNC_FLUSH,
-  Z_FULL_FLUSH,
-  Z_FINISH: Z_FINISH$2,
-  Z_OK: Z_OK$2,
-  Z_STREAM_END: Z_STREAM_END$2,
-  Z_DEFAULT_COMPRESSION,
-  Z_DEFAULT_STRATEGY,
-  Z_DEFLATED: Z_DEFLATED$1
-} = constants$2;
-function Deflate$1(options) {
-  this.options = common.assign({
-    level: Z_DEFAULT_COMPRESSION,
-    method: Z_DEFLATED$1,
-    chunkSize: 16384,
-    windowBits: 15,
-    memLevel: 8,
-    strategy: Z_DEFAULT_STRATEGY
-  }, options || {});
-  let opt = this.options;
-  if (opt.raw && opt.windowBits > 0) {
-    opt.windowBits = -opt.windowBits;
-  } else if (opt.gzip && opt.windowBits > 0 && opt.windowBits < 16) {
-    opt.windowBits += 16;
-  }
-  this.err = 0;
-  this.msg = "";
-  this.ended = false;
-  this.chunks = [];
-  this.strm = new zstream();
-  this.strm.avail_out = 0;
-  let status = deflate_1$2.deflateInit2(
-    this.strm,
-    opt.level,
-    opt.method,
-    opt.windowBits,
-    opt.memLevel,
-    opt.strategy
-  );
-  if (status !== Z_OK$2) {
-    throw new Error(messages[status]);
-  }
-  if (opt.header) {
-    deflate_1$2.deflateSetHeader(this.strm, opt.header);
-  }
-  if (opt.dictionary) {
-    let dict;
-    if (typeof opt.dictionary === "string") {
-      dict = strings.string2buf(opt.dictionary);
-    } else if (toString$1.call(opt.dictionary) === "[object ArrayBuffer]") {
-      dict = new Uint8Array(opt.dictionary);
+  fitBox(box, updateCameraPosition = true) {
+    if (box.isEmpty()) {
+      this.camera.zoom = 1;
+      this.camera.position.set(1e3, 1e3, 1e3);
+      this.camera.lookAt(0, 0, 0);
+      this.controls.target.set(0, 0, 0);
+      this.camera.updateProjectionMatrix();
+      this.controls.update();
+      return;
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const extent = maxDim > 0 ? maxDim : 100;
+    const padding = 1.2;
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const aspect = w / h;
+    let fH, fW;
+    if (aspect >= 1) {
+      fH = extent * padding;
+      fW = fH * aspect;
     } else {
-      dict = opt.dictionary;
+      fW = extent * padding;
+      fH = fW / aspect;
     }
-    status = deflate_1$2.deflateSetDictionary(this.strm, dict);
-    if (status !== Z_OK$2) {
-      throw new Error(messages[status]);
+    this.camera.zoom = 1;
+    this.camera.left = -fW / 2;
+    this.camera.right = fW / 2;
+    this.camera.top = fH / 2;
+    this.camera.bottom = -fH / 2;
+    const zBuffer = Math.max(extent * 5, 2e3);
+    this.camera.near = -zBuffer;
+    this.camera.far = zBuffer;
+    if (updateCameraPosition) {
+      const offset = new THREE.Vector3(1, -1, 1).normalize();
+      const dist = Math.max(extent * 2, 2e3);
+      this.camera.position.copy(center.clone().add(offset.multiplyScalar(dist)));
+      this.camera.lookAt(center);
+    } else {
+      const direction = new THREE.Vector3();
+      this.camera.getWorldDirection(direction);
+      const dist = this.camera.position.distanceTo(this.controls.target);
+      this.camera.position.copy(center).add(direction.multiplyScalar(-dist));
+      this.camera.lookAt(center);
     }
-    this._dict_set = true;
+    this.camera.updateProjectionMatrix();
+    this.controls.target.copy(center);
+    this.controls.update();
   }
-}
-Deflate$1.prototype.push = function(data, flush_mode) {
-  const strm = this.strm;
-  const chunkSize = this.options.chunkSize;
-  let status, _flush_mode;
-  if (this.ended) {
+  setView(view) {
+    let box = this.computeTotalBounds(true);
+    if (box.isEmpty()) box = this.computeTotalBounds(false);
+    this.sceneBounds = box.clone();
+    const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
+    const size = box.isEmpty() ? new THREE.Vector3(100, 100, 100) : box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = Math.max(maxDim * 2, 10);
+    let pos = new THREE.Vector3();
+    switch (view) {
+      case "top":
+        pos.set(0, 0, dist);
+        break;
+      case "bottom":
+        pos.set(0, 0, -dist);
+        break;
+      case "front":
+        pos.set(0, -dist, 0);
+        break;
+      case "back":
+        pos.set(0, dist, 0);
+        break;
+      case "left":
+        pos.set(-dist, 0, 0);
+        break;
+      case "right":
+        pos.set(dist, 0, 0);
+        break;
+      case "se":
+      case "top-front-right":
+        pos.set(dist, -dist, dist);
+        break;
+      case "sw":
+      case "top-front-left":
+        pos.set(-dist, -dist, dist);
+        break;
+      case "ne":
+      case "top-back-right":
+        pos.set(dist, dist, dist);
+        break;
+      case "nw":
+      case "top-back-left":
+        pos.set(-dist, dist, dist);
+        break;
+      case "bottom-front-right":
+        pos.set(dist, -dist, -dist);
+        break;
+      case "bottom-front-left":
+        pos.set(-dist, -dist, -dist);
+        break;
+      case "bottom-back-right":
+        pos.set(dist, dist, -dist);
+        break;
+      case "bottom-back-left":
+        pos.set(-dist, dist, -dist);
+        break;
+      case "top-front":
+        pos.set(0, -dist, dist);
+        break;
+      case "top-back":
+        pos.set(0, dist, dist);
+        break;
+      case "top-left":
+        pos.set(-dist, 0, dist);
+        break;
+      case "top-right":
+        pos.set(dist, 0, dist);
+        break;
+      case "bottom-front":
+        pos.set(0, -dist, -dist);
+        break;
+      case "bottom-back":
+        pos.set(0, dist, -dist);
+        break;
+      case "bottom-left":
+        pos.set(-dist, 0, -dist);
+        break;
+      case "bottom-right":
+        pos.set(dist, 0, -dist);
+        break;
+      case "front-left":
+        pos.set(-dist, -dist, 0);
+        break;
+      case "front-right":
+        pos.set(dist, -dist, 0);
+        break;
+      case "back-left":
+        pos.set(-dist, dist, 0);
+        break;
+      case "back-right":
+        pos.set(dist, dist, 0);
+        break;
+    }
+    if (pos.lengthSq() > 0) {
+      pos.normalize().multiplyScalar(dist);
+      this.camera.position.copy(center).add(pos);
+      this.camera.lookAt(center);
+      this.controls.target.copy(center);
+      this.controls.update();
+      this.fitBox(box, false);
+    }
+  }
+  // --- 测量逻辑 ---
+  startMeasurement(type) {
+    this.measureType = type;
+    this.currentMeasurePoints = [];
+    this.clearMeasurementPreview();
+  }
+  addMeasurePoint(point) {
+    if (this.measureType === "none") return null;
+    this.currentMeasurePoints.push(point);
+    this.addMarker(point, this.measureGroup);
+    if (this.measureType === "dist" && this.currentMeasurePoints.length === 2) {
+      return this.finalizeMeasurement();
+    } else if (this.measureType === "angle" && this.currentMeasurePoints.length === 3) {
+      return this.finalizeMeasurement();
+    } else if (this.measureType === "coord") {
+      return this.finalizeMeasurement();
+    }
+    this.updatePreviewLine();
+    return null;
+  }
+  updateMeasureHover(clientX, clientY) {
+    if (this.measureType === "none") {
+      this.tempMarker.visible = false;
+      return;
+    }
+    const intersect = this.getRayIntersects(clientX, clientY);
+    if (intersect) {
+      const p = intersect.point;
+      const attr = this.tempMarker.geometry.attributes.position;
+      attr.setXYZ(0, p.x, p.y, p.z);
+      attr.needsUpdate = true;
+      this.tempMarker.visible = true;
+      if (this.currentMeasurePoints.length > 0) {
+        this.updatePreviewLine(p);
+      }
+    } else {
+      this.tempMarker.visible = false;
+      if (this.previewLine) this.previewLine.visible = false;
+    }
+  }
+  updatePreviewLine(hoverPoint) {
+    if (this.previewLine) {
+      this.measureGroup.remove(this.previewLine);
+      this.previewLine = null;
+    }
+    const points = [...this.currentMeasurePoints];
+    if (hoverPoint) points.push(hoverPoint);
+    if (points.length < 2) return;
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineDashedMaterial({
+      color: 16711680,
+      dashSize: 5,
+      gapSize: 2,
+      depthTest: false
+    });
+    this.previewLine = new THREE.Line(geometry, material);
+    this.previewLine.computeLineDistances();
+    this.previewLine.renderOrder = 998;
+    this.measureGroup.add(this.previewLine);
+  }
+  finalizeMeasurement() {
+    const id = `measure_${Date.now()}`;
+    const group = new THREE.Group();
+    group.name = id;
+    this.currentMeasurePoints.forEach((p) => this.addMarker(p, group));
+    let valStr = "";
+    let displayVal = "";
+    let typeStr = this.measureType;
+    let labelPos = new THREE.Vector3();
+    if (this.measureType === "dist") {
+      const p1 = this.currentMeasurePoints[0];
+      const p2 = this.currentMeasurePoints[1];
+      const dist = p1.distanceTo(p2);
+      const dx = Math.abs(p2.x - p1.x);
+      const dy = Math.abs(p2.y - p1.y);
+      const dz = Math.abs(p2.z - p1.z);
+      displayVal = dist.toFixed(3);
+      valStr = `${displayVal} (Δx:${dx.toFixed(2)}, Δy:${dy.toFixed(2)}, Δz:${dz.toFixed(2)})`;
+      this.addLine(this.currentMeasurePoints, group);
+      labelPos.copy(p1).add(p2).multiplyScalar(0.5);
+    } else if (this.measureType === "angle") {
+      const p1 = this.currentMeasurePoints[0];
+      const center = this.currentMeasurePoints[1];
+      const p2 = this.currentMeasurePoints[2];
+      const v1 = p1.clone().sub(center).normalize();
+      const v2 = p2.clone().sub(center).normalize();
+      const angle = v1.angleTo(v2) * (180 / Math.PI);
+      displayVal = angle.toFixed(2) + "°";
+      valStr = displayVal;
+      this.addLine(this.currentMeasurePoints, group);
+      labelPos.copy(center);
+    } else {
+      const p = this.currentMeasurePoints[0];
+      displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
+      valStr = displayVal;
+      labelPos.copy(p);
+    }
+    const label = this.createLabel(displayVal, labelPos);
+    group.add(label);
+    this.measureGroup.add(group);
+    this.measureRecords.set(id, { id, type: typeStr, val: valStr, group });
+    this.currentMeasurePoints = [];
+    this.clearMeasurementPreview();
+    return { id, type: typeStr, val: valStr };
+  }
+  createLabel(text, position) {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return new THREE.Sprite();
+    const fontSize = 48;
+    const padding = 24;
+    ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
+    const textWidth = ctx.measureText(text).width;
+    canvas.width = textWidth + padding * 2;
+    canvas.height = fontSize + padding;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "rgba(30, 30, 30, 0.9)";
+    const radius = 8;
+    if (ctx.roundRect) {
+      ctx.roundRect(5, 5, canvas.width - 10, canvas.height - 10, radius);
+    } else {
+      ctx.rect(5, 5, canvas.width - 10, canvas.height - 10);
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ff0000";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    const spriteMaterial = new THREE.SpriteMaterial({
+      map: texture,
+      depthTest: false,
+      sizeAttenuation: false
+      // 关键：使文字不受相机缩放影响
+    });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    sprite.position.copy(position);
+    const baseScale = 0.035;
+    sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
+    sprite.renderOrder = 1001;
+    sprite.userData = { type: "label" };
+    return sprite;
+  }
+  highlightMeasurement(id) {
+    this.measureRecords.forEach((record, rid) => {
+      const isHighlighted = rid === id;
+      const color = isHighlighted ? 65280 : 16711680;
+      record.group.traverse((child) => {
+        if (child instanceof THREE.Line) {
+          child.material.color.set(color);
+        } else if (child instanceof THREE.Points) {
+          child.material.color.set(color);
+        } else if (child instanceof THREE.Sprite) {
+          child.material.color.set(isHighlighted ? 65280 : 16777215);
+        }
+      });
+    });
+  }
+  pickMeasurement(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    this.mouse.x = (clientX - rect.left) / rect.width * 2 - 1;
+    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const oldThreshold = this.raycaster.params.Line?.threshold || 0;
+    if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = 5;
+    const intersects = this.raycaster.intersectObjects(this.measureGroup.children, true);
+    if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = oldThreshold;
+    if (intersects.length > 0) {
+      let obj = intersects[0].object;
+      while (obj.parent && !obj.name.startsWith("measure_")) {
+        obj = obj.parent;
+      }
+      if (obj.name.startsWith("measure_")) {
+        return obj.name;
+      }
+    }
+    return null;
+  }
+  addMarker(point, parent) {
+    const markerGeo = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([point.x, point.y, point.z], 3));
+    const markerMat = new THREE.PointsMaterial({ color: 16711680, size: 8, map: this.dotTexture, transparent: true, alphaTest: 0.5, depthTest: false });
+    const marker = new THREE.Points(markerGeo, markerMat);
+    marker.renderOrder = 999;
+    parent.add(marker);
+  }
+  addLine(points, parent) {
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 16711680, depthTest: false, linewidth: 2 });
+    const line = new THREE.Line(geometry, material);
+    line.renderOrder = 998;
+    parent.add(line);
+  }
+  removeMeasurement(id) {
+    if (this.measureRecords.has(id)) {
+      const record = this.measureRecords.get(id);
+      if (record) {
+        this.measureGroup.remove(record.group);
+        this.measureRecords.delete(id);
+      }
+    }
+  }
+  clearAllMeasurements() {
+    this.measureRecords.forEach((record) => {
+      this.measureGroup.remove(record.group);
+    });
+    this.measureRecords.clear();
+    this.clearMeasurementPreview();
+  }
+  clearMeasurementPreview() {
+    this.currentMeasurePoints = [];
+    if (this.previewLine) {
+      this.measureGroup.remove(this.previewLine);
+      this.previewLine = null;
+    }
+    this.tempMarker.visible = false;
+    for (let i = this.measureGroup.children.length - 1; i >= 0; i--) {
+      const child = this.measureGroup.children[i];
+      if (!child.name.startsWith("measure_") && child !== this.previewLine) {
+        this.measureGroup.remove(child);
+      }
+    }
+  }
+  // --- 剖切逻辑 ---
+  setupClipping() {
+    this.clippingPlanes = [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0),
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
+      new THREE.Plane(new THREE.Vector3(0, -1, 0), 0),
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), 0)
+    ];
+    this.renderer.clippingPlanes = [];
+    const colors = [16711680, 16711680, 65280, 65280, 255, 255];
+    this.clipPlaneHelpers = [];
+    this.clipHelpersGroup.clear();
+    for (let i = 0; i < 6; i++) {
+      const geom = new THREE.PlaneGeometry(1, 1);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colors[i],
+        transparent: true,
+        opacity: 0.3,
+        // 提高不透明度，使半透明效果更明显
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+        clippingPlanes: []
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.visible = false;
+      mesh.renderOrder = 9999;
+      const edges = new THREE.EdgesGeometry(geom);
+      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+        color: colors[i],
+        transparent: true,
+        opacity: 0.8,
+        // 边框也调亮一点
+        depthWrite: false
+      }));
+      line.renderOrder = 1e4;
+      mesh.add(line);
+      this.clipPlaneHelpers.push(mesh);
+      this.clipHelpersGroup.add(mesh);
+    }
+  }
+  setClippingEnabled(enabled) {
+    this.renderer.clippingPlanes = enabled ? this.clippingPlanes : [];
+    if (!enabled) {
+      this.clipPlaneHelpers.forEach((h) => h.visible = false);
+    }
+  }
+  updateClippingPlanes(bounds, values, active) {
+    if (bounds.isEmpty()) return;
+    const { min, max } = bounds;
+    const size = max.clone().sub(min);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const diagonal = size.length();
+    const helperSize = diagonal > 0 ? diagonal * 1.2 : 1e3;
+    const xMin = min.x + values.x[0] / 100 * size.x;
+    const xMax = min.x + values.x[1] / 100 * size.x;
+    const yMin = min.y + values.y[0] / 100 * size.y;
+    const yMax = min.y + values.y[1] / 100 * size.y;
+    const zMin = min.z + values.z[0] / 100 * size.z;
+    const zMax = min.z + values.z[1] / 100 * size.z;
+    const isEnabled = this.renderer.clippingPlanes.length > 0;
+    if (active.x) {
+      this.clippingPlanes[0].constant = -xMin;
+      this.clippingPlanes[1].constant = xMax;
+      this.updatePlaneHelper(0, new THREE.Vector3(1, 0, 0), xMin, center, helperSize, isEnabled);
+      this.updatePlaneHelper(1, new THREE.Vector3(-1, 0, 0), xMax, center, helperSize, isEnabled);
+    } else {
+      this.clippingPlanes[0].constant = Infinity;
+      this.clippingPlanes[1].constant = Infinity;
+      this.clipPlaneHelpers[0].visible = false;
+      this.clipPlaneHelpers[1].visible = false;
+    }
+    if (active.y) {
+      this.clippingPlanes[2].constant = -yMin;
+      this.clippingPlanes[3].constant = yMax;
+      this.updatePlaneHelper(2, new THREE.Vector3(0, 1, 0), yMin, center, helperSize, isEnabled);
+      this.updatePlaneHelper(3, new THREE.Vector3(0, -1, 0), yMax, center, helperSize, isEnabled);
+    } else {
+      this.clippingPlanes[2].constant = Infinity;
+      this.clippingPlanes[3].constant = Infinity;
+      this.clipPlaneHelpers[2].visible = false;
+      this.clipPlaneHelpers[3].visible = false;
+    }
+    if (active.z) {
+      this.clippingPlanes[4].constant = -zMin;
+      this.clippingPlanes[5].constant = zMax;
+      this.updatePlaneHelper(4, new THREE.Vector3(0, 0, 1), zMin, center, helperSize, isEnabled);
+      this.updatePlaneHelper(5, new THREE.Vector3(0, 0, -1), zMax, center, helperSize, isEnabled);
+    } else {
+      this.clippingPlanes[4].constant = Infinity;
+      this.clippingPlanes[5].constant = Infinity;
+      this.clipPlaneHelpers[4].visible = false;
+      this.clipPlaneHelpers[5].visible = false;
+    }
+  }
+  updatePlaneHelper(idx, normal, dist, center, size, isEnabled) {
+    const helper = this.clipPlaneHelpers[idx];
+    if (!helper) return;
+    helper.visible = isEnabled;
+    helper.scale.set(size, size, 1);
+    const pos = new THREE.Vector3(center.x, center.y, center.z);
+    const epsilon = 1e-3;
+    if (normal.x !== 0) pos.x = dist + normal.x * epsilon;
+    else if (normal.y !== 0) pos.y = dist + normal.y * epsilon;
+    else if (normal.z !== 0) pos.z = dist + normal.z * epsilon;
+    helper.position.copy(pos);
+    helper.lookAt(pos.clone().add(normal));
+  }
+  /**
+   * 检查包围盒是否完全被当前剖切面裁剪掉
+   * 如果包围盒完全在任意一个激活的剖切面的“背面”，则认为被裁剪
+   */
+  isBoxClipped(box) {
+    for (const plane of this.clippingPlanes) {
+      if (plane.constant === Infinity) continue;
+      const planeNormal = plane.normal;
+      const maxPoint = new THREE.Vector3(
+        planeNormal.x > 0 ? box.max.x : box.min.x,
+        planeNormal.y > 0 ? box.max.y : box.min.y,
+        planeNormal.z > 0 ? box.max.z : box.min.z
+      );
+      if (plane.distanceToPoint(maxPoint) < 0) {
+        return true;
+      }
+    }
     return false;
   }
-  if (flush_mode === ~~flush_mode) _flush_mode = flush_mode;
-  else _flush_mode = flush_mode === true ? Z_FINISH$2 : Z_NO_FLUSH$1;
-  if (typeof data === "string") {
-    strm.input = strings.string2buf(data);
-  } else if (toString$1.call(data) === "[object ArrayBuffer]") {
-    strm.input = new Uint8Array(data);
-  } else {
-    strm.input = data;
-  }
-  strm.next_in = 0;
-  strm.avail_in = strm.input.length;
-  for (; ; ) {
-    if (strm.avail_out === 0) {
-      strm.output = new Uint8Array(chunkSize);
-      strm.next_out = 0;
-      strm.avail_out = chunkSize;
-    }
-    if ((_flush_mode === Z_SYNC_FLUSH || _flush_mode === Z_FULL_FLUSH) && strm.avail_out <= 6) {
-      this.onData(strm.output.subarray(0, strm.next_out));
-      strm.avail_out = 0;
-      continue;
-    }
-    status = deflate_1$2.deflate(strm, _flush_mode);
-    if (status === Z_STREAM_END$2) {
-      if (strm.next_out > 0) {
-        this.onData(strm.output.subarray(0, strm.next_out));
-      }
-      status = deflate_1$2.deflateEnd(this.strm);
-      this.onEnd(status);
-      this.ended = true;
-      return status === Z_OK$2;
-    }
-    if (strm.avail_out === 0) {
-      this.onData(strm.output);
-      continue;
-    }
-    if (_flush_mode > 0 && strm.next_out > 0) {
-      this.onData(strm.output.subarray(0, strm.next_out));
-      strm.avail_out = 0;
-      continue;
-    }
-    if (strm.avail_in === 0) break;
-  }
-  return true;
-};
-Deflate$1.prototype.onData = function(chunk) {
-  this.chunks.push(chunk);
-};
-Deflate$1.prototype.onEnd = function(status) {
-  if (status === Z_OK$2) {
-    this.result = common.flattenChunks(this.chunks);
-  }
-  this.chunks = [];
-  this.err = status;
-  this.msg = this.strm.msg;
-};
-function deflate$1(input, options) {
-  const deflator = new Deflate$1(options);
-  deflator.push(input, true);
-  if (deflator.err) {
-    throw deflator.msg || messages[deflator.err];
-  }
-  return deflator.result;
-}
-function deflateRaw$1(input, options) {
-  options = options || {};
-  options.raw = true;
-  return deflate$1(input, options);
-}
-function gzip$1(input, options) {
-  options = options || {};
-  options.gzip = true;
-  return deflate$1(input, options);
-}
-var Deflate_1$1 = Deflate$1;
-var deflate_2 = deflate$1;
-var deflateRaw_1$1 = deflateRaw$1;
-var gzip_1$1 = gzip$1;
-var deflate_1$1 = {
-  Deflate: Deflate_1$1,
-  deflate: deflate_2,
-  deflateRaw: deflateRaw_1$1,
-  gzip: gzip_1$1};
-const BAD$1 = 16209;
-const TYPE$1 = 16191;
-var inffast = function inflate_fast(strm, start) {
-  let _in;
-  let last;
-  let _out;
-  let beg;
-  let end;
-  let dmax;
-  let wsize;
-  let whave;
-  let wnext;
-  let s_window;
-  let hold;
-  let bits;
-  let lcode;
-  let dcode;
-  let lmask;
-  let dmask;
-  let here;
-  let op;
-  let len;
-  let dist;
-  let from;
-  let from_source;
-  let input, output;
-  const state = strm.state;
-  _in = strm.next_in;
-  input = strm.input;
-  last = _in + (strm.avail_in - 5);
-  _out = strm.next_out;
-  output = strm.output;
-  beg = _out - (start - strm.avail_out);
-  end = _out + (strm.avail_out - 257);
-  dmax = state.dmax;
-  wsize = state.wsize;
-  whave = state.whave;
-  wnext = state.wnext;
-  s_window = state.window;
-  hold = state.hold;
-  bits = state.bits;
-  lcode = state.lencode;
-  dcode = state.distcode;
-  lmask = (1 << state.lenbits) - 1;
-  dmask = (1 << state.distbits) - 1;
-  top:
-    do {
-      if (bits < 15) {
-        hold += input[_in++] << bits;
-        bits += 8;
-        hold += input[_in++] << bits;
-        bits += 8;
-      }
-      here = lcode[hold & lmask];
-      dolen:
-        for (; ; ) {
-          op = here >>> 24;
-          hold >>>= op;
-          bits -= op;
-          op = here >>> 16 & 255;
-          if (op === 0) {
-            output[_out++] = here & 65535;
-          } else if (op & 16) {
-            len = here & 65535;
-            op &= 15;
-            if (op) {
-              if (bits < op) {
-                hold += input[_in++] << bits;
-                bits += 8;
-              }
-              len += hold & (1 << op) - 1;
-              hold >>>= op;
-              bits -= op;
-            }
-            if (bits < 15) {
-              hold += input[_in++] << bits;
-              bits += 8;
-              hold += input[_in++] << bits;
-              bits += 8;
-            }
-            here = dcode[hold & dmask];
-            dodist:
-              for (; ; ) {
-                op = here >>> 24;
-                hold >>>= op;
-                bits -= op;
-                op = here >>> 16 & 255;
-                if (op & 16) {
-                  dist = here & 65535;
-                  op &= 15;
-                  if (bits < op) {
-                    hold += input[_in++] << bits;
-                    bits += 8;
-                    if (bits < op) {
-                      hold += input[_in++] << bits;
-                      bits += 8;
-                    }
-                  }
-                  dist += hold & (1 << op) - 1;
-                  if (dist > dmax) {
-                    strm.msg = "invalid distance too far back";
-                    state.mode = BAD$1;
-                    break top;
-                  }
-                  hold >>>= op;
-                  bits -= op;
-                  op = _out - beg;
-                  if (dist > op) {
-                    op = dist - op;
-                    if (op > whave) {
-                      if (state.sane) {
-                        strm.msg = "invalid distance too far back";
-                        state.mode = BAD$1;
-                        break top;
-                      }
-                    }
-                    from = 0;
-                    from_source = s_window;
-                    if (wnext === 0) {
-                      from += wsize - op;
-                      if (op < len) {
-                        len -= op;
-                        do {
-                          output[_out++] = s_window[from++];
-                        } while (--op);
-                        from = _out - dist;
-                        from_source = output;
-                      }
-                    } else if (wnext < op) {
-                      from += wsize + wnext - op;
-                      op -= wnext;
-                      if (op < len) {
-                        len -= op;
-                        do {
-                          output[_out++] = s_window[from++];
-                        } while (--op);
-                        from = 0;
-                        if (wnext < len) {
-                          op = wnext;
-                          len -= op;
-                          do {
-                            output[_out++] = s_window[from++];
-                          } while (--op);
-                          from = _out - dist;
-                          from_source = output;
-                        }
-                      }
-                    } else {
-                      from += wnext - op;
-                      if (op < len) {
-                        len -= op;
-                        do {
-                          output[_out++] = s_window[from++];
-                        } while (--op);
-                        from = _out - dist;
-                        from_source = output;
-                      }
-                    }
-                    while (len > 2) {
-                      output[_out++] = from_source[from++];
-                      output[_out++] = from_source[from++];
-                      output[_out++] = from_source[from++];
-                      len -= 3;
-                    }
-                    if (len) {
-                      output[_out++] = from_source[from++];
-                      if (len > 1) {
-                        output[_out++] = from_source[from++];
-                      }
-                    }
-                  } else {
-                    from = _out - dist;
-                    do {
-                      output[_out++] = output[from++];
-                      output[_out++] = output[from++];
-                      output[_out++] = output[from++];
-                      len -= 3;
-                    } while (len > 2);
-                    if (len) {
-                      output[_out++] = output[from++];
-                      if (len > 1) {
-                        output[_out++] = output[from++];
-                      }
-                    }
-                  }
-                } else if ((op & 64) === 0) {
-                  here = dcode[(here & 65535) + (hold & (1 << op) - 1)];
-                  continue dodist;
-                } else {
-                  strm.msg = "invalid distance code";
-                  state.mode = BAD$1;
-                  break top;
-                }
-                break;
-              }
-          } else if ((op & 64) === 0) {
-            here = lcode[(here & 65535) + (hold & (1 << op) - 1)];
-            continue dolen;
-          } else if (op & 32) {
-            state.mode = TYPE$1;
-            break top;
-          } else {
-            strm.msg = "invalid literal/length code";
-            state.mode = BAD$1;
-            break top;
+  getStats() {
+    let meshes = 0;
+    let faces = 0;
+    let memory = 0;
+    this.contentGroup.traverse((obj) => {
+      if (obj.name === "__EdgesHelper") return;
+      if (obj.isMesh || obj.isBatchedMesh) {
+        meshes++;
+        const mesh = obj;
+        if (mesh.isBatchedMesh) {
+          const mapping = mesh.userData.batchIdToExpressId;
+          if (mapping) {
+            meshes += mapping.size - 1;
           }
-          break;
         }
-    } while (_in < last && _out < end);
-  len = bits >> 3;
-  _in -= len;
-  bits -= len << 3;
-  hold &= (1 << bits) - 1;
-  strm.next_in = _in;
-  strm.next_out = _out;
-  strm.avail_in = _in < last ? 5 + (last - _in) : 5 - (_in - last);
-  strm.avail_out = _out < end ? 257 + (end - _out) : 257 - (_out - end);
-  state.hold = hold;
-  state.bits = bits;
-  return;
-};
-const MAXBITS = 15;
-const ENOUGH_LENS$1 = 852;
-const ENOUGH_DISTS$1 = 592;
-const CODES$1 = 0;
-const LENS$1 = 1;
-const DISTS$1 = 2;
-const lbase = new Uint16Array([
-  /* Length codes 257..285 base */
-  3,
-  4,
-  5,
-  6,
-  7,
-  8,
-  9,
-  10,
-  11,
-  13,
-  15,
-  17,
-  19,
-  23,
-  27,
-  31,
-  35,
-  43,
-  51,
-  59,
-  67,
-  83,
-  99,
-  115,
-  131,
-  163,
-  195,
-  227,
-  258,
-  0,
-  0
-]);
-const lext = new Uint8Array([
-  /* Length codes 257..285 extra */
-  16,
-  16,
-  16,
-  16,
-  16,
-  16,
-  16,
-  16,
-  17,
-  17,
-  17,
-  17,
-  18,
-  18,
-  18,
-  18,
-  19,
-  19,
-  19,
-  19,
-  20,
-  20,
-  20,
-  20,
-  21,
-  21,
-  21,
-  21,
-  16,
-  72,
-  78
-]);
-const dbase = new Uint16Array([
-  /* Distance codes 0..29 base */
-  1,
-  2,
-  3,
-  4,
-  5,
-  7,
-  9,
-  13,
-  17,
-  25,
-  33,
-  49,
-  65,
-  97,
-  129,
-  193,
-  257,
-  385,
-  513,
-  769,
-  1025,
-  1537,
-  2049,
-  3073,
-  4097,
-  6145,
-  8193,
-  12289,
-  16385,
-  24577,
-  0,
-  0
-]);
-const dext = new Uint8Array([
-  /* Distance codes 0..29 extra */
-  16,
-  16,
-  16,
-  16,
-  17,
-  17,
-  18,
-  18,
-  19,
-  19,
-  20,
-  20,
-  21,
-  21,
-  22,
-  22,
-  23,
-  23,
-  24,
-  24,
-  25,
-  25,
-  26,
-  26,
-  27,
-  27,
-  28,
-  28,
-  29,
-  29,
-  64,
-  64
-]);
-const inflate_table = (type, lens, lens_index, codes, table, table_index, work, opts) => {
-  const bits = opts.bits;
-  let len = 0;
-  let sym = 0;
-  let min = 0, max = 0;
-  let root = 0;
-  let curr = 0;
-  let drop = 0;
-  let left = 0;
-  let used = 0;
-  let huff = 0;
-  let incr;
-  let fill;
-  let low;
-  let mask;
-  let next;
-  let base = null;
-  let match;
-  const count = new Uint16Array(MAXBITS + 1);
-  const offs = new Uint16Array(MAXBITS + 1);
-  let extra = null;
-  let here_bits, here_op, here_val;
-  for (len = 0; len <= MAXBITS; len++) {
-    count[len] = 0;
-  }
-  for (sym = 0; sym < codes; sym++) {
-    count[lens[lens_index + sym]]++;
-  }
-  root = bits;
-  for (max = MAXBITS; max >= 1; max--) {
-    if (count[max] !== 0) {
-      break;
-    }
-  }
-  if (root > max) {
-    root = max;
-  }
-  if (max === 0) {
-    table[table_index++] = 1 << 24 | 64 << 16 | 0;
-    table[table_index++] = 1 << 24 | 64 << 16 | 0;
-    opts.bits = 1;
-    return 0;
-  }
-  for (min = 1; min < max; min++) {
-    if (count[min] !== 0) {
-      break;
-    }
-  }
-  if (root < min) {
-    root = min;
-  }
-  left = 1;
-  for (len = 1; len <= MAXBITS; len++) {
-    left <<= 1;
-    left -= count[len];
-    if (left < 0) {
-      return -1;
-    }
-  }
-  if (left > 0 && (type === CODES$1 || max !== 1)) {
-    return -1;
-  }
-  offs[1] = 0;
-  for (len = 1; len < MAXBITS; len++) {
-    offs[len + 1] = offs[len] + count[len];
-  }
-  for (sym = 0; sym < codes; sym++) {
-    if (lens[lens_index + sym] !== 0) {
-      work[offs[lens[lens_index + sym]]++] = sym;
-    }
-  }
-  if (type === CODES$1) {
-    base = extra = work;
-    match = 20;
-  } else if (type === LENS$1) {
-    base = lbase;
-    extra = lext;
-    match = 257;
-  } else {
-    base = dbase;
-    extra = dext;
-    match = 0;
-  }
-  huff = 0;
-  sym = 0;
-  len = min;
-  next = table_index;
-  curr = root;
-  drop = 0;
-  low = -1;
-  used = 1 << root;
-  mask = used - 1;
-  if (type === LENS$1 && used > ENOUGH_LENS$1 || type === DISTS$1 && used > ENOUGH_DISTS$1) {
-    return 1;
-  }
-  for (; ; ) {
-    here_bits = len - drop;
-    if (work[sym] + 1 < match) {
-      here_op = 0;
-      here_val = work[sym];
-    } else if (work[sym] >= match) {
-      here_op = extra[work[sym] - match];
-      here_val = base[work[sym] - match];
-    } else {
-      here_op = 32 + 64;
-      here_val = 0;
-    }
-    incr = 1 << len - drop;
-    fill = 1 << curr;
-    min = fill;
-    do {
-      fill -= incr;
-      table[next + (huff >> drop) + fill] = here_bits << 24 | here_op << 16 | here_val | 0;
-    } while (fill !== 0);
-    incr = 1 << len - 1;
-    while (huff & incr) {
-      incr >>= 1;
-    }
-    if (incr !== 0) {
-      huff &= incr - 1;
-      huff += incr;
-    } else {
-      huff = 0;
-    }
-    sym++;
-    if (--count[len] === 0) {
-      if (len === max) {
-        break;
-      }
-      len = lens[lens_index + work[sym]];
-    }
-    if (len > root && (huff & mask) !== low) {
-      if (drop === 0) {
-        drop = root;
-      }
-      next += min;
-      curr = len - drop;
-      left = 1 << curr;
-      while (curr + drop < max) {
-        left -= count[curr + drop];
-        if (left <= 0) {
-          break;
-        }
-        curr++;
-        left <<= 1;
-      }
-      used += 1 << curr;
-      if (type === LENS$1 && used > ENOUGH_LENS$1 || type === DISTS$1 && used > ENOUGH_DISTS$1) {
-        return 1;
-      }
-      low = huff & mask;
-      table[low] = root << 24 | curr << 16 | next - table_index | 0;
-    }
-  }
-  if (huff !== 0) {
-    table[next + huff] = len - drop << 24 | 64 << 16 | 0;
-  }
-  opts.bits = root;
-  return 0;
-};
-var inftrees = inflate_table;
-const CODES = 0;
-const LENS = 1;
-const DISTS = 2;
-const {
-  Z_FINISH: Z_FINISH$1,
-  Z_BLOCK,
-  Z_TREES,
-  Z_OK: Z_OK$1,
-  Z_STREAM_END: Z_STREAM_END$1,
-  Z_NEED_DICT: Z_NEED_DICT$1,
-  Z_STREAM_ERROR: Z_STREAM_ERROR$1,
-  Z_DATA_ERROR: Z_DATA_ERROR$1,
-  Z_MEM_ERROR: Z_MEM_ERROR$1,
-  Z_BUF_ERROR,
-  Z_DEFLATED
-} = constants$2;
-const HEAD = 16180;
-const FLAGS = 16181;
-const TIME = 16182;
-const OS = 16183;
-const EXLEN = 16184;
-const EXTRA = 16185;
-const NAME = 16186;
-const COMMENT = 16187;
-const HCRC = 16188;
-const DICTID = 16189;
-const DICT = 16190;
-const TYPE = 16191;
-const TYPEDO = 16192;
-const STORED = 16193;
-const COPY_ = 16194;
-const COPY = 16195;
-const TABLE = 16196;
-const LENLENS = 16197;
-const CODELENS = 16198;
-const LEN_ = 16199;
-const LEN = 16200;
-const LENEXT = 16201;
-const DIST = 16202;
-const DISTEXT = 16203;
-const MATCH = 16204;
-const LIT = 16205;
-const CHECK = 16206;
-const LENGTH = 16207;
-const DONE = 16208;
-const BAD = 16209;
-const MEM = 16210;
-const SYNC = 16211;
-const ENOUGH_LENS = 852;
-const ENOUGH_DISTS = 592;
-const MAX_WBITS = 15;
-const DEF_WBITS = MAX_WBITS;
-const zswap32 = (q) => {
-  return (q >>> 24 & 255) + (q >>> 8 & 65280) + ((q & 65280) << 8) + ((q & 255) << 24);
-};
-function InflateState() {
-  this.strm = null;
-  this.mode = 0;
-  this.last = false;
-  this.wrap = 0;
-  this.havedict = false;
-  this.flags = 0;
-  this.dmax = 0;
-  this.check = 0;
-  this.total = 0;
-  this.head = null;
-  this.wbits = 0;
-  this.wsize = 0;
-  this.whave = 0;
-  this.wnext = 0;
-  this.window = null;
-  this.hold = 0;
-  this.bits = 0;
-  this.length = 0;
-  this.offset = 0;
-  this.extra = 0;
-  this.lencode = null;
-  this.distcode = null;
-  this.lenbits = 0;
-  this.distbits = 0;
-  this.ncode = 0;
-  this.nlen = 0;
-  this.ndist = 0;
-  this.have = 0;
-  this.next = null;
-  this.lens = new Uint16Array(320);
-  this.work = new Uint16Array(288);
-  this.lendyn = null;
-  this.distdyn = null;
-  this.sane = 0;
-  this.back = 0;
-  this.was = 0;
-}
-const inflateStateCheck = (strm) => {
-  if (!strm) {
-    return 1;
-  }
-  const state = strm.state;
-  if (!state || state.strm !== strm || state.mode < HEAD || state.mode > SYNC) {
-    return 1;
-  }
-  return 0;
-};
-const inflateResetKeep = (strm) => {
-  if (inflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$1;
-  }
-  const state = strm.state;
-  strm.total_in = strm.total_out = state.total = 0;
-  strm.msg = "";
-  if (state.wrap) {
-    strm.adler = state.wrap & 1;
-  }
-  state.mode = HEAD;
-  state.last = 0;
-  state.havedict = 0;
-  state.flags = -1;
-  state.dmax = 32768;
-  state.head = null;
-  state.hold = 0;
-  state.bits = 0;
-  state.lencode = state.lendyn = new Int32Array(ENOUGH_LENS);
-  state.distcode = state.distdyn = new Int32Array(ENOUGH_DISTS);
-  state.sane = 1;
-  state.back = -1;
-  return Z_OK$1;
-};
-const inflateReset = (strm) => {
-  if (inflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$1;
-  }
-  const state = strm.state;
-  state.wsize = 0;
-  state.whave = 0;
-  state.wnext = 0;
-  return inflateResetKeep(strm);
-};
-const inflateReset2 = (strm, windowBits) => {
-  let wrap;
-  if (inflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$1;
-  }
-  const state = strm.state;
-  if (windowBits < 0) {
-    wrap = 0;
-    windowBits = -windowBits;
-  } else {
-    wrap = (windowBits >> 4) + 5;
-    if (windowBits < 48) {
-      windowBits &= 15;
-    }
-  }
-  if (windowBits && (windowBits < 8 || windowBits > 15)) {
-    return Z_STREAM_ERROR$1;
-  }
-  if (state.window !== null && state.wbits !== windowBits) {
-    state.window = null;
-  }
-  state.wrap = wrap;
-  state.wbits = windowBits;
-  return inflateReset(strm);
-};
-const inflateInit2 = (strm, windowBits) => {
-  if (!strm) {
-    return Z_STREAM_ERROR$1;
-  }
-  const state = new InflateState();
-  strm.state = state;
-  state.strm = strm;
-  state.window = null;
-  state.mode = HEAD;
-  const ret = inflateReset2(strm, windowBits);
-  if (ret !== Z_OK$1) {
-    strm.state = null;
-  }
-  return ret;
-};
-const inflateInit = (strm) => {
-  return inflateInit2(strm, DEF_WBITS);
-};
-let virgin = true;
-let lenfix, distfix;
-const fixedtables = (state) => {
-  if (virgin) {
-    lenfix = new Int32Array(512);
-    distfix = new Int32Array(32);
-    let sym = 0;
-    while (sym < 144) {
-      state.lens[sym++] = 8;
-    }
-    while (sym < 256) {
-      state.lens[sym++] = 9;
-    }
-    while (sym < 280) {
-      state.lens[sym++] = 7;
-    }
-    while (sym < 288) {
-      state.lens[sym++] = 8;
-    }
-    inftrees(LENS, state.lens, 0, 288, lenfix, 0, state.work, { bits: 9 });
-    sym = 0;
-    while (sym < 32) {
-      state.lens[sym++] = 5;
-    }
-    inftrees(DISTS, state.lens, 0, 32, distfix, 0, state.work, { bits: 5 });
-    virgin = false;
-  }
-  state.lencode = lenfix;
-  state.lenbits = 9;
-  state.distcode = distfix;
-  state.distbits = 5;
-};
-const updatewindow = (strm, src, end, copy) => {
-  let dist;
-  const state = strm.state;
-  if (state.window === null) {
-    state.wsize = 1 << state.wbits;
-    state.wnext = 0;
-    state.whave = 0;
-    state.window = new Uint8Array(state.wsize);
-  }
-  if (copy >= state.wsize) {
-    state.window.set(src.subarray(end - state.wsize, end), 0);
-    state.wnext = 0;
-    state.whave = state.wsize;
-  } else {
-    dist = state.wsize - state.wnext;
-    if (dist > copy) {
-      dist = copy;
-    }
-    state.window.set(src.subarray(end - copy, end - copy + dist), state.wnext);
-    copy -= dist;
-    if (copy) {
-      state.window.set(src.subarray(end - copy, end), 0);
-      state.wnext = copy;
-      state.whave = state.wsize;
-    } else {
-      state.wnext += dist;
-      if (state.wnext === state.wsize) {
-        state.wnext = 0;
-      }
-      if (state.whave < state.wsize) {
-        state.whave += dist;
-      }
-    }
-  }
-  return 0;
-};
-const inflate$2 = (strm, flush) => {
-  let state;
-  let input, output;
-  let next;
-  let put;
-  let have, left;
-  let hold;
-  let bits;
-  let _in, _out;
-  let copy;
-  let from;
-  let from_source;
-  let here = 0;
-  let here_bits, here_op, here_val;
-  let last_bits, last_op, last_val;
-  let len;
-  let ret;
-  const hbuf = new Uint8Array(4);
-  let opts;
-  let n;
-  const order = (
-    /* permutation of code lengths */
-    new Uint8Array([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15])
-  );
-  if (inflateStateCheck(strm) || !strm.output || !strm.input && strm.avail_in !== 0) {
-    return Z_STREAM_ERROR$1;
-  }
-  state = strm.state;
-  if (state.mode === TYPE) {
-    state.mode = TYPEDO;
-  }
-  put = strm.next_out;
-  output = strm.output;
-  left = strm.avail_out;
-  next = strm.next_in;
-  input = strm.input;
-  have = strm.avail_in;
-  hold = state.hold;
-  bits = state.bits;
-  _in = have;
-  _out = left;
-  ret = Z_OK$1;
-  inf_leave:
-    for (; ; ) {
-      switch (state.mode) {
-        case HEAD:
-          if (state.wrap === 0) {
-            state.mode = TYPEDO;
-            break;
-          }
-          while (bits < 16) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          if (state.wrap & 2 && hold === 35615) {
-            if (state.wbits === 0) {
-              state.wbits = 15;
-            }
-            state.check = 0;
-            hbuf[0] = hold & 255;
-            hbuf[1] = hold >>> 8 & 255;
-            state.check = crc32_1(state.check, hbuf, 2, 0);
-            hold = 0;
-            bits = 0;
-            state.mode = FLAGS;
-            break;
-          }
-          if (state.head) {
-            state.head.done = false;
-          }
-          if (!(state.wrap & 1) || /* check if zlib header allowed */
-          (((hold & 255) << 8) + (hold >> 8)) % 31) {
-            strm.msg = "incorrect header check";
-            state.mode = BAD;
-            break;
-          }
-          if ((hold & 15) !== Z_DEFLATED) {
-            strm.msg = "unknown compression method";
-            state.mode = BAD;
-            break;
-          }
-          hold >>>= 4;
-          bits -= 4;
-          len = (hold & 15) + 8;
-          if (state.wbits === 0) {
-            state.wbits = len;
-          }
-          if (len > 15 || len > state.wbits) {
-            strm.msg = "invalid window size";
-            state.mode = BAD;
-            break;
-          }
-          state.dmax = 1 << state.wbits;
-          state.flags = 0;
-          strm.adler = state.check = 1;
-          state.mode = hold & 512 ? DICTID : TYPE;
-          hold = 0;
-          bits = 0;
-          break;
-        case FLAGS:
-          while (bits < 16) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          state.flags = hold;
-          if ((state.flags & 255) !== Z_DEFLATED) {
-            strm.msg = "unknown compression method";
-            state.mode = BAD;
-            break;
-          }
-          if (state.flags & 57344) {
-            strm.msg = "unknown header flags set";
-            state.mode = BAD;
-            break;
-          }
-          if (state.head) {
-            state.head.text = hold >> 8 & 1;
-          }
-          if (state.flags & 512 && state.wrap & 4) {
-            hbuf[0] = hold & 255;
-            hbuf[1] = hold >>> 8 & 255;
-            state.check = crc32_1(state.check, hbuf, 2, 0);
-          }
-          hold = 0;
-          bits = 0;
-          state.mode = TIME;
-        /* falls through */
-        case TIME:
-          while (bits < 32) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          if (state.head) {
-            state.head.time = hold;
-          }
-          if (state.flags & 512 && state.wrap & 4) {
-            hbuf[0] = hold & 255;
-            hbuf[1] = hold >>> 8 & 255;
-            hbuf[2] = hold >>> 16 & 255;
-            hbuf[3] = hold >>> 24 & 255;
-            state.check = crc32_1(state.check, hbuf, 4, 0);
-          }
-          hold = 0;
-          bits = 0;
-          state.mode = OS;
-        /* falls through */
-        case OS:
-          while (bits < 16) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          if (state.head) {
-            state.head.xflags = hold & 255;
-            state.head.os = hold >> 8;
-          }
-          if (state.flags & 512 && state.wrap & 4) {
-            hbuf[0] = hold & 255;
-            hbuf[1] = hold >>> 8 & 255;
-            state.check = crc32_1(state.check, hbuf, 2, 0);
-          }
-          hold = 0;
-          bits = 0;
-          state.mode = EXLEN;
-        /* falls through */
-        case EXLEN:
-          if (state.flags & 1024) {
-            while (bits < 16) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            state.length = hold;
-            if (state.head) {
-              state.head.extra_len = hold;
-            }
-            if (state.flags & 512 && state.wrap & 4) {
-              hbuf[0] = hold & 255;
-              hbuf[1] = hold >>> 8 & 255;
-              state.check = crc32_1(state.check, hbuf, 2, 0);
-            }
-            hold = 0;
-            bits = 0;
-          } else if (state.head) {
-            state.head.extra = null;
-          }
-          state.mode = EXTRA;
-        /* falls through */
-        case EXTRA:
-          if (state.flags & 1024) {
-            copy = state.length;
-            if (copy > have) {
-              copy = have;
-            }
-            if (copy) {
-              if (state.head) {
-                len = state.head.extra_len - state.length;
-                if (!state.head.extra) {
-                  state.head.extra = new Uint8Array(state.head.extra_len);
-                }
-                state.head.extra.set(
-                  input.subarray(
-                    next,
-                    // extra field is limited to 65536 bytes
-                    // - no need for additional size check
-                    next + copy
-                  ),
-                  /*len + copy > state.head.extra_max - len ? state.head.extra_max : copy,*/
-                  len
-                );
-              }
-              if (state.flags & 512 && state.wrap & 4) {
-                state.check = crc32_1(state.check, input, copy, next);
-              }
-              have -= copy;
-              next += copy;
-              state.length -= copy;
-            }
-            if (state.length) {
-              break inf_leave;
-            }
-          }
-          state.length = 0;
-          state.mode = NAME;
-        /* falls through */
-        case NAME:
-          if (state.flags & 2048) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            copy = 0;
-            do {
-              len = input[next + copy++];
-              if (state.head && len && state.length < 65536) {
-                state.head.name += String.fromCharCode(len);
-              }
-            } while (len && copy < have);
-            if (state.flags & 512 && state.wrap & 4) {
-              state.check = crc32_1(state.check, input, copy, next);
-            }
-            have -= copy;
-            next += copy;
-            if (len) {
-              break inf_leave;
-            }
-          } else if (state.head) {
-            state.head.name = null;
-          }
-          state.length = 0;
-          state.mode = COMMENT;
-        /* falls through */
-        case COMMENT:
-          if (state.flags & 4096) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            copy = 0;
-            do {
-              len = input[next + copy++];
-              if (state.head && len && state.length < 65536) {
-                state.head.comment += String.fromCharCode(len);
-              }
-            } while (len && copy < have);
-            if (state.flags & 512 && state.wrap & 4) {
-              state.check = crc32_1(state.check, input, copy, next);
-            }
-            have -= copy;
-            next += copy;
-            if (len) {
-              break inf_leave;
-            }
-          } else if (state.head) {
-            state.head.comment = null;
-          }
-          state.mode = HCRC;
-        /* falls through */
-        case HCRC:
-          if (state.flags & 512) {
-            while (bits < 16) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            if (state.wrap & 4 && hold !== (state.check & 65535)) {
-              strm.msg = "header crc mismatch";
-              state.mode = BAD;
-              break;
-            }
-            hold = 0;
-            bits = 0;
-          }
-          if (state.head) {
-            state.head.hcrc = state.flags >> 9 & 1;
-            state.head.done = true;
-          }
-          strm.adler = state.check = 0;
-          state.mode = TYPE;
-          break;
-        case DICTID:
-          while (bits < 32) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          strm.adler = state.check = zswap32(hold);
-          hold = 0;
-          bits = 0;
-          state.mode = DICT;
-        /* falls through */
-        case DICT:
-          if (state.havedict === 0) {
-            strm.next_out = put;
-            strm.avail_out = left;
-            strm.next_in = next;
-            strm.avail_in = have;
-            state.hold = hold;
-            state.bits = bits;
-            return Z_NEED_DICT$1;
-          }
-          strm.adler = state.check = 1;
-          state.mode = TYPE;
-        /* falls through */
-        case TYPE:
-          if (flush === Z_BLOCK || flush === Z_TREES) {
-            break inf_leave;
-          }
-        /* falls through */
-        case TYPEDO:
-          if (state.last) {
-            hold >>>= bits & 7;
-            bits -= bits & 7;
-            state.mode = CHECK;
-            break;
-          }
-          while (bits < 3) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          state.last = hold & 1;
-          hold >>>= 1;
-          bits -= 1;
-          switch (hold & 3) {
-            case 0:
-              state.mode = STORED;
-              break;
-            case 1:
-              fixedtables(state);
-              state.mode = LEN_;
-              if (flush === Z_TREES) {
-                hold >>>= 2;
-                bits -= 2;
-                break inf_leave;
-              }
-              break;
-            case 2:
-              state.mode = TABLE;
-              break;
-            case 3:
-              strm.msg = "invalid block type";
-              state.mode = BAD;
-          }
-          hold >>>= 2;
-          bits -= 2;
-          break;
-        case STORED:
-          hold >>>= bits & 7;
-          bits -= bits & 7;
-          while (bits < 32) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          if ((hold & 65535) !== (hold >>> 16 ^ 65535)) {
-            strm.msg = "invalid stored block lengths";
-            state.mode = BAD;
-            break;
-          }
-          state.length = hold & 65535;
-          hold = 0;
-          bits = 0;
-          state.mode = COPY_;
-          if (flush === Z_TREES) {
-            break inf_leave;
-          }
-        /* falls through */
-        case COPY_:
-          state.mode = COPY;
-        /* falls through */
-        case COPY:
-          copy = state.length;
-          if (copy) {
-            if (copy > have) {
-              copy = have;
-            }
-            if (copy > left) {
-              copy = left;
-            }
-            if (copy === 0) {
-              break inf_leave;
-            }
-            output.set(input.subarray(next, next + copy), put);
-            have -= copy;
-            next += copy;
-            left -= copy;
-            put += copy;
-            state.length -= copy;
-            break;
-          }
-          state.mode = TYPE;
-          break;
-        case TABLE:
-          while (bits < 14) {
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          state.nlen = (hold & 31) + 257;
-          hold >>>= 5;
-          bits -= 5;
-          state.ndist = (hold & 31) + 1;
-          hold >>>= 5;
-          bits -= 5;
-          state.ncode = (hold & 15) + 4;
-          hold >>>= 4;
-          bits -= 4;
-          if (state.nlen > 286 || state.ndist > 30) {
-            strm.msg = "too many length or distance symbols";
-            state.mode = BAD;
-            break;
-          }
-          state.have = 0;
-          state.mode = LENLENS;
-        /* falls through */
-        case LENLENS:
-          while (state.have < state.ncode) {
-            while (bits < 3) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            state.lens[order[state.have++]] = hold & 7;
-            hold >>>= 3;
-            bits -= 3;
-          }
-          while (state.have < 19) {
-            state.lens[order[state.have++]] = 0;
-          }
-          state.lencode = state.lendyn;
-          state.lenbits = 7;
-          opts = { bits: state.lenbits };
-          ret = inftrees(CODES, state.lens, 0, 19, state.lencode, 0, state.work, opts);
-          state.lenbits = opts.bits;
-          if (ret) {
-            strm.msg = "invalid code lengths set";
-            state.mode = BAD;
-            break;
-          }
-          state.have = 0;
-          state.mode = CODELENS;
-        /* falls through */
-        case CODELENS:
-          while (state.have < state.nlen + state.ndist) {
-            for (; ; ) {
-              here = state.lencode[hold & (1 << state.lenbits) - 1];
-              here_bits = here >>> 24;
-              here_op = here >>> 16 & 255;
-              here_val = here & 65535;
-              if (here_bits <= bits) {
-                break;
-              }
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            if (here_val < 16) {
-              hold >>>= here_bits;
-              bits -= here_bits;
-              state.lens[state.have++] = here_val;
-            } else {
-              if (here_val === 16) {
-                n = here_bits + 2;
-                while (bits < n) {
-                  if (have === 0) {
-                    break inf_leave;
-                  }
-                  have--;
-                  hold += input[next++] << bits;
-                  bits += 8;
-                }
-                hold >>>= here_bits;
-                bits -= here_bits;
-                if (state.have === 0) {
-                  strm.msg = "invalid bit length repeat";
-                  state.mode = BAD;
-                  break;
-                }
-                len = state.lens[state.have - 1];
-                copy = 3 + (hold & 3);
-                hold >>>= 2;
-                bits -= 2;
-              } else if (here_val === 17) {
-                n = here_bits + 3;
-                while (bits < n) {
-                  if (have === 0) {
-                    break inf_leave;
-                  }
-                  have--;
-                  hold += input[next++] << bits;
-                  bits += 8;
-                }
-                hold >>>= here_bits;
-                bits -= here_bits;
-                len = 0;
-                copy = 3 + (hold & 7);
-                hold >>>= 3;
-                bits -= 3;
-              } else {
-                n = here_bits + 7;
-                while (bits < n) {
-                  if (have === 0) {
-                    break inf_leave;
-                  }
-                  have--;
-                  hold += input[next++] << bits;
-                  bits += 8;
-                }
-                hold >>>= here_bits;
-                bits -= here_bits;
-                len = 0;
-                copy = 11 + (hold & 127);
-                hold >>>= 7;
-                bits -= 7;
-              }
-              if (state.have + copy > state.nlen + state.ndist) {
-                strm.msg = "invalid bit length repeat";
-                state.mode = BAD;
-                break;
-              }
-              while (copy--) {
-                state.lens[state.have++] = len;
-              }
-            }
-          }
-          if (state.mode === BAD) {
-            break;
-          }
-          if (state.lens[256] === 0) {
-            strm.msg = "invalid code -- missing end-of-block";
-            state.mode = BAD;
-            break;
-          }
-          state.lenbits = 9;
-          opts = { bits: state.lenbits };
-          ret = inftrees(LENS, state.lens, 0, state.nlen, state.lencode, 0, state.work, opts);
-          state.lenbits = opts.bits;
-          if (ret) {
-            strm.msg = "invalid literal/lengths set";
-            state.mode = BAD;
-            break;
-          }
-          state.distbits = 6;
-          state.distcode = state.distdyn;
-          opts = { bits: state.distbits };
-          ret = inftrees(DISTS, state.lens, state.nlen, state.ndist, state.distcode, 0, state.work, opts);
-          state.distbits = opts.bits;
-          if (ret) {
-            strm.msg = "invalid distances set";
-            state.mode = BAD;
-            break;
-          }
-          state.mode = LEN_;
-          if (flush === Z_TREES) {
-            break inf_leave;
-          }
-        /* falls through */
-        case LEN_:
-          state.mode = LEN;
-        /* falls through */
-        case LEN:
-          if (have >= 6 && left >= 258) {
-            strm.next_out = put;
-            strm.avail_out = left;
-            strm.next_in = next;
-            strm.avail_in = have;
-            state.hold = hold;
-            state.bits = bits;
-            inffast(strm, _out);
-            put = strm.next_out;
-            output = strm.output;
-            left = strm.avail_out;
-            next = strm.next_in;
-            input = strm.input;
-            have = strm.avail_in;
-            hold = state.hold;
-            bits = state.bits;
-            if (state.mode === TYPE) {
-              state.back = -1;
-            }
-            break;
-          }
-          state.back = 0;
-          for (; ; ) {
-            here = state.lencode[hold & (1 << state.lenbits) - 1];
-            here_bits = here >>> 24;
-            here_op = here >>> 16 & 255;
-            here_val = here & 65535;
-            if (here_bits <= bits) {
-              break;
-            }
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          if (here_op && (here_op & 240) === 0) {
-            last_bits = here_bits;
-            last_op = here_op;
-            last_val = here_val;
-            for (; ; ) {
-              here = state.lencode[last_val + ((hold & (1 << last_bits + last_op) - 1) >> last_bits)];
-              here_bits = here >>> 24;
-              here_op = here >>> 16 & 255;
-              here_val = here & 65535;
-              if (last_bits + here_bits <= bits) {
-                break;
-              }
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            hold >>>= last_bits;
-            bits -= last_bits;
-            state.back += last_bits;
-          }
-          hold >>>= here_bits;
-          bits -= here_bits;
-          state.back += here_bits;
-          state.length = here_val;
-          if (here_op === 0) {
-            state.mode = LIT;
-            break;
-          }
-          if (here_op & 32) {
-            state.back = -1;
-            state.mode = TYPE;
-            break;
-          }
-          if (here_op & 64) {
-            strm.msg = "invalid literal/length code";
-            state.mode = BAD;
-            break;
-          }
-          state.extra = here_op & 15;
-          state.mode = LENEXT;
-        /* falls through */
-        case LENEXT:
-          if (state.extra) {
-            n = state.extra;
-            while (bits < n) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            state.length += hold & (1 << state.extra) - 1;
-            hold >>>= state.extra;
-            bits -= state.extra;
-            state.back += state.extra;
-          }
-          state.was = state.length;
-          state.mode = DIST;
-        /* falls through */
-        case DIST:
-          for (; ; ) {
-            here = state.distcode[hold & (1 << state.distbits) - 1];
-            here_bits = here >>> 24;
-            here_op = here >>> 16 & 255;
-            here_val = here & 65535;
-            if (here_bits <= bits) {
-              break;
-            }
-            if (have === 0) {
-              break inf_leave;
-            }
-            have--;
-            hold += input[next++] << bits;
-            bits += 8;
-          }
-          if ((here_op & 240) === 0) {
-            last_bits = here_bits;
-            last_op = here_op;
-            last_val = here_val;
-            for (; ; ) {
-              here = state.distcode[last_val + ((hold & (1 << last_bits + last_op) - 1) >> last_bits)];
-              here_bits = here >>> 24;
-              here_op = here >>> 16 & 255;
-              here_val = here & 65535;
-              if (last_bits + here_bits <= bits) {
-                break;
-              }
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            hold >>>= last_bits;
-            bits -= last_bits;
-            state.back += last_bits;
-          }
-          hold >>>= here_bits;
-          bits -= here_bits;
-          state.back += here_bits;
-          if (here_op & 64) {
-            strm.msg = "invalid distance code";
-            state.mode = BAD;
-            break;
-          }
-          state.offset = here_val;
-          state.extra = here_op & 15;
-          state.mode = DISTEXT;
-        /* falls through */
-        case DISTEXT:
-          if (state.extra) {
-            n = state.extra;
-            while (bits < n) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            state.offset += hold & (1 << state.extra) - 1;
-            hold >>>= state.extra;
-            bits -= state.extra;
-            state.back += state.extra;
-          }
-          if (state.offset > state.dmax) {
-            strm.msg = "invalid distance too far back";
-            state.mode = BAD;
-            break;
-          }
-          state.mode = MATCH;
-        /* falls through */
-        case MATCH:
-          if (left === 0) {
-            break inf_leave;
-          }
-          copy = _out - left;
-          if (state.offset > copy) {
-            copy = state.offset - copy;
-            if (copy > state.whave) {
-              if (state.sane) {
-                strm.msg = "invalid distance too far back";
-                state.mode = BAD;
-                break;
-              }
-            }
-            if (copy > state.wnext) {
-              copy -= state.wnext;
-              from = state.wsize - copy;
-            } else {
-              from = state.wnext - copy;
-            }
-            if (copy > state.length) {
-              copy = state.length;
-            }
-            from_source = state.window;
-          } else {
-            from_source = output;
-            from = put - state.offset;
-            copy = state.length;
-          }
-          if (copy > left) {
-            copy = left;
-          }
-          left -= copy;
-          state.length -= copy;
-          do {
-            output[put++] = from_source[from++];
-          } while (--copy);
-          if (state.length === 0) {
-            state.mode = LEN;
-          }
-          break;
-        case LIT:
-          if (left === 0) {
-            break inf_leave;
-          }
-          output[put++] = state.length;
-          left--;
-          state.mode = LEN;
-          break;
-        case CHECK:
-          if (state.wrap) {
-            while (bits < 32) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold |= input[next++] << bits;
-              bits += 8;
-            }
-            _out -= left;
-            strm.total_out += _out;
-            state.total += _out;
-            if (state.wrap & 4 && _out) {
-              strm.adler = state.check = /*UPDATE_CHECK(state.check, put - _out, _out);*/
-              state.flags ? crc32_1(state.check, output, _out, put - _out) : adler32_1(state.check, output, _out, put - _out);
-            }
-            _out = left;
-            if (state.wrap & 4 && (state.flags ? hold : zswap32(hold)) !== state.check) {
-              strm.msg = "incorrect data check";
-              state.mode = BAD;
-              break;
-            }
-            hold = 0;
-            bits = 0;
-          }
-          state.mode = LENGTH;
-        /* falls through */
-        case LENGTH:
-          if (state.wrap && state.flags) {
-            while (bits < 32) {
-              if (have === 0) {
-                break inf_leave;
-              }
-              have--;
-              hold += input[next++] << bits;
-              bits += 8;
-            }
-            if (state.wrap & 4 && hold !== (state.total & 4294967295)) {
-              strm.msg = "incorrect length check";
-              state.mode = BAD;
-              break;
-            }
-            hold = 0;
-            bits = 0;
-          }
-          state.mode = DONE;
-        /* falls through */
-        case DONE:
-          ret = Z_STREAM_END$1;
-          break inf_leave;
-        case BAD:
-          ret = Z_DATA_ERROR$1;
-          break inf_leave;
-        case MEM:
-          return Z_MEM_ERROR$1;
-        case SYNC:
-        /* falls through */
-        default:
-          return Z_STREAM_ERROR$1;
-      }
-    }
-  strm.next_out = put;
-  strm.avail_out = left;
-  strm.next_in = next;
-  strm.avail_in = have;
-  state.hold = hold;
-  state.bits = bits;
-  if (state.wsize || _out !== strm.avail_out && state.mode < BAD && (state.mode < CHECK || flush !== Z_FINISH$1)) {
-    if (updatewindow(strm, strm.output, strm.next_out, _out - strm.avail_out)) ;
-  }
-  _in -= strm.avail_in;
-  _out -= strm.avail_out;
-  strm.total_in += _in;
-  strm.total_out += _out;
-  state.total += _out;
-  if (state.wrap & 4 && _out) {
-    strm.adler = state.check = /*UPDATE_CHECK(state.check, strm.next_out - _out, _out);*/
-    state.flags ? crc32_1(state.check, output, _out, strm.next_out - _out) : adler32_1(state.check, output, _out, strm.next_out - _out);
-  }
-  strm.data_type = state.bits + (state.last ? 64 : 0) + (state.mode === TYPE ? 128 : 0) + (state.mode === LEN_ || state.mode === COPY_ ? 256 : 0);
-  if ((_in === 0 && _out === 0 || flush === Z_FINISH$1) && ret === Z_OK$1) {
-    ret = Z_BUF_ERROR;
-  }
-  return ret;
-};
-const inflateEnd = (strm) => {
-  if (inflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$1;
-  }
-  let state = strm.state;
-  if (state.window) {
-    state.window = null;
-  }
-  strm.state = null;
-  return Z_OK$1;
-};
-const inflateGetHeader = (strm, head) => {
-  if (inflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$1;
-  }
-  const state = strm.state;
-  if ((state.wrap & 2) === 0) {
-    return Z_STREAM_ERROR$1;
-  }
-  state.head = head;
-  head.done = false;
-  return Z_OK$1;
-};
-const inflateSetDictionary = (strm, dictionary) => {
-  const dictLength = dictionary.length;
-  let state;
-  let dictid;
-  let ret;
-  if (inflateStateCheck(strm)) {
-    return Z_STREAM_ERROR$1;
-  }
-  state = strm.state;
-  if (state.wrap !== 0 && state.mode !== DICT) {
-    return Z_STREAM_ERROR$1;
-  }
-  if (state.mode === DICT) {
-    dictid = 1;
-    dictid = adler32_1(dictid, dictionary, dictLength, 0);
-    if (dictid !== state.check) {
-      return Z_DATA_ERROR$1;
-    }
-  }
-  ret = updatewindow(strm, dictionary, dictLength, dictLength);
-  if (ret) {
-    state.mode = MEM;
-    return Z_MEM_ERROR$1;
-  }
-  state.havedict = 1;
-  return Z_OK$1;
-};
-var inflateReset_1 = inflateReset;
-var inflateReset2_1 = inflateReset2;
-var inflateResetKeep_1 = inflateResetKeep;
-var inflateInit_1 = inflateInit;
-var inflateInit2_1 = inflateInit2;
-var inflate_2$1 = inflate$2;
-var inflateEnd_1 = inflateEnd;
-var inflateGetHeader_1 = inflateGetHeader;
-var inflateSetDictionary_1 = inflateSetDictionary;
-var inflateInfo = "pako inflate (from Nodeca project)";
-var inflate_1$2 = {
-  inflateReset: inflateReset_1,
-  inflateReset2: inflateReset2_1,
-  inflateResetKeep: inflateResetKeep_1,
-  inflateInit: inflateInit_1,
-  inflateInit2: inflateInit2_1,
-  inflate: inflate_2$1,
-  inflateEnd: inflateEnd_1,
-  inflateGetHeader: inflateGetHeader_1,
-  inflateSetDictionary: inflateSetDictionary_1,
-  inflateInfo
-};
-function GZheader() {
-  this.text = 0;
-  this.time = 0;
-  this.xflags = 0;
-  this.os = 0;
-  this.extra = null;
-  this.extra_len = 0;
-  this.name = "";
-  this.comment = "";
-  this.hcrc = 0;
-  this.done = false;
-}
-var gzheader = GZheader;
-const toString = Object.prototype.toString;
-const {
-  Z_NO_FLUSH,
-  Z_FINISH,
-  Z_OK,
-  Z_STREAM_END,
-  Z_NEED_DICT,
-  Z_STREAM_ERROR,
-  Z_DATA_ERROR,
-  Z_MEM_ERROR
-} = constants$2;
-function Inflate$1(options) {
-  this.options = common.assign({
-    chunkSize: 1024 * 64,
-    windowBits: 15,
-    to: ""
-  }, options || {});
-  const opt = this.options;
-  if (opt.raw && opt.windowBits >= 0 && opt.windowBits < 16) {
-    opt.windowBits = -opt.windowBits;
-    if (opt.windowBits === 0) {
-      opt.windowBits = -15;
-    }
-  }
-  if (opt.windowBits >= 0 && opt.windowBits < 16 && !(options && options.windowBits)) {
-    opt.windowBits += 32;
-  }
-  if (opt.windowBits > 15 && opt.windowBits < 48) {
-    if ((opt.windowBits & 15) === 0) {
-      opt.windowBits |= 15;
-    }
-  }
-  this.err = 0;
-  this.msg = "";
-  this.ended = false;
-  this.chunks = [];
-  this.strm = new zstream();
-  this.strm.avail_out = 0;
-  let status = inflate_1$2.inflateInit2(
-    this.strm,
-    opt.windowBits
-  );
-  if (status !== Z_OK) {
-    throw new Error(messages[status]);
-  }
-  this.header = new gzheader();
-  inflate_1$2.inflateGetHeader(this.strm, this.header);
-  if (opt.dictionary) {
-    if (typeof opt.dictionary === "string") {
-      opt.dictionary = strings.string2buf(opt.dictionary);
-    } else if (toString.call(opt.dictionary) === "[object ArrayBuffer]") {
-      opt.dictionary = new Uint8Array(opt.dictionary);
-    }
-    if (opt.raw) {
-      status = inflate_1$2.inflateSetDictionary(this.strm, opt.dictionary);
-      if (status !== Z_OK) {
-        throw new Error(messages[status]);
-      }
-    }
-  }
-}
-Inflate$1.prototype.push = function(data, flush_mode) {
-  const strm = this.strm;
-  const chunkSize = this.options.chunkSize;
-  const dictionary = this.options.dictionary;
-  let status, _flush_mode, last_avail_out;
-  if (this.ended) return false;
-  if (flush_mode === ~~flush_mode) _flush_mode = flush_mode;
-  else _flush_mode = flush_mode === true ? Z_FINISH : Z_NO_FLUSH;
-  if (toString.call(data) === "[object ArrayBuffer]") {
-    strm.input = new Uint8Array(data);
-  } else {
-    strm.input = data;
-  }
-  strm.next_in = 0;
-  strm.avail_in = strm.input.length;
-  for (; ; ) {
-    if (strm.avail_out === 0) {
-      strm.output = new Uint8Array(chunkSize);
-      strm.next_out = 0;
-      strm.avail_out = chunkSize;
-    }
-    status = inflate_1$2.inflate(strm, _flush_mode);
-    if (status === Z_NEED_DICT && dictionary) {
-      status = inflate_1$2.inflateSetDictionary(strm, dictionary);
-      if (status === Z_OK) {
-        status = inflate_1$2.inflate(strm, _flush_mode);
-      } else if (status === Z_DATA_ERROR) {
-        status = Z_NEED_DICT;
-      }
-    }
-    while (strm.avail_in > 0 && status === Z_STREAM_END && strm.state.wrap > 0 && data[strm.next_in] !== 0) {
-      inflate_1$2.inflateReset(strm);
-      status = inflate_1$2.inflate(strm, _flush_mode);
-    }
-    switch (status) {
-      case Z_STREAM_ERROR:
-      case Z_DATA_ERROR:
-      case Z_NEED_DICT:
-      case Z_MEM_ERROR:
-        this.onEnd(status);
-        this.ended = true;
-        return false;
-    }
-    last_avail_out = strm.avail_out;
-    if (strm.next_out) {
-      if (strm.avail_out === 0 || status === Z_STREAM_END) {
-        if (this.options.to === "string") {
-          let next_out_utf8 = strings.utf8border(strm.output, strm.next_out);
-          let tail = strm.next_out - next_out_utf8;
-          let utf8str = strings.buf2string(strm.output, next_out_utf8);
-          strm.next_out = tail;
-          strm.avail_out = chunkSize - tail;
-          if (tail) strm.output.set(strm.output.subarray(next_out_utf8, next_out_utf8 + tail), 0);
-          this.onData(utf8str);
-        } else {
-          this.onData(strm.output.length === strm.next_out ? strm.output : strm.output.subarray(0, strm.next_out));
+        if (mesh.geometry) {
+          let meshFaces = 0;
+          if (mesh.geometry.index) {
+            meshFaces = mesh.geometry.index.count / 3;
+          } else if (mesh.geometry.attributes.position) {
+            meshFaces = mesh.geometry.attributes.position.count / 3;
+          }
+          if (mesh.isInstancedMesh) {
+            meshFaces *= mesh.count;
+          }
+          faces += meshFaces;
+          memory += calculateGeometryMemory(mesh.geometry);
         }
       }
-    }
-    if (status === Z_OK && last_avail_out === 0) continue;
-    if (status === Z_STREAM_END) {
-      status = inflate_1$2.inflateEnd(this.strm);
-      this.onEnd(status);
-      this.ended = true;
-      return true;
-    }
-    if (strm.avail_in === 0) break;
+    });
+    const drawCalls = this.renderer.info.render.calls;
+    return {
+      meshes,
+      faces: Math.floor(faces),
+      memory: parseFloat(memory.toFixed(2)),
+      drawCalls
+    };
   }
-  return true;
-};
-Inflate$1.prototype.onData = function(chunk) {
-  this.chunks.push(chunk);
-};
-Inflate$1.prototype.onEnd = function(status) {
-  if (status === Z_OK) {
-    if (this.options.to === "string") {
-      this.result = this.chunks.join("");
-    } else {
-      this.result = common.flattenChunks(this.chunks);
-    }
+  dispose() {
+    this.renderer.dispose();
+    if (this.tilesRenderer) this.tilesRenderer.dispose();
   }
-  this.chunks = [];
-  this.err = status;
-  this.msg = this.strm.msg;
-};
-function inflate$1(input, options) {
-  const inflator = new Inflate$1(options);
-  inflator.push(input);
-  if (inflator.err) throw inflator.msg || messages[inflator.err];
-  return inflator.result;
 }
-function inflateRaw$1(input, options) {
-  options = options || {};
-  options.raw = true;
-  return inflate$1(input, options);
-}
-var Inflate_1$1 = Inflate$1;
-var inflate_2 = inflate$1;
-var inflateRaw_1$1 = inflateRaw$1;
-var ungzip$1 = inflate$1;
-var inflate_1$1 = {
-  Inflate: Inflate_1$1,
-  inflate: inflate_2,
-  inflateRaw: inflateRaw_1$1,
-  ungzip: ungzip$1};
-const { Deflate, deflate, deflateRaw, gzip } = deflate_1$1;
-const { Inflate, inflate, inflateRaw, ungzip } = inflate_1$1;
-var Deflate_1 = Deflate;
-var deflate_1 = deflate;
-var deflateRaw_1 = deflateRaw;
-var gzip_1 = gzip;
-var Inflate_1 = Inflate;
-var inflate_1 = inflate;
-var inflateRaw_1 = inflateRaw;
-var ungzip_1 = ungzip;
-var constants_1 = constants$2;
-var pako = {
-  Deflate: Deflate_1,
-  deflate: deflate_1,
-  deflateRaw: deflateRaw_1,
-  gzip: gzip_1,
-  Inflate: Inflate_1,
-  inflate: inflate_1,
-  inflateRaw: inflateRaw_1,
-  ungzip: ungzip_1,
-  constants: constants_1
-};
 
+const LMB_EXPRESS_ID_START = 1e6;
+const LMB_SCALE_SNAP_1 = 0.01;
+const LMB_SCALE_SNAP_2 = 0.02;
+const NORMAL_INV_PRECISION = 1 / 511;
+const NORMAL_COMPONENT_MASK = 1023;
+const NORMAL_SHIFT_X = 20;
+const NORMAL_SHIFT_Y = 10;
+const NORMAL_SIGN_THRESHOLD = 512;
+const NORMAL_SIGN_OFFSET = 1024;
 const setMaterialProperties = (material) => {
   if (!material) return;
   material.side = THREE.DoubleSide;
@@ -16078,16 +14393,15 @@ function decompressVertice(baseVertex, vertexScale, vertex) {
   return { rx, ry, rz };
 }
 const decodeNormal = (packed) => {
-  const INV_NORMAL_PRECISION = 1 / 511;
-  let x = packed >> 20 & 1023;
-  let y = packed >> 10 & 1023;
-  let z = packed & 1023;
-  x = x >= 512 ? x - 1024 : x;
-  y = y >= 512 ? y - 1024 : y;
-  z = z >= 512 ? z - 1024 : z;
-  let nx = x * INV_NORMAL_PRECISION;
-  let ny = y * INV_NORMAL_PRECISION;
-  let nz = z * INV_NORMAL_PRECISION;
+  let x = packed >> NORMAL_SHIFT_X & NORMAL_COMPONENT_MASK;
+  let y = packed >> NORMAL_SHIFT_Y & NORMAL_COMPONENT_MASK;
+  let z = packed & NORMAL_COMPONENT_MASK;
+  x = x >= NORMAL_SIGN_THRESHOLD ? x - NORMAL_SIGN_OFFSET : x;
+  y = y >= NORMAL_SIGN_THRESHOLD ? y - NORMAL_SIGN_OFFSET : y;
+  z = z >= NORMAL_SIGN_THRESHOLD ? z - NORMAL_SIGN_OFFSET : z;
+  let nx = x * NORMAL_INV_PRECISION;
+  let ny = y * NORMAL_INV_PRECISION;
+  let nz = z * NORMAL_INV_PRECISION;
   const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
   if (length > 0) {
     nx /= length;
@@ -16110,8 +14424,8 @@ const extractScaleFromMatrix3 = (matrix) => {
   const sy = Math.sqrt(matrix[3] * matrix[3] + matrix[4] * matrix[4] + matrix[5] * matrix[5]);
   const sz = Math.sqrt(matrix[6] * matrix[6] + matrix[7] * matrix[7] + matrix[8] * matrix[8]);
   const processScale = (scale) => {
-    if (Math.abs(scale - 0.01) < 1e-6) return 0.01;
-    if (Math.abs(scale - 0.02) < 1e-6) return 0.02;
+    if (Math.abs(scale - LMB_SCALE_SNAP_1) < 1e-6) return LMB_SCALE_SNAP_1;
+    if (Math.abs(scale - LMB_SCALE_SNAP_2) < 1e-6) return LMB_SCALE_SNAP_2;
     return scale;
   };
   return [processScale(sx), processScale(sy), processScale(sz)];
@@ -16169,42 +14483,26 @@ const composeMatrixByMatrix3 = (matrix, position) => {
 };
 class LMBLoader extends Loader {
   static {
-    this.expressIdCounter = 1e6;
+    this.expressIdCounter = LMB_EXPRESS_ID_START;
   }
-  // LMB 使用较大的起始值以避免与 IFC 冲突
   constructor(manager) {
     super(manager);
     this.manager = manager || THREE.DefaultLoadingManager;
   }
-  async loadAsync(url, t, onProgress) {
+  async loadAsync(url, onProgress) {
     const loader = new FileLoader(this.manager);
     loader.setResponseType("arraybuffer");
     let buffer = await new Promise((resolve, reject) => {
       loader.load(url, (data) => resolve(data), onProgress, reject);
     });
-    url.split("?")[0].split("#")[0].toLowerCase().endsWith("lmbz");
-    const view = new DataView(buffer);
-    if (view.byteLength > 4 && view.getUint32(0, true) !== 1280131617) {
-      try {
-        const compressedData = new Uint8Array(buffer);
-        const decompressedData = pako.inflate(compressedData);
-        buffer = decompressedData.buffer;
-      } catch (error) {
-        console.error("Decompression failed and file is not a valid LMB:", error);
-      }
-    }
-    return this.parse(buffer, t, onProgress);
+    const isCompressed = url.split("?")[0].split("#")[0].toLowerCase().endsWith("lmbz");
+    if (isCompressed) throw new Error("不支持 lmbz 压缩格式，请使用 .lmb");
+    return this.parse(buffer, onProgress);
   }
-  parse(buffer, t, onProgress = () => {
+  parse(buffer, onProgress = () => {
   }) {
     const view = new DataView(buffer);
     let offset = 0;
-    const magic = view.getUint32(offset, true);
-    if (magic !== 1280131617) {
-      throw new Error(t("error_invalid_lmb"));
-    }
-    offset += 4;
-    onProgress(0.05, t("lmb_parsing_header"));
     const position = new Float32Array(3);
     for (let i = 0; i < 3; i++) {
       position[i] = view.getFloat32(offset, true);
@@ -16218,7 +14516,7 @@ class LMBLoader extends Loader {
     const totalSteps = colorCount + nodeCount;
     const colors = [];
     for (let i = 0; i < colorCount; i++) {
-      onProgress(currentStep / totalSteps, "Parsing Colors...");
+      onProgress(currentStep / totalSteps);
       currentStep++;
       const color = view.getUint32(offset, true);
       colors.push(color);
@@ -16240,7 +14538,7 @@ class LMBLoader extends Loader {
       return material;
     });
     for (let i = 0; i < nodeCount; i++) {
-      onProgress(currentStep / totalSteps, `Parsing Node ${i + 1}/${nodeCount}...`);
+      onProgress(currentStep / totalSteps);
       currentStep++;
       const node = this.parseNode(buffer, view, offset);
       const geometry = new THREE.BufferGeometry();
@@ -16250,21 +14548,33 @@ class LMBLoader extends Loader {
       geometry.computeBoundingBox();
       const nodeName = node.name && node.name.length > 0 ? node.name : `Node_${i}`;
       const expressID = LMBLoader.expressIdCounter++;
-      const mesh = new THREE.Mesh(geometry, materials[node.colorIndex]);
-      mesh.name = nodeName;
-      mesh.userData.expressID = expressID;
-      const matrix = composeMatrixByMatrix3(node.matrix, node.position);
-      mesh.applyMatrix4(matrix);
-      root.add(mesh);
+      geometry.userData = { expressID, bimId: String(expressID) };
       if (node.instances.length > 0) {
-        node.instances.forEach((instance) => {
-          const instanceMesh = new THREE.Mesh(geometry, materials[instance.colorIndex]);
-          instanceMesh.name = nodeName;
-          instanceMesh.userData.expressID = LMBLoader.expressIdCounter++;
+        const instancedMesh = new THREE.InstancedMesh(
+          geometry,
+          materials[node.colorIndex],
+          node.instances.length + 1
+        );
+        instancedMesh.name = nodeName;
+        instancedMesh.userData.expressID = expressID;
+        instancedMesh.userData.bimId = String(expressID);
+        const nodeMatrix = composeMatrixByMatrix3(node.matrix, node.position);
+        instancedMesh.setMatrixAt(0, nodeMatrix);
+        instancedMesh.setColorAt(0, new THREE.Color(parseColor(colors[node.colorIndex])));
+        node.instances.forEach((instance, index) => {
           const instanceMatrix = composeMatrixByMatrix3(instance.matrix, instance.position);
-          instanceMesh.applyMatrix4(instanceMatrix);
-          root.add(instanceMesh);
+          instancedMesh.setMatrixAt(index + 1, instanceMatrix);
+          instancedMesh.setColorAt(index + 1, new THREE.Color(parseColor(colors[instance.colorIndex])));
         });
+        root.add(instancedMesh);
+      } else {
+        const mesh = new THREE.Mesh(geometry, materials[node.colorIndex]);
+        mesh.name = nodeName;
+        mesh.userData.expressID = expressID;
+        mesh.userData.bimId = String(expressID);
+        const matrix = composeMatrixByMatrix3(node.matrix, node.position);
+        mesh.applyMatrix4(matrix);
+        root.add(mesh);
       }
       offset = node.nextOffset;
     }
@@ -96003,40 +94313,51 @@ var IfcAPI2 = class {
   }
 };
 
-const loadIFC = async (url, onProgress, t, libPath = "./libs") => {
+const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
   const ifcApi = new IfcAPI2();
   const wasmPath = libPath.endsWith("/") ? `${libPath}web-ifc/` : `${libPath}/web-ifc/`;
   ifcApi.SetWasmPath(wasmPath);
   await ifcApi.Init();
-  let staticDownloadCounter = 0;
-  const loader = new THREE.FileLoader();
-  loader.setResponseType("arraybuffer");
-  const buffer = await new Promise((resolve, reject) => {
-    loader.load(
-      url,
-      (data2) => resolve(data2),
-      (event) => {
-        if (event.total > 0) {
-          const downloadPercent = event.loaded / event.total * 100;
-          onProgress(downloadPercent, t("downloading"));
-        } else {
-          staticDownloadCounter = (staticDownloadCounter || 0) + 5;
-          onProgress(Math.min(35, staticDownloadCounter), t("downloading"));
-        }
-      },
-      reject
-    );
-  });
+  let buffer;
+  if (typeof input !== "string") {
+    if (input instanceof ArrayBuffer) {
+      buffer = input;
+    } else {
+      onProgress(5, `${t("reading")}...`);
+      buffer = await input.arrayBuffer();
+      onProgress(25, `${t("reading")}...`);
+    }
+  } else {
+    const loader = new THREE.FileLoader();
+    loader.setResponseType("arraybuffer");
+    let staticReadCounter = 0;
+    buffer = await new Promise((resolve, reject) => {
+      loader.load(
+        input,
+        (data2) => resolve(data2),
+        (event) => {
+          if (event.total > 0) {
+            const readPercent = event.loaded / event.total * 100;
+            onProgress(readPercent, `${t("reading")}...`);
+          } else {
+            staticReadCounter = staticReadCounter + 5;
+            onProgress(Math.min(35, staticReadCounter), `${t("reading")}...`);
+          }
+        },
+        reject
+      );
+    });
+  }
   const data = new Uint8Array(buffer);
-  onProgress(30, t("parsing"));
+  onProgress(30, t("analyzing"));
   const modelID = ifcApi.OpenModel(data, {
     COORDINATE_TO_ORIGIN: true,
     CIRCLE_SEGMENTS: 12,
     MEMORY_LIMIT: 1073741824
-    // 1GB
+    // 1GB（内存限制）
   });
   const rootGroup = new THREE.Group();
-  rootGroup.name = "IFC Model";
+  rootGroup.name = "IFC模型";
   const propertyMap = /* @__PURE__ */ new Map();
   try {
     const relID = ifcApi.GetTypeCodeFromName("IFCRELDEFINESBYPROPERTIES");
@@ -96120,12 +94441,7 @@ const loadIFC = async (url, onProgress, t, libPath = "./libs") => {
       const name = props.Name?.value || props.LongName?.value || `${props.is_a} [${expressID}]`;
       const group = new THREE.Group();
       group.name = name;
-      group.userData = {
-        expressID,
-        isSpatial: true,
-        type: props.is_a,
-        properties: getItemPropertiesSync(expressID)
-      };
+      group.userData = { expressID, isSpatial: true, type: props.is_a };
       parent.add(group);
       currentParent = group;
       nodesMap.set(expressID, group);
@@ -96301,69 +94617,6 @@ const loadIFC = async (url, onProgress, t, libPath = "./libs") => {
     }
     return String(value);
   };
-  const getItemPropertiesSync = (expressID) => {
-    const result = {};
-    try {
-      const entity = ifcApi.GetLine(modelID, expressID);
-      if (entity) {
-        result["ExpressID"] = expressID;
-        result["类型"] = entity.is_a || "Unknown";
-        result["全局ID"] = entity.GlobalId?.value || "";
-        result["名称"] = entity.Name?.value || "";
-        Object.keys(entity).forEach((key) => {
-          if (["expressID", "is_a", "type", "ID", "GlobalId", "Name", "Description", "Tag"].includes(key)) return;
-          const value = formatDisplayValue(entity[key]);
-          if (value !== "" && value !== null && value !== void 0) {
-            result[getFriendlyName(key)] = value;
-          }
-        });
-        const psetIDs = propertyMap.get(expressID);
-        if (psetIDs) {
-          for (const psetID of psetIDs) {
-            const pset = ifcApi.GetLine(modelID, psetID);
-            if (pset && pset.HasProperties) {
-              const psetName = getFriendlyName(pset.Name?.value || `属性集_${psetID}`);
-              for (const propRef of pset.HasProperties) {
-                const propID = propRef.value;
-                const prop = ifcApi.GetLine(modelID, propID);
-                if (prop && prop.Name && prop.NominalValue) {
-                  const key = getFriendlyName(prop.Name.value);
-                  let val = prop.NominalValue.value;
-                  if (typeof val === "object" && val !== null) {
-                    val = val.value !== void 0 ? val.value : formatDisplayValue(val);
-                  } else {
-                    val = formatDisplayValue(val);
-                  }
-                  result[`${psetName}.${key}`] = val;
-                }
-              }
-            }
-            if (pset && pset.Quantities) {
-              const psetName = getFriendlyName(pset.Name?.value || `属性集_${psetID}`);
-              pset.Quantities.forEach((quant) => {
-                if (quant.Name) {
-                  const quantName = getFriendlyName(quant.Name.value);
-                  const valueTypes = [
-                    { key: "LengthValue", name: "长度" },
-                    { key: "AreaValue", name: "面积" },
-                    { key: "VolumeValue", name: "体积" },
-                    { key: "CountValue", name: "数量" }
-                  ];
-                  for (const valType of valueTypes) {
-                    if (quant[valType.key] && quant[valType.key].value !== void 0) {
-                      result[`${psetName}.数量.${quantName}.${valType.name}`] = formatDisplayValue(quant[valType.key].value);
-                    }
-                  }
-                }
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {
-    }
-    return result;
-  };
   rootGroup.userData.ifcManager = {
     getItemProperties: async (id, expressID) => {
       const result = {};
@@ -96497,7 +94750,7 @@ const loadIFC = async (url, onProgress, t, libPath = "./libs") => {
       geometry.setAttribute("position", new THREE.BufferAttribute(posFloats, 3));
       geometry.setAttribute("normal", new THREE.BufferAttribute(normFloats, 3));
       geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-      geometry.userData = { expressID };
+      geometry.userData = { expressID, bimId: String(expressID) };
       const transform = placedGeom.flatTransformation;
       dummyMatrix.fromArray(transform);
       const color = placedGeom.color;
@@ -96513,7 +94766,7 @@ const loadIFC = async (url, onProgress, t, libPath = "./libs") => {
       mesh.matrix.fromArray(transform);
       mesh.matrixWorldNeedsUpdate = true;
       mesh.userData.expressID = expressID;
-      mesh.userData.properties = getItemPropertiesSync(expressID);
+      mesh.userData.bimId = String(expressID);
       if (layerMap.has(expressID)) {
         mesh.userData.layer = layerMap.get(expressID);
       }
@@ -96564,7 +94817,7 @@ class OCCTLoader {
       };
       result = occt.ReadStepFile(fileContent, params);
     } catch (e) {
-      console.warn("Failed to read as STEP, trying IGES...", e);
+      console.warn("STEP 解析失败，尝试 IGES...", e);
     }
     if (!result || !result.success) {
       try {
@@ -96574,7 +94827,7 @@ class OCCTLoader {
         };
         result = occt.ReadIgesFile(fileContent, params);
       } catch (e) {
-        console.error("Failed to read as IGES", e);
+        console.error("IGES 解析失败", e);
       }
     }
     if (!result || !result.success) {
@@ -96589,7 +94842,7 @@ class OCCTLoader {
       shininess: 30
     });
     for (const mesh of result.meshes) {
-      const geometry = new THREE.BufferGeometry();
+      let geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3));
       if (mesh.attributes.normal) {
         geometry.setAttribute("normal", new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3));
@@ -96599,14 +94852,51 @@ class OCCTLoader {
       if (mesh.index) {
         geometry.setIndex(new THREE.Uint32BufferAttribute(mesh.index.array, 1));
       }
-      const threeMesh = new THREE.Mesh(geometry, material.clone());
+      const threeMaterial = material.clone();
+      const threeMesh = new THREE.Mesh(geometry, threeMaterial);
       if (mesh.color) {
         const color = new THREE.Color(mesh.color[0], mesh.color[1], mesh.color[2]);
         threeMesh.material.color = color;
+        threeMesh.userData.color = color.getHex();
+      }
+      const brepFaces = mesh.brep_faces;
+      if (Array.isArray(brepFaces) && brepFaces.some((f) => Array.isArray(f?.color))) {
+        geometry = geometry.toNonIndexed();
+        const posAttr = geometry.getAttribute("position");
+        const triCount = Math.floor(posAttr.count / 3);
+        const colors = new Float32Array(posAttr.count * 3);
+        const baseColor = new THREE.Color(threeMesh.material.color.getHex());
+        const triHex = new Uint32Array(triCount);
+        triHex.fill(baseColor.getHex());
+        for (const face of brepFaces) {
+          const first = Number(face?.first);
+          const last = Number(face?.last);
+          const c = face?.color;
+          if (!Number.isFinite(first) || !Number.isFinite(last) || !Array.isArray(c)) continue;
+          const faceColor = new THREE.Color(c[0], c[1], c[2]).getHex();
+          const start = Math.max(0, Math.min(triCount - 1, first));
+          const end = Math.max(0, Math.min(triCount - 1, last));
+          for (let tIdx = start; tIdx <= end; tIdx++) triHex[tIdx] = faceColor;
+        }
+        const tmp = new THREE.Color();
+        for (let tri = 0; tri < triCount; tri++) {
+          tmp.setHex(triHex[tri]);
+          for (let v = 0; v < 3; v++) {
+            const vi = tri * 3 + v;
+            const ci = vi * 3;
+            colors[ci + 0] = tmp.r;
+            colors[ci + 1] = tmp.g;
+            colors[ci + 2] = tmp.b;
+          }
+        }
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        threeMesh.geometry = geometry;
+        threeMesh.material.vertexColors = true;
       }
       threeMesh.name = mesh.name || "CAD Part";
       threeMesh.userData = {
         ...mesh.userData,
+        ...threeMesh.userData,
         source: "OCCT"
       };
       group.add(threeMesh);
@@ -96643,16 +94933,16 @@ const loadModelFiles = async (files, onProgress, t, settings, libPath = "./libs"
     const fileWeight = 100 / totalFiles;
     const updateFileProgress = (p, msg) => {
       const safeP = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
-      const status = msg || `${t("loading")} ${fileName}`;
+      const status = msg || `${t("reading")} ${fileName}`;
       onProgress(Math.round(fileBaseProgress + safeP * fileWeight / 100), status);
     };
     updateFileProgress(0);
     let object = null;
     try {
       console.log(`[LoaderUtils] Dispatching loader for ext: ${ext}`);
-      if (ext === "lmb" || ext === "lmbz") {
+      if (ext === "lmb") {
         const loader = new LMBLoader();
-        object = await loader.loadAsync(url, t, (p) => updateFileProgress(p * 100));
+        object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
       } else if (ext === "glb" || ext === "gltf") {
         const loader = new GLTFLoader();
         const gltf = await new Promise((resolve, reject) => {
@@ -96678,7 +94968,7 @@ const loadModelFiles = async (files, onProgress, t, settings, libPath = "./libs"
           });
         });
       } else if (ext === "ifc") {
-        object = await loadIFC(url, updateFileProgress, t, libPath);
+        object = await loadIFC(isUrl ? url : fileOrUrl, updateFileProgress, t, libPath);
       } else if (ext === "obj") {
         const loader = new OBJLoader();
         object = await loader.loadAsync(url, (e) => {
@@ -96722,7 +95012,7 @@ const loadModelFiles = async (files, onProgress, t, settings, libPath = "./libs"
       if (!isUrl) URL.revokeObjectURL(url);
     }
   }
-  onProgress(100, t("preparing_scene"));
+  onProgress(100, t("analyzing"));
   for (const object of loadedObjects) {
     object.traverse((child) => {
       if (child.isMesh) {
@@ -96753,7 +95043,7 @@ const parseTilesetFromFolder = async (files, onProgress, t) => {
   }
   if (!tilesetKey && fileMap.has("tileset.json")) tilesetKey = "tileset.json";
   if (!tilesetKey) {
-    throw new Error(t("error_no_tileset"));
+    throw new Error("在所选文件夹中未找到tileset.json");
   }
   onProgress(50, t("reading"));
   const blobUrlMap = /* @__PURE__ */ new Map();
@@ -96776,2065 +95066,6 @@ const parseTilesetFromFolder = async (files, onProgress, t) => {
   const blob = new Blob([JSON.stringify(json)], { type: "application/json" });
   return URL.createObjectURL(blob);
 };
-
-class SceneManager {
-  constructor(canvas) {
-    this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
-    this.componentCounter = 0;
-    this.nodeMap = /* @__PURE__ */ new Map();
-    this.componentMap = /* @__PURE__ */ new Map();
-    this.tilesRenderer = null;
-    this.lastSelectedUuid = null;
-    this.measureType = "none";
-    this.currentMeasurePoints = [];
-    this.previewLine = null;
-    this.measureRecords = /* @__PURE__ */ new Map();
-    this.clippingPlanes = [];
-    this.clipPlaneHelpers = [];
-    this.sceneCenter = new THREE.Vector3();
-    this.globalOffset = new THREE.Vector3();
-    this.optimizedMapping = /* @__PURE__ */ new Map();
-    this.settings = {
-      ambientInt: 2,
-      dirInt: 1,
-      bgColor: "#1e1e1e",
-      viewCubeSize: 100
-    };
-    this.sceneBounds = new THREE.Box3();
-    this.precomputedBounds = new THREE.Box3();
-    this.chunks = [];
-    this.processingChunks = /* @__PURE__ */ new Set();
-    this.frustum = new THREE.Frustum();
-    this.projScreenMatrix = new THREE.Matrix4();
-    this.logicTimer = 0;
-    this.nbimFiles = /* @__PURE__ */ new Map();
-    this.sharedMaterial = new THREE.MeshStandardMaterial({
-      color: 16777215,
-      roughness: 0.6,
-      metalness: 0.1,
-      side: THREE.DoubleSide
-    });
-    this.lastReportedProgress = { loaded: -1, total: -1 };
-    this.canvas = canvas;
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    this.dotTexture = this.createCircleTexture();
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: true,
-      logarithmicDepthBuffer: true,
-      precision: "highp",
-      powerPreference: "high-performance"
-    });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(width, height, false);
-    this.renderer.setClearColor(this.settings.bgColor);
-    this.renderer.localClippingEnabled = true;
-    this.scene = new THREE.Scene();
-    this.contentGroup = new THREE.Group();
-    this.contentGroup.name = "Content";
-    this.scene.add(this.contentGroup);
-    this.helpersGroup = new THREE.Group();
-    this.helpersGroup.name = "Helpers";
-    this.scene.add(this.helpersGroup);
-    this.measureGroup = new THREE.Group();
-    this.measureGroup.name = "Measure";
-    this.scene.add(this.measureGroup);
-    this.ghostGroup = new THREE.Group();
-    this.ghostGroup.name = "Ghost";
-    this.scene.add(this.ghostGroup);
-    this.clipHelpersGroup = new THREE.Group();
-    this.clipHelpersGroup.name = "ClipHelpers";
-    this.scene.add(this.clipHelpersGroup);
-    const frustumSize = 100;
-    const aspect = width / height;
-    this.camera = new THREE.OrthographicCamera(
-      frustumSize * aspect / -2,
-      frustumSize * aspect / 2,
-      frustumSize / 2,
-      frustumSize / -2,
-      0.1,
-      2e5
-    );
-    this.camera.up.set(0, 0, 1);
-    this.camera.position.set(1e3, 1e3, 1e3);
-    this.camera.lookAt(0, 0, 0);
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.enableDamping = false;
-    this.controls.screenSpacePanning = true;
-    this.controls.maxPolarAngle = Math.PI;
-    this.ambientLight = new THREE.AmbientLight(16777215, this.settings.ambientInt);
-    this.scene.add(this.ambientLight);
-    this.dirLight = new THREE.DirectionalLight(16777215, this.settings.dirInt);
-    this.dirLight.position.set(50, 50, 100);
-    this.scene.add(this.dirLight);
-    this.backLight = new THREE.DirectionalLight(16777215, 0.8);
-    this.backLight.position.set(-50, -50, -10);
-    this.scene.add(this.backLight);
-    const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
-    this.selectionBox = new THREE.Box3Helper(box, new THREE.Color(16776960));
-    this.selectionBox.visible = false;
-    this.helpersGroup.add(this.selectionBox);
-    const highlightMat = new THREE.MeshBasicMaterial({
-      color: 16755200,
-      transparent: true,
-      opacity: 0.4,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    });
-    this.highlightMesh = new THREE.Mesh(new THREE.BufferGeometry(), highlightMat);
-    this.highlightMesh.visible = false;
-    this.highlightMesh.renderOrder = 999;
-    this.helpersGroup.add(this.highlightMesh);
-    const markerGeo = new THREE.BufferGeometry();
-    markerGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
-    const markerMat = new THREE.PointsMaterial({
-      color: 16711680,
-      size: 8,
-      sizeAttenuation: false,
-      map: this.dotTexture,
-      transparent: true,
-      alphaTest: 0.5,
-      depthTest: false
-    });
-    this.tempMarker = new THREE.Points(markerGeo, markerMat);
-    this.tempMarker.visible = false;
-    this.tempMarker.renderOrder = 1e3;
-    this.helpersGroup.add(this.tempMarker);
-    this.setupClipping();
-    this.raycaster = new THREE.Raycaster();
-    this.raycaster.params.Points.threshold = 10;
-    if (!this.raycaster.params.Line) this.raycaster.params.Line = { threshold: 1 };
-    this.raycaster.params.Line.threshold = 2;
-    this.mouse = new THREE.Vector2();
-    this.logicTimer = window.setInterval(() => {
-      this.checkCullingAndLoad();
-    }, 300);
-    this.animate = this.animate.bind(this);
-    requestAnimationFrame(this.animate);
-  }
-  // 全局导出接口
-  static async batchConvert(files, t, filename, onProgress, libPath = "./libs") {
-    const tempMgr = new SceneManager(document.createElement("canvas"));
-    const total = files.length;
-    for (let i = 0; i < total; i++) {
-      const file = files[i];
-      const pStart = i / total * 90;
-      const pEnd = (i + 1) / total * 90;
-      const loadedObjects = await loadModelFiles(
-        [file],
-        (p, msg) => {
-          const globalP = pStart + p / 100 * (pEnd - pStart);
-          if (onProgress) onProgress(globalP, msg || `${t("processing")} ${file.name}`);
-        },
-        t,
-        tempMgr.settings,
-        libPath
-      );
-      for (const obj of loadedObjects) {
-        await tempMgr.addModel(obj, t);
-      }
-    }
-    const allItems = collectItems$1(tempMgr.contentGroup);
-    if (allItems.length === 0) {
-      throw new Error(t("no_models"));
-    }
-    const sceneBounds = new THREE.Box3();
-    allItems.forEach((item) => {
-      if (!item.geometry.boundingBox) item.geometry.computeBoundingBox();
-      const itemBox = item.geometry.boundingBox.clone().applyMatrix4(item.matrix);
-      sceneBounds.union(itemBox);
-    });
-    tempMgr.sceneBounds.copy(sceneBounds);
-    const octreeConfig = { maxItemsPerNode: 100, maxDepth: 8 };
-    const octreeRoot = buildOctree$1(allItems, sceneBounds, octreeConfig);
-    tempMgr.chunks = [];
-    collectLeafNodes(octreeRoot, tempMgr.chunks);
-    if (onProgress) onProgress(99, t("nbim_generating"));
-    const blob = await tempMgr.exportNbim(t, filename, (p, msg) => {
-      if (onProgress) onProgress(p, msg);
-    });
-    if (onProgress) onProgress(100, t("success"));
-    tempMgr.dispose();
-    return blob;
-  }
-  updateSettings(newSettings) {
-    this.settings = { ...this.settings, ...newSettings };
-    this.ambientLight.intensity = this.settings.ambientInt;
-    this.dirLight.intensity = this.settings.dirInt;
-    this.renderer.setClearColor(this.settings.bgColor);
-    this.renderer.render(this.scene, this.camera);
-  }
-  createCircleTexture() {
-    const size = 64;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d");
-    if (context) {
-      context.beginPath();
-      context.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
-      context.fillStyle = "#ffffff";
-      context.fill();
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    return texture;
-  }
-  animate() {
-    requestAnimationFrame(this.animate);
-    if (this.controls) this.controls.update();
-    if (this.tilesRenderer) {
-      this.camera.updateMatrixWorld();
-      this.tilesRenderer.update();
-    }
-    this.updateCameraClipping();
-    this.renderer.render(this.scene, this.camera);
-  }
-  updateCameraClipping() {
-    if (!this.sceneBounds || this.sceneBounds.isEmpty()) return;
-    const sphere = new THREE.Sphere();
-    this.sceneBounds.getBoundingSphere(sphere);
-    const dist = this.camera.position.distanceTo(sphere.center);
-    const range = sphere.radius * 20 + dist;
-    this.camera.near = -range;
-    this.camera.far = range;
-    this.camera.updateProjectionMatrix();
-  }
-  resize() {
-    if (!this.canvas) return;
-    const w = this.canvas.clientWidth;
-    const h = this.canvas.clientHeight;
-    if (w === 0 || h === 0) return;
-    const aspect = w / h;
-    const cam = this.camera;
-    const frustumHeight = cam.top - cam.bottom;
-    const newWidth = frustumHeight * aspect;
-    cam.left = -newWidth / 2;
-    cam.right = newWidth / 2;
-    cam.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(w, h, false);
-    this.renderer.render(this.scene, this.camera);
-  }
-  checkCullingAndLoad() {
-    if (this.chunks.length === 0) return;
-    const loadedCount = this.chunks.filter((c) => c.loaded).length;
-    const totalCount = this.chunks.length;
-    if (this.onChunkProgress && (loadedCount !== this.lastReportedProgress.loaded || totalCount !== this.lastReportedProgress.total)) {
-      this.lastReportedProgress = { loaded: loadedCount, total: totalCount };
-      this.onChunkProgress(loadedCount, totalCount);
-    }
-    if (this.processingChunks.size >= 12) return;
-    this.camera.updateMatrixWorld();
-    this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
-    this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
-    const padding = 0.2;
-    const toLoad = [];
-    const isClippingActive = this.renderer.clippingPlanes.length > 0;
-    this.chunks.forEach((c) => {
-      const paddedBounds = c.bounds.clone();
-      const size = new THREE.Vector3();
-      paddedBounds.getSize(size);
-      paddedBounds.expandByVector(size.multiplyScalar(padding));
-      const inFrustum = this.frustum.intersectsBox(paddedBounds);
-      const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
-      const shouldBeVisible = inFrustum && !isClipped;
-      if (c.loaded) {
-        const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
-        if (optimizedGroup) {
-          const bm = optimizedGroup.getObjectByName(c.id);
-          if (bm) bm.visible = shouldBeVisible;
-        }
-      } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
-        toLoad.push(c);
-      }
-    });
-    if (toLoad.length > 0) {
-      toLoad.sort((a, b) => {
-        const centerA = a.bounds.getCenter(new THREE.Vector3());
-        const centerB = b.bounds.getCenter(new THREE.Vector3());
-        return centerA.distanceToSquared(this.camera.position) - centerB.distanceToSquared(this.camera.position);
-      });
-      const batch = toLoad.slice(0, 6);
-      batch.forEach((chunk) => this.loadChunk(chunk));
-    }
-  }
-  async loadChunk(chunk) {
-    this.processingChunks.add(chunk.id);
-    try {
-      let bm = null;
-      if (chunk.node) {
-        bm = createBatchedMeshFromItems(chunk.node.items, this.sharedMaterial);
-      } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
-        const file = this.nbimFiles.get(chunk.nbimFileId);
-        const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
-        bm = this.parseChunkBinaryV7(buffer, this.sharedMaterial);
-      }
-      if (bm) {
-        bm.name = chunk.id;
-        bm.userData.chunkId = chunk.id;
-        if (chunk.nbimFileId) {
-          bm.position.sub(this.globalOffset);
-          bm.updateMatrixWorld(true);
-        }
-        let optimizedGroup = this.contentGroup.getObjectByName(chunk.groupName);
-        if (!optimizedGroup) {
-          optimizedGroup = new THREE.Group();
-          optimizedGroup.name = chunk.groupName;
-          optimizedGroup.userData.isOptimizedGroup = true;
-          optimizedGroup.userData.originalUuid = chunk.originalUuid;
-          this.contentGroup.add(optimizedGroup);
-        }
-        optimizedGroup.add(bm);
-        const batchIdToUuid = bm.userData.batchIdToUuid;
-        const batchIdToColor = bm.userData.batchIdToColor;
-        const batchIdToGeometry = bm.userData.batchIdToGeometry;
-        if (batchIdToUuid) {
-          for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-            if (!this.optimizedMapping.has(originalUuid)) {
-              this.optimizedMapping.set(originalUuid, []);
-            }
-            const originalColor = batchIdToColor?.get(batchId) ?? 16777215;
-            const geometry = batchIdToGeometry?.get(batchId);
-            this.optimizedMapping.get(originalUuid).push({
-              mesh: bm,
-              instanceId: batchId,
-              originalColor,
-              geometry
-            });
-          }
-        }
-      }
-      chunk.loaded = true;
-      const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
-      if (ghost) {
-        this.ghostGroup.remove(ghost);
-        if (ghost.geometry) ghost.geometry.dispose();
-      }
-    } catch (err) {
-      console.error(`加载分块 ${chunk.id} 失败:`, err);
-    } finally {
-      this.processingChunks.delete(chunk.id);
-    }
-  }
-  buildSceneGraph(object) {
-    const node = {
-      id: object.uuid,
-      name: object.name || object.uuid,
-      type: object.isMesh ? "Mesh" : "Group",
-      children: [],
-      userData: { ...object.userData },
-      properties: object.userData?.properties
-    };
-    if (!this.nodeMap.has(object.uuid)) this.nodeMap.set(object.uuid, []);
-    this.nodeMap.get(object.uuid).push(node);
-    for (const child of object.children) {
-      node.children.push(this.buildSceneGraph(child));
-    }
-    return node;
-  }
-  /**
-   * 构建基于 IFC 图层和空间结构的复合树
-   */
-  /**
-   * 构建基于 IFC 图层和空间结构的复合树
-   */
-  buildIFCStructure(object, t) {
-    const buildSpatialRecursive = (obj) => {
-      const node = {
-        id: obj.uuid,
-        name: obj.name || obj.isMesh ? `Mesh_${obj.id}` : `Group_${obj.id}`,
-        type: obj.isMesh ? "Mesh" : "Group",
-        children: [],
-        bimId: obj.userData?.expressID,
-        userData: { ...obj.userData },
-        properties: obj.userData?.properties
-      };
-      if (!this.nodeMap.has(obj.uuid)) this.nodeMap.set(obj.uuid, []);
-      this.nodeMap.get(obj.uuid).push(node);
-      for (const child of obj.children) {
-        node.children.push(buildSpatialRecursive(child));
-      }
-      return node;
-    };
-    const spatialRoot = buildSpatialRecursive(object);
-    const layerMap = object.userData.layerMap;
-    if (layerMap && layerMap.size > 0) {
-      const layerRoot = {
-        id: `layers_${object.uuid}`,
-        name: "图层结构 (Layers)",
-        type: "Group",
-        children: [],
-        userData: { originalUuid: object.uuid }
-      };
-      if (!this.nodeMap.has(layerRoot.id)) this.nodeMap.set(layerRoot.id, []);
-      this.nodeMap.get(layerRoot.id).push(layerRoot);
-      const layers = /* @__PURE__ */ new Map();
-      object.traverse((child) => {
-        if (child.isMesh && child.userData.expressID !== void 0) {
-          const expressID = child.userData.expressID;
-          const layerName = layerMap.get(expressID) || t("unclassified_layer");
-          if (!layers.has(layerName)) {
-            const lNode = {
-              id: `layer_${layerName}_${object.uuid}`,
-              name: layerName,
-              type: "Group",
-              children: [],
-              userData: { originalUuid: object.uuid }
-            };
-            layers.set(layerName, lNode);
-            if (!this.nodeMap.has(lNode.id)) this.nodeMap.set(lNode.id, []);
-            this.nodeMap.get(lNode.id).push(lNode);
-          }
-          const layerNode = layers.get(layerName);
-          const node = {
-            id: child.uuid,
-            name: child.name,
-            type: "Mesh",
-            bimId: expressID,
-            userData: { ...child.userData },
-            properties: child.userData?.properties
-          };
-          layerNode.children.push(node);
-          if (!this.nodeMap.has(child.uuid)) this.nodeMap.set(child.uuid, []);
-          this.nodeMap.get(child.uuid).push(node);
-        }
-      });
-      layerRoot.children = Array.from(layers.values());
-      if (layerRoot.children.length > 0) {
-        const compositeRoot = {
-          id: `composite_${object.uuid}`,
-          name: object.name || "IFC Model",
-          type: "Group",
-          children: [spatialRoot, layerRoot],
-          userData: { originalUuid: object.uuid }
-        };
-        if (!this.nodeMap.has(compositeRoot.id)) this.nodeMap.set(compositeRoot.id, []);
-        this.nodeMap.get(compositeRoot.id).push(compositeRoot);
-        return compositeRoot;
-      }
-    }
-    return spatialRoot;
-  }
-  async addModel(object, t, onProgress) {
-    object.updateMatrixWorld(true);
-    const modelBox = new THREE.Box3().setFromObject(object);
-    if (!modelBox.isEmpty()) {
-      if (this.globalOffset.length() === 0) {
-        modelBox.getCenter(this.globalOffset);
-        console.log("初始化全局偏移以解决大坐标问题:", this.globalOffset);
-      }
-      object.position.sub(this.globalOffset);
-      object.updateMatrixWorld(true);
-    }
-    if (onProgress) onProgress(5, t("preparing_scene"));
-    let modelRoot;
-    if (object.userData.isIFC) {
-      modelRoot = this.buildIFCStructure(object, t);
-    } else {
-      modelRoot = this.buildSceneGraph(object);
-    }
-    const markOriginalUuid = (node) => {
-      if (!node.userData) node.userData = {};
-      node.userData.originalUuid = object.uuid;
-      if (node.children) node.children.forEach(markOriginalUuid);
-    };
-    markOriginalUuid(modelRoot);
-    if (modelRoot.name === "Root" && modelRoot.children && modelRoot.children.length > 0) {
-      if (!this.structureRoot.children) this.structureRoot.children = [];
-      this.structureRoot.children.push(...modelRoot.children);
-    } else {
-      if (!this.structureRoot.children) this.structureRoot.children = [];
-      this.structureRoot.children.push(modelRoot);
-    }
-    modelBox.setFromObject(object);
-    if (!modelBox.isEmpty()) {
-      this.precomputedBounds.union(modelBox);
-      this.sceneBounds.copy(this.precomputedBounds);
-    }
-    const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    object.traverse((child) => {
-      if (child.isMesh) {
-        const mesh = child;
-        this.componentMap.set(mesh.uuid, mesh);
-        if (mesh.userData.expressID !== void 0) {
-          this.componentMap.set(mesh.userData.expressID, mesh);
-        }
-        if (mesh.material) {
-          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          materials.forEach((mat) => {
-            if (mat.map) mat.map.anisotropy = maxAnisotropy;
-          });
-        }
-      }
-    });
-    if (onProgress) onProgress(80, t("analyzing"));
-    const box = new THREE.Box3().setFromObject(object);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 50) {
-      const items = collectItems$1(object);
-      const octree = buildOctree$1(items, box, { maxItemsPerNode: 200, maxDepth: 5 });
-      const leaves = [];
-      collectLeafNodes(octree, leaves);
-      leaves.forEach((node, idx) => {
-        this.chunks.push({
-          id: `chunk_${object.uuid}_${idx}`,
-          bounds: node.bounds.clone(),
-          loaded: true,
-          // 原始模型已在场景中，标记为已加载
-          node,
-          groupName: `file_${object.uuid}`,
-          originalUuid: object.uuid
-        });
-      });
-    } else {
-      const items = collectItems$1(object);
-      this.chunks.push({
-        id: `chunk_${object.uuid}_single`,
-        bounds: box.clone(),
-        loaded: true,
-        node: { items, bounds: box.clone(), children: null, level: 0 },
-        groupName: `file_${object.uuid}`,
-        originalUuid: object.uuid
-      });
-    }
-    const fileGroup = new THREE.Group();
-    fileGroup.name = `file_${object.uuid}`;
-    fileGroup.userData.originalUuid = object.uuid;
-    fileGroup.add(object);
-    object.visible = true;
-    this.contentGroup.add(fileGroup);
-    this.sceneBounds = this.computeTotalBounds(false);
-    this.precomputedBounds = this.sceneBounds.clone();
-    if (this.globalOffset.length() > 0) {
-      this.precomputedBounds.translate(this.globalOffset);
-    }
-    this.updateSettings(this.settings);
-    if (onProgress) onProgress(100, t("fitting_view"));
-    this.fitView();
-    if (onProgress) onProgress(100, t("model_loaded"));
-  }
-  removeObject(uuid) {
-    const nodes = this.nodeMap.get(uuid);
-    const originalUuid = nodes?.[0]?.userData?.originalUuid || uuid;
-    const optimizedGroupsToRemove = [];
-    this.contentGroup.traverse((child) => {
-      const isMatch = child.name === `optimized_${uuid}` || child.name === `file_${uuid}` || child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid || child.name.startsWith("optimized_") && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid) || child.name.startsWith("file_") && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid);
-      if (isMatch) {
-        optimizedGroupsToRemove.push(child);
-      }
-    });
-    optimizedGroupsToRemove.forEach((group) => {
-      group.traverse((child) => {
-        if (child.isBatchedMesh) {
-          const bm = child;
-          if (bm.geometry) bm.geometry.dispose();
-          if (bm.material) {
-            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-            materials.forEach((m) => m.dispose());
-          }
-        }
-      });
-      group.removeFromParent();
-    });
-    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-    const processRemoval = (o) => {
-      const id = o instanceof THREE.Object3D ? o.uuid : o.id;
-      const mappings = this.optimizedMapping.get(id);
-      if (mappings) {
-        mappings.forEach((m) => {
-          m.mesh.setVisibleAt(m.instanceId, false);
-        });
-        this.optimizedMapping.delete(id);
-      }
-      if (o instanceof THREE.Mesh) {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) {
-          const materials = Array.isArray(o.material) ? o.material : [o.material];
-          materials.forEach((m) => m.dispose());
-        }
-      }
-      this.componentMap.delete(id);
-      if (o instanceof THREE.Object3D && o.userData.expressID !== void 0) {
-        this.componentMap.delete(o.userData.expressID);
-      }
-      const nodeInfos = this.nodeMap.get(id);
-      if (nodeInfos) {
-        nodeInfos.forEach((nodeInfo) => {
-          if (nodeInfo.bimId !== void 0) {
-            this.componentMap.delete(String(nodeInfo.bimId));
-          }
-        });
-      }
-      this.nodeMap.delete(id);
-    };
-    if (obj) {
-      obj.traverse(processRemoval);
-      obj.removeFromParent();
-    } else if (nodes && nodes.length > 0) {
-      const traverseNode = (n) => {
-        processRemoval(n);
-        if (n.children) n.children.forEach(traverseNode);
-      };
-      traverseNode(nodes[0]);
-    }
-    this.chunks = this.chunks.filter((c) => {
-      const isMatch = c.originalUuid === uuid || c.originalUuid === originalUuid || c.id.startsWith(uuid);
-      if (isMatch) {
-        const ghost = this.ghostGroup.getObjectByName(`ghost_${c.id}`);
-        if (ghost) {
-          this.ghostGroup.remove(ghost);
-          if (ghost.geometry) ghost.geometry.dispose();
-        }
-        return false;
-      }
-      return true;
-    });
-    if (this.structureRoot) {
-      const filterNodes = (nodes2) => {
-        return nodes2.filter((n) => {
-          if (n.id === uuid) return false;
-          if (!this.nodeMap.has(n.id) && n.id !== "root") return false;
-          if (n.children) {
-            n.children = filterNodes(n.children);
-          }
-          return true;
-        });
-      };
-      if (this.structureRoot.id === uuid) {
-        this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
-      } else if (this.structureRoot.children) {
-        this.structureRoot.children = filterNodes(this.structureRoot.children);
-      }
-    }
-    this.precomputedBounds = this.computeTotalBounds();
-    if (this.precomputedBounds.isEmpty()) {
-      this.contentGroup.traverse((child) => {
-        if (child.isMesh && child.visible) {
-          const box = new THREE.Box3().setFromObject(child);
-          if (!box.isEmpty()) this.precomputedBounds.union(box);
-        }
-      });
-    }
-    this.updateSceneBounds();
-    if (this.onStructureUpdate) this.onStructureUpdate();
-    return true;
-  }
-  async removeModel(uuid) {
-    return this.removeObject(uuid);
-  }
-  addTileset(url, t, onProgress) {
-    if (this.tilesRenderer) {
-      this.tilesRenderer.dispose();
-      this.contentGroup.remove(this.tilesRenderer.group);
-    }
-    if (onProgress) onProgress(10, t("tileset_initializing"));
-    const renderer = new TilesRenderer(url);
-    renderer.setCamera(this.camera);
-    renderer.setResolutionFromRenderer(this.camera, this.renderer);
-    renderer.errorTarget = 16;
-    renderer.lruCache.maxSize = 500 * 1024 * 1024;
-    renderer.group.name = "3D Tileset";
-    let loadedTiles = 0;
-    let hasError = false;
-    renderer.onLoadTileSet = () => {
-      if (onProgress) onProgress(50, t("tileset_structure_loaded"));
-    };
-    renderer.onLoadModel = () => {
-      loadedTiles++;
-      if (onProgress && !hasError) {
-        onProgress(Math.min(99, 50 + loadedTiles), `${t("tileset_tile_loaded")}${loadedTiles}`);
-      }
-    };
-    setTimeout(() => {
-      if (!renderer.tileset && !hasError) {
-        hasError = true;
-        if (onProgress) onProgress(0, t("tileset_load_failed"));
-      }
-    }, 1e4);
-    renderer.onLoadTile = (tile) => {
-      if (this.onTilesUpdate) this.onTilesUpdate();
-    };
-    renderer.onDisposeTile = (tile) => {
-      if (this.onTilesUpdate) this.onTilesUpdate();
-    };
-    this.contentGroup.add(renderer.group);
-    this.tilesRenderer = renderer;
-    renderer.group.position.copy(this.globalOffset.clone().negate());
-    renderer.group.name = "3D Tileset";
-    const buildTilesTree = (tile, depth = 0) => {
-      const node = {
-        id: tile.content?.uuid || THREE.MathUtils.generateUUID(),
-        name: tile.content?.name || `Tile_${tile.level}_${tile.x || 0}_${tile.y || 0}`,
-        type: "Group",
-        children: []
-      };
-      if (tile.children) {
-        node.children = tile.children.map((c) => buildTilesTree(c, depth + 1));
-      }
-      return node;
-    };
-    const tilesNode = {
-      id: renderer.group.uuid,
-      name: "3D Tileset",
-      type: "Group",
-      children: renderer.tileset ? [buildTilesTree(renderer.tileset.root)] : []
-    };
-    if (!this.structureRoot.children) this.structureRoot.children = [];
-    this.structureRoot.children.push(tilesNode);
-    this.nodeMap.set(tilesNode.id, [tilesNode]);
-    this.updateSceneBounds();
-    this.updateSettings(this.settings);
-    return renderer.group;
-  }
-  // --- 辅助功能 (对齐 refs) ---
-  getTypeIndex(type) {
-    const types = ["Generic", "Column", "Beam", "Slab", "Wall", "Window", "Door", "Pipe", "Duct"];
-    const idx = types.indexOf(type);
-    return idx === -1 ? 0 : idx;
-  }
-  guessType(name) {
-    const n = name.toLowerCase();
-    if (n.includes("col") || n.includes("柱")) return "Column";
-    if (n.includes("beam") || n.includes("梁")) return "Beam";
-    if (n.includes("slab") || n.includes("板")) return "Slab";
-    if (n.includes("wall") || n.includes("墙")) return "Wall";
-    if (n.includes("window") || n.includes("窗")) return "Window";
-    if (n.includes("door") || n.includes("门")) return "Door";
-    return "Generic";
-  }
-  extractColor(mesh) {
-    if (mesh.userData.color !== void 0) return mesh.userData.color;
-    const geo = mesh.geometry;
-    if (geo && geo.attributes.color) {
-      const colorAttr = geo.attributes.color;
-      if (colorAttr.count > 0) {
-        const r = colorAttr.getX(0);
-        const g = colorAttr.getY(0);
-        const b = colorAttr.getZ(0);
-        const color = new THREE.Color();
-        if (r > 1 || g > 1 || b > 1) color.setRGB(r / 255, g / 255, b / 255);
-        else color.setRGB(r, g, b);
-        return color.getHex();
-      }
-    }
-    const material = mesh.material;
-    if (Array.isArray(material)) {
-      for (const mat of material) {
-        if (mat.color) return mat.color.getHex();
-      }
-    } else if (material.color) {
-      return material.color.getHex();
-    }
-    return this.getColorByComponentType(mesh.name);
-  }
-  getColorByComponentType(name) {
-    const n = name.toLowerCase();
-    if (n.includes("col") || n.includes("柱")) return 12573694;
-    if (n.includes("beam") || n.includes("梁")) return 9684477;
-    if (n.includes("slab") || n.includes("板")) return 15067115;
-    if (n.includes("wall") || n.includes("墙")) return 15987958;
-    return 9741240;
-  }
-  // --- NBIM 导入/导出功能 (对齐 refs V7 逻辑) ---
-  generateChunkBinaryV7(items) {
-    const uniqueGeos = [];
-    const geoMap = /* @__PURE__ */ new Map();
-    items.forEach((item) => {
-      if (item.geometry && !geoMap.has(item.geometry)) {
-        geoMap.set(item.geometry, uniqueGeos.length);
-        uniqueGeos.push(item.geometry);
-      }
-    });
-    let size = 4;
-    for (const geo of uniqueGeos) {
-      const vertCount = geo.attributes.position.count;
-      const index = geo.index;
-      const indexCount = index ? index.count : 0;
-      size += 4 + 4 + vertCount * 12 + vertCount * 12;
-      if (indexCount > 0) size += indexCount * 4;
-    }
-    size += 4;
-    size += items.length * (4 + 4 + 4 + 64 + 4);
-    const buffer = new ArrayBuffer(size);
-    const dv = new DataView(buffer);
-    let offset = 0;
-    dv.setUint32(offset, uniqueGeos.length, true);
-    offset += 4;
-    for (const geo of uniqueGeos) {
-      const pos = geo.getAttribute("position");
-      const norm = geo.getAttribute("normal");
-      const count = pos.count;
-      const index = geo.index;
-      const indexCount = index ? index.count : 0;
-      dv.setUint32(offset, count, true);
-      offset += 4;
-      dv.setUint32(offset, indexCount, true);
-      offset += 4;
-      for (let i = 0; i < count; i++) {
-        dv.setFloat32(offset, pos.getX(i), true);
-        offset += 4;
-        dv.setFloat32(offset, pos.getY(i), true);
-        offset += 4;
-        dv.setFloat32(offset, pos.getZ(i), true);
-        offset += 4;
-      }
-      for (let i = 0; i < count; i++) {
-        dv.setFloat32(offset, norm.getX(i), true);
-        offset += 4;
-        dv.setFloat32(offset, norm.getY(i), true);
-        offset += 4;
-        dv.setFloat32(offset, norm.getZ(i), true);
-        offset += 4;
-      }
-      if (index && indexCount > 0) {
-        for (let i = 0; i < indexCount; i++) {
-          dv.setUint32(offset, index.getX(i), true);
-          offset += 4;
-        }
-      }
-    }
-    dv.setUint32(offset, items.length, true);
-    offset += 4;
-    for (const item of items) {
-      const treeNodes = this.nodeMap.get(item.uuid);
-      const firstNode = treeNodes?.[0];
-      let id = item.expressID ?? firstNode?.bimId;
-      if (id === void 0) {
-        if (!this.componentMap.has(item.uuid)) {
-          this.componentMap.set(item.uuid, ++this.componentCounter);
-        }
-        id = this.componentMap.get(item.uuid);
-        if (firstNode) firstNode.bimId = id;
-      }
-      const typeStr = this.guessType(firstNode?.name || "");
-      dv.setUint32(offset, id, true);
-      offset += 4;
-      dv.setUint32(offset, this.getTypeIndex(typeStr), true);
-      offset += 4;
-      dv.setUint32(offset, item.color, true);
-      offset += 4;
-      const elements = item.matrix.elements;
-      for (let k = 0; k < 16; k++) {
-        dv.setFloat32(offset, elements[k], true);
-        offset += 4;
-      }
-      const geoId = geoMap.get(item.geometry) || 0;
-      dv.setUint32(offset, geoId, true);
-      offset += 4;
-    }
-    return buffer;
-  }
-  parseChunkBinaryV7(buffer, material) {
-    const dv = new DataView(buffer);
-    let offset = 0;
-    const geoCount = dv.getUint32(offset, true);
-    offset += 4;
-    const geometries = [];
-    for (let i = 0; i < geoCount; i++) {
-      const vertCount = dv.getUint32(offset, true);
-      offset += 4;
-      const indexCount = dv.getUint32(offset, true);
-      offset += 4;
-      const posArr = new Float32Array(buffer, offset, vertCount * 3);
-      offset += vertCount * 12;
-      const normArr = new Float32Array(buffer, offset, vertCount * 3);
-      offset += vertCount * 12;
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(posArr), 3));
-      geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(normArr), 3));
-      if (indexCount > 0) {
-        const indexArr = new Uint32Array(buffer, offset, indexCount);
-        offset += indexCount * 4;
-        geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
-      }
-      geometries.push(geo);
-    }
-    const instanceCount = dv.getUint32(offset, true);
-    offset += 4;
-    let totalVerts = 0;
-    let totalIndices = 0;
-    geometries.forEach((g) => {
-      totalVerts += g.attributes.position.count;
-      if (g.index) totalIndices += g.index.count;
-    });
-    const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
-    const geoIds = geometries.map((g) => bm.addGeometry(g));
-    const matrix = new THREE.Matrix4();
-    const color = new THREE.Color();
-    const batchIdToUuid = /* @__PURE__ */ new Map();
-    const batchIdToColor = /* @__PURE__ */ new Map();
-    const batchIdToGeometry = /* @__PURE__ */ new Map();
-    for (let i = 0; i < instanceCount; i++) {
-      const bimId = dv.getUint32(offset, true);
-      offset += 4;
-      dv.getUint32(offset, true);
-      offset += 4;
-      const hex = dv.getUint32(offset, true);
-      offset += 4;
-      color.setHex(hex);
-      for (let k = 0; k < 16; k++) {
-        matrix.elements[k] = dv.getFloat32(offset, true);
-        offset += 4;
-      }
-      const geoIdx = dv.getUint32(offset, true);
-      offset += 4;
-      const instId = bm.addInstance(geoIds[geoIdx]);
-      bm.setMatrixAt(instId, matrix);
-      bm.setColorAt(instId, color);
-      const bimStr = bimId.toString();
-      const nodes = this.nodeMap.get(bimStr);
-      const actualUuid = nodes?.[0]?.id || bimStr;
-      batchIdToUuid.set(instId, actualUuid);
-      batchIdToColor.set(instId, hex);
-      batchIdToGeometry.set(instId, geometries[geoIdx]);
-    }
-    bm.userData.batchIdToUuid = batchIdToUuid;
-    bm.userData.batchIdToColor = batchIdToColor;
-    bm.userData.batchIdToGeometry = batchIdToGeometry;
-    return bm;
-  }
-  async exportNbim(t, filename, onProgress) {
-    if (this.chunks.length === 0) throw new Error(t("no_models"));
-    const chunkBlobs = [];
-    const exportChunks = this.chunks.map((c) => ({
-      id: c.id,
-      bounds: {
-        min: { x: c.bounds.min.x, y: c.bounds.min.y, z: c.bounds.min.z },
-        max: { x: c.bounds.max.x, y: c.bounds.max.y, z: c.bounds.max.z }
-      },
-      byteOffset: 0,
-      byteLength: 0
-    }));
-    let currentOffset = 1024;
-    for (let i = 0; i < this.chunks.length; i++) {
-      const chunk = this.chunks[i];
-      const exportChunk = exportChunks[i];
-      if (onProgress) {
-        const p = 90 + i / this.chunks.length * 9;
-        onProgress(p, `${t("processing_chunk")} ${i + 1}/${this.chunks.length}`);
-      }
-      let buffer;
-      if (chunk.node) {
-        buffer = this.generateChunkBinaryV7(chunk.node.items);
-      } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
-        const file = this.nbimFiles.get(chunk.nbimFileId);
-        buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
-      } else {
-        continue;
-      }
-      const uint8 = new Uint8Array(buffer);
-      chunkBlobs.push(uint8);
-      exportChunk.byteOffset = currentOffset;
-      exportChunk.byteLength = uint8.byteLength;
-      currentOffset += uint8.byteLength;
-    }
-    const optimizeNodeNaming = (node) => {
-      if (!node.name || node.name === node.id) {
-        const cleanId = String(node.bimId !== void 0 ? node.bimId : node.id);
-        node.name = cleanId.replace(/^bim_/, "");
-      }
-      if (node.children) {
-        node.children.forEach(optimizeNodeNaming);
-      }
-    };
-    optimizeNodeNaming(this.structureRoot);
-    const manifest = {
-      globalBounds: {
-        min: { x: this.sceneBounds.min.x, y: this.sceneBounds.min.y, z: this.sceneBounds.min.z },
-        max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
-      },
-      chunks: exportChunks,
-      structureTree: this.structureRoot
-    };
-    const getCircularReplacer = () => {
-      const seen = /* @__PURE__ */ new WeakSet();
-      return (key, value) => {
-        if (key === "object" || key === "userData") return void 0;
-        if (typeof value === "object" && value !== null) {
-          if (seen.has(value)) {
-            return;
-          }
-          seen.add(value);
-        }
-        return value;
-      };
-    };
-    const manifestStr = JSON.stringify(manifest, getCircularReplacer());
-    const manifestBytes = new TextEncoder().encode(manifestStr);
-    const header = new ArrayBuffer(1024);
-    const dv = new DataView(header);
-    dv.setUint32(0, 1296646734, true);
-    dv.setUint32(4, 7, true);
-    dv.setUint32(8, currentOffset, true);
-    dv.setUint32(12, manifestBytes.byteLength, true);
-    const blobParts = [header, ...chunkBlobs, manifestBytes];
-    const finalBlob = new Blob(blobParts, { type: "application/octet-stream" });
-    if (filename) {
-      const url = URL.createObjectURL(finalBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      const finalName = filename.endsWith(".nbim") ? filename : `${filename}.nbim`;
-      a.download = finalName;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-    return finalBlob;
-  }
-  async loadNbim(file, t, onProgress) {
-    const fileId = `nbim_${file.name}_${(/* @__PURE__ */ new Date()).getTime()}`;
-    this.nbimFiles.set(fileId, file);
-    if (onProgress) onProgress(10, t("nbim_parsing_header"));
-    const headerBuffer = await file.slice(0, 1024).arrayBuffer();
-    const dv = new DataView(headerBuffer);
-    const magic = dv.getUint32(0, true);
-    if (magic !== 1296646734) throw new Error(t("error_invalid_nbim"));
-    const manifestOffset = dv.getUint32(8, true);
-    const manifestLen = dv.getUint32(12, true);
-    if (onProgress) onProgress(20, t("nbim_reading_metadata"));
-    const manifestBlob = file.slice(manifestOffset, manifestOffset + manifestLen);
-    const manifestText = await manifestBlob.text();
-    const manifest = JSON.parse(manifestText);
-    if (manifest.globalBounds) {
-      const newBounds = new THREE.Box3(
-        new THREE.Vector3(manifest.globalBounds.min.x, manifest.globalBounds.min.y, manifest.globalBounds.min.z),
-        new THREE.Vector3(manifest.globalBounds.max.x, manifest.globalBounds.max.y, manifest.globalBounds.max.z)
-      );
-      if (this.globalOffset.length() === 0) {
-        newBounds.getCenter(this.globalOffset);
-        console.log("初始化全局偏移 (NBIM):", this.globalOffset);
-      }
-      if (this.precomputedBounds.isEmpty()) {
-        this.precomputedBounds.copy(newBounds);
-      } else {
-        this.precomputedBounds.union(newBounds);
-      }
-      this.sceneBounds.copy(this.precomputedBounds);
-    }
-    const modelRoot = manifest.structureTree;
-    if (!this.structureRoot.children) this.structureRoot.children = [];
-    if (modelRoot) {
-      if (modelRoot.children && modelRoot.name === "Root") {
-        this.structureRoot.children.push(...modelRoot.children);
-      } else {
-        this.structureRoot.children.push(modelRoot);
-      }
-    }
-    const rootId = modelRoot?.id || fileId;
-    const fileGroup = new THREE.Group();
-    fileGroup.name = `file_${rootId}`;
-    fileGroup.userData.originalUuid = rootId;
-    this.contentGroup.add(fileGroup);
-    if (modelRoot) {
-      const traverse = (node) => {
-        if (!node.userData) node.userData = {};
-        node.userData.originalUuid = rootId;
-        if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
-        this.nodeMap.get(node.id).push(node);
-        if (node.bimId !== void 0) {
-          const bimStr = String(node.bimId);
-          if (!this.nodeMap.has(bimStr)) this.nodeMap.set(bimStr, []);
-          if (!this.nodeMap.get(bimStr).includes(node)) {
-            this.nodeMap.get(bimStr).push(node);
-          }
-        }
-        if (node.children) node.children.forEach(traverse);
-      };
-      traverse(modelRoot);
-    }
-    if (onProgress) onProgress(30, t("nbim_initializing_chunks"));
-    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-    const boxMat = new THREE.LineBasicMaterial({ color: 4674921, transparent: true, opacity: 0.3 });
-    manifest.chunks.forEach((c) => {
-      const bounds = new THREE.Box3(
-        new THREE.Vector3(c.bounds.min.x, c.bounds.min.y, c.bounds.min.z),
-        new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)
-      );
-      if (this.globalOffset.length() > 0) {
-        bounds.translate(this.globalOffset.clone().negate());
-      }
-      const chunkId = c.id;
-      this.chunks.push({
-        id: chunkId,
-        bounds,
-        loaded: false,
-        byteOffset: c.byteOffset,
-        byteLength: c.byteLength,
-        nbimFileId: fileId,
-        groupName: `optimized_${rootId}`,
-        originalUuid: rootId
-      });
-      const size = new THREE.Vector3();
-      bounds.getSize(size);
-      const center = new THREE.Vector3();
-      bounds.getCenter(center);
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(boxGeo),
-        boxMat
-      );
-      edges.name = `ghost_${chunkId}`;
-      edges.scale.copy(size);
-      edges.position.copy(center);
-      this.ghostGroup.add(edges);
-    });
-    this.fitView();
-    if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
-  }
-  async clear() {
-    console.log("开始清空场景...");
-    try {
-      this.lastSelectedUuid = null;
-      this.highlightObject(null);
-      const disposeObject = (obj) => {
-        if (obj.isMesh) {
-          const mesh = obj;
-          if (mesh.geometry) mesh.geometry.dispose();
-          if (mesh.material) {
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            materials.forEach((m) => m.dispose());
-          }
-        } else if (obj.isBatchedMesh) {
-          const bm = obj;
-          if (bm.geometry) bm.geometry.dispose();
-          if (bm.material) {
-            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-            materials.forEach((m) => m.dispose());
-          }
-        }
-      };
-      this.contentGroup.traverse(disposeObject);
-      while (this.contentGroup.children.length > 0) {
-        this.contentGroup.remove(this.contentGroup.children[0]);
-      }
-      if (this.tilesRenderer) {
-        this.tilesRenderer.dispose();
-        this.tilesRenderer = null;
-      }
-      this.ghostGroup.children.forEach(disposeObject);
-      this.ghostGroup.clear();
-      this.selectionBox.visible = false;
-      this.highlightMesh.visible = false;
-      this.clearAllMeasurements();
-      this.optimizedMapping.clear();
-      this.sceneBounds.makeEmpty();
-      this.precomputedBounds.makeEmpty();
-      this.nbimFiles.clear();
-      this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
-      this.nodeMap.clear();
-      this.chunks = [];
-      this.componentMap.clear();
-      this.componentCounter = 0;
-      this.globalOffset.set(0, 0, 0);
-      console.log("场景已清空");
-    } catch (error) {
-      console.error("清空场景失败:", error);
-      throw error;
-    }
-  }
-  setObjectVisibility(uuid, visible) {
-    const nodes = this.nodeMap.get(uuid);
-    if (nodes) {
-      nodes.forEach((node) => {
-        const setVisibleRecursive = (n) => {
-          n.visible = visible;
-          if (n.children) n.children.forEach(setVisibleRecursive);
-          const otherNodes = this.nodeMap.get(n.id);
-          if (otherNodes) {
-            otherNodes.forEach((on) => on.visible = visible);
-          }
-        };
-        setVisibleRecursive(node);
-      });
-    }
-    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-    if (!obj) {
-      if (nodes && nodes.length > 0) {
-        const updateMappingsRecursive = (n) => {
-          const mappings = this.optimizedMapping.get(n.id);
-          if (mappings) {
-            mappings.forEach((m) => {
-              m.mesh.setVisibleAt(m.instanceId, visible);
-            });
-          }
-          if (n.children) n.children.forEach(updateMappingsRecursive);
-        };
-        updateMappingsRecursive(nodes[0]);
-      }
-      return;
-    }
-    obj.traverse((o) => {
-      if (o.name !== "Helpers" && o.name !== "Measure") {
-        if (o.isMesh && o.userData.isOptimized) {
-          o.visible = false;
-        } else {
-          o.visible = visible;
-        }
-        const mappings = this.optimizedMapping.get(o.uuid);
-        if (mappings) {
-          mappings.forEach((m) => {
-            m.mesh.setVisibleAt(m.instanceId, visible);
-          });
-        }
-      }
-    });
-    this.updateSceneBounds();
-  }
-  highlightObject(uuid) {
-    if (this.lastSelectedUuid === uuid) return;
-    if (this.lastSelectedUuid) {
-      const prevMappings = this.optimizedMapping.get(this.lastSelectedUuid);
-      if (prevMappings) {
-        prevMappings.forEach((m) => {
-          m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-          if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
-        });
-      }
-    } else {
-      this.optimizedMapping.forEach((mappings2) => {
-        mappings2.forEach((m) => {
-          m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-          if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
-        });
-      });
-    }
-    this.selectionBox.visible = false;
-    this.highlightMesh.visible = false;
-    this.lastSelectedUuid = uuid;
-    if (!uuid) {
-      if (this.onSelectionChange) this.onSelectionChange(null, null);
-      return;
-    }
-    const mappings = this.optimizedMapping.get(uuid);
-    if (mappings && mappings.length > 0) {
-      mappings.forEach((m2) => {
-        m2.mesh.setColorAt(m2.instanceId, new THREE.Color(16755200));
-        if (m2.mesh.instanceColor) m2.mesh.instanceColor.needsUpdate = true;
-      });
-      const m = mappings[0];
-      if (m.geometry) {
-        this.highlightMesh.geometry = m.geometry;
-        const matrix = new THREE.Matrix4();
-        m.mesh.getMatrixAt(m.instanceId, matrix);
-        matrix.premultiply(m.mesh.matrixWorld);
-        const worldPos = new THREE.Vector3();
-        const worldQuat = new THREE.Quaternion();
-        const worldScale = new THREE.Vector3();
-        matrix.decompose(worldPos, worldQuat, worldScale);
-        if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-        const center = new THREE.Vector3();
-        m.geometry.boundingBox.getCenter(center);
-        if (center.length() > 1e4) {
-          this.highlightMesh.position.set(0, 0, 0);
-          const pureRotationMatrix = matrix.clone().setPosition(0, 0, 0);
-          pureRotationMatrix.decompose(worldPos, worldQuat, worldScale);
-          this.highlightMesh.quaternion.copy(worldQuat);
-          this.highlightMesh.scale.copy(worldScale);
-          const bmPos = new THREE.Vector3();
-          const bmQuat = new THREE.Quaternion();
-          const bmScale = new THREE.Vector3();
-          m.mesh.matrixWorld.decompose(bmPos, bmQuat, bmScale);
-          this.highlightMesh.position.add(bmPos);
-        } else {
-          this.highlightMesh.position.copy(worldPos);
-          this.highlightMesh.quaternion.copy(worldQuat);
-          this.highlightMesh.scale.copy(worldScale);
-        }
-        this.highlightMesh.visible = true;
-      }
-    }
-    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-    if (obj) {
-      if (obj.isMesh) {
-        const mesh = obj;
-        this.highlightMesh.geometry = mesh.geometry;
-        obj.updateMatrixWorld(true);
-        const worldPos = new THREE.Vector3();
-        const worldQuat = new THREE.Quaternion();
-        const worldScale = new THREE.Vector3();
-        obj.matrixWorld.decompose(worldPos, worldQuat, worldScale);
-        this.highlightMesh.position.copy(worldPos);
-        this.highlightMesh.quaternion.copy(worldQuat);
-        this.highlightMesh.scale.copy(worldScale);
-        this.highlightMesh.visible = true;
-      } else {
-        const box = new THREE.Box3();
-        if (obj.userData.boundingBox) {
-          box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
-        } else {
-          box.setFromObject(obj);
-        }
-        if (!box.isEmpty()) {
-          this.selectionBox.box.copy(box);
-          this.selectionBox.visible = true;
-        }
-      }
-    }
-    if (this.onSelectionChange) {
-      let selectedObj = obj;
-      if (mappings) {
-        const nodes = this.nodeMap.get(uuid);
-        const firstNode = nodes?.[0];
-        selectedObj = {
-          uuid,
-          isOptimized: true,
-          name: firstNode?.name || uuid,
-          type: firstNode?.type || "Mesh",
-          properties: firstNode?.properties,
-          // 附加属性
-          userData: firstNode?.userData || {}
-        };
-        if (mappings[0].geometry) {
-          if (!mappings[0].geometry.boundingBox) mappings[0].geometry.computeBoundingBox();
-          selectedObj.userData.boundingBox = mappings[0].geometry.boundingBox;
-        }
-      }
-      this.onSelectionChange(uuid, selectedObj);
-    }
-  }
-  pick(clientX, clientY) {
-    const intersect = this.getRayIntersects(clientX, clientY);
-    if (!intersect) return null;
-    return { object: intersect.object, intersect };
-  }
-  getRayIntersects(clientX, clientY) {
-    const rect = this.canvas.getBoundingClientRect();
-    this.mouse.x = (clientX - rect.left) / rect.width * 2 - 1;
-    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    const interactables = [];
-    this.contentGroup.traverse((o) => {
-      if (o.visible && (o.isMesh || o.isBatchedMesh)) {
-        if (o.userData.isOptimized) return;
-        interactables.push(o);
-      }
-    });
-    const intersects = this.raycaster.intersectObjects(interactables, false);
-    if (intersects.length > 0) {
-      const hit = intersects[0];
-      if (hit.object.isBatchedMesh) {
-        const bm = hit.object;
-        const batchId = hit.batchId !== void 0 ? hit.batchId : hit.instanceId;
-        if (batchId !== void 0) {
-          const originalUuid = bm.userData.batchIdToUuid?.get(batchId);
-          if (originalUuid) {
-            const originalObj = this.contentGroup.getObjectByProperty("uuid", originalUuid);
-            if (originalObj) {
-              hit.object = originalObj;
-            } else {
-              const nodes = this.nodeMap.get(originalUuid);
-              const node = nodes?.[0];
-              const proxy = new THREE.Object3D();
-              proxy.uuid = originalUuid;
-              if (node) {
-                proxy.name = node.name;
-                proxy.type = node.type;
-                proxy.isMesh = node.type === "Mesh";
-                proxy.bimId = node.bimId;
-                proxy.properties = node.properties;
-              }
-              proxy.getWorldPosition = (v) => {
-                const mat = new THREE.Matrix4();
-                bm.getMatrixAt(batchId, mat);
-                mat.premultiply(bm.matrixWorld);
-                return v.setFromMatrixPosition(mat);
-              };
-              proxy.position.setFromMatrixPosition(new THREE.Matrix4().getMatrixAt ? new THREE.Matrix4() : new THREE.Matrix4());
-              hit.object = proxy;
-            }
-          }
-        }
-      }
-      return hit;
-    }
-    return null;
-  }
-  computeTotalBounds(onlyVisible = false, forceRecompute = false) {
-    if (!onlyVisible && !forceRecompute && !this.precomputedBounds.isEmpty()) {
-      const box = this.precomputedBounds.clone();
-      if (this.globalOffset.length() > 0) {
-        box.translate(this.globalOffset.clone().negate());
-      }
-      return box;
-    }
-    const totalBox = new THREE.Box3();
-    this.contentGroup.updateMatrixWorld(true);
-    this.contentGroup.traverse((obj) => {
-      if (onlyVisible && !obj.visible) return;
-      if (obj.name === "3D Tileset" && this.tilesRenderer) {
-        const tilesBox = new THREE.Box3();
-        if (this.tilesRenderer.getBounds) {
-          this.tilesRenderer.getBounds(tilesBox);
-          if (!tilesBox.isEmpty() && this.globalOffset.length() > 0) {
-            if (Math.abs(tilesBox.min.x) > 1e5 || Math.abs(tilesBox.min.y) > 1e5) {
-              tilesBox.translate(this.globalOffset.clone().negate());
-            }
-          }
-          if (!tilesBox.isEmpty()) totalBox.union(tilesBox);
-        }
-        obj.traverse((child) => {
-          if (child !== obj) child._skipTraverse = true;
-        });
-      } else if (obj.isMesh && !obj._skipTraverse) {
-        const mesh = obj;
-        if (mesh.geometry) {
-          const box = new THREE.Box3().setFromObject(mesh);
-          if (!box.isEmpty()) totalBox.union(box);
-        }
-      } else if (obj.isBatchedMesh && !obj._skipTraverse) {
-        const bm = obj;
-        if (bm.computeBoundingBox) {
-          bm.computeBoundingBox();
-          if (bm.boundingBox) {
-            const box = bm.boundingBox.clone().applyMatrix4(bm.matrixWorld);
-            totalBox.union(box);
-          }
-        } else {
-          const box = new THREE.Box3().setFromObject(bm);
-          if (!box.isEmpty()) totalBox.union(box);
-        }
-      }
-    });
-    this.contentGroup.traverse((obj) => {
-      delete obj._skipTraverse;
-    });
-    if (this.chunks.length > 0) {
-      this.chunks.forEach((c) => {
-        if (!onlyVisible || c.loaded) {
-          totalBox.union(c.bounds);
-        }
-      });
-    }
-    if (totalBox.isEmpty() && !this.precomputedBounds.isEmpty()) {
-      const fallback = this.precomputedBounds.clone();
-      if (this.globalOffset.length() > 0) {
-        fallback.translate(this.globalOffset.clone().negate());
-      }
-      return fallback;
-    }
-    return totalBox;
-  }
-  updateSceneBounds() {
-    const fullBox = this.computeTotalBounds(false, true);
-    this.precomputedBounds = fullBox.clone();
-    if (this.globalOffset.length() > 0) {
-      this.precomputedBounds.translate(this.globalOffset);
-    }
-    const visibleBox = this.computeTotalBounds(true);
-    if (visibleBox.isEmpty()) {
-      this.sceneBounds.copy(fullBox);
-    } else {
-      this.sceneBounds.copy(visibleBox);
-    }
-  }
-  fitView(keepOrientation = false) {
-    this.contentGroup.updateMatrixWorld(true);
-    let box = this.computeTotalBounds(true);
-    if (box.isEmpty()) {
-      box = this.computeTotalBounds(false);
-    }
-    this.sceneBounds = box.clone();
-    this.fitBox(box, !keepOrientation);
-  }
-  fitViewToObject(uuid) {
-    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-    if (!obj) return;
-    const box = new THREE.Box3();
-    if (obj.userData.boundingBox) {
-      box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
-    } else {
-      box.setFromObject(obj);
-    }
-    if (!box.isEmpty()) this.fitBox(box);
-  }
-  fitBox(box, updateCameraPosition = true) {
-    if (box.isEmpty()) {
-      this.camera.zoom = 1;
-      this.camera.position.set(1e3, 1e3, 1e3);
-      this.camera.lookAt(0, 0, 0);
-      this.controls.target.set(0, 0, 0);
-      this.camera.updateProjectionMatrix();
-      this.controls.update();
-      return;
-    }
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const extent = maxDim > 0 ? maxDim : 100;
-    const padding = 1.2;
-    const w = this.canvas.clientWidth;
-    const h = this.canvas.clientHeight;
-    const aspect = w / h;
-    let fH, fW;
-    if (aspect >= 1) {
-      fH = extent * padding;
-      fW = fH * aspect;
-    } else {
-      fW = extent * padding;
-      fH = fW / aspect;
-    }
-    this.camera.zoom = 1;
-    this.camera.left = -fW / 2;
-    this.camera.right = fW / 2;
-    this.camera.top = fH / 2;
-    this.camera.bottom = -fH / 2;
-    const zBuffer = Math.max(extent * 5, 2e3);
-    this.camera.near = -zBuffer;
-    this.camera.far = zBuffer;
-    if (updateCameraPosition) {
-      const offset = new THREE.Vector3(1, 1, 1).normalize();
-      const dist = Math.max(extent * 2, 2e3);
-      this.camera.position.copy(center.clone().add(offset.multiplyScalar(dist)));
-      this.camera.lookAt(center);
-    } else {
-      const direction = new THREE.Vector3();
-      this.camera.getWorldDirection(direction);
-      const dist = this.camera.position.distanceTo(this.controls.target);
-      this.camera.position.copy(center).add(direction.multiplyScalar(-dist));
-      this.camera.lookAt(center);
-    }
-    this.camera.updateProjectionMatrix();
-    this.controls.target.copy(center);
-    this.controls.update();
-  }
-  setView(view) {
-    let box = new THREE.Box3();
-    if (this.lastSelectedUuid) {
-      const obj = this.contentGroup.getObjectByProperty("uuid", this.lastSelectedUuid);
-      if (obj) {
-        if (obj.userData.boundingBox) {
-          box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
-        } else {
-          box.setFromObject(obj);
-        }
-      } else {
-        const mappings = this.optimizedMapping.get(this.lastSelectedUuid);
-        if (mappings && mappings.length > 0) {
-          const m = mappings[0];
-          if (m.geometry) {
-            if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-            box.copy(m.geometry.boundingBox);
-            const matrix = new THREE.Matrix4();
-            m.mesh.getMatrixAt(m.instanceId, matrix);
-            matrix.premultiply(m.mesh.matrixWorld);
-            box.applyMatrix4(matrix);
-          }
-        }
-      }
-    }
-    if (box.isEmpty()) {
-      box = this.computeTotalBounds(true);
-      if (box.isEmpty()) box = this.computeTotalBounds(false);
-    }
-    if (box.isEmpty()) return;
-    this.fitBox(box, false);
-    this.sceneBounds = box.clone();
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = maxDim > 0 ? maxDim * 2 : 5e3;
-    let pos = new THREE.Vector3();
-    switch (view) {
-      case "top":
-        pos.set(0, 0, 1);
-        break;
-      case "bottom":
-        pos.set(0, 0, -1);
-        break;
-      case "front":
-        pos.set(0, -1, 0);
-        break;
-      case "back":
-        pos.set(0, 1, 0);
-        break;
-      case "left":
-        pos.set(-1, 0, 0);
-        break;
-      case "right":
-        pos.set(1, 0, 0);
-        break;
-      case "iso":
-      case "se":
-      case "top-front-right":
-        pos.set(1, -1, 1);
-        break;
-      case "sw":
-      case "top-front-left":
-        pos.set(-1, -1, 1);
-        break;
-      case "ne":
-      case "top-back-right":
-        pos.set(1, 1, 1);
-        break;
-      case "nw":
-      case "top-back-left":
-        pos.set(-1, 1, 1);
-        break;
-      case "bottom-front-right":
-        pos.set(1, -1, -1);
-        break;
-      case "bottom-front-left":
-        pos.set(-1, -1, -1);
-        break;
-      case "bottom-back-right":
-        pos.set(1, 1, -1);
-        break;
-      case "bottom-back-left":
-        pos.set(-1, 1, -1);
-        break;
-      case "top-front":
-        pos.set(0, -1, 1);
-        break;
-      case "top-back":
-        pos.set(0, 1, 1);
-        break;
-      case "top-left":
-        pos.set(-1, 0, 1);
-        break;
-      case "top-right":
-        pos.set(1, 0, 1);
-        break;
-      case "bottom-front":
-        pos.set(0, -1, -1);
-        break;
-      case "bottom-back":
-        pos.set(0, 1, -1);
-        break;
-      case "bottom-left":
-        pos.set(-1, 0, -1);
-        break;
-      case "bottom-right":
-        pos.set(1, 0, -1);
-        break;
-      case "front-left":
-        pos.set(-1, -1, 0);
-        break;
-      case "front-right":
-        pos.set(1, -1, 0);
-        break;
-      case "back-left":
-        pos.set(-1, 1, 0);
-        break;
-      case "back-right":
-        pos.set(1, 1, 0);
-        break;
-    }
-    if (pos.lengthSq() > 0) {
-      pos.normalize().multiplyScalar(dist);
-      this.camera.position.copy(center).add(pos);
-      this.camera.lookAt(center);
-      this.controls.target.copy(center);
-      this.controls.update();
-      this.fitBox(box, false);
-    }
-  }
-  // --- 测量逻辑 ---
-  startMeasurement(type) {
-    this.measureType = type;
-    this.currentMeasurePoints = [];
-    this.clearMeasurementPreview();
-  }
-  addMeasurePoint(point) {
-    if (this.measureType === "none") return null;
-    this.currentMeasurePoints.push(point);
-    this.addMarker(point, this.measureGroup);
-    if (this.measureType === "dist" && this.currentMeasurePoints.length === 2) {
-      return this.finalizeMeasurement();
-    } else if (this.measureType === "angle" && this.currentMeasurePoints.length === 3) {
-      return this.finalizeMeasurement();
-    } else if (this.measureType === "coord") {
-      return this.finalizeMeasurement();
-    }
-    this.updatePreviewLine();
-    return null;
-  }
-  updateMeasureHover(clientX, clientY) {
-    if (this.measureType === "none") {
-      this.tempMarker.visible = false;
-      return;
-    }
-    const intersect = this.getRayIntersects(clientX, clientY);
-    if (intersect) {
-      const p = intersect.point;
-      const attr = this.tempMarker.geometry.attributes.position;
-      attr.setXYZ(0, p.x, p.y, p.z);
-      attr.needsUpdate = true;
-      this.tempMarker.visible = true;
-      if (this.currentMeasurePoints.length > 0) {
-        this.updatePreviewLine(p);
-      }
-    } else {
-      this.tempMarker.visible = false;
-      if (this.previewLine) this.previewLine.visible = false;
-    }
-  }
-  updatePreviewLine(hoverPoint) {
-    if (this.previewLine) {
-      this.measureGroup.remove(this.previewLine);
-      this.previewLine = null;
-    }
-    const points = [...this.currentMeasurePoints];
-    if (hoverPoint) points.push(hoverPoint);
-    if (points.length < 2) return;
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineDashedMaterial({
-      color: 16711680,
-      dashSize: 5,
-      gapSize: 2,
-      depthTest: false
-    });
-    this.previewLine = new THREE.Line(geometry, material);
-    this.previewLine.computeLineDistances();
-    this.previewLine.renderOrder = 998;
-    this.measureGroup.add(this.previewLine);
-  }
-  finalizeMeasurement() {
-    const id = `measure_${Date.now()}`;
-    const group = new THREE.Group();
-    group.name = id;
-    this.currentMeasurePoints.forEach((p) => this.addMarker(p, group));
-    let valStr = "";
-    let displayVal = "";
-    let typeStr = this.measureType;
-    let labelPos = new THREE.Vector3();
-    if (this.measureType === "dist") {
-      const p1 = this.currentMeasurePoints[0];
-      const p2 = this.currentMeasurePoints[1];
-      const dist = p1.distanceTo(p2);
-      const dx = Math.abs(p2.x - p1.x);
-      const dy = Math.abs(p2.y - p1.y);
-      const dz = Math.abs(p2.z - p1.z);
-      displayVal = dist.toFixed(3);
-      valStr = `${displayVal} (Δx:${dx.toFixed(2)}, Δy:${dy.toFixed(2)}, Δz:${dz.toFixed(2)})`;
-      this.addLine(this.currentMeasurePoints, group);
-      labelPos.copy(p1).add(p2).multiplyScalar(0.5);
-    } else if (this.measureType === "angle") {
-      const p1 = this.currentMeasurePoints[0];
-      const center = this.currentMeasurePoints[1];
-      const p2 = this.currentMeasurePoints[2];
-      const v1 = p1.clone().sub(center).normalize();
-      const v2 = p2.clone().sub(center).normalize();
-      const angle = v1.angleTo(v2) * (180 / Math.PI);
-      displayVal = angle.toFixed(2) + "°";
-      valStr = displayVal;
-      this.addLine(this.currentMeasurePoints, group);
-      labelPos.copy(center);
-    } else {
-      const p = this.currentMeasurePoints[0];
-      displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
-      valStr = displayVal;
-      labelPos.copy(p);
-    }
-    const label = this.createLabel(displayVal, labelPos);
-    group.add(label);
-    this.measureGroup.add(group);
-    this.measureRecords.set(id, { id, type: typeStr, val: valStr, group });
-    this.currentMeasurePoints = [];
-    this.clearMeasurementPreview();
-    return { id, type: typeStr, val: valStr };
-  }
-  createLabel(text, position) {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return new THREE.Sprite();
-    const fontSize = 48;
-    const padding = 24;
-    ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
-    const textWidth = ctx.measureText(text).width;
-    canvas.width = textWidth + padding * 2;
-    canvas.height = fontSize + padding;
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = "rgba(30, 30, 30, 0.9)";
-    const radius = 8;
-    if (ctx.roundRect) {
-      ctx.roundRect(5, 5, canvas.width - 10, canvas.height - 10, radius);
-    } else {
-      ctx.rect(5, 5, canvas.width - 10, canvas.height - 10);
-    }
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#ff0000";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: texture,
-      depthTest: false,
-      sizeAttenuation: false
-      // 关键：使文字不受相机缩放影响
-    });
-    const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.position.copy(position);
-    const baseScale = 0.035;
-    sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
-    sprite.renderOrder = 1001;
-    sprite.userData = { type: "label" };
-    return sprite;
-  }
-  highlightMeasurement(id) {
-    this.measureRecords.forEach((record, rid) => {
-      const isHighlighted = rid === id;
-      const color = isHighlighted ? 65280 : 16711680;
-      record.group.traverse((child) => {
-        if (child instanceof THREE.Line) {
-          child.material.color.set(color);
-        } else if (child instanceof THREE.Points) {
-          child.material.color.set(color);
-        } else if (child instanceof THREE.Sprite) {
-          child.material.color.set(isHighlighted ? 65280 : 16777215);
-        }
-      });
-    });
-  }
-  pickMeasurement(clientX, clientY) {
-    const rect = this.canvas.getBoundingClientRect();
-    this.mouse.x = (clientX - rect.left) / rect.width * 2 - 1;
-    this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    const oldThreshold = this.raycaster.params.Line?.threshold || 0;
-    if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = 5;
-    const intersects = this.raycaster.intersectObjects(this.measureGroup.children, true);
-    if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = oldThreshold;
-    if (intersects.length > 0) {
-      let obj = intersects[0].object;
-      while (obj.parent && !obj.name.startsWith("measure_")) {
-        obj = obj.parent;
-      }
-      if (obj.name.startsWith("measure_")) {
-        return obj.name;
-      }
-    }
-    return null;
-  }
-  addMarker(point, parent) {
-    const markerGeo = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([point.x, point.y, point.z], 3));
-    const markerMat = new THREE.PointsMaterial({ color: 16711680, size: 8, map: this.dotTexture, transparent: true, alphaTest: 0.5, depthTest: false });
-    const marker = new THREE.Points(markerGeo, markerMat);
-    marker.renderOrder = 999;
-    parent.add(marker);
-  }
-  addLine(points, parent) {
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: 16711680, depthTest: false, linewidth: 2 });
-    const line = new THREE.Line(geometry, material);
-    line.renderOrder = 998;
-    parent.add(line);
-  }
-  removeMeasurement(id) {
-    if (this.measureRecords.has(id)) {
-      const record = this.measureRecords.get(id);
-      if (record) {
-        this.measureGroup.remove(record.group);
-        this.measureRecords.delete(id);
-      }
-    }
-  }
-  clearAllMeasurements() {
-    this.measureRecords.forEach((record) => {
-      this.measureGroup.remove(record.group);
-    });
-    this.measureRecords.clear();
-    this.clearMeasurementPreview();
-  }
-  clearMeasurementPreview() {
-    this.currentMeasurePoints = [];
-    if (this.previewLine) {
-      this.measureGroup.remove(this.previewLine);
-      this.previewLine = null;
-    }
-    this.tempMarker.visible = false;
-    for (let i = this.measureGroup.children.length - 1; i >= 0; i--) {
-      const child = this.measureGroup.children[i];
-      if (!child.name.startsWith("measure_") && child !== this.previewLine) {
-        this.measureGroup.remove(child);
-      }
-    }
-  }
-  // --- 剖切逻辑 ---
-  setupClipping() {
-    this.clippingPlanes = [
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),
-      new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0),
-      new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
-      new THREE.Plane(new THREE.Vector3(0, -1, 0), 0),
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
-      new THREE.Plane(new THREE.Vector3(0, 0, -1), 0)
-    ];
-    this.renderer.clippingPlanes = [];
-    const colors = [16711680, 16711680, 65280, 65280, 255, 255];
-    this.clipPlaneHelpers = [];
-    this.clipHelpersGroup.clear();
-    for (let i = 0; i < 6; i++) {
-      const geom = new THREE.PlaneGeometry(1, 1);
-      const mat = new THREE.MeshBasicMaterial({
-        color: colors[i],
-        transparent: true,
-        opacity: 0.3,
-        // 提高不透明度，使半透明效果更明显
-        side: THREE.DoubleSide,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -4,
-        polygonOffsetUnits: -4,
-        clippingPlanes: []
-      });
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.visible = false;
-      mesh.renderOrder = 9999;
-      const edges = new THREE.EdgesGeometry(geom);
-      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-        color: colors[i],
-        transparent: true,
-        opacity: 0.8,
-        // 边框也调亮一点
-        depthWrite: false
-      }));
-      line.renderOrder = 1e4;
-      mesh.add(line);
-      this.clipPlaneHelpers.push(mesh);
-      this.clipHelpersGroup.add(mesh);
-    }
-  }
-  setClippingEnabled(enabled) {
-    this.renderer.clippingPlanes = enabled ? this.clippingPlanes : [];
-    if (!enabled) {
-      this.clipPlaneHelpers.forEach((h) => h.visible = false);
-    }
-  }
-  updateClippingPlanes(bounds, values, active) {
-    if (bounds.isEmpty()) return;
-    const { min, max } = bounds;
-    const size = max.clone().sub(min);
-    const center = bounds.getCenter(new THREE.Vector3());
-    const diagonal = size.length();
-    const helperSize = diagonal > 0 ? diagonal * 1.2 : 1e3;
-    const xMin = min.x + values.x[0] / 100 * size.x;
-    const xMax = min.x + values.x[1] / 100 * size.x;
-    const yMin = min.y + values.y[0] / 100 * size.y;
-    const yMax = min.y + values.y[1] / 100 * size.y;
-    const zMin = min.z + values.z[0] / 100 * size.z;
-    const zMax = min.z + values.z[1] / 100 * size.z;
-    const isEnabled = this.renderer.clippingPlanes.length > 0;
-    if (active.x) {
-      this.clippingPlanes[0].constant = -xMin;
-      this.clippingPlanes[1].constant = xMax;
-      this.updatePlaneHelper(0, new THREE.Vector3(1, 0, 0), xMin, center, helperSize, isEnabled);
-      this.updatePlaneHelper(1, new THREE.Vector3(-1, 0, 0), xMax, center, helperSize, isEnabled);
-    } else {
-      this.clippingPlanes[0].constant = Infinity;
-      this.clippingPlanes[1].constant = Infinity;
-      this.clipPlaneHelpers[0].visible = false;
-      this.clipPlaneHelpers[1].visible = false;
-    }
-    if (active.y) {
-      this.clippingPlanes[2].constant = -yMin;
-      this.clippingPlanes[3].constant = yMax;
-      this.updatePlaneHelper(2, new THREE.Vector3(0, 1, 0), yMin, center, helperSize, isEnabled);
-      this.updatePlaneHelper(3, new THREE.Vector3(0, -1, 0), yMax, center, helperSize, isEnabled);
-    } else {
-      this.clippingPlanes[2].constant = Infinity;
-      this.clippingPlanes[3].constant = Infinity;
-      this.clipPlaneHelpers[2].visible = false;
-      this.clipPlaneHelpers[3].visible = false;
-    }
-    if (active.z) {
-      this.clippingPlanes[4].constant = -zMin;
-      this.clippingPlanes[5].constant = zMax;
-      this.updatePlaneHelper(4, new THREE.Vector3(0, 0, 1), zMin, center, helperSize, isEnabled);
-      this.updatePlaneHelper(5, new THREE.Vector3(0, 0, -1), zMax, center, helperSize, isEnabled);
-    } else {
-      this.clippingPlanes[4].constant = Infinity;
-      this.clippingPlanes[5].constant = Infinity;
-      this.clipPlaneHelpers[4].visible = false;
-      this.clipPlaneHelpers[5].visible = false;
-    }
-  }
-  updatePlaneHelper(idx, normal, dist, center, size, isEnabled) {
-    const helper = this.clipPlaneHelpers[idx];
-    if (!helper) return;
-    helper.visible = isEnabled;
-    helper.scale.set(size, size, 1);
-    const pos = new THREE.Vector3(center.x, center.y, center.z);
-    const epsilon = 1e-3;
-    if (normal.x !== 0) pos.x = dist + normal.x * epsilon;
-    else if (normal.y !== 0) pos.y = dist + normal.y * epsilon;
-    else if (normal.z !== 0) pos.z = dist + normal.z * epsilon;
-    helper.position.copy(pos);
-    helper.lookAt(pos.clone().add(normal));
-  }
-  /**
-   * 检查包围盒是否完全被当前剖切面裁剪掉
-   * 如果包围盒完全在任意一个激活的剖切面的“背面”，则认为被裁剪
-   */
-  isBoxClipped(box) {
-    for (const plane of this.clippingPlanes) {
-      if (plane.constant === Infinity) continue;
-      const planeNormal = plane.normal;
-      const maxPoint = new THREE.Vector3(
-        planeNormal.x > 0 ? box.max.x : box.min.x,
-        planeNormal.y > 0 ? box.max.y : box.min.y,
-        planeNormal.z > 0 ? box.max.z : box.min.z
-      );
-      if (plane.distanceToPoint(maxPoint) < 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-  getStats() {
-    let meshes = 0;
-    let faces = 0;
-    let memory = 0;
-    this.contentGroup.traverse((obj) => {
-      if (obj.name === "__EdgesHelper") return;
-      if (obj.isMesh || obj.isBatchedMesh) {
-        meshes++;
-        const mesh = obj;
-        if (mesh.isBatchedMesh) {
-          const mapping = mesh.userData.batchIdToExpressId;
-          if (mapping) {
-            meshes += mapping.size - 1;
-          }
-        }
-        if (mesh.geometry) {
-          let meshFaces = 0;
-          if (mesh.geometry.index) {
-            meshFaces = mesh.geometry.index.count / 3;
-          } else if (mesh.geometry.attributes.position) {
-            meshFaces = mesh.geometry.attributes.position.count / 3;
-          }
-          if (mesh.isInstancedMesh) {
-            meshFaces *= mesh.count;
-          }
-          faces += meshFaces;
-          memory += calculateGeometryMemory(mesh.geometry);
-        }
-      }
-    });
-    const drawCalls = this.renderer.info.render.calls;
-    return {
-      meshes,
-      faces: Math.floor(faces),
-      memory: parseFloat(memory.toFixed(2)),
-      drawCalls
-    };
-  }
-  dispose() {
-    this.renderer.dispose();
-    if (this.tilesRenderer) this.tilesRenderer.dispose();
-  }
-}
 
 /**
  * The KHR_mesh_quantization extension allows these extra attribute component types
@@ -102832,23 +99063,23 @@ const themes = {
   },
   light: {
     bg: "#ffffff",
-    // Office 2013 White
+    // 办公风格白色
     panelBg: "#ffffff",
     headerBg: "#f3f3f3",
-    // Light gray for tabs area
+    // 标签区域浅灰
     border: "#d2d2d2",
-    // Office 2013 border color
+    // 办公风格边框色
     text: "#444444",
     textLight: "#000000",
     textMuted: "#666666",
     accent: "#2b579a",
-    // Office 2013 Blue (Word style)
+    // 办公风格蓝（文字应用风格）
     highlight: "#cfe3ff",
     itemHover: "#e1e1e1",
     success: "#217346",
-    // Excel green
+    // 成功绿
     warning: "#d24726",
-    // PPT orange
+    // 警告橙
     danger: "#a4262c",
     canvasBg: "#ffffff",
     shadow: "rgba(0, 0, 0, 0.15)"
@@ -102874,16 +99105,16 @@ const createGlobalStyle = (theme) => `
     * { box-sizing: border-box; }
 `;
 const createStyles = (theme) => ({
-  // Desktop / Shared
+  // 桌面端 / 通用
   container: { display: "flex", flexDirection: "column", height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none", overflow: "hidden" },
-  // Classic Menu Styles
+  // 传统菜单样式
   classicMenuBar: {
     display: "flex",
     alignItems: "center",
     backgroundColor: theme.bg,
     borderBottom: `1px solid ${theme.border}`,
     padding: "0 8px",
-    height: "24px",
+    height: "26px",
     gap: "4px",
     WebkitAppRegion: "no-drag"
   },
@@ -102920,7 +99151,7 @@ const createStyles = (theme) => ({
     backgroundColor: hover ? theme.itemHover : "transparent"
   }),
   statusBar: {
-    height: "20px",
+    height: "24px",
     backgroundColor: "#ffffff",
     color: "#444444",
     display: "flex",
@@ -102946,8 +99177,8 @@ const createStyles = (theme) => ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "24px",
-    height: "24px",
+    width: "32px",
+    height: "32px",
     borderRadius: "0px",
     cursor: "pointer",
     color: theme.textMuted,
@@ -102962,7 +99193,7 @@ const createStyles = (theme) => ({
     backgroundColor: theme.itemHover,
     color: theme.text
   },
-  // Checkbox Style
+  // 复选框样式
   checkboxContainer: {
     display: "flex",
     alignItems: "center",
@@ -103009,7 +99240,8 @@ const createStyles = (theme) => ({
     color: theme.text
   },
   floatingHeader: {
-    padding: "8px 12px",
+    height: "29px",
+    padding: "0 12px",
     backgroundColor: theme.headerBg,
     borderBottom: `1px solid ${theme.border}`,
     cursor: "default",
@@ -103039,7 +99271,7 @@ const createStyles = (theme) => ({
     zIndex: 10,
     background: "transparent"
   },
-  // Tree Styles
+  // 树形结构样式
   treeContainer: {
     flex: 1,
     height: "100%",
@@ -103050,7 +99282,7 @@ const createStyles = (theme) => ({
   treeNode: {
     display: "flex",
     alignItems: "center",
-    height: "20px",
+    height: "24px",
     cursor: "pointer",
     whiteSpace: "nowrap",
     fontSize: "12px",
@@ -103077,7 +99309,7 @@ const createStyles = (theme) => ({
     overflow: "hidden",
     textOverflow: "ellipsis"
   },
-  // Properties
+  // 属性面板
   list: {
     flex: 1,
     overflowY: "auto",
@@ -103122,12 +99354,12 @@ const createStyles = (theme) => ({
     textOverflow: "ellipsis",
     cursor: "text"
   },
-  // UI Elements
+  // 通用 UI 元素
   btn: {
     backgroundColor: theme.bg,
     color: theme.text,
     border: `1px solid ${theme.border}`,
-    padding: "2px 8px",
+    padding: "4px 12px",
     cursor: "pointer",
     borderRadius: "0px",
     fontSize: "12px",
@@ -103143,7 +99375,7 @@ const createStyles = (theme) => ({
     color: "#ffffff",
     borderColor: theme.accent
   },
-  // View Grid Button
+  // 视图宫格按钮
   viewGridBtn: {
     display: "flex",
     flexDirection: "column",
@@ -103160,7 +99392,7 @@ const createStyles = (theme) => ({
     height: "56px",
     gap: "4px"
   },
-  // Modal Overlay
+  // 弹窗遮罩
   modalOverlay: {
     position: "fixed",
     top: 0,
@@ -103185,7 +99417,7 @@ const createStyles = (theme) => ({
     overflow: "hidden",
     color: theme.text
   },
-  // Loading
+  // 加载遮罩
   overlay: {
     position: "absolute",
     top: 0,
@@ -103219,7 +99451,7 @@ const createStyles = (theme) => ({
     backgroundColor: theme.accent,
     transition: "width 0.2s ease-out"
   },
-  // Slider
+  // 滑块
   sliderRow: {
     display: "flex",
     alignItems: "center",
@@ -103237,7 +99469,7 @@ const createStyles = (theme) => ({
     height: "4px",
     outline: "none"
   },
-  // Stats HUD (Top Center)
+  // 统计 HUD（顶部居中）
   statsOverlay: {
     position: "absolute",
     top: "8px",
@@ -103277,8 +99509,7 @@ const resources = {
     menu_open_file: "Open File",
     menu_open_folder: "Open Folder",
     menu_open_url: "Open URL",
-    menu_batch_convert: "Batch Convert NBIM",
-    enter_filename: "Enter output filename",
+    menu_batch_convert: "Batch Convert to NBIM",
     menu_file: "File",
     menu_export: "Export",
     interface_display: "Display",
@@ -103310,38 +99541,9 @@ const resources = {
     interface_outline: "Structures",
     interface_props: "Properties",
     status_ready: "Ready",
-    loading: "Loading...",
     loading_resources: "Loading resources...",
     analyzing: "Analyzing...",
-    converting: "Converting...",
-    reading: "Reading...",
-    downloading: "Downloading...",
-    initializing: "Initializing...",
-    parsing: "Parsing...",
-    processing_geometry: "Processing Geometry...",
-    loading_textures: "Loading Textures...",
-    preparing_scene: "Preparing Scene...",
-    fitting_view: "Fitting View...",
-    model_loaded: "Model Loaded",
-    loading_cad_engine: "Loading CAD Engine...",
-    parsing_cad_data: "Parsing CAD Data...",
-    creating_geometry: "Creating Geometry...",
-    error_cad_parse_failed: "Failed to parse CAD data",
-    tileset_initializing: "Initializing TilesRenderer...",
-    tileset_structure_loaded: "Tileset structure loaded",
-    tileset_tile_loaded: "Tile loaded: ",
-    tileset_load_failed: "Load failed: Cannot fetch Tileset configuration, please check network or path.",
-    error_no_tileset: "tileset.json not found in the selected folder",
-    nbim_parsing_header: "Parsing NBIM Header...",
-    nbim_reading_metadata: "Reading Metadata...",
-    nbim_initializing_chunks: "Initializing Chunks...",
-    nbim_generating: "Generating NBIM Data...",
-    nbim_loading_chunk: "Loading Chunk: ",
-    processing_chunk: "Processing Chunk",
-    error_invalid_nbim: "Not a valid NBIM file",
-    lmb_parsing_header: "Parsing LMB Header...",
-    error_invalid_lmb: "Not a valid LMB file",
-    unclassified_layer: "Unclassified Layer",
+    reading: "Reading",
     success: "Operation Successful",
     failed: "Failed",
     processing: "Processing",
@@ -103349,13 +99551,15 @@ const resources = {
     no_measurements: "No measurements",
     search_nodes: "Search nodes...",
     search_props: "Search properties...",
+    expand_all: "Expand All",
+    collapse_all: "Collapse All",
+    ctx_show_all: "Show All",
+    ctx_isolate_selection: "Isolate Selection",
+    ctx_hide_selection: "Hide Selection",
     monitor_meshes: "Meshes",
     monitor_faces: "Faces",
     monitor_mem: "Mem",
     monitor_calls: "Calls",
-    expand_all: "Expand All",
-    collapse_all: "Collapse All",
-    delete_model: "Delete Model",
     confirm_delete: "Confirm delete",
     confirm_clear: "Are you sure you want to clear the scene?",
     app_title: "3D Browser - Professional Viewer",
@@ -103363,14 +99567,12 @@ const resources = {
     view_perspective: "Perspective",
     view_ortho: "Orthographic",
     writing: "Writing files...",
-    no_models: "No models found",
     delete_item: "Delete Item",
     btn_confirm: "Confirm",
     btn_cancel: "Cancel",
     // 属性
-    pg_basic: "Basic Info",
-    pg_geo: "Geometry Info",
-    pg_ifc: "IFC Properties",
+    pg_basic: "Basic Information",
+    pg_geo: "Geometry",
     prop_name: "Name",
     prop_id: "ID",
     prop_type: "Type",
@@ -103410,11 +99612,13 @@ const resources = {
     st_lighting: "Lighting",
     st_ambient: "Ambient Int.",
     st_dir: "Direct Int.",
-    st_bg: "Background Color",
+    st_bg: "Background",
     st_lang: "Language",
+    st_import_settings: "Import Settings",
     st_theme: "Theme",
-    st_monitor: "Performance Monitor",
-    st_viewport: "Viewport Settings",
+    st_monitor: "Show Performance Panel",
+    st_instancing: "Instancing Render",
+    st_viewport: "Viewport",
     st_viewcube_size: "ViewCube Size",
     unsupported_format: "Unsupported format",
     theme_dark: "Dark",
@@ -103422,6 +99626,11 @@ const resources = {
     ready: "ready",
     all_chunks_loaded: "All model chunks loaded",
     loading_chunks: "Chunks",
+    loading_cad_engine: "Loading CAD engine...",
+    parsing_cad_data: "Parsing CAD data...",
+    creating_geometry: "Creating geometry...",
+    error_cad_parse_failed: "Failed to parse CAD file",
+    model_loaded: "Model loaded",
     confirm_clear_title: "Clear Scene",
     confirm_clear_msg: "Are you sure you want to clear all models in the scene?",
     menu_about: "About",
@@ -103439,8 +99648,7 @@ const resources = {
     menu_open_file: "打开文件",
     menu_open_folder: "打开目录",
     menu_open_url: "打开 URL",
-    menu_batch_convert: "批量转换 NBIM",
-    enter_filename: "输入输出文件名",
+    menu_batch_convert: "批量转换为NBIM",
     menu_file: "文件",
     menu_export: "导出场景",
     interface_display: "界面",
@@ -103471,39 +99679,10 @@ const resources = {
     setting_general: "全局设置",
     interface_outline: "模型结构",
     interface_props: "对象属性",
-    status_ready: "准备就绪",
-    loading: "正在加载...",
+    status_ready: "就绪",
     loading_resources: "正在加载资源...",
     analyzing: "正在分析...",
-    converting: "正在转换...",
-    reading: "正在读取...",
-    downloading: "正在下载...",
-    initializing: "正在初始化...",
-    parsing: "正在解析...",
-    processing_geometry: "正在处理几何数据...",
-    loading_textures: "正在加载贴图...",
-    preparing_scene: "正在准备场景...",
-    fitting_view: "正在自适应视图...",
-    model_loaded: "模型加载完成",
-    loading_cad_engine: "正在加载 CAD 引擎...",
-    parsing_cad_data: "正在解析 CAD 数据...",
-    creating_geometry: "正在创建几何体...",
-    error_cad_parse_failed: "解析 CAD 数据失败",
-    tileset_initializing: "正在初始化 TilesRenderer...",
-    tileset_structure_loaded: "Tileset 结构已加载",
-    tileset_tile_loaded: "已加载瓦片: ",
-    tileset_load_failed: "加载失败: 无法获取 Tileset 配置文件，请检查网络或路径。",
-    error_no_tileset: "在所选文件夹中未找到 tileset.json",
-    nbim_parsing_header: "正在解析 NBIM 文件头...",
-    nbim_reading_metadata: "正在读取元数据...",
-    nbim_initializing_chunks: "正在初始化分块...",
-    nbim_generating: "正在生成 NBIM 数据...",
-    nbim_loading_chunk: "正在加载分块: ",
-    processing_chunk: "正在处理分块",
-    error_invalid_nbim: "不是有效的 NBIM 文件",
-    lmb_parsing_header: "正在解析 LMB 文件头...",
-    error_invalid_lmb: "不是有效的 LMB 文件",
-    unclassified_layer: "未分类图层",
+    reading: "读取",
     success: "操作成功",
     failed: "失败",
     processing: "处理中",
@@ -103511,28 +99690,27 @@ const resources = {
     no_measurements: "无测量结果",
     search_nodes: "搜索节点...",
     search_props: "搜索属性...",
+    expand_all: "全部展开",
+    collapse_all: "全部折叠",
+    ctx_show_all: "显示所有",
+    ctx_isolate_selection: "隔离选择",
+    ctx_hide_selection: "隐藏选择",
     monitor_meshes: "网格数",
     monitor_faces: "三角面",
     monitor_mem: "显存",
     monitor_calls: "绘制调用",
-    expand_all: "全部展开",
-    collapse_all: "全部折叠",
-    delete_model: "删除模型",
     confirm_delete: "确定要删除吗？",
     confirm_clear: "确定要清空场景吗？",
     app_title: "3D Browser - 专业浏览器",
     interface_display_short: "显示",
     view_perspective: "透视",
     view_ortho: "正交",
-    writing: "正在写入文件...",
-    no_models: "未找到模型数据",
-    delete_item: "删除项目",
+    delete_item: "删除模型",
     btn_confirm: "确定",
     btn_cancel: "取消",
     // 属性
     pg_basic: "基本信息",
     pg_geo: "几何信息",
-    pg_ifc: "IFC 属性",
     prop_name: "名称",
     prop_id: "ID",
     prop_type: "类型",
@@ -103574,16 +99752,23 @@ const resources = {
     st_dir: "直射光强度",
     st_bg: "背景颜色",
     st_lang: "界面语言",
+    st_import_settings: "导入设置",
     st_theme: "界面主题",
     st_monitor: "显示性能面板",
+    st_instancing: "实例化渲染",
     st_viewport: "视口设置",
     st_viewcube_size: "导航方块大小",
     unsupported_format: "不支持的文件格式",
     theme_dark: "深色模式",
     theme_light: "浅色模式",
-    ready: "准备就绪",
+    ready: "就绪",
     all_chunks_loaded: "所有模型分片已加载",
     loading_chunks: "分片",
+    loading_cad_engine: "正在加载 CAD 引擎...",
+    parsing_cad_data: "正在解析 CAD 数据...",
+    creating_geometry: "正在生成几何体...",
+    error_cad_parse_failed: "CAD 文件解析失败",
+    model_loaded: "模型加载完成",
     confirm_clear_title: "清空场景",
     confirm_clear_msg: "确定要清空场景中的所有模型吗？",
     menu_about: "关于",
@@ -103599,16 +99784,6 @@ const resources = {
 const getTranslation = (lang, key) => {
   return resources[lang][key] || key;
 };
-
-async function performBatchConvert({
-  files,
-  t,
-  filename,
-  onProgress,
-  libPath
-}) {
-  return await SceneManager.batchConvert(files, t, filename, onProgress, libPath);
-}
 
 const ClassicMenuItem = ({ label, children, styles, theme, enabled = true }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -103691,6 +99866,7 @@ const MenuBar = (props) => {
   const isHidden = (id) => (hiddenMenus || []).includes(id);
   const fileInputRef = React.useRef(null);
   const folderInputRef = React.useRef(null);
+  const batchConvertInputRef = React.useRef(null);
   return /* @__PURE__ */ jsxs("div", { style: styles.classicMenuBar, children: [
     /* @__PURE__ */ jsx(
       "input",
@@ -103701,6 +99877,17 @@ const MenuBar = (props) => {
         multiple: true,
         accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
         onChange: props.handleOpenFiles
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "file",
+        ref: batchConvertInputRef,
+        style: { display: "none" },
+        multiple: true,
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleBatchConvert
       }
     ),
     /* @__PURE__ */ jsx(
@@ -103727,6 +99914,13 @@ const MenuBar = (props) => {
         props.handleOpenUrl();
         close();
       }, styles }),
+      !isHidden("batch_convert") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_batch_convert"), onClick: () => {
+          batchConvertInputRef.current?.click();
+          close();
+        }, styles })
+      ] }),
       !isHidden("export") && /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
         /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_export"), onClick: () => {
@@ -104050,7 +100244,7 @@ const Button = ({
     transition: "all 0.2s",
     border: variant === "ghost" ? "none" : active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
     boxShadow: variant === "ghost" ? "none" : "none",
-    // Remove default black border/shadow if requested
+    // 不使用默认的黑色描边/阴影
     ...style
   };
   return /* @__PURE__ */ jsx("button", { style: baseStyle, ...props, children });
@@ -104621,14 +100815,12 @@ const flattenTree = (nodes, result = [], parentIsLast = []) => {
 };
 const SceneTree = ({
   t,
-  sceneMgr,
   treeRoot,
   setTreeRoot,
   selectedUuid,
   onSelect,
   onToggleVisibility,
-  onDelete,
-  showDeleteButton = true,
+  onModelContextMenu,
   styles,
   theme
 }) => {
@@ -104675,40 +100867,6 @@ const SceneTree = ({
     };
     setTreeRoot((prev) => toggle(prev));
   };
-  const [contextMenu, setContextMenu] = useState(null);
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, []);
-  const handleContextMenu = (e, node) => {
-    e.preventDefault();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      node
-    });
-  };
-  const expandAll = () => {
-    const expandRecursive = (nodes) => {
-      return nodes.map((n) => ({
-        ...n,
-        expanded: true,
-        children: expandRecursive(n.children)
-      }));
-    };
-    setTreeRoot((prev) => expandRecursive(prev));
-  };
-  const collapseAll = () => {
-    const collapseRecursive = (nodes) => {
-      return nodes.map((n) => ({
-        ...n,
-        expanded: false,
-        children: collapseRecursive(n.children)
-      }));
-    };
-    setTreeRoot((prev) => collapseRecursive(prev));
-  };
   const totalHeight = flatData.length * rowHeight;
   const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
   const visibleCount = Math.ceil(containerHeight / rowHeight);
@@ -104744,7 +100902,12 @@ const SceneTree = ({
           ...node.uuid === selectedUuid ? styles.treeNodeSelected : {}
         },
         onClick: () => onSelect(node.uuid, node.object),
-        onContextMenu: (e) => handleContextMenu(e, node),
+        onContextMenu: (e) => {
+          if (!node.isFileNode || !onModelContextMenu) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onModelContextMenu(node.uuid, e.clientX, e.clientY);
+        },
         children: [
           node.depth > 0 && /* @__PURE__ */ jsxs("div", { style: { display: "flex", height: "100%", alignItems: "center", flexShrink: 0 }, children: [
             node.parentIsLast?.map((isLast, i) => /* @__PURE__ */ jsx("div", { style: {
@@ -104789,59 +100952,11 @@ const SceneTree = ({
               style: { marginRight: 6, padding: 0, flexShrink: 0 }
             }
           ),
-          /* @__PURE__ */ jsx("div", { style: { ...styles.nodeLabel, flex: 1, whiteSpace: "nowrap" }, children: node.name })
+          /* @__PURE__ */ jsx("div", { style: { ...styles.nodeLabel, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }, children: node.name })
         ]
       },
       node.uuid
-    )) }) }) }),
-    contextMenu && /* @__PURE__ */ jsxs("div", { style: {
-      position: "fixed",
-      top: contextMenu.y,
-      left: contextMenu.x,
-      backgroundColor: theme.bg,
-      border: `1px solid ${theme.border}`,
-      boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-      zIndex: 9999,
-      padding: "4px 0",
-      minWidth: "120px"
-    }, children: [
-      /* @__PURE__ */ jsx(
-        "div",
-        {
-          style: { padding: "6px 12px", cursor: "pointer", fontSize: "12px", color: theme.text },
-          onClick: expandAll,
-          onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.hover,
-          onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
-          children: t("expand_all")
-        }
-      ),
-      /* @__PURE__ */ jsx(
-        "div",
-        {
-          style: { padding: "6px 12px", cursor: "pointer", fontSize: "12px", color: theme.text },
-          onClick: collapseAll,
-          onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.hover,
-          onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
-          children: t("collapse_all")
-        }
-      ),
-      contextMenu.node?.isFileNode && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            style: { padding: "6px 12px", cursor: "pointer", fontSize: "12px", color: theme.danger },
-            onClick: () => {
-              if (contextMenu.node) onDelete(contextMenu.node.uuid);
-              setContextMenu(null);
-            },
-            onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.hover,
-            onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
-            children: t("delete_model")
-          }
-        )
-      ] })
-    ] })
+    )) }) }) })
   ] });
 };
 
@@ -105462,7 +101577,6 @@ const ThreeViewer = ({
   showStats: propShowStats,
   showOutline: propShowOutline,
   showProperties: propShowProperties,
-  showDeleteButton: propShowDeleteButton,
   initialSettings,
   initialFiles,
   onSelect: propOnSelect,
@@ -105496,8 +101610,10 @@ const ThreeViewer = ({
     }
   }, [defaultLang]);
   const [treeRoot, setTreeRoot] = useState([]);
-  const [selectedUuid, setSelectedUuid] = useState(null);
+  const [selectedUuids, setSelectedUuids] = useState([]);
+  const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
   const [selectedProps, setSelectedProps] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ x: 0, y: 0, open: false, source: "canvas", targetUuid: null });
   const [status, setStatus] = useState(getTranslation(lang, "ready"));
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -105544,7 +101660,6 @@ const ThreeViewer = ({
       return true;
     }
   });
-  const showDeleteButton = propShowDeleteButton !== void 0 ? propShowDeleteButton : true;
   const [sceneSettings, setSceneSettings] = useState(() => {
     let baseSettings = {
       ambientInt: 2,
@@ -105582,10 +101697,10 @@ const ThreeViewer = ({
   useRef(null);
   const [errorState, setErrorState] = useState({ isOpen: false, title: "", message: "" });
   const [toast, setToast] = useState(null);
-  const cleanStatus = useCallback((msg) => {
+  const cleanStatus = (msg) => {
     if (!msg) return "";
     return msg.replace(/:\s*\d+%/g, "").replace(/\(\d+%\)/g, "").replace(/\d+%/g, "").trim();
-  }, []);
+  };
   const t = useCallback((key) => getTranslation(lang, key), [lang]);
   useEffect(() => {
     const handleError = (event) => {
@@ -105707,7 +101822,7 @@ const ThreeViewer = ({
       e.stopPropagation();
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
         const files = Array.from(e.dataTransfer.files);
-        const supportedExtensions = [".lmb", ".lmbz", ".glb", ".gltf", ".ifc", ".nbim", ".fbx", ".obj", ".stl", ".ply", ".3ds", ".dae", ".stp", ".step", ".igs", ".iges"];
+        const supportedExtensions = [".lmb", ".glb", ".gltf", ".ifc", ".nbim", ".fbx", ".obj", ".stl", ".ply", ".3ds", ".dae", ".stp", ".step", ".igs", ".iges"];
         const unsupportedFiles = files.filter((f) => {
           const ext = "." + f.name.split(".").pop()?.toLowerCase();
           return !supportedExtensions.includes(ext);
@@ -105790,39 +101905,54 @@ const ThreeViewer = ({
       setTreeRoot([]);
       return;
     }
+    const expandedMap = /* @__PURE__ */ new Map();
+    const collectExpanded = (nodes) => {
+      const stack = [...nodes || []];
+      while (stack.length) {
+        const n = stack.pop();
+        if (!n) continue;
+        if (typeof n.uuid === "string") expandedMap.set(n.uuid, !!n.expanded);
+        if (Array.isArray(n.children) && n.children.length) stack.push(...n.children);
+      }
+    };
     const convertNode = (node, depth = 0, isFileNode = false) => {
-      let displayName = node.name;
-      if (!displayName || displayName === node.id || displayName.startsWith("Mesh_") || displayName.startsWith("Group_")) {
-        displayName = String(node.bimId !== void 0 ? node.bimId : node.id).replace(/^bim_/, "");
-      }
-      if (node.name && !node.name.startsWith("Mesh_") && !node.name.startsWith("Group_")) {
-        displayName = node.name;
-      } else {
-        displayName = String(node.bimId !== void 0 ? node.bimId : node.id).replace(/^bim_/, "");
-      }
+      const uuid = node.id;
       return {
-        uuid: node.id,
-        name: displayName,
+        uuid,
+        name: node.name,
         type: node.type === "Mesh" ? "MESH" : "GROUP",
         depth,
         children: (node.children || []).map((c) => convertNode(c, depth + 1, false)),
-        expanded: false,
+        expanded: expandedMap.get(uuid) ?? false,
         visible: node.visible !== false,
         object: node,
         isFileNode
       };
     };
-    const roots = [];
-    (root.children || []).forEach((c) => {
-      if (c.name === "ImportedModels" || c.name === "Tilesets") {
-        (c.children || []).forEach((child) => {
-          roots.push(convertNode(child, 0, true));
-        });
-      } else {
-        roots.push(convertNode(c, 0, true));
-      }
+    setTreeRoot((prev) => {
+      collectExpanded(prev);
+      const roots = [];
+      (root.children || []).forEach((c) => {
+        if (c.name === "ImportedModels" || c.name === "Tilesets") {
+          (c.children || []).forEach((child) => {
+            roots.push(convertNode(child, 0, true));
+          });
+        } else {
+          roots.push(convertNode(c, 0, true));
+        }
+      });
+      return roots;
     });
-    setTreeRoot(roots);
+  }, []);
+  const setAllTreeExpanded = useCallback((expanded) => {
+    const update = (nodes) => {
+      return nodes.map((n) => ({
+        ...n,
+        expanded,
+        children: n.children && n.children.length > 0 ? update(n.children) : n.children
+      }));
+    };
+    setTreeRoot((prev) => update(prev));
   }, []);
   const handleToggleVisibility = (uuid, visible) => {
     if (!sceneMgr.current) return;
@@ -105832,9 +101962,9 @@ const ThreeViewer = ({
   const handleDeleteObject = (uuid) => {
     if (!sceneMgr.current) return;
     const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-    const node = sceneMgr.current.nodeMap.get(uuid);
-    if (obj || node) {
-      const name = obj?.name || node?.name || "Item";
+    const nodes = sceneMgr.current.getStructureNodes(uuid);
+    if (obj || nodes) {
+      const name = obj?.name || nodes?.[0]?.name || "Item";
       setConfirmState({
         isOpen: true,
         title: t("delete_item"),
@@ -105844,11 +101974,12 @@ const ThreeViewer = ({
           setStatus(t("delete_item") + "...");
           try {
             await sceneMgr.current?.removeModel(uuid);
-            if (selectedUuid === uuid) {
-              setSelectedUuid(null);
-              setSelectedProps(null);
-              sceneMgr.current?.highlightObject(null);
-            }
+            setSelectedUuids((prev) => {
+              const next = prev.filter((id) => id !== uuid);
+              sceneMgr.current?.highlightObjects(next);
+              if (next.length === 0) setSelectedProps(null);
+              return next;
+            });
             updateTree();
             setStatus(t("ready"));
             setToast({ message: t("success"), type: "success" });
@@ -105958,7 +102089,7 @@ const ThreeViewer = ({
       }
       if (pickEnabled) {
         const result = mgr.pick(e.clientX, e.clientY);
-        handleSelect(result ? result.object : null, result ? result.intersect : null);
+        handleSelect(result ? result.object : null, result ? result.intersect : null, e.ctrlKey);
       }
     };
     const handleMouseMove = (e) => {
@@ -105966,7 +102097,14 @@ const ThreeViewer = ({
         mgr.updateMeasureHover(e.clientX, e.clientY);
         return;
       }
-      mgr.highlightObject(selectedUuid);
+    };
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({ x: e.clientX, y: e.clientY, open: true, source: "canvas", targetUuid: null });
+    };
+    const handleGlobalClick = () => {
+      setContextMenu((prev) => prev.open ? { ...prev, open: false } : prev);
     };
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
@@ -105974,17 +102112,24 @@ const ThreeViewer = ({
           setMeasureType("none");
           mgr.startMeasurement("none");
         }
+        setSelectedUuids([]);
+        setSelectedProps(null);
+        mgr.highlightObjects([]);
       }
     };
     canvas.addEventListener("click", handleClick);
     canvas.addEventListener("mousemove", handleMouseMove);
+    canvas.addEventListener("contextmenu", handleContextMenu);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("click", handleGlobalClick);
     return () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("click", handleGlobalClick);
     };
-  }, [pickEnabled, selectedUuid, activeTool, measureType]);
+  }, [pickEnabled, selectedUuids, activeTool, measureType]);
   useEffect(() => {
     const mgr = sceneMgr.current;
     if (!mgr) return;
@@ -106025,33 +102170,39 @@ const ThreeViewer = ({
       sceneMgr.current.startMeasurement(measureType);
     }
   }, [measureType]);
-  const handleSelect = useCallback(async (obj, intersect) => {
+  const handleSelect = async (obj, intersect, isMultiSelect = false) => {
     if (!sceneMgr.current) return;
     if (!obj) {
-      setSelectedUuid(null);
+      setSelectedUuids([]);
       setSelectedProps(null);
-      sceneMgr.current.highlightObject(null);
+      sceneMgr.current.highlightObjects([]);
       return;
     }
     const uuid = obj.uuid || obj.id;
     if (!uuid) return;
-    setSelectedUuid(uuid);
-    sceneMgr.current.highlightObject(uuid);
-    if (propOnSelect) propOnSelect(uuid, obj);
-    let realObj = obj instanceof THREE.Object3D ? obj : sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
+    const nextUuids = isMultiSelect ? selectedUuids.includes(uuid) ? selectedUuids.filter((id) => id !== uuid) : [...selectedUuids, uuid] : [uuid];
+    setSelectedUuids(nextUuids);
+    sceneMgr.current.highlightObjects(nextUuids);
+    const focusUuid = nextUuids.length > 0 ? nextUuids[nextUuids.length - 1] : null;
+    if (!focusUuid) {
+      setSelectedProps(null);
+      return;
+    }
+    if (propOnSelect) propOnSelect(focusUuid, obj);
+    let realObj = focusUuid === uuid && obj instanceof THREE.Object3D ? obj : sceneMgr.current.contentGroup.getObjectByProperty("uuid", focusUuid);
+    if (!realObj) {
+      const nodes = sceneMgr.current.getStructureNodes(focusUuid);
+      if (nodes && nodes.length > 0) realObj = nodes[0];
+    }
     if (!realObj && sceneMgr.current) ;
     const target = realObj || obj;
     const basicProps = {};
     const geoProps = {};
     const ifcProps = {};
-    const nodeID = String(target.bimId !== void 0 ? target.bimId : uuid).replace(/^bim_/, "");
-    basicProps[t("prop_name")] = nodeID;
+    basicProps[t("prop_name")] = target.name || "Unnamed";
     basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
-    basicProps[t("prop_id")] = nodeID;
-    if (target.name && !target.name.startsWith("Mesh_") && !target.name.startsWith("Group_")) {
-      basicProps["Original Name"] = target.name;
-    }
-    if (target instanceof THREE.Object3D) {
+    basicProps[t("prop_id")] = focusUuid;
+    if (target.getWorldPosition) {
       const worldPos = new THREE.Vector3();
       target.getWorldPosition(worldPos);
       geoProps[t("prop_pos")] = `${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}`;
@@ -106080,9 +102231,7 @@ const ThreeViewer = ({
       }
       const userData = target.userData || {};
       const parentUserData = target.parent?.userData || {};
-      if (target.properties) {
-        Object.assign(ifcProps, target.properties);
-      } else if (userData.isIFC || parentUserData.isIFC) {
+      if (userData.isIFC || parentUserData.isIFC) {
         const ifcTarget = userData.isIFC ? target : target.parent;
         if (ifcTarget && ifcTarget.userData.ifcAPI && ifcTarget.userData.modelID !== void 0) {
           const expressID = userData.expressID;
@@ -106109,77 +102258,28 @@ const ThreeViewer = ({
       [t("pg_geo")]: geoProps
     };
     if (Object.keys(ifcProps).length > 0) {
-      finalProps[t("pg_ifc") || "IFC Properties"] = ifcProps;
+      finalProps["IFC Properties"] = ifcProps;
+    }
+    const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
+    if (nbimProps) {
+      finalProps["BIM 属性"] = nbimProps;
     }
     setSelectedProps(finalProps);
-  }, [sceneMgr, setSelectedUuid, setSelectedProps, propOnSelect, t]);
-  const processFiles = useCallback(async (items) => {
+  };
+  const processFiles = async (items) => {
     if (!items.length || !sceneMgr.current) return;
     console.log("[ThreeViewer] processFiles called with", items.length, "items");
+    sceneMgr.current.setChunkLoadingEnabled?.(true);
+    sceneMgr.current.setContentVisible?.(true);
     setLoading(true);
     setStatus(t("loading"));
     setProgress(0);
     try {
-      const nbimItems = [];
-      const otherItems = [];
-      for (const item of items) {
-        const path = typeof item === "string" ? item.split("?")[0].split("#")[0] : item.name;
-        if (path.toLowerCase().endsWith(".nbim")) {
-          nbimItems.push(item);
-        } else {
-          otherItems.push(item);
-        }
-      }
-      console.log("[ThreeViewer] nbimItems:", nbimItems.length, "otherItems:", otherItems.length);
-      for (const item of nbimItems) {
-        if (sceneMgr.current) {
-          if (typeof item === "string") {
-            console.log("[ThreeViewer] Fetching NBIM URL:", item);
-            const response = await fetch(item);
-            if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
-            const blob = await response.blob();
-            const fileName = item.split("?")[0].split("#")[0].split("/").pop() || "model.nbim";
-            const file = new File([blob], fileName);
-            await sceneMgr.current.loadNbim(file, t, (p, msg) => {
-              setProgress(p);
-              if (msg) setStatus(cleanStatus(msg));
-            });
-          } else {
-            console.log("[ThreeViewer] Loading NBIM File:", item.name);
-            await sceneMgr.current.loadNbim(item, t, (p, msg) => {
-              setProgress(p);
-              if (msg) setStatus(cleanStatus(msg));
-            });
-          }
-        }
-      }
-      if (otherItems.length > 0) {
-        console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
-        const loadedObjects = await loadModelFiles(
-          otherItems,
-          (p, msg) => {
-            setProgress(p);
-            if (msg) setStatus(cleanStatus(msg));
-          },
-          t,
-          sceneSettings,
-          // Pass settings
-          libPath
-        );
-        console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
-        for (const obj of loadedObjects) {
-          await sceneMgr.current.addModel(obj, t);
-        }
-      }
+      await loadItemsIntoScene(items);
       updateTree();
       setStatus(t("success"));
       console.log("[ThreeViewer] processFiles completed successfully");
-      setTimeout(() => {
-        if (sceneMgr.current) {
-          sceneMgr.current.fitView();
-          sceneMgr.current.setView("iso");
-        }
-      }, 500);
+      sceneMgr.current?.fitView();
     } catch (err) {
       console.error("[ThreeViewer] processFiles error:", err);
       setStatus(t("failed"));
@@ -106187,11 +102287,109 @@ const ThreeViewer = ({
     } finally {
       setLoading(false);
     }
-  }, [sceneMgr, setLoading, setStatus, setProgress, t, cleanStatus, sceneSettings, libPath, updateTree, setToast]);
+  };
+  const loadItemsIntoScene = async (items) => {
+    if (!items.length || !sceneMgr.current) return;
+    const nbimItems = [];
+    const otherItems = [];
+    for (const item of items) {
+      const path = typeof item === "string" ? item.split("?")[0].split("#")[0] : item.name;
+      if (path.toLowerCase().endsWith(".nbim")) {
+        nbimItems.push(item);
+      } else {
+        otherItems.push(item);
+      }
+    }
+    console.log("[ThreeViewer] nbimItems:", nbimItems.length, "otherItems:", otherItems.length);
+    for (const item of nbimItems) {
+      if (!sceneMgr.current) return;
+      if (typeof item === "string") {
+        console.log("[ThreeViewer] Fetching NBIM URL:", item);
+        const response = await fetch(item);
+        if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
+        const blob = await response.blob();
+        const fileName = item.split("?")[0].split("#")[0].split("/").pop() || "model.nbim";
+        const file = new File([blob], fileName);
+        await sceneMgr.current.loadNbim(file, (p, msg) => {
+          setProgress(p);
+          if (msg) setStatus(cleanStatus(msg));
+        });
+      } else {
+        console.log("[ThreeViewer] Loading NBIM File:", item.name);
+        await sceneMgr.current.loadNbim(item, (p, msg) => {
+          setProgress(p);
+          if (msg) setStatus(cleanStatus(msg));
+        });
+      }
+    }
+    if (otherItems.length > 0) {
+      console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
+      const loadedObjects = await loadModelFiles(
+        otherItems,
+        (p, msg) => {
+          setProgress(p);
+          if (msg) setStatus(cleanStatus(msg));
+        },
+        t,
+        sceneSettings,
+        libPath
+      );
+      console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
+      for (const obj of loadedObjects) {
+        if (!sceneMgr.current) return;
+        await sceneMgr.current.addModel(obj, (p, msg) => {
+          setProgress(p);
+          if (msg) setStatus(cleanStatus(msg));
+        });
+      }
+    }
+  };
   const handleOpenFiles = async (e) => {
     if (!e.target.files?.length) return;
     await processFiles(Array.from(e.target.files));
     e.target.value = "";
+  };
+  const handleBatchConvert = async (e) => {
+    if (!e.target.files?.length || !sceneMgr.current) return;
+    const files = Array.from(e.target.files);
+    e.target.value = "";
+    const invalid = files.filter((f) => f.name.toLowerCase().endsWith(".nbim"));
+    if (invalid.length > 0) {
+      setToast({ message: t("unsupported_format"), type: "info" });
+      return;
+    }
+    sceneMgr.current.setChunkLoadingEnabled?.(false);
+    sceneMgr.current.setContentVisible?.(false);
+    setLoading(true);
+    setStatus(t("processing") + "...");
+    setProgress(0);
+    setActiveTool("none");
+    try {
+      await sceneMgr.current.clear();
+      setSelectedUuids([]);
+      setSelectedProps(null);
+      setMeasureHistory([]);
+      updateTree();
+      await loadItemsIntoScene(files);
+      updateTree();
+      setStatus(t("processing") + "...");
+      await sceneMgr.current.exportNbim();
+      setStatus(t("success"));
+      setToast({ message: t("success"), type: "success" });
+    } catch (err) {
+      console.error("[ThreeViewer] handleBatchConvert error:", err);
+      setStatus(t("failed"));
+      setToast({ message: `${t("failed")}: ${err.message}`, type: "error" });
+    } finally {
+      try {
+        await sceneMgr.current?.clear();
+        updateTree();
+      } catch {
+      }
+      sceneMgr.current.setChunkLoadingEnabled?.(true);
+      sceneMgr.current.setContentVisible?.(true);
+      setLoading(false);
+    }
   };
   const handleOpenUrl = async () => {
     const url = window.prompt(t("menu_open_url"), "http://");
@@ -106205,13 +102403,13 @@ const ThreeViewer = ({
       if (urlPath.toLowerCase().endsWith(".json") || urlPath.includes("tileset")) {
         console.log("[ThreeViewer] Detected as 3D Tiles");
         if (sceneMgr.current) {
-          sceneMgr.current.addTileset(url, t, (p, msg) => {
+          sceneMgr.current.addTileset(url, (p, msg) => {
             setProgress(p);
             if (msg) setStatus(cleanStatus(msg));
           });
           updateTree();
           setStatus(t("tileset_loaded"));
-          setTimeout(() => sceneMgr.current?.fitView(), 500);
+          sceneMgr.current?.fitView();
         }
       } else {
         await processFiles([url]);
@@ -106233,13 +102431,13 @@ const ThreeViewer = ({
     e.stopPropagation();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
-      const supportedExtensions = [".lmb", ".lmbz", ".glb", ".gltf", ".ifc", ".nbim", ".fbx", ".obj", ".stl", ".ply", ".3mf", ".stp", ".step", ".igs", ".iges"];
+      const supportedExtensions = [".lmb", ".glb", ".gltf", ".ifc", ".nbim", ".fbx", ".obj", ".stl", ".ply", ".3mf", ".stp", ".step", ".igs", ".iges"];
       const validFiles = files.filter((file) => {
         const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
         return supportedExtensions.includes(ext);
       });
       if (validFiles.length < files.length) {
-        setToast({ message: t("unsupported_format"), type: "warning" });
+        setToast({ message: t("unsupported_format"), type: "info" });
       }
       if (validFiles.length > 0) {
         await processFiles(validFiles);
@@ -106260,13 +102458,13 @@ const ThreeViewer = ({
         t
       );
       if (url) {
-        sceneMgr.current.addTileset(url, t, (p, msg) => {
+        sceneMgr.current.addTileset(url, (p, msg) => {
           setProgress(p);
           if (msg) setStatus(cleanStatus(msg));
         });
         updateTree();
         setStatus(t("tileset_loaded"));
-        setTimeout(() => sceneMgr.current?.fitView(), 500);
+        sceneMgr.current?.fitView();
       }
     } catch (err) {
       console.error(err);
@@ -106377,7 +102575,7 @@ const ThreeViewer = ({
         setStatus(t("op_clear") + "...");
         try {
           await sceneMgr.current?.clear();
-          setSelectedUuid(null);
+          setSelectedUuids([]);
           setSelectedProps(null);
           setMeasureHistory([]);
           updateTree();
@@ -106405,30 +102603,9 @@ const ThreeViewer = ({
             themeType: themeMode,
             setThemeType: setThemeMode,
             handleOpenFiles,
+            handleBatchConvert,
             handleOpenFolder,
             handleOpenUrl,
-            handleBatchConvert: (files) => {
-              const filename = window.prompt(t("enter_filename"), `batch_model_${(/* @__PURE__ */ new Date()).getTime()}.nbim`);
-              if (filename === null) return;
-              setLoading(true);
-              setStatus(t("converting"));
-              performBatchConvert({
-                files,
-                t,
-                filename,
-                onProgress: (p, msg) => {
-                  setProgress(p);
-                  if (msg) setStatus(msg);
-                },
-                libPath
-              }).then(() => {
-                setToast({ message: t("success"), type: "success" });
-              }).catch((err) => {
-                setToast({ message: err.message, type: "error" });
-              }).finally(() => {
-                setLoading(false);
-              });
-            },
             handleView,
             handleClear,
             pickEnabled,
@@ -106478,14 +102655,12 @@ const ThreeViewer = ({
               SceneTree,
               {
                 t,
-                sceneMgr: sceneMgr.current,
                 treeRoot,
                 setTreeRoot,
                 selectedUuid,
                 onSelect: (uuid, obj) => handleSelect(obj),
                 onToggleVisibility: handleToggleVisibility,
-                onDelete: handleDeleteObject,
-                showDeleteButton,
+                onModelContextMenu: (uuid, x, y) => setContextMenu({ x, y, open: true, source: "tree", targetUuid: uuid }),
                 styles,
                 theme
               }
@@ -106513,6 +102688,117 @@ const ThreeViewer = ({
             overflow: "hidden"
           }, children: [
             /* @__PURE__ */ jsx("canvas", { ref: canvasRef, style: { width: "100%", height: "100%", outline: "none" } }),
+            contextMenu.open && /* @__PURE__ */ jsx(
+              "div",
+              {
+                style: {
+                  position: "fixed",
+                  left: contextMenu.x,
+                  top: contextMenu.y,
+                  backgroundColor: theme.panelBg,
+                  color: theme.text,
+                  border: `1px solid ${theme.border}`,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+                  zIndex: 2e4,
+                  minWidth: 160
+                },
+                onContextMenu: (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                },
+                onMouseDown: (e) => e.stopPropagation(),
+                onClick: (e) => e.stopPropagation(),
+                children: contextMenu.source === "canvas" ? /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: { padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}` },
+                      onClick: () => {
+                        sceneMgr.current?.setAllVisibility(true);
+                        updateTree();
+                        setContextMenu((prev) => ({ ...prev, open: false }));
+                      },
+                      children: t("ctx_show_all")
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: {
+                        padding: "10px 12px",
+                        cursor: selectedUuids.length > 0 ? "pointer" : "not-allowed",
+                        opacity: selectedUuids.length > 0 ? 1 : 0.5,
+                        borderBottom: `1px solid ${theme.border}`
+                      },
+                      onClick: () => {
+                        if (!sceneMgr.current || selectedUuids.length === 0) return;
+                        sceneMgr.current.isolateObjects(selectedUuids);
+                        updateTree();
+                        setContextMenu((prev) => ({ ...prev, open: false }));
+                      },
+                      children: t("ctx_isolate_selection")
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: {
+                        padding: "10px 12px",
+                        cursor: selectedUuids.length > 0 ? "pointer" : "not-allowed",
+                        opacity: selectedUuids.length > 0 ? 1 : 0.5
+                      },
+                      onClick: () => {
+                        if (!sceneMgr.current || selectedUuids.length === 0) return;
+                        sceneMgr.current.hideObjects(selectedUuids);
+                        updateTree();
+                        setContextMenu((prev) => ({ ...prev, open: false }));
+                      },
+                      children: t("ctx_hide_selection")
+                    }
+                  )
+                ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: { padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}` },
+                      onClick: () => {
+                        setAllTreeExpanded(true);
+                        setContextMenu((prev) => ({ ...prev, open: false }));
+                      },
+                      children: t("expand_all")
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: { padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}` },
+                      onClick: () => {
+                        setAllTreeExpanded(false);
+                        setContextMenu((prev) => ({ ...prev, open: false }));
+                      },
+                      children: t("collapse_all")
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    "div",
+                    {
+                      style: {
+                        padding: "10px 12px",
+                        cursor: contextMenu.targetUuid ? "pointer" : "not-allowed",
+                        opacity: contextMenu.targetUuid ? 1 : 0.5,
+                        color: theme.danger
+                      },
+                      onClick: () => {
+                        if (!contextMenu.targetUuid) return;
+                        handleDeleteObject(contextMenu.targetUuid);
+                        setContextMenu((prev) => ({ ...prev, open: false }));
+                      },
+                      children: t("delete_item")
+                    }
+                  )
+                ] })
+              }
+            ),
             /* @__PURE__ */ jsx(ViewCube, { sceneMgr: mgrInstance, theme, lang }),
             toast && /* @__PURE__ */ jsxs("div", { style: {
               position: "fixed",
@@ -106705,8 +102991,8 @@ const ThreeViewer = ({
             selectedUuid && /* @__PURE__ */ jsxs("span", { style: { opacity: 0.8, paddingLeft: "8px", borderLeft: "1px solid rgba(255,255,255,0.3)" }, children: [
               t("prop_id"),
               ": ",
-              selectedUuid.substring(0, 8),
-              "..."
+              selectedUuid,
+              selectedUuids.length > 1 ? ` (${selectedUuids.length})` : ""
             ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "16px", alignItems: "center" }, children: [
@@ -106798,4 +103084,4 @@ const ThreeViewer = ({
   ) });
 };
 
-export { DEFAULT_FONT, SceneManager, ThreeViewer, colors, createGlobalStyle, createStyles, getTranslation, loadModelFiles, parseTilesetFromFolder, performBatchConvert, themes };
+export { DEFAULT_FONT, SceneManager, ThreeViewer, colors, createGlobalStyle, createStyles, getTranslation, loadModelFiles, parseTilesetFromFolder, themes };

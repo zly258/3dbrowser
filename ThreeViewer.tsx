@@ -529,14 +529,26 @@ export const ThreeViewer = ({
             return;
         }
 
+        const expandedMap = new Map<string, boolean>();
+        const collectExpanded = (nodes: any[]) => {
+            const stack = [...(nodes || [])];
+            while (stack.length) {
+                const n = stack.pop();
+                if (!n) continue;
+                if (typeof n.uuid === 'string') expandedMap.set(n.uuid, !!n.expanded);
+                if (Array.isArray(n.children) && n.children.length) stack.push(...n.children);
+            }
+        };
+
         const convertNode = (node: any, depth = 0, isFileNode = false): any => {
+            const uuid = node.id;
             return {
-                uuid: node.id,
+                uuid,
                 name: node.name,
                 type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
                 depth,
                 children: (node.children || []).map((c: any) => convertNode(c, depth + 1, false)),
-                expanded: depth < 1,
+                expanded: expandedMap.get(uuid) ?? false,
                 visible: node.visible !== false,
                 object: node,
                 isFileNode
@@ -544,19 +556,20 @@ export const ThreeViewer = ({
         };
 
         // 只显示 Root 的子节点，从而移除 Root 和 ImportedModels 这一层
-        const roots: any[] = [];
-        (root.children || []).forEach((c: any) => {
-            if (c.name === "ImportedModels" || c.name === "Tilesets") {
-                // 如果是这两个容器，则将其子节点作为顶级节点，从而移除容器层
-                (c.children || []).forEach((child: any) => {
-                    roots.push(convertNode(child, 0, true));
-                });
-            } else {
-                roots.push(convertNode(c, 0, true));
-            }
+        setTreeRoot(prev => {
+            collectExpanded(prev);
+            const roots: any[] = [];
+            (root.children || []).forEach((c: any) => {
+                if (c.name === "ImportedModels" || c.name === "Tilesets") {
+                    (c.children || []).forEach((child: any) => {
+                        roots.push(convertNode(child, 0, true));
+                    });
+                } else {
+                    roots.push(convertNode(c, 0, true));
+                }
+            });
+            return roots;
         });
-        
-        setTreeRoot(roots);
     }, [])
 
     const setAllTreeExpanded = useCallback((expanded: boolean) => {
@@ -1000,7 +1013,7 @@ export const ThreeViewer = ({
             updateTree();
             setStatus(t("success"));
             console.log("[ThreeViewer] processFiles completed successfully");
-            setTimeout(() => sceneMgr.current?.fitView(), 100);
+            sceneMgr.current?.fitView();
         } catch (err) {
             console.error("[ThreeViewer] processFiles error:", err); 
             setStatus(t("failed")); 
@@ -1146,7 +1159,7 @@ export const ThreeViewer = ({
                     });
                     updateTree();
                     setStatus(t("tileset_loaded"));
-                    setTimeout(() => sceneMgr.current?.fitView(), 500);
+                    sceneMgr.current?.fitView();
                 }
             } else {
                 // 直接传递 URL 到 processFiles，让其内部处理或传递给加载器
@@ -1209,7 +1222,7 @@ export const ThreeViewer = ({
                 });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
-                setTimeout(() => sceneMgr.current?.fitView(), 500);
+                sceneMgr.current?.fitView();
             }
         } catch (err) { console.error(err); setStatus(t("failed") + ": " + (err as Error).message); } 
         finally { setLoading(false); }
