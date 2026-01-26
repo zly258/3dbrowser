@@ -1,19 +1,15 @@
 
 import React, { useState } from 'react';
 import { ThreeViewer } from '@zhangly1403/3dbrowser';
-import BatchConvertPage from './BatchConvertPage';
 
 const App: React.FC = () => {
     const [lang, setLang] = useState<'zh' | 'en'>('zh');
-    const [currentPage, setCurrentPage] = useState<'viewer' | 'batch'>('viewer');
 
     const t = {
         title: lang === 'zh' ? '3D 浏览器' : '3D Browser',
         langZh: '中文',
         langEn: 'English',
-        hint: lang === 'zh' ? '支持拖拽本地文件至浏览器' : 'Drag local files to browser',
-        batchMenu: lang === 'zh' ? '批量转换' : 'Batch Convert',
-        viewerMenu: lang === 'zh' ? '模型查看' : 'Model Viewer'
+        hint: lang === 'zh' ? '支持拖拽本地文件至浏览器' : 'Drag local files to browser'
     };
 
     const containerStyle: React.CSSProperties = {
@@ -51,30 +47,14 @@ const App: React.FC = () => {
     return (
         <div style={containerStyle}>
             <div style={headerStyle}>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007acc', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007acc', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span>{t.title}</span>
-                    <div style={{ display: 'flex', gap: '10px', marginLeft: '20px' }}>
-                        <button 
-                            style={buttonStyle(currentPage === 'viewer')} 
-                            onClick={() => setCurrentPage('viewer')}
-                        >
-                            {t.viewerMenu}
-                        </button>
-                        <button 
-                            style={buttonStyle(currentPage === 'batch')} 
-                            onClick={() => setCurrentPage('batch')}
-                        >
-                            {t.batchMenu}
-                        </button>
-                    </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    {currentPage === 'viewer' && (
-                        <div style={{ fontSize: '12px', color: '#888' }}>
-                            {t.hint}
-                        </div>
-                    )}
+                    <div style={{ fontSize: '12px', color: '#888' }}>
+                        {t.hint}
+                    </div>
                     <div style={{ display: 'flex', backgroundColor: '#1e1e1e', borderRadius: '6px', padding: '3px', gap: '2px' }}>
                         <button 
                             style={buttonStyle(lang === 'zh')} 
@@ -93,19 +73,12 @@ const App: React.FC = () => {
             </div>
             
             <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                {currentPage === 'viewer' ? (
-                    <ThreeViewer 
-                        allowDragOpen={true}
-                        libPath="./libs"
-                        showStats={true}
-                        defaultLang={lang}
-                    />
-                ) : (
-                    <BatchConvertPage 
-                        lang={lang} 
-                        onBack={() => setCurrentPage('viewer')} 
-                    />
-                )}
+                <ThreeViewer 
+                    allowDragOpen={true}
+                    libPath="./libs"
+                    showStats={true}
+                    defaultLang={lang}
+                />
             </div>
         </div>
     );

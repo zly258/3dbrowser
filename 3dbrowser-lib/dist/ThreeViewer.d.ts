@@ -4,14 +4,6 @@ import * as THREE from 'three';
 import { TilesGroup } from '3d-tiles-renderer';
 import { TilesRenderer } from '3d-tiles-renderer';
 
-export declare interface BatchConvertOptions {
-    files: File[];
-    t: TFunc;
-    filename: string;
-    onProgress: (p: number, msg: string) => void;
-    libPath: string;
-}
-
 export declare const colors: ThemeColors;
 
 export declare const createGlobalStyle: (theme: ThemeColors) => string;
@@ -160,6 +152,7 @@ export declare const createStyles: (theme: ThemeColors) => {
         color: string;
     };
     floatingHeader: {
+        height: string;
         padding: string;
         backgroundColor: string;
         borderBottom: string;
@@ -443,8 +436,6 @@ export declare type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 
 export declare const parseTilesetFromFolder: (files: FileList, onProgress: ProgressCallback, t: TFunc) => Promise<string | null>;
 
-export declare function performBatchConvert({ files, t, filename, onProgress, libPath, }: BatchConvertOptions): Promise<Blob>;
-
 export declare type ProgressCallback = (percent: number, msg?: string) => void;
 
 export declare class SceneManager {
@@ -462,13 +453,13 @@ export declare class SceneManager {
     dirLight: THREE.DirectionalLight;
     backLight: THREE.DirectionalLight;
     structureRoot: StructureTreeNode;
-    private componentCounter;
-    nodeMap: Map<string, StructureTreeNode[]>;
-    private componentMap;
+    private nodeMap;
+    private bimIdToNodeIds;
     tilesRenderer: TilesRenderer | null;
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh;
     private lastSelectedUuid;
+    private highlightedUuids;
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
     measureType: MeasureType;
@@ -480,7 +471,7 @@ export declare class SceneManager {
     clipPlaneHelpers: THREE.Mesh[];
     sceneCenter: THREE.Vector3;
     globalOffset: THREE.Vector3;
-    static batchConvert(files: File[], t: TFunc, filename?: string, onProgress?: (p: number, msg: string) => void, libPath?: string): Promise<Blob>;
+    componentMap: Map<number | string, any>;
     optimizedMapping: Map<string, {
         mesh: THREE.BatchedMesh;
         instanceId: number;
@@ -493,24 +484,34 @@ export declare class SceneManager {
     precomputedBounds: THREE.Box3;
     private chunks;
     private processingChunks;
+    private cancelledChunkIds;
     private frustum;
     private projScreenMatrix;
     private logicTimer;
     private nbimFiles;
+    private nbimMeta;
+    private nbimPropsByOriginalUuid;
     private sharedMaterial;
     onTilesUpdate?: () => void;
     onStructureUpdate?: () => void;
     onChunkProgress?: (loaded: number, total: number) => void;
-    onSelectionChange?: (uuid: string | null, object: any) => void;
     private lastReportedProgress;
+    private chunkTotalCount;
+    private chunkLoadedCount;
+    private chunkPadding;
+    private maxConcurrentChunkLoads;
+    private maxChunkLoadsPerFrame;
+    private chunkLoadingEnabled;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
-    createCircleTexture(): THREE.CanvasTexture<HTMLCanvasElement>;
+    createCircleTexture(): any;
     animate(): void;
     updateCameraClipping(): void;
     resize(): void;
     private checkCullingAndLoad;
     private loadChunk;
+    setChunkLoadingEnabled(enabled: boolean): void;
+    setContentVisible(visible: boolean): void;
     private buildSceneGraph;
     /**
      * 构建基于 IFC 图层和空间结构的复合树
@@ -519,21 +520,29 @@ export declare class SceneManager {
      * 构建基于 IFC 图层和空间结构的复合树
      */
     private buildIFCStructure;
-    addModel(object: THREE.Object3D, t: TFunc, onProgress?: (p: number, msg: string) => void): Promise<void>;
+    addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void): Promise<void>;
     removeObject(uuid: string): boolean;
     removeModel(uuid: string): Promise<boolean>;
-    addTileset(url: string, t: TFunc, onProgress?: (p: number, msg: string) => void): TilesGroup;
+    addTileset(url: string, onProgress?: (p: number, msg: string) => void): TilesGroup;
     private getTypeIndex;
     private guessType;
     private extractColor;
     private getColorByComponentType;
     private generateChunkBinaryV7;
+    private generateChunkBinaryV8;
     private parseChunkBinaryV7;
-    exportNbim(t: TFunc, filename?: string, onProgress?: (p: number, msg: string) => void): Promise<Blob>;
-    loadNbim(file: File, t: TFunc, onProgress?: (p: number, msg: string) => void): Promise<void>;
+    private parseChunkBinaryV8;
+    exportNbim(): Promise<void>;
+    loadNbim(file: File, onProgress?: (p: number, msg: string) => void): Promise<void>;
     clear(): Promise<void>;
+    getStructureNodes(id: string): StructureTreeNode[] | undefined;
+    getNbimProperties(id: string): any | null;
+    setAllVisibility(visible: boolean): void;
+    hideObjects(uuids: string[]): void;
+    isolateObjects(uuids: string[]): void;
     setObjectVisibility(uuid: string, visible: boolean): void;
     highlightObject(uuid: string | null): void;
+    highlightObjects(uuids: string[]): void;
     pick(clientX: number, clientY: number): {
         object: THREE.Object3D;
         intersect: THREE.Intersection;
@@ -587,7 +596,7 @@ export declare class SceneManager {
         meshes: number;
         faces: number;
         memory: number;
-        drawCalls: number;
+        drawCalls: any;
     };
     dispose(): void;
 }
@@ -604,11 +613,10 @@ export declare interface StructureTreeNode {
     name: string;
     type: 'Mesh' | 'Group';
     children?: StructureTreeNode[];
-    bimId?: number;
+    bimId?: string;
     chunkId?: string;
     visible?: boolean;
     userData?: any;
-    properties?: Record<string, any>;
 }
 
 export declare type TFunc = (key: string) => string;
@@ -633,7 +641,7 @@ export declare interface ThemeColors {
 
 export declare const themes: Record<'dark' | 'light', ThemeColors>;
 
-export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, showDeleteButton: propShowDeleteButton, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => JSX.Element;
+export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => JSX.Element;
 
 export declare interface ThreeViewerProps {
     allowDragOpen?: boolean;
@@ -644,7 +652,6 @@ export declare interface ThreeViewerProps {
     showStats?: boolean;
     showOutline?: boolean;
     showProperties?: boolean;
-    showDeleteButton?: boolean;
     initialSettings?: Partial<SceneSettings>;
     initialFiles?: (string | File) | (string | File)[];
     onSelect?: (uuid: string, object: any) => void;
