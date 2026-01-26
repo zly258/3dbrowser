@@ -1743,17 +1743,30 @@ export const ThreeViewer = ({
                         </span>
                     )}
                 </div>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {/* 操作提示 */}
+                    <div style={{ display: 'flex', gap: '10px', opacity: 0.85 }}>
+                        <span>{t("tips_rotate")}</span>
+                        <span>{t("tips_pan")}</span>
+                        <span>{t("tips_zoom")}</span>
+                    </div>
+                    
                     {showStats && (
-                        <>
-                            <span>{formatNumber(stats.meshes)} {t("monitor_meshes")}</span>
-                            <span>{formatNumber(stats.faces)} {t("monitor_faces")}</span>
-                            <span>{formatMemory(stats.memory)}</span>
-                            <span>{stats.drawCalls} {t("monitor_calls")}</span>
-                        </>
+                        <div style={{ 
+                            display: 'flex', 
+                            gap: '10px', 
+                            alignItems: 'center', 
+                            paddingLeft: '12px', 
+                            borderLeft: '1px solid rgba(255,255,255,0.3)' 
+                        }}>
+                            <span>{t("monitor_meshes")}: {formatNumber(stats.meshes)}</span>
+                            <span>{t("monitor_faces")}: {formatNumber(stats.faces)}</span>
+                            <span>{t("monitor_mem")}: {formatMemory(stats.memory)}</span>
+                            <span>{t("monitor_calls")}: {stats.drawCalls}</span>
+                        </div>
                     )}
                     <div style={{ width: '1px', height: '12px', backgroundColor: 'rgba(255,255,255,0.3)' }} />
-                    <div style={{ opacity: 0.9 }}>{lang === 'zh' ? '简体中文' : 'English'}</div>
+                    <div style={{ opacity: 0.9 }}>{lang === 'zh' ? 'ZH' : 'EN'}</div>
                     
                     {/* Website Title/Logo */}
                     <div style={{ 
