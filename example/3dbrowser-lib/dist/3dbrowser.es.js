@@ -99698,7 +99698,7 @@ const resources = {
     monitor_meshes: "网格数",
     monitor_faces: "三角面",
     monitor_mem: "显存",
-    monitor_calls: "绘制调用",
+    monitor_calls: "绘制",
     confirm_delete: "确定要删除吗？",
     confirm_clear: "确定要清空场景吗？",
     app_title: "3D Browser - 专业浏览器",
