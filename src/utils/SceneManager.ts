@@ -368,21 +368,21 @@ export class SceneManager {
         this.renderer.render(this.scene, this.camera);
     }
 
+    private reportChunkProgress() {
+        const total = this.chunks.length;
+        const loaded = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
+        this.chunkTotalCount = total;
+        this.chunkLoadedCount = loaded;
+        if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
+            this.lastReportedProgress = { loaded, total };
+            this.onChunkProgress(loaded, total);
+        }
+    }
+
     private checkCullingAndLoad() {
         if (!this.chunkLoadingEnabled) return;
         if (this.chunks.length === 0) return;
-
-        const totalCount = this.chunks.length;
-        if (this.chunkTotalCount !== totalCount) {
-            this.chunkTotalCount = totalCount;
-            this.chunkLoadedCount = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
-        }
-        const loadedCount = this.chunkLoadedCount;
-        
-        if (this.onChunkProgress && (loadedCount !== this.lastReportedProgress.loaded || totalCount !== this.lastReportedProgress.total)) {
-            this.lastReportedProgress = { loaded: loadedCount, total: totalCount };
-            this.onChunkProgress(loadedCount, totalCount);
-        }
+        this.reportChunkProgress();
 
         if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
 
@@ -520,11 +520,7 @@ export class SceneManager {
 
             if (loadedNow && !chunk.loaded) {
                 chunk.loaded = true;
-                this.chunkLoadedCount++;
-                if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
-                    this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
-                    this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
-                }
+                this.reportChunkProgress();
             }
             this.cancelledChunkIds.delete(chunk.id);
 
@@ -858,10 +854,7 @@ export class SceneManager {
             });
 
             this.chunkTotalCount = this.chunks.length;
-            if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
-                this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
-                this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
-            }
+            this.reportChunkProgress();
 
             // 隐藏原始网格中的 Mesh 标记优化
             object.traverse(child => {
@@ -1873,10 +1866,7 @@ export class SceneManager {
         });
 
         this.chunkTotalCount = this.chunks.length;
-        if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
-            this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
-            this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
-        }
+        this.reportChunkProgress();
 
         this.fitView();
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
