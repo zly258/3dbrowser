@@ -31,12 +31,8 @@
   ],
   "scripts": {
     "dev": "vite",
-    "dev:example": "vite --open /example/index.html",
     "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && npx @microsoft/api-extractor run --local && node -e \"require('fs').rmSync('dist/src', { recursive: true, force: true })\"",
-    "build:example": "vite build --config vite.example.config.ts",
-    "preview": "vite preview",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
-    "electron:build": "npm run build && electron-builder"
+    "preview": "vite preview"
   },
   "dependencies": {
     "3d-tiles-renderer": "0.3.31",

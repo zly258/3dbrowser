@@ -3699,6 +3699,171 @@ class B3DMLoaderBase extends LoaderBase {
 }
 
 /**
+ * Returns a new geometry with vertices for which all similar vertex attributes (within tolerance) are merged.
+ *
+ * @param {BufferGeometry} geometry - The geometry to merge vertices for.
+ * @param {number} [tolerance=1e-4] - The tolerance value.
+ * @return {BufferGeometry} - The new geometry with merged vertices.
+ */
+function mergeVertices( geometry, tolerance = 1e-4 ) {
+
+	tolerance = Math.max( tolerance, Number.EPSILON );
+
+	// Generate an index buffer if the geometry doesn't have one, or optimize it
+	// if it's already available.
+	const hashToIndex = {};
+	const indices = geometry.getIndex();
+	const positions = geometry.getAttribute( 'position' );
+	const vertexCount = indices ? indices.count : positions.count;
+
+	// next value for triangle indices
+	let nextIndex = 0;
+
+	// attributes and new attribute arrays
+	const attributeNames = Object.keys( geometry.attributes );
+	const tmpAttributes = {};
+	const tmpMorphAttributes = {};
+	const newIndices = [];
+	const getters = [ 'getX', 'getY', 'getZ', 'getW' ];
+	const setters = [ 'setX', 'setY', 'setZ', 'setW' ];
+
+	// Initialize the arrays, allocating space conservatively. Extra
+	// space will be trimmed in the last step.
+	for ( let i = 0, l = attributeNames.length; i < l; i ++ ) {
+
+		const name = attributeNames[ i ];
+		const attr = geometry.attributes[ name ];
+
+		tmpAttributes[ name ] = new attr.constructor(
+			new attr.array.constructor( attr.count * attr.itemSize ),
+			attr.itemSize,
+			attr.normalized
+		);
+
+		const morphAttributes = geometry.morphAttributes[ name ];
+		if ( morphAttributes ) {
+
+			if ( ! tmpMorphAttributes[ name ] ) tmpMorphAttributes[ name ] = [];
+			morphAttributes.forEach( ( morphAttr, i ) => {
+
+				const array = new morphAttr.array.constructor( morphAttr.count * morphAttr.itemSize );
+				tmpMorphAttributes[ name ][ i ] = new morphAttr.constructor( array, morphAttr.itemSize, morphAttr.normalized );
+
+			} );
+
+		}
+
+	}
+
+	// convert the error tolerance to an amount of decimal places to truncate to
+	const halfTolerance = tolerance * 0.5;
+	const exponent = Math.log10( 1 / tolerance );
+	const hashMultiplier = Math.pow( 10, exponent );
+	const hashAdditive = halfTolerance * hashMultiplier;
+	for ( let i = 0; i < vertexCount; i ++ ) {
+
+		const index = indices ? indices.getX( i ) : i;
+
+		// Generate a hash for the vertex attributes at the current index 'i'
+		let hash = '';
+		for ( let j = 0, l = attributeNames.length; j < l; j ++ ) {
+
+			const name = attributeNames[ j ];
+			const attribute = geometry.getAttribute( name );
+			const itemSize = attribute.itemSize;
+
+			for ( let k = 0; k < itemSize; k ++ ) {
+
+				// double tilde truncates the decimal value
+				hash += `${ ~ ~ ( attribute[ getters[ k ] ]( index ) * hashMultiplier + hashAdditive ) },`;
+
+			}
+
+		}
+
+		// Add another reference to the vertex if it's already
+		// used by another index
+		if ( hash in hashToIndex ) {
+
+			newIndices.push( hashToIndex[ hash ] );
+
+		} else {
+
+			// copy data to the new index in the temporary attributes
+			for ( let j = 0, l = attributeNames.length; j < l; j ++ ) {
+
+				const name = attributeNames[ j ];
+				const attribute = geometry.getAttribute( name );
+				const morphAttributes = geometry.morphAttributes[ name ];
+				const itemSize = attribute.itemSize;
+				const newArray = tmpAttributes[ name ];
+				const newMorphArrays = tmpMorphAttributes[ name ];
+
+				for ( let k = 0; k < itemSize; k ++ ) {
+
+					const getterFunc = getters[ k ];
+					const setterFunc = setters[ k ];
+					newArray[ setterFunc ]( nextIndex, attribute[ getterFunc ]( index ) );
+
+					if ( morphAttributes ) {
+
+						for ( let m = 0, ml = morphAttributes.length; m < ml; m ++ ) {
+
+							newMorphArrays[ m ][ setterFunc ]( nextIndex, morphAttributes[ m ][ getterFunc ]( index ) );
+
+						}
+
+					}
+
+				}
+
+			}
+
+			hashToIndex[ hash ] = nextIndex;
+			newIndices.push( nextIndex );
+			nextIndex ++;
+
+		}
+
+	}
+
+	// generate result BufferGeometry
+	const result = geometry.clone();
+	for ( const name in geometry.attributes ) {
+
+		const tmpAttribute = tmpAttributes[ name ];
+
+		result.setAttribute( name, new tmpAttribute.constructor(
+			tmpAttribute.array.slice( 0, nextIndex * tmpAttribute.itemSize ),
+			tmpAttribute.itemSize,
+			tmpAttribute.normalized,
+		) );
+
+		if ( ! ( name in tmpMorphAttributes ) ) continue;
+
+		for ( let j = 0; j < tmpMorphAttributes[ name ].length; j ++ ) {
+
+			const tmpMorphAttribute = tmpMorphAttributes[ name ][ j ];
+
+			result.morphAttributes[ name ][ j ] = new tmpMorphAttribute.constructor(
+				tmpMorphAttribute.array.slice( 0, nextIndex * tmpMorphAttribute.itemSize ),
+				tmpMorphAttribute.itemSize,
+				tmpMorphAttribute.normalized,
+			);
+
+		}
+
+	}
+
+	// indices
+
+	result.setIndex( newIndices );
+
+	return result;
+
+}
+
+/**
  * Returns a new indexed geometry based on `TrianglesDrawMode` draw mode.
  * This mode corresponds to the `gl.TRIANGLES` primitive in WebGL.
  *
@@ -11722,12 +11887,7 @@ function extractColor(mesh) {
   }
   return getColorByComponentType(mesh.name);
 }
-function getColorByComponentType(name) {
-  const n = name.toLowerCase();
-  if (n.includes("col") || n.includes("柱")) return 12573694;
-  if (n.includes("beam") || n.includes("梁")) return 9684477;
-  if (n.includes("slab") || n.includes("板")) return 15067115;
-  if (n.includes("wall") || n.includes("墙")) return 15987958;
+function getColorByComponentType(_name) {
   return 9741240;
 }
 function collectItems$1(root) {
@@ -11899,7 +12059,7 @@ class SceneManager {
     this.cancelledChunkIds = /* @__PURE__ */ new Set();
     this.frustum = new THREE.Frustum();
     this.projScreenMatrix = new THREE.Matrix4();
-    this.logicTimer = 0;
+    this.logicTimer = null;
     this.nbimFiles = /* @__PURE__ */ new Map();
     this.nbimMeta = /* @__PURE__ */ new Map();
     this.nbimPropsByOriginalUuid = /* @__PURE__ */ new Map();
@@ -11910,8 +12070,6 @@ class SceneManager {
       side: THREE.DoubleSide
     });
     this.lastReportedProgress = { loaded: -1, total: -1 };
-    this.chunkTotalCount = 0;
-    this.chunkLoadedCount = 0;
     this.chunkPadding = 0.2;
     this.maxConcurrentChunkLoads = 96;
     this.maxChunkLoadsPerFrame = 48;
@@ -12026,6 +12184,13 @@ class SceneManager {
     this.ambientLight.intensity = this.settings.ambientInt;
     this.dirLight.intensity = this.settings.dirInt;
     this.renderer.setClearColor(this.settings.bgColor);
+    if (newSettings.frustumCulling !== void 0) {
+      this.contentGroup.traverse((obj) => {
+        if (obj.isMesh || obj.isBatchedMesh) {
+          obj.frustumCulled = newSettings.frustumCulling;
+        }
+      });
+    }
     this.renderer.render(this.scene, this.camera);
   }
   createCircleTexture() {
@@ -12063,36 +12228,47 @@ class SceneManager {
     this.camera.far = range;
     this.camera.updateProjectionMatrix();
   }
-  resize() {
+  resize(width, height) {
     if (!this.canvas) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.round(rect.width));
-    const h = Math.max(1, Math.round(rect.height));
+    let w = width;
+    let h = height;
+    if (w === void 0 || h === void 0) {
+      const rect = this.canvas.parentElement?.getBoundingClientRect() || this.canvas.getBoundingClientRect();
+      w = rect.width;
+      h = rect.height;
+    }
+    w = Math.max(1, w);
+    h = Math.max(1, h);
     if (w === 0 || h === 0) return;
     const aspect = w / h;
     const cam = this.camera;
-    const frustumHeight = cam.top - cam.bottom;
-    const newWidth = frustumHeight * aspect;
-    cam.left = -newWidth / 2;
-    cam.right = newWidth / 2;
+    const currentHeight = cam.top - cam.bottom;
+    const halfHeight = currentHeight / 2;
+    const halfWidth = halfHeight * aspect;
+    cam.left = -halfWidth;
+    cam.right = halfWidth;
+    cam.top = halfHeight;
+    cam.bottom = -halfHeight;
     cam.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(w, h, false);
+    if (this.controls) {
+      this.controls.update();
+    }
     this.renderer.render(this.scene, this.camera);
+  }
+  reportChunkProgress() {
+    const total = this.chunks.length;
+    const loaded = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
+    if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
+      this.lastReportedProgress = { loaded, total };
+      this.onChunkProgress(loaded, total);
+    }
   }
   checkCullingAndLoad() {
     if (!this.chunkLoadingEnabled) return;
     if (this.chunks.length === 0) return;
-    const totalCount = this.chunks.length;
-    if (this.chunkTotalCount !== totalCount) {
-      this.chunkTotalCount = totalCount;
-      this.chunkLoadedCount = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
-    }
-    const loadedCount = this.chunkLoadedCount;
-    if (this.onChunkProgress && (loadedCount !== this.lastReportedProgress.loaded || totalCount !== this.lastReportedProgress.total)) {
-      this.lastReportedProgress = { loaded: loadedCount, total: totalCount };
-      this.onChunkProgress(loadedCount, totalCount);
-    }
+    this.reportChunkProgress();
     if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
     this.camera.updateMatrixWorld();
     this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
@@ -12202,11 +12378,7 @@ class SceneManager {
       }
       if (loadedNow && !chunk.loaded) {
         chunk.loaded = true;
-        this.chunkLoadedCount++;
-        if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
-          this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
-          this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
-        }
+        this.reportChunkProgress();
       }
       this.cancelledChunkIds.delete(chunk.id);
       const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
@@ -12477,11 +12649,7 @@ class SceneManager {
         edges.position.copy(center);
         this.ghostGroup.add(edges);
       });
-      this.chunkTotalCount = this.chunks.length;
-      if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
-        this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
-        this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
-      }
+      this.reportChunkProgress();
       object.traverse((child) => {
         if (child.isMesh) {
           child.visible = false;
@@ -12639,10 +12807,10 @@ class SceneManager {
         if (onProgress) onProgress(0, "加载失败: 无法获取 Tileset 配置文件，请检查网络或路径。");
       }
     }, 1e4);
-    renderer.onLoadTile = (tile) => {
+    renderer.onLoadTile = (_tile) => {
       if (this.onTilesUpdate) this.onTilesUpdate();
     };
-    renderer.onDisposeTile = (tile) => {
+    renderer.onDisposeTile = (_tile) => {
       if (this.onTilesUpdate) this.onTilesUpdate();
     };
     this.contentGroup.add(renderer.group);
@@ -12690,124 +12858,7 @@ class SceneManager {
     if (n.includes("door") || n.includes("门")) return "Door";
     return "Generic";
   }
-  extractColor(mesh) {
-    if (mesh.userData.color !== void 0) return mesh.userData.color;
-    const geo = mesh.geometry;
-    if (geo && geo.attributes.color) {
-      const colorAttr = geo.attributes.color;
-      if (colorAttr.count > 0) {
-        const r = colorAttr.getX(0);
-        const g = colorAttr.getY(0);
-        const b = colorAttr.getZ(0);
-        const color = new THREE.Color();
-        if (r > 1 || g > 1 || b > 1) color.setRGB(r / 255, g / 255, b / 255);
-        else color.setRGB(r, g, b);
-        return color.getHex();
-      }
-    }
-    const material = mesh.material;
-    if (Array.isArray(material)) {
-      for (const mat of material) {
-        if (mat.color) return mat.color.getHex();
-      }
-    } else if (material.color) {
-      return material.color.getHex();
-    }
-    return this.getColorByComponentType(mesh.name);
-  }
-  getColorByComponentType(name) {
-    const n = name.toLowerCase();
-    if (n.includes("col") || n.includes("柱")) return 12573694;
-    if (n.includes("beam") || n.includes("梁")) return 9684477;
-    if (n.includes("slab") || n.includes("板")) return 15067115;
-    if (n.includes("wall") || n.includes("墙")) return 15987958;
-    return 9741240;
-  }
   // --- NBIM 导入/导出功能 ---
-  generateChunkBinaryV7(items) {
-    const uniqueGeos = [];
-    const geoMap = /* @__PURE__ */ new Map();
-    items.forEach((item) => {
-      if (item.geometry && !geoMap.has(item.geometry)) {
-        geoMap.set(item.geometry, uniqueGeos.length);
-        uniqueGeos.push(item.geometry);
-      }
-    });
-    let size = 4;
-    for (const geo of uniqueGeos) {
-      const vertCount = geo.attributes.position.count;
-      const index = geo.index;
-      const indexCount = index ? index.count : 0;
-      size += 4 + 4 + vertCount * 12 + vertCount * 12;
-      if (indexCount > 0) size += indexCount * 4;
-    }
-    size += 4;
-    size += items.length * (4 + 4 + 4 + 64 + 4);
-    const buffer = new ArrayBuffer(size);
-    const dv = new DataView(buffer);
-    let offset = 0;
-    dv.setUint32(offset, uniqueGeos.length, true);
-    offset += 4;
-    for (const geo of uniqueGeos) {
-      const pos = geo.getAttribute("position");
-      const norm = geo.getAttribute("normal");
-      const count = pos.count;
-      const index = geo.index;
-      const indexCount = index ? index.count : 0;
-      dv.setUint32(offset, count, true);
-      offset += 4;
-      dv.setUint32(offset, indexCount, true);
-      offset += 4;
-      for (let i = 0; i < count; i++) {
-        dv.setFloat32(offset, pos.getX(i), true);
-        offset += 4;
-        dv.setFloat32(offset, pos.getY(i), true);
-        offset += 4;
-        dv.setFloat32(offset, pos.getZ(i), true);
-        offset += 4;
-      }
-      for (let i = 0; i < count; i++) {
-        dv.setFloat32(offset, norm.getX(i), true);
-        offset += 4;
-        dv.setFloat32(offset, norm.getY(i), true);
-        offset += 4;
-        dv.setFloat32(offset, norm.getZ(i), true);
-        offset += 4;
-      }
-      if (index && indexCount > 0) {
-        for (let i = 0; i < indexCount; i++) {
-          dv.setUint32(offset, index.getX(i), true);
-          offset += 4;
-        }
-      }
-    }
-    dv.setUint32(offset, items.length, true);
-    offset += 4;
-    for (const item of items) {
-      const treeNodes = this.nodeMap.get(item.uuid);
-      const firstNode = treeNodes?.[0];
-      const idStr = item.bimId ?? firstNode?.bimId ?? "0";
-      const parsed = Number.parseInt(idStr, 10);
-      const id = Number.isFinite(parsed) ? parsed : 0;
-      const typeStr = this.guessType(firstNode?.name || "");
-      dv.setUint32(offset, id, true);
-      offset += 4;
-      const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
-      dv.setUint32(offset, typeIndex, true);
-      offset += 4;
-      dv.setUint32(offset, item.color, true);
-      offset += 4;
-      const elements = item.matrix.elements;
-      for (let k = 0; k < 16; k++) {
-        dv.setFloat32(offset, elements[k], true);
-        offset += 4;
-      }
-      const geoId = geoMap.get(item.geometry) || 0;
-      dv.setUint32(offset, geoId, true);
-      offset += 4;
-    }
-    return buffer;
-  }
   generateChunkBinaryV8(items, bimIdToIndex) {
     const uniqueGeos = [];
     const geoMap = /* @__PURE__ */ new Map();
@@ -13391,11 +13442,7 @@ class SceneManager {
       edges.position.copy(center);
       this.ghostGroup.add(edges);
     });
-    this.chunkTotalCount = this.chunks.length;
-    if (this.onChunkProgress && (this.chunkLoadedCount !== this.lastReportedProgress.loaded || this.chunkTotalCount !== this.lastReportedProgress.total)) {
-      this.lastReportedProgress = { loaded: this.chunkLoadedCount, total: this.chunkTotalCount };
-      this.onChunkProgress(this.chunkLoadedCount, this.chunkTotalCount);
-    }
+    this.reportChunkProgress();
     this.fitView();
     if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
     this.checkCullingAndLoad();
@@ -13443,8 +13490,6 @@ class SceneManager {
       this.nodeMap.clear();
       this.bimIdToNodeIds.clear();
       this.chunks = [];
-      this.chunkTotalCount = 0;
-      this.chunkLoadedCount = 0;
       this.lastReportedProgress = { loaded: -1, total: -1 };
       this.processingChunks.clear();
       this.cancelledChunkIds.clear();
@@ -13516,6 +13561,37 @@ class SceneManager {
       });
     }
     const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+    if (visible && obj) {
+      let parent = obj.parent;
+      while (parent && parent !== this.scene) {
+        parent.visible = true;
+        parent = parent.parent;
+      }
+    }
+    if (!visible) {
+      const idsToUnhighlight = [];
+      if (this.highlightedUuids.has(uuid)) {
+        idsToUnhighlight.push(uuid);
+      }
+      if (obj) {
+        obj.traverse((child) => {
+          if (this.highlightedUuids.has(child.uuid)) {
+            idsToUnhighlight.push(child.uuid);
+          }
+        });
+      } else if (nodes && nodes.length > 0) {
+        const findHighlightedRecursive = (n) => {
+          if (this.highlightedUuids.has(n.id)) idsToUnhighlight.push(n.id);
+          if (n.children) n.children.forEach(findHighlightedRecursive);
+        };
+        findHighlightedRecursive(nodes[0]);
+      }
+      if (idsToUnhighlight.length > 0) {
+        const nextHighlighted = new Set(this.highlightedUuids);
+        idsToUnhighlight.forEach((id) => nextHighlighted.delete(id));
+        this.highlightObjects(Array.from(nextHighlighted));
+      }
+    }
     if (!obj) {
       if (nodes && nodes.length > 0) {
         const updateMappingsRecursive = (n) => {
@@ -13612,7 +13688,7 @@ class SceneManager {
     for (const id of target) addObjectBounds(id);
     if (!union.isEmpty()) {
       this.selectionBox.box.copy(union);
-      this.selectionBox.visible = true;
+      this.selectionBox.visible = false;
     }
     const focusId = this.lastSelectedUuid;
     if (!focusId) return;
@@ -14355,6 +14431,7 @@ class SceneManager {
     };
   }
   dispose() {
+    if (this.logicTimer) clearInterval(this.logicTimer);
     this.renderer.dispose();
     if (this.tilesRenderer) this.tilesRenderer.dispose();
   }
@@ -94480,105 +94557,12 @@ const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
     }
   };
   loadSpatialStructure();
-  const propertyNameMap = {
-    // 基本属性
-    "GlobalId": "全局ID",
-    "Name": "名称",
-    "Description": "描述",
-    "ObjectType": "对象类型",
-    "Tag": "标签",
-    "LongName": "长名称",
-    "CompositionType": "组成类型",
-    "PredefinedType": "预定义类型",
-    // 几何属性
-    "ObjectPlacement": "对象位置",
-    "Representation": "几何表示",
-    "Style": "样式",
-    // 材料相关
-    "Material": "材料",
-    "Finish": "表面处理",
-    "Color": "颜色",
-    "Transparency": "透明度",
-    // 尺寸属性
-    "Width": "宽度",
-    "Height": "高度",
-    "Depth": "深度",
-    "Length": "长度",
-    "Thickness": "厚度",
-    "Area": "面积",
-    "Volume": "体积",
-    "Perimeter": "周长",
-    // 状态属性
-    "Status": "状态",
-    "FireRating": "防火等级",
-    "AcousticRating": "声学等级",
-    "ThermalTransmittance": "热传导系数",
-    "IsExternal": "是否外部",
-    "LoadBearing": "是否承重",
-    "Reference": "参考",
-    // 系统属性
-    "ElementType": "元素类型",
-    "AssemblyPlace": "装配位置",
-    "Construction": "构造",
-    "FootingType": "基础类型",
-    "SurfaceType": "表面类型"
-  };
   const getFriendlyName = (name) => {
-    if (propertyNameMap[name]) {
-      return propertyNameMap[name];
-    }
     let cleanName = name.replace(/^(is|has|are)_/i, "");
-    const camelToChinese = (str) => {
-      return str.replace(/([A-Z])/g, " $1").replace(/^ /, "").split(" ").map((word, index) => {
-        const simpleMap = {
-          "Id": "ID",
-          "Type": "类型",
-          "Name": "名称",
-          "Value": "值",
-          "Code": "代码",
-          "Number": "编号",
-          "Date": "日期",
-          "Time": "时间",
-          "Area": "面积",
-          "Length": "长度",
-          "Width": "宽度",
-          "Height": "高度",
-          "Volume": "体积",
-          "Weight": "重量",
-          "Status": "状态",
-          "Level": "标高",
-          "Floor": "楼层",
-          "Room": "房间",
-          "Space": "空间",
-          "Building": "建筑",
-          "Story": "层",
-          "Zone": "区域",
-          "System": "系统",
-          "Group": "组",
-          "Set": "集",
-          "Property": "属性",
-          "Material": "材料",
-          "Element": "元素",
-          "Component": "组件",
-          "Assembly": "装配",
-          "Construction": "构造",
-          "Profile": "轮廓",
-          "Shape": "形状",
-          "Geometry": "几何",
-          "Position": "位置",
-          "Location": "位置",
-          "Coordinate": "坐标",
-          "Point": "点",
-          "Line": "线",
-          "Surface": "表面",
-          "Face": "面",
-          "Edge": "边",
-          "Vertex": "顶点"
-        };
-        return simpleMap[word] || word;
-      }).join("");
+    const camelToWords = (str) => {
+      return str.replace(/([A-Z])/g, " $1").replace(/^ /, "");
     };
-    return camelToChinese(cleanName);
+    return camelToWords(cleanName);
   };
   const formatDisplayValue = (value) => {
     if (value === null || value === void 0) return "";
@@ -94618,7 +94602,7 @@ const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
     return String(value);
   };
   rootGroup.userData.ifcManager = {
-    getItemProperties: async (id, expressID) => {
+    getItemProperties: async (_id, expressID) => {
       const result = {};
       try {
         const entity = ifcApi.GetLine(modelID, expressID);
@@ -94705,7 +94689,7 @@ const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
       }
       return result;
     },
-    getExpressId: (geo, faceIndex) => {
+    getExpressId: (geo, _faceIndex) => {
       return geo.userData?.expressID;
     }
   };
@@ -94797,116 +94781,216 @@ const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
 class OCCTLoader {
   constructor(wasmUrl = "/libs/occt-import-js/occt-import-js.wasm") {
     this.wasmUrl = wasmUrl;
+    this.readParameters = {
+      productContext: 1,
+      assemblyLevel: 1,
+      shapeRepr: 1,
+      shapeAspect: 1,
+      subShapesNames: 0,
+      codePage: "UTF8",
+      linearDeflection: 0.1,
+      angularDeflection: 0.5
+    };
   }
   async load(buffer, t, onProgress) {
+    if (!buffer || buffer.byteLength === 0) {
+      throw new Error(t("error_empty_file"));
+    }
     if (onProgress) onProgress(10, t("loading_cad_engine"));
-    const initOCCT = (await import('./occt-import-js-CuP3d19j.js').then(n => n.o)).default;
-    const occt = await initOCCT({
-      locateFile: (name) => {
-        if (name.endsWith(".wasm")) return this.wasmUrl;
-        return name;
-      }
-    });
+    let occt;
+    try {
+      const initOCCT = (await import('./occt-import-js-CuP3d19j.js').then(n => n.o)).default;
+      occt = await initOCCT({
+        locateFile: (name) => {
+          if (name.endsWith(".wasm")) return this.wasmUrl;
+          return name;
+        }
+      });
+    } catch (e) {
+      console.error("初始化 OCCT 引擎失败:", e);
+      throw new Error(t("error_cad_engine_init_failed"));
+    }
     if (onProgress) onProgress(30, t("parsing_cad_data"));
     const fileContent = new Uint8Array(buffer);
     let result;
+    let stepError = null;
+    let igesError = null;
     try {
       const params = {
-        linearDeflection: 0.1,
-        angularDeflection: 0.5
+        linearDeflection: this.readParameters.linearDeflection,
+        angularDeflection: this.readParameters.angularDeflection,
+        productContext: this.readParameters.productContext,
+        assemblyLevel: this.readParameters.assemblyLevel,
+        shapeRepr: this.readParameters.shapeRepr,
+        shapeAspect: this.readParameters.shapeAspect,
+        subShapesNames: this.readParameters.subShapesNames,
+        codePage: this.readParameters.codePage
       };
       result = occt.ReadStepFile(fileContent, params);
     } catch (e) {
-      console.warn("STEP 解析失败，尝试 IGES...", e);
+      stepError = e;
+      console.warn("STEP 解析失败，正在尝试 IGES...", e);
     }
     if (!result || !result.success) {
       try {
         const params = {
-          linearDeflection: 0.1,
-          angularDeflection: 0.5
+          linearDeflection: this.readParameters.linearDeflection,
+          angularDeflection: this.readParameters.angularDeflection
         };
         result = occt.ReadIgesFile(fileContent, params);
       } catch (e) {
+        igesError = e;
         console.error("IGES 解析失败", e);
       }
     }
-    if (!result || !result.success) {
-      throw new Error(t("error_cad_parse_failed"));
+    if (!result) {
+      throw new Error(t("error_cad_parse_failed") + " - " + t("error_no_parser_result"));
+    }
+    if (!result.success) {
+      let errorMsg = t("error_cad_parse_failed");
+      if (result.error) {
+        errorMsg += ` - ${result.error}`;
+      } else if (stepError && igesError) {
+        errorMsg += ` - STEP: ${stepError.message || "未知错误"}, IGES: ${igesError.message || "未知错误"}`;
+      }
+      throw new Error(errorMsg);
+    }
+    if (!result.meshes || !Array.isArray(result.meshes) || result.meshes.length === 0) {
+      throw new Error(t("error_cad_no_meshes"));
     }
     if (onProgress) onProgress(70, t("creating_geometry"));
     const group = new THREE.Group();
-    const material = new THREE.MeshPhongMaterial({
+    const materialCache = /* @__PURE__ */ new Map();
+    const defaultMaterial = new THREE.MeshPhongMaterial({
       color: 13421772,
       side: THREE.DoubleSide,
       flatShading: false,
-      shininess: 30
+      shininess: 30,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
     });
+    materialCache.set("default", defaultMaterial);
+    const meshMap = /* @__PURE__ */ new Map();
+    const groupMap = /* @__PURE__ */ new Map();
+    const meshesWithParent = /* @__PURE__ */ new Map();
     for (const mesh of result.meshes) {
       let geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3));
-      if (mesh.attributes.normal) {
+      if (mesh.attributes.normal && mesh.attributes.normal.array) {
         geometry.setAttribute("normal", new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3));
       } else {
         geometry.computeVertexNormals();
       }
-      if (mesh.index) {
+      if (mesh.index && mesh.index.array) {
         geometry.setIndex(new THREE.Uint32BufferAttribute(mesh.index.array, 1));
       }
-      const threeMaterial = material.clone();
+      geometry = mergeVertices(geometry);
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
+      const threeMaterial = defaultMaterial.clone();
       const threeMesh = new THREE.Mesh(geometry, threeMaterial);
-      if (mesh.color) {
-        const color = new THREE.Color(mesh.color[0], mesh.color[1], mesh.color[2]);
-        threeMesh.material.color = color;
-        threeMesh.userData.color = color.getHex();
+      let baseColor = new THREE.Color(13421772);
+      if (mesh.color && Array.isArray(mesh.color) && mesh.color.length >= 3) {
+        baseColor = new THREE.Color(mesh.color[0], mesh.color[1], mesh.color[2]);
       }
+      threeMesh.material.color = baseColor;
+      threeMesh.userData.color = baseColor.getHex();
       const brepFaces = mesh.brep_faces;
-      if (Array.isArray(brepFaces) && brepFaces.some((f) => Array.isArray(f?.color))) {
-        geometry = geometry.toNonIndexed();
-        const posAttr = geometry.getAttribute("position");
-        const triCount = Math.floor(posAttr.count / 3);
-        const colors = new Float32Array(posAttr.count * 3);
-        const baseColor = new THREE.Color(threeMesh.material.color.getHex());
-        const triHex = new Uint32Array(triCount);
-        triHex.fill(baseColor.getHex());
-        for (const face of brepFaces) {
-          const first = Number(face?.first);
-          const last = Number(face?.last);
-          const c = face?.color;
-          if (!Number.isFinite(first) || !Number.isFinite(last) || !Array.isArray(c)) continue;
-          const faceColor = new THREE.Color(c[0], c[1], c[2]).getHex();
-          const start = Math.max(0, Math.min(triCount - 1, first));
-          const end = Math.max(0, Math.min(triCount - 1, last));
-          for (let tIdx = start; tIdx <= end; tIdx++) triHex[tIdx] = faceColor;
-        }
-        const tmp = new THREE.Color();
-        for (let tri = 0; tri < triCount; tri++) {
-          tmp.setHex(triHex[tri]);
-          for (let v = 0; v < 3; v++) {
-            const vi = tri * 3 + v;
-            const ci = vi * 3;
-            colors[ci + 0] = tmp.r;
-            colors[ci + 1] = tmp.g;
-            colors[ci + 2] = tmp.b;
+      if (Array.isArray(brepFaces) && brepFaces.length > 0) {
+        const hasValidFaceColors = brepFaces.some(
+          (face) => face && Array.isArray(face.color) && face.color.length >= 3 && face.first !== void 0 && face.last !== void 0
+        );
+        if (hasValidFaceColors) {
+          geometry = geometry.toNonIndexed();
+          const posAttr = geometry.getAttribute("position");
+          const vertexCount = posAttr.count;
+          const triCount = Math.floor(vertexCount / 3);
+          const colors = new Float32Array(vertexCount * 3);
+          for (let i = 0; i < vertexCount; i++) {
+            const ci = i * 3;
+            colors[ci + 0] = baseColor.r;
+            colors[ci + 1] = baseColor.g;
+            colors[ci + 2] = baseColor.b;
           }
+          for (const face of brepFaces) {
+            if (!face || !Array.isArray(face.color) || face.color.length < 3) {
+              continue;
+            }
+            const first = Number(face.first);
+            const last = Number(face.last);
+            if (!Number.isFinite(first) || !Number.isFinite(last) || first < 0 || last < first) {
+              continue;
+            }
+            const faceColor = new THREE.Color(
+              face.color[0],
+              face.color[1],
+              face.color[2]
+            );
+            const startTri = Math.max(0, Math.min(triCount - 1, first));
+            const endTri = Math.max(0, Math.min(triCount - 1, last));
+            for (let tIdx = startTri; tIdx <= endTri; tIdx++) {
+              for (let v = 0; v < 3; v++) {
+                const vi = tIdx * 3 + v;
+                const ci = vi * 3;
+                colors[ci + 0] = faceColor.r;
+                colors[ci + 1] = faceColor.g;
+                colors[ci + 2] = faceColor.b;
+              }
+            }
+          }
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+          threeMesh.geometry = geometry;
+          threeMesh.material.vertexColors = true;
         }
-        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-        threeMesh.geometry = geometry;
-        threeMesh.material.vertexColors = true;
       }
       threeMesh.name = mesh.name || "CAD Part";
       threeMesh.userData = {
         ...mesh.userData,
         ...threeMesh.userData,
-        source: "OCCT"
+        source: "OCCT",
+        meshId: mesh.id,
+        shapeName: mesh.name,
+        isAssembly: !!mesh.isAssembly,
+        isComponent: !!mesh.isComponent
       };
-      group.add(threeMesh);
+      threeMesh.frustumCulled = true;
+      const parentId = mesh.parentId || mesh.parent;
+      if (parentId) {
+        meshesWithParent.set(threeMesh, parentId);
+      } else {
+        group.add(threeMesh);
+      }
+      meshMap.set(mesh.id || mesh.name || `mesh_${meshMap.size}`, threeMesh);
     }
+    for (const [threeMesh, parentId] of meshesWithParent.entries()) {
+      let parent;
+      if (meshMap.has(parentId)) {
+        parent = meshMap.get(parentId);
+      } else {
+        if (!groupMap.has(parentId)) {
+          const newGroup = new THREE.Group();
+          newGroup.name = `Group_${parentId}`;
+          groupMap.set(parentId, newGroup);
+          group.add(newGroup);
+        }
+        parent = groupMap.get(parentId);
+      }
+      parent.add(threeMesh);
+    }
+    group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.computeBoundingBox();
+        obj.geometry.computeBoundingSphere();
+      }
+    });
+    group.updateMatrixWorld(true);
     if (onProgress) onProgress(100, t("model_loaded"));
     return group;
   }
 }
 
-const loadModelFiles = async (files, onProgress, t, settings, libPath = "./libs") => {
+const loadModelFiles = async (files, onProgress, t, _settings, libPath = "./libs") => {
   const loadedObjects = [];
   const totalFiles = files.length;
   for (let i = 0; i < totalFiles; i++) {
@@ -99126,7 +99210,7 @@ const createStyles = (theme) => ({
     fontSize: "12px",
     color: theme.text,
     cursor: "pointer",
-    backgroundColor: active ? theme.highlight : hover ? "rgba(128, 128, 128, 0.1)" : "transparent",
+    backgroundColor: active ? theme.highlight : hover ? theme.itemHover : "transparent",
     transition: "background-color 0.1s"
   }),
   classicMenuDropdown: {
@@ -99279,22 +99363,19 @@ const createStyles = (theme) => ({
     overflowX: "hidden",
     padding: "2px 0"
   },
-  treeNode: {
+  treeNode: (selected, hover) => ({
     display: "flex",
     alignItems: "center",
     height: "24px",
     cursor: "pointer",
     whiteSpace: "nowrap",
     fontSize: "12px",
-    color: theme.text,
+    color: selected ? theme.accent : theme.text,
+    backgroundColor: selected ? theme.highlight : hover ? theme.itemHover : "transparent",
     transition: "background-color 0.1s ease",
-    paddingRight: "8px"
-  },
-  treeNodeSelected: {
-    backgroundColor: theme.highlight,
-    color: theme.accent,
-    fontWeight: "600"
-  },
+    paddingRight: "8px",
+    fontWeight: selected ? "600" : "400"
+  }),
   expander: {
     width: "20px",
     height: "100%",
@@ -99554,12 +99635,14 @@ const resources = {
     expand_all: "Expand All",
     collapse_all: "Collapse All",
     ctx_show_all: "Show All",
-    ctx_isolate_selection: "Isolate Selection",
     ctx_hide_selection: "Hide Selection",
-    monitor_meshes: "Meshes",
+    monitor_meshes: "Mesh",
     monitor_faces: "Faces",
     monitor_mem: "Mem",
     monitor_calls: "Calls",
+    tips_rotate: "LMB: Rotate",
+    tips_pan: "MMB: Pan",
+    tips_zoom: "Scroll: Zoom",
     confirm_delete: "Confirm delete",
     confirm_clear: "Are you sure you want to clear the scene?",
     app_title: "3D Browser - Professional Viewer",
@@ -99620,6 +99703,7 @@ const resources = {
     st_instancing: "Instancing Render",
     st_viewport: "Viewport",
     st_viewcube_size: "ViewCube Size",
+    st_frustum_culling: "Frustum Culling",
     unsupported_format: "Unsupported format",
     theme_dark: "Dark",
     theme_light: "Light",
@@ -99693,12 +99777,14 @@ const resources = {
     expand_all: "全部展开",
     collapse_all: "全部折叠",
     ctx_show_all: "显示所有",
-    ctx_isolate_selection: "隔离选择",
     ctx_hide_selection: "隐藏选择",
-    monitor_meshes: "网格数",
-    monitor_faces: "三角面",
+    monitor_meshes: "网格",
+    monitor_faces: "面",
     monitor_mem: "显存",
     monitor_calls: "绘制",
+    tips_rotate: "左键旋转",
+    tips_pan: "中键平移",
+    tips_zoom: "滚轮缩放",
     confirm_delete: "确定要删除吗？",
     confirm_clear: "确定要清空场景吗？",
     app_title: "3D Browser - 专业浏览器",
@@ -99758,6 +99844,7 @@ const resources = {
     st_instancing: "实例化渲染",
     st_viewport: "视口设置",
     st_viewcube_size: "导航方块大小",
+    st_frustum_culling: "视锥体剔除",
     unsupported_format: "不支持的文件格式",
     theme_dark: "深色模式",
     theme_light: "浅色模式",
@@ -99785,7 +99872,7 @@ const getTranslation = (lang, key) => {
   return resources[lang][key] || key;
 };
 
-const ClassicMenuItem = ({ label, children, styles, theme, enabled = true }) => {
+const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const menuRef = useRef(null);
@@ -99901,7 +99988,7 @@ const MenuBar = (props) => {
         onChange: props.handleOpenFolder
       }
     ),
-    !isHidden("file") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("menu_file"), styles, theme, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+    !isHidden("file") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("menu_file"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
       !isHidden("open_file") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_file"), onClick: () => {
         fileInputRef.current?.click();
         close();
@@ -99936,7 +100023,7 @@ const MenuBar = (props) => {
         }, styles })
       ] })
     ] }) }),
-    !isHidden("view") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("view"), styles, theme, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+    !isHidden("view") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("view"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
       !isHidden("fit_view") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_fit_view"), onClick: () => {
         props.sceneMgr?.fitView();
         close();
@@ -99986,7 +100073,7 @@ const MenuBar = (props) => {
         }, styles })
       ] })
     ] }) }),
-    !isHidden("interface") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("interface_display"), styles, theme, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+    !isHidden("interface") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("interface_display"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
       !isHidden("outline") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_outline"), checked: props.showOutline, onClick: () => {
         props.setShowOutline(!props.showOutline);
         close();
@@ -100007,7 +100094,7 @@ const MenuBar = (props) => {
         }, styles })
       ] })
     ] }) }),
-    !isHidden("tool") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("tool"), styles, theme, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+    !isHidden("tool") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("tool"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
       !isHidden("measure") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_measure"), onClick: () => {
         props.setActiveTool("measure");
         close();
@@ -100017,7 +100104,7 @@ const MenuBar = (props) => {
         close();
       }, styles })
     ] }) }),
-    !isHidden("settings_panel") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("settings"), styles, theme, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+    !isHidden("settings_panel") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("settings"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
       !isHidden("settings") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("settings"), onClick: () => {
         props.setActiveTool("settings");
         close();
@@ -100420,7 +100507,19 @@ const DualSlider = ({ min, max, value, onChange, theme, disabled, style }) => {
   ] });
 };
 
-const FloatingPanel = ({ title, onClose, children, width = 300, height = 200, x = 100, y = 100, resizable = false, movable = true, styles, theme, storageId }) => {
+const FloatingPanel = ({
+  title,
+  onClose,
+  children,
+  width = 300,
+  height = 200,
+  x = 100,
+  y = 100,
+  resizable = false,
+  movable = true,
+  styles,
+  storageId
+}) => {
   const panelRef = useRef(null);
   const [pos, setPos] = useState(() => {
     if (storageId) {
@@ -100566,7 +100665,7 @@ const FloatingPanel = ({ title, onClose, children, width = 300, height = 200, x 
     resizable && /* @__PURE__ */ jsx("div", { style: styles.resizeHandle, onMouseDown: onResizeDown })
   ] });
 };
-const Checkbox = ({ label, checked, onChange, styles, theme, style }) => {
+const Checkbox = ({ label, checked, onChange, styles, style }) => {
   return /* @__PURE__ */ jsxs(
     "label",
     {
@@ -100640,7 +100739,7 @@ const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory
     setMeasureType(type);
     sceneMgr?.startMeasurement(type);
   };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px 16px 0 16px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px 16px 0 16px", display: "flex", flexDirection: "column", height: "100%" }, children: [
     /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 }, children: [
       /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_none") }),
       /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_dist") }),
@@ -100701,7 +100800,6 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
           checked: clipActive[axis],
           onChange: (v) => setClipActive({ ...clipActive, [axis]: v }),
           styles,
-          theme,
           style: { fontWeight: "600", fontSize: 14 }
         }
       ),
@@ -100735,7 +100833,7 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
       }
     ) })
   ] });
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 360, height: 480, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "24px" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 360, height: 480, resizable: false, styles, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "24px" }, children: [
     /* @__PURE__ */ jsx("div", { style: { marginBottom: 24, borderBottom: `1px solid ${theme.border}`, paddingBottom: 16 }, children: /* @__PURE__ */ jsx(
       Checkbox,
       {
@@ -100743,7 +100841,6 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
         checked: clipEnabled,
         onChange: (v) => setClipEnabled(v),
         styles,
-        theme,
         style: { fontWeight: "bold", fontSize: 15 }
       }
     ) }),
@@ -100760,7 +100857,7 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
 };
 const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
   const [format, setFormat] = useState("glb");
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, theme, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
     /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10, fontSize: 12, color: theme.textMuted }, children: [
       t("export_format"),
       ":"
@@ -100825,6 +100922,7 @@ const SceneTree = ({
   theme
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [hoveredUuid, setHoveredUuid] = useState(null);
   const filterTree = (nodes, query) => {
     if (!query) return nodes;
     const lowercaseQuery = query.toLowerCase();
@@ -100893,15 +100991,16 @@ const SceneTree = ({
         }
       }
     ) }),
-    /* @__PURE__ */ jsx("div", { ref: containerRef, style: { ...styles.treeContainer, flex: 1 }, onScroll: (e) => setScrollTop(e.currentTarget.scrollTop), children: /* @__PURE__ */ jsx("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }, children: visibleItems.map((node, index) => /* @__PURE__ */ jsxs(
+    /* @__PURE__ */ jsx("div", { ref: containerRef, style: { ...styles.treeContainer, flex: 1 }, onScroll: (e) => setScrollTop(e.currentTarget.scrollTop), children: /* @__PURE__ */ jsx("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }, children: visibleItems.map((node) => /* @__PURE__ */ jsxs(
       "div",
       {
         style: {
-          ...styles.treeNode,
-          paddingLeft: 8,
-          ...node.uuid === selectedUuid ? styles.treeNodeSelected : {}
+          ...styles.treeNode(node.uuid === selectedUuid, node.uuid === hoveredUuid),
+          paddingLeft: 8
         },
         onClick: () => onSelect(node.uuid, node.object),
+        onMouseEnter: () => setHoveredUuid(node.uuid),
+        onMouseLeave: () => setHoveredUuid(null),
         onContextMenu: (e) => {
           if (!node.isFileNode || !onModelContextMenu) return;
           e.preventDefault();
@@ -101055,17 +101154,28 @@ const SettingsPanel = ({
           }
         ) })
       ] }),
-      /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), theme, children: /* @__PURE__ */ jsx(Row, { label: `${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`, theme, children: /* @__PURE__ */ jsx(
-        Slider,
-        {
-          min: 80,
-          max: 300,
-          step: 10,
-          value: settings.viewCubeSize || 100,
-          onChange: (val) => onUpdate({ viewCubeSize: val }),
-          theme
-        }
-      ) }) }),
+      /* @__PURE__ */ jsxs(Section, { title: t("st_viewport"), theme, children: [
+        /* @__PURE__ */ jsx(Row, { label: `${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`, theme, children: /* @__PURE__ */ jsx(
+          Slider,
+          {
+            min: 80,
+            max: 300,
+            step: 10,
+            value: settings.viewCubeSize || 100,
+            onChange: (val) => onUpdate({ viewCubeSize: val }),
+            theme
+          }
+        ) }),
+        /* @__PURE__ */ jsx(Row, { label: t("st_frustum_culling"), theme, children: /* @__PURE__ */ jsx(
+          Checkbox,
+          {
+            checked: !!settings.frustumCulling,
+            onChange: (val) => onUpdate({ frustumCulling: val }),
+            styles,
+            theme
+          }
+        ) })
+      ] }),
       /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), theme, children: [
         /* @__PURE__ */ jsx(Row, { label: `${t("st_ambient")} (${settings.ambientInt.toFixed(1)})`, theme, children: /* @__PURE__ */ jsx(
           Slider,
@@ -101271,7 +101381,7 @@ const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
   ) });
 };
 
-const ViewCube = ({ sceneMgr, theme, lang = "zh" }) => {
+const ViewCube = ({ sceneMgr, lang = "zh" }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
@@ -101528,7 +101638,7 @@ class ErrorBoundary extends Component {
   }
   render() {
     if (this.state.hasError) {
-      const { t, styles, theme } = this.props;
+      const { t, theme } = this.props;
       return /* @__PURE__ */ jsxs("div", { style: {
         display: "flex",
         flexDirection: "column",
@@ -101568,6 +101678,28 @@ class ErrorBoundary extends Component {
   }
 }
 const GlobalStyle = ({ theme }) => /* @__PURE__ */ jsx("style", { dangerouslySetInnerHTML: { __html: createGlobalStyle(theme) } });
+const ContextMenuItem = ({ label, onClick, theme, disabled = false, danger = false, hasBorder = true }) => {
+  const [hover, setHover] = useState(false);
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      style: {
+        padding: "10px 12px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        borderBottom: hasBorder ? `1px solid ${theme.border}` : "none",
+        backgroundColor: hover && !disabled ? theme.itemHover : "transparent",
+        opacity: disabled ? 0.5 : 1,
+        color: danger ? theme.danger : theme.text,
+        fontSize: "12px",
+        transition: "background-color 0.1s"
+      },
+      onMouseEnter: () => !disabled && setHover(true),
+      onMouseLeave: () => setHover(false),
+      onClick: () => !disabled && onClick(),
+      children: label
+    }
+  );
+};
 const ThreeViewer = ({
   allowDragOpen = true,
   hiddenMenus = [],
@@ -101694,7 +101826,6 @@ const ThreeViewer = ({
   const viewportRef = useRef(null);
   const sceneMgr = useRef(null);
   const [mgrInstance, setMgrInstance] = useState(null);
-  useRef(null);
   const [errorState, setErrorState] = useState({ isOpen: false, title: "", message: "" });
   const [toast, setToast] = useState(null);
   const cleanStatus = (msg) => {
@@ -101796,20 +101927,30 @@ const ThreeViewer = ({
     return mb.toFixed(1) + " MB";
   };
   useEffect(() => {
-    if (!viewportRef.current || !sceneMgr.current) return;
-    let resizeId;
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(resizeId);
-      resizeId = requestAnimationFrame(() => {
-        sceneMgr.current?.resize();
+    if (!viewportRef.current || !mgrInstance) return;
+    const observer = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const { width, height } = entries[0].contentRect;
+      if (width === 0 || height === 0) return;
+      requestAnimationFrame(() => {
+        if (mgrInstance) {
+          mgrInstance.resize(width, height);
+        }
       });
     });
     observer.observe(viewportRef.current);
+    const handleWindowResize = () => {
+      if (mgrInstance && viewportRef.current) {
+        const rect = viewportRef.current.getBoundingClientRect();
+        mgrInstance.resize(rect.width, rect.height);
+      }
+    };
+    window.addEventListener("resize", handleWindowResize);
     return () => {
       observer.disconnect();
-      cancelAnimationFrame(resizeId);
+      window.removeEventListener("resize", handleWindowResize);
     };
-  }, []);
+  }, [mgrInstance]);
   useEffect(() => {
     const handleDragOver2 = (e) => {
       if (!allowDragOpen) return;
@@ -101850,12 +101991,12 @@ const ThreeViewer = ({
     };
   }, [lang, allowDragOpen, t]);
   useEffect(() => {
-    if (sceneMgr.current) {
+    if (mgrInstance) {
       requestAnimationFrame(() => {
-        sceneMgr.current?.resize();
+        mgrInstance.resize();
       });
     }
-  }, [showOutline, showProps, leftWidth, rightWidth]);
+  }, [mgrInstance, showOutline, showProps, leftWidth, rightWidth]);
   useEffect(() => {
     if (sceneSettings.bgColor === themes[themeMode === "light" ? "dark" : "light"].canvasBg) {
       const newBg = theme.canvasBg;
@@ -102000,7 +102141,9 @@ const ThreeViewer = ({
     setMgrInstance(manager);
     if (onLoad) onLoad(manager);
     manager.updateSettings(sceneSettings);
-    manager.resize();
+    requestAnimationFrame(() => {
+      manager.resize();
+    });
     let lastReportedSuccess = false;
     manager.onChunkProgress = (loaded, total) => {
       setChunkProgress({ loaded, total });
@@ -102170,7 +102313,7 @@ const ThreeViewer = ({
       sceneMgr.current.startMeasurement(measureType);
     }
   }, [measureType]);
-  const handleSelect = async (obj, intersect, isMultiSelect = false) => {
+  const handleSelect = async (obj, _intersect, isMultiSelect = false) => {
     if (!sceneMgr.current) return;
     if (!obj) {
       setSelectedUuids([]);
@@ -102658,7 +102801,7 @@ const ThreeViewer = ({
                 treeRoot,
                 setTreeRoot,
                 selectedUuid,
-                onSelect: (uuid, obj) => handleSelect(obj),
+                onSelect: (_uuid, obj) => handleSelect(obj),
                 onToggleVisibility: handleToggleVisibility,
                 onModelContextMenu: (uuid, x, y) => setContextMenu({ x, y, open: true, source: "tree", targetUuid: uuid }),
                 styles,
@@ -102710,90 +102853,70 @@ const ThreeViewer = ({
                 onClick: (e) => e.stopPropagation(),
                 children: contextMenu.source === "canvas" ? /* @__PURE__ */ jsxs(Fragment, { children: [
                   /* @__PURE__ */ jsx(
-                    "div",
+                    ContextMenuItem,
                     {
-                      style: { padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}` },
+                      label: t("ctx_show_all"),
+                      theme,
                       onClick: () => {
                         sceneMgr.current?.setAllVisibility(true);
                         updateTree();
                         setContextMenu((prev) => ({ ...prev, open: false }));
-                      },
-                      children: t("ctx_show_all")
+                      }
                     }
                   ),
                   /* @__PURE__ */ jsx(
-                    "div",
+                    ContextMenuItem,
                     {
-                      style: {
-                        padding: "10px 12px",
-                        cursor: selectedUuids.length > 0 ? "pointer" : "not-allowed",
-                        opacity: selectedUuids.length > 0 ? 1 : 0.5,
-                        borderBottom: `1px solid ${theme.border}`
-                      },
-                      onClick: () => {
-                        if (!sceneMgr.current || selectedUuids.length === 0) return;
-                        sceneMgr.current.isolateObjects(selectedUuids);
-                        updateTree();
-                        setContextMenu((prev) => ({ ...prev, open: false }));
-                      },
-                      children: t("ctx_isolate_selection")
-                    }
-                  ),
-                  /* @__PURE__ */ jsx(
-                    "div",
-                    {
-                      style: {
-                        padding: "10px 12px",
-                        cursor: selectedUuids.length > 0 ? "pointer" : "not-allowed",
-                        opacity: selectedUuids.length > 0 ? 1 : 0.5
-                      },
+                      label: t("ctx_hide_selection"),
+                      theme,
+                      disabled: selectedUuids.length === 0,
+                      hasBorder: false,
                       onClick: () => {
                         if (!sceneMgr.current || selectedUuids.length === 0) return;
                         sceneMgr.current.hideObjects(selectedUuids);
+                        setSelectedUuids([]);
+                        setSelectedProps(null);
                         updateTree();
                         setContextMenu((prev) => ({ ...prev, open: false }));
-                      },
-                      children: t("ctx_hide_selection")
+                      }
                     }
                   )
                 ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
                   /* @__PURE__ */ jsx(
-                    "div",
+                    ContextMenuItem,
                     {
-                      style: { padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}` },
+                      label: t("expand_all"),
+                      theme,
                       onClick: () => {
                         setAllTreeExpanded(true);
                         setContextMenu((prev) => ({ ...prev, open: false }));
-                      },
-                      children: t("expand_all")
+                      }
                     }
                   ),
                   /* @__PURE__ */ jsx(
-                    "div",
+                    ContextMenuItem,
                     {
-                      style: { padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}` },
+                      label: t("collapse_all"),
+                      theme,
                       onClick: () => {
                         setAllTreeExpanded(false);
                         setContextMenu((prev) => ({ ...prev, open: false }));
-                      },
-                      children: t("collapse_all")
+                      }
                     }
                   ),
                   /* @__PURE__ */ jsx(
-                    "div",
+                    ContextMenuItem,
                     {
-                      style: {
-                        padding: "10px 12px",
-                        cursor: contextMenu.targetUuid ? "pointer" : "not-allowed",
-                        opacity: contextMenu.targetUuid ? 1 : 0.5,
-                        color: theme.danger
-                      },
+                      label: t("delete_item"),
+                      theme,
+                      disabled: !contextMenu.targetUuid,
+                      danger: true,
+                      hasBorder: false,
                       onClick: () => {
                         if (!contextMenu.targetUuid) return;
                         handleDeleteObject(contextMenu.targetUuid);
                         setContextMenu((prev) => ({ ...prev, open: false }));
-                      },
-                      children: t("delete_item")
+                      }
                     }
                   )
                 ] })
@@ -102995,27 +103118,42 @@ const ThreeViewer = ({
               selectedUuids.length > 1 ? ` (${selectedUuids.length})` : ""
             ] })
           ] }),
-          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "16px", alignItems: "center" }, children: [
-            showStats && /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "12px", alignItems: "center" }, children: [
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "10px", opacity: 0.85 }, children: [
+              /* @__PURE__ */ jsx("span", { children: t("tips_rotate") }),
+              /* @__PURE__ */ jsx("span", { children: t("tips_pan") }),
+              /* @__PURE__ */ jsx("span", { children: t("tips_zoom") })
+            ] }),
+            showStats && /* @__PURE__ */ jsxs("div", { style: {
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+              paddingLeft: "12px",
+              borderLeft: "1px solid rgba(255,255,255,0.3)"
+            }, children: [
               /* @__PURE__ */ jsxs("span", { children: [
-                formatNumber(stats.meshes),
-                " ",
-                t("monitor_meshes")
+                t("monitor_meshes"),
+                ": ",
+                formatNumber(stats.meshes)
               ] }),
               /* @__PURE__ */ jsxs("span", { children: [
-                formatNumber(stats.faces),
-                " ",
-                t("monitor_faces")
+                t("monitor_faces"),
+                ": ",
+                formatNumber(stats.faces)
               ] }),
-              /* @__PURE__ */ jsx("span", { children: formatMemory(stats.memory) }),
               /* @__PURE__ */ jsxs("span", { children: [
-                stats.drawCalls,
-                " ",
-                t("monitor_calls")
+                t("monitor_mem"),
+                ": ",
+                formatMemory(stats.memory)
+              ] }),
+              /* @__PURE__ */ jsxs("span", { children: [
+                t("monitor_calls"),
+                ": ",
+                stats.drawCalls
               ] })
             ] }),
             /* @__PURE__ */ jsx("div", { style: { width: "1px", height: "12px", backgroundColor: "rgba(255,255,255,0.3)" } }),
-            /* @__PURE__ */ jsx("div", { style: { opacity: 0.9 }, children: lang === "zh" ? "简体中文" : "English" }),
+            /* @__PURE__ */ jsx("div", { style: { opacity: 0.9 }, children: lang === "zh" ? "ZH" : "EN" }),
             /* @__PURE__ */ jsx("div", { style: {
               display: "flex",
               alignItems: "center",

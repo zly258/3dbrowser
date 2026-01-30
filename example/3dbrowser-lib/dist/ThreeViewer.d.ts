@@ -1,4 +1,3 @@
-import { JSX } from 'react/jsx-runtime';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 import { TilesGroup } from '3d-tiles-renderer';
@@ -190,7 +189,7 @@ export declare const createStyles: (theme: ThemeColors) => {
         overflowX: "hidden";
         padding: string;
     };
-    treeNode: {
+    treeNode: (selected: boolean, hover: boolean) => {
         display: string;
         alignItems: string;
         height: string;
@@ -198,12 +197,9 @@ export declare const createStyles: (theme: ThemeColors) => {
         whiteSpace: "nowrap";
         fontSize: string;
         color: string;
+        backgroundColor: string;
         transition: string;
         paddingRight: string;
-    };
-    treeNodeSelected: {
-        backgroundColor: string;
-        color: string;
         fontWeight: string;
     };
     expander: {
@@ -423,7 +419,7 @@ export declare interface LoadedItem {
     object?: THREE.Object3D;
 }
 
-export declare const loadModelFiles: (files: (File | string)[], onProgress: ProgressCallback, t: TFunc, settings: SceneSettings, libPath?: string) => Promise<THREE.Object3D[]>;
+export declare const loadModelFiles: (files: (File | string)[], onProgress: ProgressCallback, t: TFunc, _settings: SceneSettings, libPath?: string) => Promise<THREE.Object3D[]>;
 
 export declare interface MeasurementRecord {
     id: string;
@@ -496,8 +492,6 @@ export declare class SceneManager {
     onStructureUpdate?: () => void;
     onChunkProgress?: (loaded: number, total: number) => void;
     private lastReportedProgress;
-    private chunkTotalCount;
-    private chunkLoadedCount;
     private chunkPadding;
     private maxConcurrentChunkLoads;
     private maxChunkLoadsPerFrame;
@@ -507,7 +501,8 @@ export declare class SceneManager {
     createCircleTexture(): any;
     animate(): void;
     updateCameraClipping(): void;
-    resize(): void;
+    resize(width?: number, height?: number): void;
+    private reportChunkProgress;
     private checkCullingAndLoad;
     private loadChunk;
     setChunkLoadingEnabled(enabled: boolean): void;
@@ -526,9 +521,6 @@ export declare class SceneManager {
     addTileset(url: string, onProgress?: (p: number, msg: string) => void): TilesGroup;
     private getTypeIndex;
     private guessType;
-    private extractColor;
-    private getColorByComponentType;
-    private generateChunkBinaryV7;
     private generateChunkBinaryV8;
     private parseChunkBinaryV7;
     private parseChunkBinaryV8;
@@ -606,6 +598,7 @@ export declare interface SceneSettings {
     dirInt: number;
     bgColor: string;
     viewCubeSize?: number;
+    frustumCulling?: boolean;
 }
 
 export declare interface StructureTreeNode {
@@ -641,7 +634,7 @@ export declare interface ThemeColors {
 
 export declare const themes: Record<'dark' | 'light', ThemeColors>;
 
-export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => JSX.Element;
+export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => any;
 
 export declare interface ThreeViewerProps {
     allowDragOpen?: boolean;
