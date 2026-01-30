@@ -413,24 +413,37 @@ export const ThreeViewer = ({
 
     // 1. 使用 ResizeObserver 处理容器尺寸变化
     useEffect(() => {
-        if (!viewportRef.current || !sceneMgr.current) return;
+        if (!viewportRef.current || !mgrInstance) return;
         
-        let resizeId: number;
-        const observer = new ResizeObserver(() => {
-             // 使用 requestAnimationFrame 避免 "ResizeObserver loop limit exceeded" 错误
-             cancelAnimationFrame(resizeId);
-             resizeId = requestAnimationFrame(() => {
-                sceneMgr.current?.resize();
+        const observer = new ResizeObserver((entries) => {
+             if (!entries || entries.length === 0) return;
+             
+             const { width, height } = entries[0].contentRect;
+             if (width === 0 || height === 0) return;
+
+             requestAnimationFrame(() => {
+                if (mgrInstance) {
+                    mgrInstance.resize(width, height);
+                }
              });
         });
         
         observer.observe(viewportRef.current);
 
+        // 额外的 window resize 监听作为兜底
+        const handleWindowResize = () => {
+            if (mgrInstance && viewportRef.current) {
+                const rect = viewportRef.current.getBoundingClientRect();
+                mgrInstance.resize(rect.width, rect.height);
+            }
+        };
+        window.addEventListener('resize', handleWindowResize);
+
         return () => {
             observer.disconnect();
-            cancelAnimationFrame(resizeId);
+            window.removeEventListener('resize', handleWindowResize);
         };
-    }, []);
+    }, [mgrInstance]);
 
     // 2. 全局拖拽支持
     useEffect(() => {
@@ -484,13 +497,13 @@ export const ThreeViewer = ({
 
     // 3. 当布局状态变化时强制触发一次 resize
     useEffect(() => {
-        if (sceneMgr.current) {
+        if (mgrInstance) {
             // Use requestAnimationFrame to ensure the DOM reflow has completed
             requestAnimationFrame(() => {
-                sceneMgr.current?.resize();
+                mgrInstance.resize();
             });
         }
-    }, [showOutline, showProps, leftWidth, rightWidth]);
+    }, [mgrInstance, showOutline, showProps, leftWidth, rightWidth]);
 
     // 当主题变化时更新场景背景色
     useEffect(() => {
@@ -673,7 +686,9 @@ export const ThreeViewer = ({
 
         // Initial setup
         manager.updateSettings(sceneSettings);
-        manager.resize();
+        requestAnimationFrame(() => {
+            manager.resize();
+        });
 
         // 监听分块加载进度
         let lastReportedSuccess = false;
@@ -1508,18 +1523,6 @@ export const ThreeViewer = ({
                                         theme={theme}
                                         onClick={() => {
                                             sceneMgr.current?.setAllVisibility(true);
-                                            updateTree();
-                                            setContextMenu(prev => ({ ...prev, open: false }));
-                                        }}
-                                    />
-                                    <ContextMenuItem 
-                                        label={t("ctx_isolate_selection")}
-                                        theme={theme}
-                                        disabled={selectedUuids.length === 0}
-                                        onClick={() => {
-                                            if (!sceneMgr.current || selectedUuids.length === 0) return;
-                                            sceneMgr.current.isolateObjects(selectedUuids);
-                                            // 隔离选择后，通常保留当前选择的高亮，但由于其他物体被隐藏，所以不需要清除 selectedUuids
                                             updateTree();
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}

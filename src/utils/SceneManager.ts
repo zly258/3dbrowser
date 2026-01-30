@@ -350,31 +350,47 @@ export class SceneManager {
         this.camera.updateProjectionMatrix();
     }
 
-    resize() {
+    resize(width?: number, height?: number) {
         if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const w = Math.max(1, Math.round(rect.width));
-        const h = Math.max(1, Math.round(rect.height));
         
-        // 确保大小为正数
+        let w = width;
+        let h = height;
+
+        if (w === undefined || h === undefined) {
+            const rect = this.canvas.parentElement?.getBoundingClientRect() || this.canvas.getBoundingClientRect();
+            w = rect.width;
+            h = rect.height;
+        }
+
+        w = Math.max(1, w); 
+        h = Math.max(1, h);
+        
         if (w === 0 || h === 0) return;
 
         const aspect = w / h;
         const cam = this.camera;
-        const frustumHeight = cam.top - cam.bottom;
-        const newWidth = frustumHeight * aspect;
         
-        cam.left = -newWidth / 2;
-        cam.right = newWidth / 2;
+        // 计算当前视锥体的高度
+        const currentHeight = cam.top - cam.bottom;
+        // 计算新的半高和半宽
+        const halfHeight = currentHeight / 2;
+        const halfWidth = halfHeight * aspect;
+        
+        cam.left = -halfWidth;
+        cam.right = halfWidth;
+        cam.top = halfHeight;
+        cam.bottom = -halfHeight;
+        
         cam.updateProjectionMatrix();
         
-        // 关键修复：第三参数传 false（不更新内联样式）
-        // 保持渲染分辨率与 clientWidth/Height 匹配
-        // 由 CSS（宽度 100%）负责弹性容器中的实际显示大小
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.setSize(w, h, false);
         
-        // 调整大小时强制渲染
+        // 如果使用了 OrbitControls，需要更新它
+        if (this.controls) {
+            this.controls.update();
+        }
+
         this.renderer.render(this.scene, this.camera);
     }
 
