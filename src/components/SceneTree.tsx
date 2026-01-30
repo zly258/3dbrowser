@@ -140,12 +140,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         setTreeRoot(prev => toggle(prev));
     };
 
-    const handleCheckbox = (e: React.MouseEvent, node: TreeNode) => {
-        e.stopPropagation();
-        const newVisible = !node.visible;
-        onToggleVisibility(node.uuid, newVisible);
-    };
-
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
     const visibleCount = Math.ceil(containerHeight / rowHeight);
@@ -176,7 +170,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <div ref={containerRef} style={{ ...styles.treeContainer, flex: 1 }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
                 <div style={{ height: totalHeight, position: "relative" }}>
                 <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
-                    {visibleItems.map((node, index) => (
+                    {visibleItems.map((node) => (
                         <div key={node.uuid} 
                                 style={{
                                     ...styles.treeNode(node.uuid === selectedUuid, node.uuid === hoveredUuid),

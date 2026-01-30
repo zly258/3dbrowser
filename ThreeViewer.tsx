@@ -1,6 +1,5 @@
 import React, { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as THREE from "three";
-import { createRoot } from "react-dom/client";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
 import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
@@ -10,7 +9,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { MenuBar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, FloatingPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
@@ -51,7 +50,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
     render() {
         if (this.state.hasError) {
-            const { t, styles, theme } = this.props;
+            const { t, theme } = this.props;
             return (
                 <div style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -281,7 +280,6 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
-    const visibilityDebounce = useRef<any>(null);
 
     // Error State
     const [errorState, setErrorState] = useState<{
@@ -908,7 +906,7 @@ export const ThreeViewer = ({
 
     // --- 处理函数 ---
 
-    const handleSelect = async (obj: any, intersect?: THREE.Intersection | null, isMultiSelect: boolean = false) => {
+    const handleSelect = async (obj: any, _intersect?: THREE.Intersection | null, isMultiSelect: boolean = false) => {
         if (!sceneMgr.current) return;
         
         if (!obj) {
@@ -1472,7 +1470,7 @@ export const ThreeViewer = ({
                                 treeRoot={treeRoot} 
                                 setTreeRoot={setTreeRoot} 
                                 selectedUuid={selectedUuid}
-                                onSelect={(uuid, obj) => handleSelect(obj)}
+                                onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
                                 onModelContextMenu={(uuid, x, y) => setContextMenu({ x, y, open: true, source: 'tree', targetUuid: uuid })}
                                 styles={styles}

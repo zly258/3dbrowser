@@ -5,11 +5,9 @@ import {
     calculateGeometryMemory, 
     collectItems, 
     buildOctree, 
-    convertOctreeToBatchedMeshes,
     collectLeafNodes,
     createBatchedMeshFromItems
 } from "./octree";
-import type { OctreeNode } from "./octree";
 
 export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 
@@ -115,7 +113,7 @@ export class SceneManager {
     private cancelledChunkIds = new Set<string>();
     private frustum = new THREE.Frustum();
     private projScreenMatrix = new THREE.Matrix4();
-    private logicTimer: number = 0;
+    private logicTimer: any = null;
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
     private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
     private nbimPropsByOriginalUuid: Map<string, Record<string, any>> = new Map();
@@ -132,8 +130,6 @@ export class SceneManager {
     onChunkProgress?: (loaded: number, total: number) => void;
 
     private lastReportedProgress = { loaded: -1, total: -1 };
-    private chunkTotalCount = 0;
-    private chunkLoadedCount = 0;
     private chunkPadding = 0.2;
     private maxConcurrentChunkLoads = 96;
     private maxChunkLoadsPerFrame = 48;
@@ -397,8 +393,6 @@ export class SceneManager {
     private reportChunkProgress() {
         const total = this.chunks.length;
         const loaded = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
-        this.chunkTotalCount = total;
-        this.chunkLoadedCount = loaded;
         if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
             this.lastReportedProgress = { loaded, total };
             this.onChunkProgress(loaded, total);
@@ -879,7 +873,6 @@ export class SceneManager {
                 this.ghostGroup.add(edges);
             });
 
-            this.chunkTotalCount = this.chunks.length;
             this.reportChunkProgress();
 
             // 隐藏原始网格中的 Mesh 标记优化
@@ -1092,10 +1085,10 @@ export class SceneManager {
         }, 10000); // 10秒超时检查
 
         // 树更新的钩子
-        (renderer as any).onLoadTile = (tile: any) => {
+        (renderer as any).onLoadTile = (_tile: any) => {
             if (this.onTilesUpdate) this.onTilesUpdate();
         };
-        (renderer as any).onDisposeTile = (tile: any) => {
+        (renderer as any).onDisposeTile = (_tile: any) => {
             if (this.onTilesUpdate) this.onTilesUpdate();
         };
 
@@ -1157,130 +1150,7 @@ export class SceneManager {
         return 'Generic';
     }
 
-    private extractColor(mesh: THREE.Mesh): number {
-        if (mesh.userData.color !== undefined) return mesh.userData.color;
-
-        // 尝试从顶点颜色提取（针对某些 BIM 格式）
-        const geo = mesh.geometry;
-        if (geo && geo.attributes.color) {
-            const colorAttr = geo.attributes.color;
-            if (colorAttr.count > 0) {
-                const r = colorAttr.getX(0);
-                const g = colorAttr.getY(0);
-                const b = colorAttr.getZ(0);
-                // 处理 0-1 或 0-255 范围
-                const color = new THREE.Color();
-                if (r > 1 || g > 1 || b > 1) color.setRGB(r / 255, g / 255, b / 255);
-                else color.setRGB(r, g, b);
-                return color.getHex();
-            }
-        }
-
-        const material = mesh.material;
-        if (Array.isArray(material)) {
-            for (const mat of material) {
-                if ((mat as any).color) return (mat as any).color.getHex();
-            }
-        } else if ((material as any).color) {
-            return (material as any).color.getHex();
-        }
-
-        return this.getColorByComponentType(mesh.name);
-    }
-
-    private getColorByComponentType(name: string): number {
-        const n = name.toLowerCase();
-        if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // 蓝色（浅）
-        if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // 蓝色（中）
-        if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // 灰色（浅）
-        if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // 灰色（更浅）
-        return 0x94a3b8; // 灰色（中）
-    }
-
     // --- NBIM 导入/导出功能 ---
-    private generateChunkBinaryV7(items: any[]): ArrayBuffer {
-        const uniqueGeos: THREE.BufferGeometry[] = [];
-        const geoMap = new Map<THREE.BufferGeometry, number>();
-        
-        items.forEach(item => {
-            if (item.geometry && !geoMap.has(item.geometry)) {
-                geoMap.set(item.geometry, uniqueGeos.length);
-                uniqueGeos.push(item.geometry);
-            }
-        });
-
-        // 计算大小
-        let size = 4; // 几何体数量
-        for (const geo of uniqueGeos) {
-            const vertCount = geo.attributes.position.count;
-            const index = geo.index;
-            const indexCount = index ? index.count : 0;
-            size += 4 + 4 + (vertCount * 12) + (vertCount * 12); // 顶点数、索引数、坐标、法线
-            if (indexCount > 0) size += indexCount * 4; 
-        }
-        
-        size += 4; // 实例数量
-        size += items.length * (4 + 4 + 4 + 64 + 4); // BIMId/索引、类型、颜色、矩阵、几何体索引
-
-        const buffer = new ArrayBuffer(size);
-        const dv = new DataView(buffer);
-        let offset = 0;
-
-        // 写入几何体
-        dv.setUint32(offset, uniqueGeos.length, true); offset += 4;
-        for (const geo of uniqueGeos) {
-            const pos = geo.getAttribute('position');
-            const norm = geo.getAttribute('normal');
-            const count = pos.count;
-            const index = geo.index;
-            const indexCount = index ? index.count : 0;
-            
-            dv.setUint32(offset, count, true); offset += 4;
-            dv.setUint32(offset, indexCount, true); offset += 4;
-            
-            for (let i = 0; i < count; i++) {
-                dv.setFloat32(offset, pos.getX(i), true); offset += 4;
-                dv.setFloat32(offset, pos.getY(i), true); offset += 4;
-                dv.setFloat32(offset, pos.getZ(i), true); offset += 4;
-            }
-            for (let i = 0; i < count; i++) {
-                dv.setFloat32(offset, norm.getX(i), true); offset += 4;
-                dv.setFloat32(offset, norm.getY(i), true); offset += 4;
-                dv.setFloat32(offset, norm.getZ(i), true); offset += 4;
-            }
-            if (index && indexCount > 0) {
-                for (let i = 0; i < indexCount; i++) {
-                    dv.setUint32(offset, index.getX(i), true); offset += 4;
-                }
-            }
-        }
-
-        // 写入实例
-        dv.setUint32(offset, items.length, true); offset += 4;
-        for (const item of items) {
-            const treeNodes = this.nodeMap.get(item.uuid);
-            const firstNode = treeNodes?.[0];
-            const idStr = item.bimId ?? firstNode?.bimId ?? "0";
-            const parsed = Number.parseInt(idStr, 10);
-            const id = Number.isFinite(parsed) ? parsed : 0;
-            const typeStr = this.guessType(firstNode?.name || "");
-            dv.setUint32(offset, id, true); offset += 4;
-            const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
-            dv.setUint32(offset, typeIndex, true); offset += 4;
-            dv.setUint32(offset, item.color, true); offset += 4;
-            
-            const elements = item.matrix.elements;
-            for (let k = 0; k < 16; k++) {
-                dv.setFloat32(offset, elements[k], true); offset += 4;
-            }
-            
-            const geoId = geoMap.get(item.geometry) || 0;
-            dv.setUint32(offset, geoId, true); offset += 4;
-        }
-
-        return buffer;
-    }
-
     private generateChunkBinaryV8(items: any[], bimIdToIndex: Map<string, number>): ArrayBuffer {
         const uniqueGeos: THREE.BufferGeometry[] = [];
         const geoMap = new Map<THREE.BufferGeometry, number>();
@@ -1891,7 +1761,6 @@ export class SceneManager {
             this.ghostGroup.add(edges);
         });
 
-        this.chunkTotalCount = this.chunks.length;
         this.reportChunkProgress();
 
         this.fitView();
@@ -1956,8 +1825,6 @@ export class SceneManager {
             this.nodeMap.clear();
             this.bimIdToNodeIds.clear();
             this.chunks = [];
-            this.chunkTotalCount = 0;
-            this.chunkLoadedCount = 0;
             this.lastReportedProgress = { loaded: -1, total: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
@@ -3059,6 +2926,7 @@ export class SceneManager {
     }
 
     dispose() {
+        if (this.logicTimer) clearInterval(this.logicTimer);
         this.renderer.dispose();
         if (this.tilesRenderer) this.tilesRenderer.dispose();
     }

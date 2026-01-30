@@ -1,15 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { TFunc } from "../theme/Locales";
 
 interface MenuItemProps {
     label: string;
     children: (close: () => void) => React.ReactNode;
     styles: any;
-    theme: any;
     enabled?: boolean;
 }
 
-const ClassicMenuItem = ({ label, children, styles, theme, enabled = true }: MenuItemProps) => {
+const ClassicMenuItem = ({ label, children, styles, enabled = true }: MenuItemProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const [hover, setHover] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -141,7 +139,7 @@ export const MenuBar: React.FC<any> = (props) => {
             />
 
             {!isHidden('file') && (
-                <ClassicMenuItem label={t('menu_file')} styles={styles} theme={theme}>
+                <ClassicMenuItem label={t('menu_file')} styles={styles}>
                     {(close) => (
                         <>
                             {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} styles={styles} />}
@@ -171,7 +169,7 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('view') && (
-                <ClassicMenuItem label={t('view')} styles={styles} theme={theme}>
+                <ClassicMenuItem label={t('view')} styles={styles}>
                     {(close) => (
                         <>
                             {!isHidden('fit_view') && <ClassicSubItem label={t('menu_fit_view')} onClick={() => { props.sceneMgr?.fitView(); close(); }} styles={styles} />}
@@ -197,7 +195,7 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('interface') && (
-                <ClassicMenuItem label={t('interface_display')} styles={styles} theme={theme}>
+                <ClassicMenuItem label={t('interface_display')} styles={styles}>
                     {(close) => (
                         <>
                             {!isHidden('outline') && <ClassicSubItem label={t('interface_outline')} checked={props.showOutline} onClick={() => { props.setShowOutline(!props.showOutline); close(); }} styles={styles} />}
@@ -215,7 +213,7 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('tool') && (
-                <ClassicMenuItem label={t('tool')} styles={styles} theme={theme}>
+                <ClassicMenuItem label={t('tool')} styles={styles}>
                     {(close) => (
                         <>
                             {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool('measure'); close(); }} styles={styles} />}
@@ -226,7 +224,7 @@ export const MenuBar: React.FC<any> = (props) => {
             )}
 
             {!isHidden('settings_panel') && (
-                <ClassicMenuItem label={t('settings')} styles={styles} theme={theme}>
+                <ClassicMenuItem label={t('settings')} styles={styles}>
                     {(close) => (
                         <>
                             {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool('settings'); close(); }} styles={styles} />}

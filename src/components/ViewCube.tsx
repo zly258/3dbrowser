@@ -5,11 +5,10 @@ import { getTranslation, Lang } from "../theme/Locales";
 
 interface ViewCubeProps {
     sceneMgr: SceneManager | null;
-    theme: any;
     lang?: Lang;
 }
 
-export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, theme, lang = 'zh' }) => {
+export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh' }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
