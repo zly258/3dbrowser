@@ -93,7 +93,6 @@ export async function convertLMBTo3DTiles(
       });
 
       processedCount++;
-      const percent = Math.floor((processedCount / tileCount) * 100);
       onProgress(`生成瓦片 (${processedCount}/${tileCount})`);
 
       const filename = `tile_${path}.glb`;

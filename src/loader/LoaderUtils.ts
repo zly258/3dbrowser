@@ -22,7 +22,7 @@ export const loadModelFiles = async (
     files: (File | string)[], 
     onProgress: ProgressCallback, 
     t: TFunc,
-    settings: SceneSettings,
+    _settings: SceneSettings,
     libPath: string = './libs'
 ): Promise<THREE.Object3D[]> => {
     const loadedObjects: THREE.Object3D[] = [];

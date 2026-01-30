@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { IconClose, IconClear, IconPlay } from "../theme/Icons";
-import { Button, PanelSection, Slider, DualSlider } from "./CommonUI";
+import { IconClose, IconClear } from "../theme/Icons";
+import { Button, PanelSection, DualSlider } from "./CommonUI";
 
 // --- 通用浮动面板 ---
 interface FloatingPanelProps {
@@ -19,7 +19,19 @@ interface FloatingPanelProps {
     storageId?: string; // localStorage 持久化标识
 }
 
-export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, children, width = 300, height = 200, x = 100, y = 100, resizable = false, movable = true, styles, theme, storageId }) => {
+export const FloatingPanel: React.FC<FloatingPanelProps> = ({ 
+    title, 
+    onClose, 
+    children, 
+    width = 300, 
+    height = 200, 
+    x = 100, 
+    y = 100, 
+    resizable = false, 
+    movable = true, 
+    styles, 
+    storageId 
+}) => {
     const panelRef = useRef<HTMLDivElement>(null);
     // 从 localStorage 或 props 初始化位置
     const [pos, setPos] = useState(() => {
@@ -196,7 +208,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, onClose, ch
 };
 
 // --- 自定义复选框组件 ---
-export const Checkbox = ({ label, checked, onChange, styles, theme, style }: any) => {
+export const Checkbox = ({ label, checked, onChange, styles, style }: any) => {
     return (
         <label 
             style={{ 
@@ -273,7 +285,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
     };
 
     return (
-        <FloatingPanel title={t("measure_title")} onClose={onClose} width={340} height={580} resizable={true} styles={styles} theme={theme} storageId="tool_measure">
+        <FloatingPanel title={t("measure_title")} onClose={onClose} width={340} height={580} resizable={true} styles={styles} storageId="tool_measure">
             <div style={{padding: '16px 16px 0 16px', display: 'flex', flexDirection: 'column', height: '100%'}}>
                 <PanelSection title={t("measure_type")} theme={theme}>
                     <div style={{display:'flex', flexWrap: 'wrap', gap:4}}>
@@ -360,7 +372,6 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
                     checked={clipActive[axis]} 
                     onChange={(v: boolean) => setClipActive({ ...clipActive, [axis]: v })} 
                     styles={styles} 
-                    theme={theme}
                     style={{ fontWeight: '600', fontSize: 14 }}
                 />
                 <span style={{ 
@@ -391,7 +402,7 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
     );
 
     return (
-        <FloatingPanel title={t("clip_title")} onClose={onClose} width={360} height={480} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
+        <FloatingPanel title={t("clip_title")} onClose={onClose} width={360} height={480} resizable={false} styles={styles} storageId="tool_clip">
              <div style={{ padding: '24px' }}>
                  <div style={{ marginBottom: 24, borderBottom: `1px solid ${theme.border}`, paddingBottom: 16 }}>
                     <Checkbox 
@@ -399,7 +410,6 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
                         checked={clipEnabled} 
                         onChange={(v: boolean) => setClipEnabled(v)} 
                         styles={styles} 
-                        theme={theme}
                         style={{ fontWeight: 'bold', fontSize: 15 }}
                     />
                  </div>
@@ -421,7 +431,7 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     const [format, setFormat] = useState('glb');
     
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={400} resizable={false} styles={styles} theme={theme} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={400} resizable={false} styles={styles} storageId="tool_export">
             <div style={{padding: 16}}>
                 <div style={{marginBottom: 10, fontSize:12, color: theme.textMuted}}>{t("export_format")}:</div>
                 

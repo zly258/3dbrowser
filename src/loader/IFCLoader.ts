@@ -230,127 +230,19 @@ export const loadIFC = async (
     loadSpatialStructure();
     // --- 空间结构解析结束 ---
 
-    // 属性名称映射 - 提供更友好的显示名称
-    const propertyNameMap: Record<string, string> = {
-        // 基本属性
-        'GlobalId': '全局ID',
-        'Name': '名称',
-        'Description': '描述',
-        'ObjectType': '对象类型',
-        'Tag': '标签',
-        'LongName': '长名称',
-        'CompositionType': '组成类型',
-        'PredefinedType': '预定义类型',
-        
-        // 几何属性
-        'ObjectPlacement': '对象位置',
-        'Representation': '几何表示',
-        'Style': '样式',
-        
-        // 材料相关
-        'Material': '材料',
-        'Finish': '表面处理',
-        'Color': '颜色',
-        'Transparency': '透明度',
-        
-        // 尺寸属性
-        'Width': '宽度',
-        'Height': '高度',
-        'Depth': '深度',
-        'Length': '长度',
-        'Thickness': '厚度',
-        'Area': '面积',
-        'Volume': '体积',
-        'Perimeter': '周长',
-        
-        // 状态属性
-        'Status': '状态',
-        'FireRating': '防火等级',
-        'AcousticRating': '声学等级',
-        'ThermalTransmittance': '热传导系数',
-        'IsExternal': '是否外部',
-        'LoadBearing': '是否承重',
-        'Reference': '参考',
-        
-        // 系统属性
-        'ElementType': '元素类型',
-        'AssemblyPlace': '装配位置',
-        'Construction': '构造',
-        'FootingType': '基础类型',
-        'SurfaceType': '表面类型'
-    };
-
     // 获取友好的属性名称
     const getFriendlyName = (name: string): string => {
-        // 首先检查映射表
-        if (propertyNameMap[name]) {
-            return propertyNameMap[name];
-        }
-        
-        // 对于没有映射的属性，尝试转换
         // 移除常见前缀
         let cleanName = name.replace(/^(is|has|are)_/i, '');
         
-        // 驼峰转中文
-        const camelToChinese = (str: string) => {
+        // 驼峰转单词
+        const camelToWords = (str: string) => {
             return str
                 .replace(/([A-Z])/g, ' $1')
-                .replace(/^ /, '')
-                .split(' ')
-                .map((word, index) => {
-                    // 简单的英文到中文映射
-                    const simpleMap: Record<string, string> = {
-                        'Id': 'ID',
-                        'Type': '类型',
-                        'Name': '名称',
-                        'Value': '值',
-                        'Code': '代码',
-                        'Number': '编号',
-                        'Date': '日期',
-                        'Time': '时间',
-                        'Area': '面积',
-                        'Length': '长度',
-                        'Width': '宽度',
-                        'Height': '高度',
-                        'Volume': '体积',
-                        'Weight': '重量',
-                        'Status': '状态',
-                        'Level': '标高',
-                        'Floor': '楼层',
-                        'Room': '房间',
-                        'Space': '空间',
-                        'Building': '建筑',
-                        'Story': '层',
-                        'Zone': '区域',
-                        'System': '系统',
-                        'Group': '组',
-                        'Set': '集',
-                        'Property': '属性',
-                        'Material': '材料',
-                        'Element': '元素',
-                        'Component': '组件',
-                        'Assembly': '装配',
-                        'Construction': '构造',
-                        'Profile': '轮廓',
-                        'Shape': '形状',
-                        'Geometry': '几何',
-                        'Position': '位置',
-                        'Location': '位置',
-                        'Coordinate': '坐标',
-                        'Point': '点',
-                        'Line': '线',
-                        'Surface': '表面',
-                        'Face': '面',
-                        'Edge': '边',
-                        'Vertex': '顶点'
-                    };
-                    
-                    return simpleMap[word] || word;
-                })
-                .join('');
+                .replace(/^ /, '');
         };
         
-        return camelToChinese(cleanName);
+        return camelToWords(cleanName);
     };
 
     // 格式化属性值显示
@@ -439,7 +331,7 @@ export const loadIFC = async (
 
     // 附加自定义属性管理器
     rootGroup.userData.ifcManager = {
-        getItemProperties: async (id: number, expressID: number) => {
+        getItemProperties: async (_id: number, expressID: number) => {
             const result: any = {};
             
             // 1. 获取直接属性
@@ -549,7 +441,7 @@ export const loadIFC = async (
             return result;
         },
         
-        getExpressId: (geo: any, faceIndex: number) => {
+        getExpressId: (geo: any, _faceIndex: number) => {
             return geo.userData?.expressID;
         }
     };

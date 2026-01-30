@@ -135,13 +135,8 @@ function extractColor(mesh: THREE.Mesh): number {
 /**
  * 根据构件类型获取颜色
  */
-function getColorByComponentType(name: string): number {
-  const n = name.toLowerCase();
-  if (n.includes('col') || n.includes('柱')) return 0xbfdbfe; // 蓝色（浅）
-  if (n.includes('beam') || n.includes('梁')) return 0x93c5fd; // 蓝色（中）
-  if (n.includes('slab') || n.includes('板')) return 0xe5e7eb; // 灰色（浅）
-  if (n.includes('wall') || n.includes('墙')) return 0xf3f4f6; // 灰色（更浅）
-  return 0x94a3b8; // 灰色（中）
+function getColorByComponentType(_name: string): number {
+  return 0x94a3b8; // 默认灰色
 }
 
 /**
