@@ -98,7 +98,7 @@ export const createStyles = (theme: ThemeColors) => ({
         fontSize: "12px",
         color: theme.text,
         cursor: "pointer",
-        backgroundColor: active ? theme.highlight : (hover ? "rgba(128, 128, 128, 0.1)" : "transparent"),
+        backgroundColor: active ? theme.highlight : (hover ? theme.itemHover : "transparent"),
         transition: "background-color 0.1s",
     }),
     classicMenuDropdown: {
@@ -254,22 +254,19 @@ export const createStyles = (theme: ThemeColors) => ({
         overflowX: "hidden" as const,
         padding: "2px 0"
     },
-    treeNode: {
+    treeNode: (selected: boolean, hover: boolean) => ({
         display: "flex",
         alignItems: "center",
         height: "24px",
         cursor: "pointer",
         whiteSpace: "nowrap" as const,
         fontSize: "12px",
-        color: theme.text,
+        color: selected ? theme.accent : theme.text,
+        backgroundColor: selected ? theme.highlight : (hover ? theme.itemHover : "transparent"),
         transition: "background-color 0.1s ease",
-        paddingRight: "8px"
-    },
-    treeNodeSelected: {
-        backgroundColor: theme.highlight, 
-        color: theme.accent,
-        fontWeight: '600',
-    },
+        paddingRight: "8px",
+        fontWeight: selected ? '600' : '400',
+    }),
     expander: {
         width: "20px",
         height: "100%",

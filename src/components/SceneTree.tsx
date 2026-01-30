@@ -89,6 +89,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onModelContextMenu, styles, theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
+    const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
     
     // 过滤树结构的辅助函数
     const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
@@ -178,11 +179,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     {visibleItems.map((node, index) => (
                         <div key={node.uuid} 
                                 style={{
-                                    ...styles.treeNode,
+                                    ...styles.treeNode(node.uuid === selectedUuid, node.uuid === hoveredUuid),
                                     paddingLeft: 8,
-                                    ...(node.uuid === selectedUuid ? styles.treeNodeSelected : {})
                                 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
+                                onMouseEnter={() => setHoveredUuid(node.uuid)}
+                                onMouseLeave={() => setHoveredUuid(null)}
                                 onContextMenu={(e) => {
                                     if (!node.isFileNode || !onModelContextMenu) return;
                                     e.preventDefault();

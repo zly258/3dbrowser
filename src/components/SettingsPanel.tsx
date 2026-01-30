@@ -115,6 +115,14 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                                 onChange={(val: number) => onUpdate({viewCubeSize: val})} 
                                 theme={theme}/>
                         </Row>
+                        <Row label={t("st_frustum_culling")} theme={theme}>
+                             <Checkbox 
+                                checked={!!settings.frustumCulling} 
+                                onChange={(val: boolean) => onUpdate({frustumCulling: val})} 
+                                styles={styles} 
+                                theme={theme}
+                             />
+                        </Row>
                     </Section>
 
                     <Section title={t("st_lighting")} theme={theme}>

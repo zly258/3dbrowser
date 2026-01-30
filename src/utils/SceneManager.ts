@@ -25,6 +25,7 @@ export interface SceneSettings {
     dirInt: number;
     bgColor: string;
     viewCubeSize?: number;
+    frustumCulling?: boolean;
 }
 
 export interface StructureTreeNode {
@@ -288,6 +289,15 @@ export class SceneManager {
 
         // 应用背景
         this.renderer.setClearColor(this.settings.bgColor);
+
+        // 应用视锥体剔除
+        if (newSettings.frustumCulling !== undefined) {
+            this.contentGroup.traverse(obj => {
+                if ((obj as THREE.Mesh).isMesh || (obj as any).isBatchedMesh) {
+                    obj.frustumCulled = newSettings.frustumCulling!;
+                }
+            });
+        }
 
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
@@ -2019,6 +2029,45 @@ export class SceneManager {
         }
 
         const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+        
+        // 如果设置为可见，确保所有父节点也可见
+        if (visible && obj) {
+            let parent = obj.parent;
+            while (parent && parent !== this.scene) {
+                parent.visible = true;
+                parent = parent.parent;
+            }
+        }
+
+        if (!visible) {
+            // 如果隐藏的对象（或其子对象）当前被高亮，则取消高亮
+            const idsToUnhighlight: string[] = [];
+            if (this.highlightedUuids.has(uuid)) {
+                idsToUnhighlight.push(uuid);
+            }
+            
+            // 检查子对象
+            if (obj) {
+                obj.traverse(child => {
+                    if (this.highlightedUuids.has(child.uuid)) {
+                        idsToUnhighlight.push(child.uuid);
+                    }
+                });
+            } else if (nodes && nodes.length > 0) {
+                const findHighlightedRecursive = (n: StructureTreeNode) => {
+                    if (this.highlightedUuids.has(n.id)) idsToUnhighlight.push(n.id);
+                    if (n.children) n.children.forEach(findHighlightedRecursive);
+                };
+                findHighlightedRecursive(nodes[0]);
+            }
+
+            if (idsToUnhighlight.length > 0) {
+                const nextHighlighted = new Set(this.highlightedUuids);
+                idsToUnhighlight.forEach(id => nextHighlighted.delete(id));
+                this.highlightObjects(Array.from(nextHighlighted));
+            }
+        }
+
         if (!obj) {
             // 如果在 contentGroup 中找不到，可能已经被优化掉了
             // 我们尝试直接根据 node 递归更新 mappings
@@ -2134,7 +2183,7 @@ export class SceneManager {
 
         if (!union.isEmpty()) {
             this.selectionBox.box.copy(union);
-            this.selectionBox.visible = true;
+            this.selectionBox.visible = false; // 用户要求不显示包围盒
         }
 
         const focusId = this.lastSelectedUuid;

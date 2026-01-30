@@ -101,6 +101,30 @@ export interface ThreeViewerProps {
     onLoad?: (manager: SceneManager) => void;
 }
 
+// --- 辅助组件 ---
+const ContextMenuItem = ({ label, onClick, theme, disabled = false, danger = false, hasBorder = true }: any) => {
+    const [hover, setHover] = useState(false);
+    return (
+        <div
+            style={{
+                padding: '10px 12px',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                borderBottom: hasBorder ? `1px solid ${theme.border}` : 'none',
+                backgroundColor: hover && !disabled ? theme.itemHover : 'transparent',
+                opacity: disabled ? 0.5 : 1,
+                color: danger ? theme.danger : theme.text,
+                fontSize: '12px',
+                transition: 'background-color 0.1s'
+            }}
+            onMouseEnter={() => !disabled && setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            onClick={() => !disabled && onClick()}
+        >
+            {label}
+        </div>
+    );
+};
+
 // --- 主应用 ---
 export const ThreeViewer = ({ 
     allowDragOpen = true, 
@@ -1087,13 +1111,13 @@ export const ThreeViewer = ({
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
-        await processFiles(Array.from(e.target.files));
+        await processFiles(Array.from(e.target.files) as File[]);
         e.target.value = ""; 
     };
 
     const handleBatchConvert = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length || !sceneMgr.current) return;
-        const files = Array.from(e.target.files);
+        const files = Array.from(e.target.files) as File[];
         e.target.value = "";
 
         const invalid = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
@@ -1479,83 +1503,72 @@ export const ThreeViewer = ({
                         >
                             {contextMenu.source === 'canvas' ? (
                                 <>
-                                    <div
-                                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: `1px solid ${theme.border}` }}
+                                    <ContextMenuItem 
+                                        label={t("ctx_show_all")}
+                                        theme={theme}
                                         onClick={() => {
                                             sceneMgr.current?.setAllVisibility(true);
                                             updateTree();
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
-                                    >
-                                        {t("ctx_show_all")}
-                                    </div>
-                                    <div
-                                        style={{
-                                            padding: '10px 12px',
-                                            cursor: selectedUuids.length > 0 ? 'pointer' : 'not-allowed',
-                                            opacity: selectedUuids.length > 0 ? 1 : 0.5,
-                                            borderBottom: `1px solid ${theme.border}`
-                                        }}
+                                    />
+                                    <ContextMenuItem 
+                                        label={t("ctx_isolate_selection")}
+                                        theme={theme}
+                                        disabled={selectedUuids.length === 0}
                                         onClick={() => {
                                             if (!sceneMgr.current || selectedUuids.length === 0) return;
                                             sceneMgr.current.isolateObjects(selectedUuids);
+                                            // 隔离选择后，通常保留当前选择的高亮，但由于其他物体被隐藏，所以不需要清除 selectedUuids
                                             updateTree();
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
-                                    >
-                                        {t("ctx_isolate_selection")}
-                                    </div>
-                                    <div
-                                        style={{
-                                            padding: '10px 12px',
-                                            cursor: selectedUuids.length > 0 ? 'pointer' : 'not-allowed',
-                                            opacity: selectedUuids.length > 0 ? 1 : 0.5
-                                        }}
+                                    />
+                                    <ContextMenuItem 
+                                        label={t("ctx_hide_selection")}
+                                        theme={theme}
+                                        disabled={selectedUuids.length === 0}
+                                        hasBorder={false}
                                         onClick={() => {
                                             if (!sceneMgr.current || selectedUuids.length === 0) return;
                                             sceneMgr.current.hideObjects(selectedUuids);
+                                            setSelectedUuids([]); // 隐藏后清除选择
+                                            setSelectedProps(null);
                                             updateTree();
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
-                                    >
-                                        {t("ctx_hide_selection")}
-                                    </div>
+                                    />
                                 </>
                             ) : (
                                 <>
-                                    <div
-                                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: `1px solid ${theme.border}` }}
+                                    <ContextMenuItem 
+                                        label={t("expand_all")}
+                                        theme={theme}
                                         onClick={() => {
                                             setAllTreeExpanded(true);
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
-                                    >
-                                        {t("expand_all")}
-                                    </div>
-                                    <div
-                                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: `1px solid ${theme.border}` }}
+                                    />
+                                    <ContextMenuItem 
+                                        label={t("collapse_all")}
+                                        theme={theme}
                                         onClick={() => {
                                             setAllTreeExpanded(false);
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
-                                    >
-                                        {t("collapse_all")}
-                                    </div>
-                                    <div
-                                        style={{
-                                            padding: '10px 12px',
-                                            cursor: contextMenu.targetUuid ? 'pointer' : 'not-allowed',
-                                            opacity: contextMenu.targetUuid ? 1 : 0.5,
-                                            color: theme.danger
-                                        }}
+                                    />
+                                    <ContextMenuItem 
+                                        label={t("delete_item")}
+                                        theme={theme}
+                                        disabled={!contextMenu.targetUuid}
+                                        danger={true}
+                                        hasBorder={false}
                                         onClick={() => {
                                             if (!contextMenu.targetUuid) return;
                                             handleDeleteObject(contextMenu.targetUuid);
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
-                                    >
-                                        {t("delete_item")}
-                                    </div>
+                                    />
                                 </>
                             )}
                         </div>
