@@ -131,9 +131,17 @@ export class SceneManager {
 
     private lastReportedProgress = { loaded: -1, total: -1 };
     private chunkPadding = 0.2;
-    private maxConcurrentChunkLoads = 96;
-    private maxChunkLoadsPerFrame = 48;
+    private chunkTotalCount = 0;
+    private chunkLoadedCount = 0;
+    private maxConcurrentChunkLoads = 128; // 提高并发
+    private maxChunkLoadsPerFrame = 64;   // 提高并发
     private chunkLoadingEnabled = true;
+
+    // Worker 池
+    private workers: Worker[] = [];
+    private workerQueue: { resolve: Function, reject: Function, data: any, transferables: any[] }[] = [];
+    private activeWorkerCount = 0;
+    private maxWorkers = Math.min(navigator.hardwareConcurrency || 4, 8);
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -393,6 +401,8 @@ export class SceneManager {
     private reportChunkProgress() {
         const total = this.chunks.length;
         const loaded = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
+        this.chunkTotalCount = total;
+        this.chunkLoadedCount = loaded;
         if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
             this.lastReportedProgress = { loaded, total };
             this.onChunkProgress(loaded, total);
@@ -460,6 +470,53 @@ export class SceneManager {
         }
     }
 
+    private async runWorkerTask(data: any, transferables: any[]): Promise<any> {
+        return new Promise((resolve, reject) => {
+            this.workerQueue.push({ resolve, reject, data, transferables });
+            this.processWorkerQueue();
+        });
+    }
+
+    private processWorkerQueue() {
+        if (this.activeWorkerCount >= this.maxWorkers || this.workerQueue.length === 0) return;
+
+        const task = this.workerQueue.shift()!;
+        this.activeWorkerCount++;
+
+        let worker = this.workers.pop();
+        if (!worker) {
+            // @ts-ignore
+            worker = new Worker(new URL('./chunkWorker.ts', import.meta.url), { type: 'module' });
+        }
+
+        const onMessage = (e: MessageEvent) => {
+            worker!.removeEventListener('message', onMessage);
+            worker!.removeEventListener('error', onError);
+            this.workers.push(worker!);
+            this.activeWorkerCount--;
+            
+            if (e.data.type === 'success') {
+                task.resolve(e.data.result);
+            } else {
+                task.reject(new Error(e.data.error));
+            }
+            this.processWorkerQueue();
+        };
+
+        const onError = (e: ErrorEvent) => {
+            worker!.removeEventListener('message', onMessage);
+            worker!.removeEventListener('error', onError);
+            // 发生错误时不重用该 worker
+            this.activeWorkerCount--;
+            task.reject(new Error(e.message));
+            this.processWorkerQueue();
+        };
+
+        worker.addEventListener('message', onMessage);
+        worker.addEventListener('error', onError);
+        worker.postMessage(task.data, task.transferables);
+    }
+
     private async loadChunk(chunk: any) {
         this.processingChunks.add(chunk.id);
         try {
@@ -475,11 +532,16 @@ export class SceneManager {
                 const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
                 const meta = this.nbimMeta.get(chunk.nbimFileId);
                 const version = meta?.version ?? 7;
-                if (version >= 8) {
-                    bm = this.parseChunkBinaryV8(buffer, this.sharedMaterial, chunk.originalUuid, meta?.bimIdTable || []);
-                } else {
-                    bm = this.parseChunkBinaryV7(buffer, this.sharedMaterial, chunk.originalUuid);
-                }
+                
+                // 使用 Worker 进行解析
+                const workerResult = await this.runWorkerTask({
+                    buffer,
+                    version,
+                    originalUuid: chunk.originalUuid,
+                    bimIdTable: meta?.bimIdTable
+                }, [buffer]);
+                
+                bm = this.reconstructBatchedMesh(workerResult, this.sharedMaterial);
             }
 
             if (bm) {
@@ -540,6 +602,7 @@ export class SceneManager {
 
             if (loadedNow && !chunk.loaded) {
                 chunk.loaded = true;
+                this.chunkLoadedCount++; // 增加计数
                 this.reportChunkProgress();
             }
             this.cancelledChunkIds.delete(chunk.id);
@@ -1228,6 +1291,60 @@ export class SceneManager {
         }
 
         return buffer;
+    }
+
+    private reconstructBatchedMesh(data: any, material: THREE.Material): THREE.BatchedMesh | null {
+        const { geometries: geoData, instances: instData, originalUuid } = data;
+        
+        const geometries: THREE.BufferGeometry[] = geoData.map((g: any) => {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(g.position, 3));
+            geo.setAttribute('normal', new THREE.BufferAttribute(g.normal, 3));
+            if (g.index) {
+                geo.setIndex(new THREE.BufferAttribute(g.index, 1));
+            }
+            return geo;
+        });
+
+        let totalVerts = 0;
+        let totalIndices = 0;
+        geometries.forEach(g => {
+            totalVerts += g.attributes.position.count;
+            if (g.index) totalIndices += g.index.count;
+        });
+        
+        const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
+        const geoIds = geometries.map(g => bm.addGeometry(g));
+
+        const matrix = new THREE.Matrix4();
+        const color = new THREE.Color();
+        const batchIdToUuid = new Map<number, string>();
+        const batchIdToBimId = new Map<number, string>();
+        const batchIdToColor = new Map<number, number>();
+        const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
+
+        instData.forEach((inst: any) => {
+            color.setHex(inst.color);
+            matrix.fromArray(inst.matrix);
+
+            const instId = bm.addInstance(geoIds[inst.geoIdx]);
+            bm.setMatrixAt(instId, matrix);
+            bm.setColorAt(instId, color);
+            
+            const bimId = inst.bimId;
+            const key = `${originalUuid}::${bimId}`;
+            const nodeIds = this.bimIdToNodeIds.get(key);
+            batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+            batchIdToBimId.set(instId, bimId);
+            batchIdToColor.set(instId, inst.color);
+            batchIdToGeometry.set(instId, geometries[inst.geoIdx]);
+        });
+
+        bm.userData.batchIdToUuid = batchIdToUuid;
+        bm.userData.batchIdToBimId = batchIdToBimId;
+        bm.userData.batchIdToColor = batchIdToColor;
+        bm.userData.batchIdToGeometry = batchIdToGeometry;
+        return bm;
     }
 
     private parseChunkBinaryV7(buffer: ArrayBuffer, material: THREE.Material, originalUuid: string): THREE.BatchedMesh | null {

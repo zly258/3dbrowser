@@ -690,15 +690,29 @@ export const ThreeViewer = ({
 
         // 监听分块加载进度
         let lastReportedSuccess = false;
+        let clearProgressTimer: any = null;
+
         manager.onChunkProgress = (loaded, total) => {
             setChunkProgress({ loaded, total });
+            
             if (loaded === total && total > 0) {
                 if (!lastReportedSuccess) {
                     setToast({ message: t("all_chunks_loaded"), type: 'success' });
                     lastReportedSuccess = true;
+                    
+                    // 加载完成后，延迟 3 秒清空进度信息
+                    if (clearProgressTimer) clearTimeout(clearProgressTimer);
+                    clearProgressTimer = setTimeout(() => {
+                        setChunkProgress({ loaded: 0, total: 0 });
+                        clearProgressTimer = null;
+                    }, 3000);
                 }
             } else {
                 lastReportedSuccess = false;
+                if (clearProgressTimer) {
+                    clearTimeout(clearProgressTimer);
+                    clearProgressTimer = null;
+                }
             }
         };
 
@@ -716,6 +730,7 @@ export const ThreeViewer = ({
         }, 1000);
 
         return () => {
+            if (clearProgressTimer) clearTimeout(clearProgressTimer);
             clearInterval(statsInterval);
             manager.dispose();
         };
@@ -1750,10 +1765,9 @@ export const ThreeViewer = ({
                             )}
                         </span>
                     )}
-                    {selectedUuid && (
+                    {selectedUuid && selectedUuids.length > 1 && (
                         <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: '1px solid rgba(255,255,255,0.3)' }}>
-                            {t("prop_id")}: {selectedUuid}
-                            {selectedUuids.length > 1 ? ` (${selectedUuids.length})` : ''}
+                            {t("selected_count") || "已选择"}: {selectedUuids.length}
                         </span>
                     )}
                 </div>

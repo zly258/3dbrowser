@@ -2,13 +2,15 @@ import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { SceneManager } from "../utils/SceneManager";
 import { getTranslation, Lang } from "../theme/Locales";
+import { ThemeColors } from "../theme/Styles";
 
 interface ViewCubeProps {
     sceneMgr: SceneManager | null;
     lang?: Lang;
+    theme?: ThemeColors;
 }
 
-export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh' }) => {
+export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh', theme }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);

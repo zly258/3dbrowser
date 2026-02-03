@@ -30,6 +30,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     resizable = false, 
     movable = true, 
     styles, 
+    theme,
     storageId 
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
@@ -285,7 +286,7 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
     };
 
     return (
-        <FloatingPanel title={t("measure_title")} onClose={onClose} width={340} height={580} resizable={true} styles={styles} storageId="tool_measure">
+        <FloatingPanel title={t("measure_title")} onClose={onClose} width={340} height={580} resizable={true} styles={styles} theme={theme} storageId="tool_measure">
             <div style={{padding: '16px 16px 0 16px', display: 'flex', flexDirection: 'column', height: '100%'}}>
                 <PanelSection title={t("measure_type")} theme={theme}>
                     <div style={{display:'flex', flexWrap: 'wrap', gap:4}}>
@@ -402,7 +403,7 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
     );
 
     return (
-        <FloatingPanel title={t("clip_title")} onClose={onClose} width={360} height={480} resizable={false} styles={styles} storageId="tool_clip">
+        <FloatingPanel title={t("clip_title")} onClose={onClose} width={360} height={480} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
              <div style={{ padding: '24px' }}>
                  <div style={{ marginBottom: 24, borderBottom: `1px solid ${theme.border}`, paddingBottom: 16 }}>
                     <Checkbox 
@@ -431,7 +432,7 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     const [format, setFormat] = useState('glb');
     
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={400} resizable={false} styles={styles} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={400} resizable={false} styles={styles} theme={theme} storageId="tool_export">
             <div style={{padding: 16}}>
                 <div style={{marginBottom: 10, fontSize:12, color: theme.textMuted}}>{t("export_format")}:</div>
                 
