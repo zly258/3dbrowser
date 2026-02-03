@@ -141,7 +141,7 @@ export class SceneManager {
     private workers: Worker[] = [];
     private workerQueue: { resolve: Function, reject: Function, data: any, transferables: any[] }[] = [];
     private activeWorkerCount = 0;
-    private maxWorkers = Math.min(navigator.hardwareConcurrency || 4, 8);
+    private maxWorkers = 4; // 限制固定为 4 个，平衡性能与系统开销
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
