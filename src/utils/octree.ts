@@ -55,36 +55,40 @@ export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeom
   
   // 1. 复制坐标（position）
   const posAttr = source.getAttribute('position');
-  const positions = new Float32Array(posAttr.count * 3);
-  for (let i = 0; i < posAttr.count; i++) {
-    positions[i * 3] = posAttr.getX(i);
-    positions[i * 3 + 1] = posAttr.getY(i);
-    positions[i * 3 + 2] = posAttr.getZ(i);
+  if ((posAttr as any).isInterleavedBufferAttribute) {
+    const positions = new Float32Array(posAttr.count * 3);
+    for (let i = 0; i < posAttr.count; i++) {
+      positions[i * 3] = posAttr.getX(i);
+      positions[i * 3 + 1] = posAttr.getY(i);
+      positions[i * 3 + 2] = posAttr.getZ(i);
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  } else {
+    geometry.setAttribute('position', posAttr.clone());
   }
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
   // 2. 复制法线（normal；不存在则重新计算）
   const normAttr = source.getAttribute('normal');
   if (normAttr) {
-    const normals = new Float32Array(normAttr.count * 3);
-    for (let i = 0; i < normAttr.count; i++) {
-      normals[i * 3] = normAttr.getX(i);
-      normals[i * 3 + 1] = normAttr.getY(i);
-      normals[i * 3 + 2] = normAttr.getZ(i);
+    if ((normAttr as any).isInterleavedBufferAttribute) {
+      const normals = new Float32Array(normAttr.count * 3);
+      for (let i = 0; i < normAttr.count; i++) {
+        normals[i * 3] = normAttr.getX(i);
+        normals[i * 3 + 1] = normAttr.getY(i);
+        normals[i * 3 + 2] = normAttr.getZ(i);
+      }
+      geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    } else {
+      geometry.setAttribute('normal', normAttr.clone());
     }
-    geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   } else {
     geometry.computeVertexNormals();
   }
 
   // 3. 复制索引（index；不存在则生成）
-  if (source.getIndex()) {
-    const sourceIndex = source.getIndex()!;
-    const indices = new Uint32Array(sourceIndex.count);
-    for (let i = 0; i < sourceIndex.count; i++) {
-      indices[i] = sourceIndex.getX(i);
-    }
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  const sourceIndex = source.getIndex();
+  if (sourceIndex) {
+    geometry.setIndex(sourceIndex.clone());
   }
 
   // 4. 移除冗余属性（uv/uv2/color 等），确保 BatchedMesh 兼容性
