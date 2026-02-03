@@ -11829,32 +11829,36 @@ function sanitizeGeometry(source) {
   if (!source.getAttribute("position")) return new THREE.BoxGeometry(0.1, 0.1, 0.1);
   const geometry = new THREE.BufferGeometry();
   const posAttr = source.getAttribute("position");
-  const positions = new Float32Array(posAttr.count * 3);
-  for (let i = 0; i < posAttr.count; i++) {
-    positions[i * 3] = posAttr.getX(i);
-    positions[i * 3 + 1] = posAttr.getY(i);
-    positions[i * 3 + 2] = posAttr.getZ(i);
+  if (posAttr.isInterleavedBufferAttribute) {
+    const positions = new Float32Array(posAttr.count * 3);
+    for (let i = 0; i < posAttr.count; i++) {
+      positions[i * 3] = posAttr.getX(i);
+      positions[i * 3 + 1] = posAttr.getY(i);
+      positions[i * 3 + 2] = posAttr.getZ(i);
+    }
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  } else {
+    geometry.setAttribute("position", posAttr.clone());
   }
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const normAttr = source.getAttribute("normal");
   if (normAttr) {
-    const normals = new Float32Array(normAttr.count * 3);
-    for (let i = 0; i < normAttr.count; i++) {
-      normals[i * 3] = normAttr.getX(i);
-      normals[i * 3 + 1] = normAttr.getY(i);
-      normals[i * 3 + 2] = normAttr.getZ(i);
+    if (normAttr.isInterleavedBufferAttribute) {
+      const normals = new Float32Array(normAttr.count * 3);
+      for (let i = 0; i < normAttr.count; i++) {
+        normals[i * 3] = normAttr.getX(i);
+        normals[i * 3 + 1] = normAttr.getY(i);
+        normals[i * 3 + 2] = normAttr.getZ(i);
+      }
+      geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+    } else {
+      geometry.setAttribute("normal", normAttr.clone());
     }
-    geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   } else {
     geometry.computeVertexNormals();
   }
-  if (source.getIndex()) {
-    const sourceIndex = source.getIndex();
-    const indices = new Uint32Array(sourceIndex.count);
-    for (let i = 0; i < sourceIndex.count; i++) {
-      indices[i] = sourceIndex.getX(i);
-    }
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  const sourceIndex = source.getIndex();
+  if (sourceIndex) {
+    geometry.setIndex(sourceIndex.clone());
   }
   geometry.deleteAttribute("uv");
   geometry.deleteAttribute("uv2");
@@ -12029,6 +12033,7 @@ function collectLeafNodes(node, leaves = []) {
 }
 
 class SceneManager {
+  // 限制固定为 4 个，平衡性能与系统开销
   constructor(canvas) {
     this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
     this.nodeMap = /* @__PURE__ */ new Map();
@@ -12071,9 +12076,15 @@ class SceneManager {
     });
     this.lastReportedProgress = { loaded: -1, total: -1 };
     this.chunkPadding = 0.2;
-    this.maxConcurrentChunkLoads = 96;
-    this.maxChunkLoadsPerFrame = 48;
+    this.chunkTotalCount = 0;
+    this.chunkLoadedCount = 0;
+    this.maxConcurrentChunkLoads = 128;
+    this.maxChunkLoadsPerFrame = 64;
     this.chunkLoadingEnabled = true;
+    this.workers = [];
+    this.workerQueue = [];
+    this.activeWorkerCount = 0;
+    this.maxWorkers = 4;
     this.canvas = canvas;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -12260,6 +12271,8 @@ class SceneManager {
   reportChunkProgress() {
     const total = this.chunks.length;
     const loaded = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
+    this.chunkTotalCount = total;
+    this.chunkLoadedCount = loaded;
     if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
       this.lastReportedProgress = { loaded, total };
       this.onChunkProgress(loaded, total);
@@ -12313,6 +12326,43 @@ class SceneManager {
       for (let i = 0; i < count; i++) this.loadChunk(toLoad[i]);
     }
   }
+  async runWorkerTask(data, transferables) {
+    return new Promise((resolve, reject) => {
+      this.workerQueue.push({ resolve, reject, data, transferables });
+      this.processWorkerQueue();
+    });
+  }
+  processWorkerQueue() {
+    if (this.activeWorkerCount >= this.maxWorkers || this.workerQueue.length === 0) return;
+    const task = this.workerQueue.shift();
+    this.activeWorkerCount++;
+    let worker = this.workers.pop();
+    if (!worker) {
+      worker = new Worker(new URL(/* @vite-ignore */ ""+new URL('assets/chunkWorker-B5eTz7G-.js', import.meta.url).href+"", import.meta.url), { type: "module" });
+    }
+    const onMessage = (e) => {
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+      this.workers.push(worker);
+      this.activeWorkerCount--;
+      if (e.data.type === "success") {
+        task.resolve(e.data.result);
+      } else {
+        task.reject(new Error(e.data.error));
+      }
+      this.processWorkerQueue();
+    };
+    const onError = (e) => {
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+      this.activeWorkerCount--;
+      task.reject(new Error(e.message));
+      this.processWorkerQueue();
+    };
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+    worker.postMessage(task.data, task.transferables);
+  }
   async loadChunk(chunk) {
     this.processingChunks.add(chunk.id);
     try {
@@ -12325,11 +12375,13 @@ class SceneManager {
         const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
         const meta = this.nbimMeta.get(chunk.nbimFileId);
         const version = meta?.version ?? 7;
-        if (version >= 8) {
-          bm = this.parseChunkBinaryV8(buffer, this.sharedMaterial, chunk.originalUuid, meta?.bimIdTable || []);
-        } else {
-          bm = this.parseChunkBinaryV7(buffer, this.sharedMaterial, chunk.originalUuid);
-        }
+        const workerResult = await this.runWorkerTask({
+          buffer,
+          version,
+          originalUuid: chunk.originalUuid,
+          bimIdTable: meta?.bimIdTable
+        }, [buffer]);
+        bm = this.reconstructBatchedMesh(workerResult, this.sharedMaterial);
       }
       if (bm) {
         if (this.cancelledChunkIds.has(chunk.id) || !this.chunks.some((c) => c.id === chunk.id)) {
@@ -12378,6 +12430,7 @@ class SceneManager {
       }
       if (loadedNow && !chunk.loaded) {
         chunk.loaded = true;
+        this.chunkLoadedCount++;
         this.reportChunkProgress();
       }
       this.cancelledChunkIds.delete(chunk.id);
@@ -12941,6 +12994,51 @@ class SceneManager {
       offset += 4;
     }
     return buffer;
+  }
+  reconstructBatchedMesh(data, material) {
+    const { geometries: geoData, instances: instData, originalUuid } = data;
+    const geometries = geoData.map((g) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(g.position, 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(g.normal, 3));
+      if (g.index) {
+        geo.setIndex(new THREE.BufferAttribute(g.index, 1));
+      }
+      return geo;
+    });
+    let totalVerts = 0;
+    let totalIndices = 0;
+    geometries.forEach((g) => {
+      totalVerts += g.attributes.position.count;
+      if (g.index) totalIndices += g.index.count;
+    });
+    const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
+    const geoIds = geometries.map((g) => bm.addGeometry(g));
+    const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    const batchIdToUuid = /* @__PURE__ */ new Map();
+    const batchIdToBimId = /* @__PURE__ */ new Map();
+    const batchIdToColor = /* @__PURE__ */ new Map();
+    const batchIdToGeometry = /* @__PURE__ */ new Map();
+    instData.forEach((inst) => {
+      color.setHex(inst.color);
+      matrix.fromArray(inst.matrix);
+      const instId = bm.addInstance(geoIds[inst.geoIdx]);
+      bm.setMatrixAt(instId, matrix);
+      bm.setColorAt(instId, color);
+      const bimId = inst.bimId;
+      const key = `${originalUuid}::${bimId}`;
+      const nodeIds = this.bimIdToNodeIds.get(key);
+      batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+      batchIdToBimId.set(instId, bimId);
+      batchIdToColor.set(instId, inst.color);
+      batchIdToGeometry.set(instId, geometries[inst.geoIdx]);
+    });
+    bm.userData.batchIdToUuid = batchIdToUuid;
+    bm.userData.batchIdToBimId = batchIdToBimId;
+    bm.userData.batchIdToColor = batchIdToColor;
+    bm.userData.batchIdToGeometry = batchIdToGeometry;
+    return bm;
   }
   parseChunkBinaryV7(buffer, material, originalUuid) {
     const dv = new DataView(buffer);
@@ -99590,7 +99688,7 @@ const resources = {
     menu_open_file: "Open File",
     menu_open_folder: "Open Folder",
     menu_open_url: "Open URL",
-    menu_batch_convert: "Batch Convert to NBIM",
+    menu_batch_convert: "Batch Convert",
     menu_file: "File",
     menu_export: "Export",
     interface_display: "Display",
@@ -99640,6 +99738,7 @@ const resources = {
     monitor_faces: "Faces",
     monitor_mem: "Mem",
     monitor_calls: "Calls",
+    selected_count: "Selected",
     tips_rotate: "LMB: Rotate",
     tips_pan: "MMB: Pan",
     tips_zoom: "Scroll: Zoom",
@@ -99732,7 +99831,7 @@ const resources = {
     menu_open_file: "打开文件",
     menu_open_folder: "打开目录",
     menu_open_url: "打开 URL",
-    menu_batch_convert: "批量转换为NBIM",
+    menu_batch_convert: "批量转换",
     menu_file: "文件",
     menu_export: "导出场景",
     interface_display: "界面",
@@ -99782,6 +99881,7 @@ const resources = {
     monitor_faces: "面",
     monitor_mem: "显存",
     monitor_calls: "绘制",
+    selected_count: "已选择",
     tips_rotate: "左键旋转",
     tips_pan: "中键平移",
     tips_zoom: "滚轮缩放",
@@ -100518,6 +100618,7 @@ const FloatingPanel = ({
   resizable = false,
   movable = true,
   styles,
+  theme,
   storageId
 }) => {
   const panelRef = useRef(null);
@@ -100739,7 +100840,7 @@ const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory
     setMeasureType(type);
     sceneMgr?.startMeasurement(type);
   };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px 16px 0 16px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px 16px 0 16px", display: "flex", flexDirection: "column", height: "100%" }, children: [
     /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 }, children: [
       /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_none") }),
       /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_dist") }),
@@ -100833,7 +100934,7 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
       }
     ) })
   ] });
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 360, height: 480, resizable: false, styles, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "24px" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 360, height: 480, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "24px" }, children: [
     /* @__PURE__ */ jsx("div", { style: { marginBottom: 24, borderBottom: `1px solid ${theme.border}`, paddingBottom: 16 }, children: /* @__PURE__ */ jsx(
       Checkbox,
       {
@@ -100857,7 +100958,7 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
 };
 const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
   const [format, setFormat] = useState("glb");
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, theme, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
     /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10, fontSize: 12, color: theme.textMuted }, children: [
       t("export_format"),
       ":"
@@ -101381,7 +101482,7 @@ const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
   ) });
 };
 
-const ViewCube = ({ sceneMgr, lang = "zh" }) => {
+const ViewCube = ({ sceneMgr, lang = "zh", theme }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
@@ -102145,15 +102246,25 @@ const ThreeViewer = ({
       manager.resize();
     });
     let lastReportedSuccess = false;
+    let clearProgressTimer = null;
     manager.onChunkProgress = (loaded, total) => {
       setChunkProgress({ loaded, total });
       if (loaded === total && total > 0) {
         if (!lastReportedSuccess) {
           setToast({ message: t("all_chunks_loaded"), type: "success" });
           lastReportedSuccess = true;
+          if (clearProgressTimer) clearTimeout(clearProgressTimer);
+          clearProgressTimer = setTimeout(() => {
+            setChunkProgress({ loaded: 0, total: 0 });
+            clearProgressTimer = null;
+          }, 3e3);
         }
       } else {
         lastReportedSuccess = false;
+        if (clearProgressTimer) {
+          clearTimeout(clearProgressTimer);
+          clearProgressTimer = null;
+        }
       }
     };
     let debounceTimer;
@@ -102167,6 +102278,7 @@ const ThreeViewer = ({
       if (manager) setStats(manager.getStats());
     }, 1e3);
     return () => {
+      if (clearProgressTimer) clearTimeout(clearProgressTimer);
       clearInterval(statsInterval);
       manager.dispose();
     };
@@ -103111,11 +103223,10 @@ const ThreeViewer = ({
                 backgroundColor: "#fff"
               } }) })
             ] }),
-            selectedUuid && /* @__PURE__ */ jsxs("span", { style: { opacity: 0.8, paddingLeft: "8px", borderLeft: "1px solid rgba(255,255,255,0.3)" }, children: [
-              t("prop_id"),
+            selectedUuid && selectedUuids.length > 1 && /* @__PURE__ */ jsxs("span", { style: { opacity: 0.8, paddingLeft: "8px", borderLeft: "1px solid rgba(255,255,255,0.3)" }, children: [
+              t("selected_count") || "已选择",
               ": ",
-              selectedUuid,
-              selectedUuids.length > 1 ? ` (${selectedUuids.length})` : ""
+              selectedUuids.length
             ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "12px", alignItems: "center" }, children: [

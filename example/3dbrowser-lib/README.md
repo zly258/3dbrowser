@@ -15,7 +15,6 @@ Professional 3D model viewer library for React and Web applications. Built with 
   - **Sectioning**: Real-time clipping planes for internal inspection.
   - **Scene Tree**: Interactive hierarchical view of the model structure.
   - **Properties**: Detailed metadata viewer for selected components.
-- **Batch Conversion**: Convert multiple models between formats (e.g., GLB to NBIM).
 - **Modern Tech Stack**: Built with **React 19**, **Three.js**, and **TypeScript**.
 - **Localization**: Built-in support for English and Chinese out of the box.
 
@@ -87,42 +86,6 @@ const handleLoad = (manager: SceneManager) => {
 };
 ```
 
-### Batch Conversion Utility
-
-For performing batch conversions independently, you can use the `performBatchConvert` function:
-
-```typescript
-import { performBatchConvert } from '@zhangly1403/3dbrowser/dist/src/utils/batchConverter';
-import { SceneManager } from '@zhangly1403/3dbrowser'; // For SceneManager.batchConvert
-
-// Example usage (you would typically get these from your React state or similar)
-const filesToConvert: File[] = []; // Your input files
-const outputFilename = "converted_model.nbim";
-const libPath = "./libs"; // Path to your libs folder
-const t = (key: string) => key; // Placeholder translation function
-
-// These would typically be state setters from a React component
-const setLoading = (loading: boolean) => console.log("Loading:", loading);
-const setStatus = (status: string) => console.log("Status:", status);
-const setProgress = (progress: number) => console.log("Progress:", progress);
-const setToast = (toast: any) => console.log("Toast:", toast);
-
-performBatchConvert({
-    files: filesToConvert,
-    filename: outputFilename,
-    onProgress: (p, msg) => {
-        setProgress(p);
-        setStatus(msg);
-    },
-    t,
-    libPath,
-    setLoading,
-    setStatus,
-    setProgress,
-    setToast,
-});
-```
-
 ## License
 
 ### Free for Non-Commercial Use (Commercial Use Prohibited)
@@ -148,7 +111,6 @@ This project is intended for learning and research purposes only. **Commercial u
   - **剖切**: 实时剖切面，方便查看内部结构。
   - **场景树**: 交互式构件树状结构视图。
   - **属性面板**: 选中构件的详细属性查看。
-  - **批量转换**: 支持多种模型格式之间的批量转换（例如，GLB 转 NBIM）。
 - **现代技术栈**: 基于 **React 19**, **Three.js** 和 **TypeScript** 构建。
 - **双语支持**: 内置完善的中英文支持。
 
@@ -207,55 +169,6 @@ function App() {
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的文件（URL 或 File 对象） |
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
 | `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
-
-### SceneManager
-
-对于高级场景，您可以直接与 `SceneManager` 交互：
-
-```typescript
-import { SceneManager } from '@zhangly1403/3dbrowser';
-
-// 在 ThreeViewer 的 onLoad 回调中
-const handleLoad = (manager: SceneManager) => {
-  manager.loadNbim('path/to/model.nbim');
-};
-```
-
-### 批量转换工具
-
-要独立执行批量转换，您可以使用 `performBatchConvert` 函数：
-
-```typescript
-import { performBatchConvert } from '@zhangly1403/3dbrowser/dist/src/utils/batchConverter';
-import { SceneManager } from '@zhangly1403/3dbrowser'; // 用于 SceneManager.batchConvert
-
-// 示例用法（您通常会从 React 状态或类似来源获取这些参数）
-const filesToConvert: File[] = []; // 您的输入文件
-const outputFilename = "converted_model.nbim";
-const libPath = "./libs"; // libs 文件夹的路径
-const t = (key: string) => key; // 占位符翻译函数
-
-// 这些通常是 React 组件中的状态设置函数
-const setLoading = (loading: boolean) => console.log("加载中:", loading);
-const setStatus = (status: string) => console.log("状态:", status);
-const setProgress = (progress: number) => console.log("进度:", progress);
-const setToast = (toast: any) => console.log("提示:", toast);
-
-performBatchConvert({
-    files: filesToConvert,
-    filename: outputFilename,
-    onProgress: (p, msg) => {
-        setProgress(p);
-        setStatus(msg);
-    },
-    t,
-    libPath,
-    setLoading,
-    setStatus,
-    setProgress,
-    setToast,
-});
-```
 
 ## 许可证
 

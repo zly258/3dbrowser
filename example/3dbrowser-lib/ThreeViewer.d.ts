@@ -1,3 +1,4 @@
+import { JSX } from 'react/jsx-runtime';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 import { TilesGroup } from '3d-tiles-renderer';
@@ -493,9 +494,15 @@ export declare class SceneManager {
     onChunkProgress?: (loaded: number, total: number) => void;
     private lastReportedProgress;
     private chunkPadding;
+    private chunkTotalCount;
+    private chunkLoadedCount;
     private maxConcurrentChunkLoads;
     private maxChunkLoadsPerFrame;
     private chunkLoadingEnabled;
+    private workers;
+    private workerQueue;
+    private activeWorkerCount;
+    private maxWorkers;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
     createCircleTexture(): any;
@@ -504,6 +511,8 @@ export declare class SceneManager {
     resize(width?: number, height?: number): void;
     private reportChunkProgress;
     private checkCullingAndLoad;
+    private runWorkerTask;
+    private processWorkerQueue;
     private loadChunk;
     setChunkLoadingEnabled(enabled: boolean): void;
     setContentVisible(visible: boolean): void;
@@ -522,6 +531,7 @@ export declare class SceneManager {
     private getTypeIndex;
     private guessType;
     private generateChunkBinaryV8;
+    private reconstructBatchedMesh;
     private parseChunkBinaryV7;
     private parseChunkBinaryV8;
     exportNbim(): Promise<void>;
@@ -634,7 +644,7 @@ export declare interface ThemeColors {
 
 export declare const themes: Record<'dark' | 'light', ThemeColors>;
 
-export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => any;
+export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => JSX.Element;
 
 export declare interface ThreeViewerProps {
     allowDragOpen?: boolean;
