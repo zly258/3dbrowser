@@ -330,6 +330,9 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   const batchedMesh = new THREE.BatchedMesh(sanitizedItems.length, vertexCount, indexCount, material);
   
   batchedMesh.frustumCulled = true;
+  // 启用实例级视锥剔除 (Three.js R164+)
+  // 这对于超多模型非常关键，可以避免整个分块即使只有一小部分在视锥内也全部渲染的问题
+  (batchedMesh as any).perInstanceFrustumCulling = true;
 
   const geometryMap = new Map<THREE.BufferGeometry, number>();
   const batchIdToExpressId = new Map<number, number>();

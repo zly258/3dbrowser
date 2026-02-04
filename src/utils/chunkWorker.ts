@@ -52,20 +52,19 @@ self.onmessage = function (e: MessageEvent) {
   }
 };
 
-function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseResult {
-  const dv = new DataView(buffer);
-  let offset = 0;
-
-  const geoCount = dv.getUint32(offset, true); offset += 4;
+/**
+ * 通用的几何体解析和索引一致性处理
+ */
+function parseGeometries(dv: DataView, buffer: ArrayBuffer, offset: { value: number }): GeometryData[] {
+  const geoCount = dv.getUint32(offset.value, true); offset.value += 4;
   const geometries: GeometryData[] = [];
   
   for (let i = 0; i < geoCount; i++) {
-    const vertCount = dv.getUint32(offset, true); offset += 4;
-    const indexCount = dv.getUint32(offset, true); offset += 4;
+    const vertCount = dv.getUint32(offset.value, true); offset.value += 4;
+    const indexCount = dv.getUint32(offset.value, true); offset.value += 4;
     
-    // 使用 slice 确保每个属性有自己的 Buffer，方便 transferable
-    const posArr = new Float32Array(buffer.slice(offset, offset + vertCount * 12)); offset += vertCount * 12;
-    const normArr = new Float32Array(buffer.slice(offset, offset + vertCount * 12)); offset += vertCount * 12;
+    const posArr = new Float32Array(buffer.slice(offset.value, offset.value + vertCount * 12)); offset.value += vertCount * 12;
+    const normArr = new Float32Array(buffer.slice(offset.value, offset.value + vertCount * 12)); offset.value += vertCount * 12;
     
     const geo: GeometryData = {
       position: posArr,
@@ -74,7 +73,7 @@ function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseRes
     };
     
     if (indexCount > 0) {
-      const indexArr = new Uint32Array(buffer.slice(offset, offset + indexCount * 4)); offset += indexCount * 4;
+      const indexArr = new Uint32Array(buffer.slice(offset.value, offset.value + indexCount * 4)); offset.value += indexCount * 4;
       geo.index = indexArr;
     }
     geometries.push(geo);
@@ -92,20 +91,36 @@ function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseRes
       }
     });
   }
+  
+  return geometries;
+}
 
-  const instanceCount = dv.getUint32(offset, true); offset += 4;
+/**
+ * 解析实例矩阵（V7 和 V8 通用部分）
+ */
+function parseMatrix(dv: DataView, offset: { value: number }): Float32Array {
+  const matrix = new Float32Array(16);
+  for (let k = 0; k < 16; k++) {
+    matrix[k] = dv.getFloat32(offset.value, true); offset.value += 4;
+  }
+  return matrix;
+}
+
+function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseResult {
+  const dv = new DataView(buffer);
+  const offset = { value: 0 };
+
+  const geometries = parseGeometries(dv, buffer, offset);
+  const instanceCount = dv.getUint32(offset.value, true); offset.value += 4;
   const instances: InstanceData[] = [];
 
   for (let i = 0; i < instanceCount; i++) {
-    const bimIdNum = dv.getUint32(offset, true); offset += 4;
-    dv.getUint32(offset, true); offset += 4; // 类型
-    const hex = dv.getUint32(offset, true); offset += 4;
+    const bimIdNum = dv.getUint32(offset.value, true); offset.value += 4;
+    dv.getUint32(offset.value, true); offset.value += 4; // 类型
+    const hex = dv.getUint32(offset.value, true); offset.value += 4;
 
-    const matrix = new Float32Array(16);
-    for (let k = 0; k < 16; k++) {
-      matrix[k] = dv.getFloat32(offset, true); offset += 4;
-    }
-    const geoIdx = dv.getUint32(offset, true); offset += 4;
+    const matrix = parseMatrix(dv, offset);
+    const geoIdx = dv.getUint32(offset.value, true); offset.value += 4;
 
     instances.push({
       bimId: String(bimIdNum),
@@ -120,57 +135,19 @@ function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseRes
 
 function parseChunkBinaryV8(buffer: ArrayBuffer, originalUuid: string, bimIdTable: string[]): ParseResult {
   const dv = new DataView(buffer);
-  let offset = 0;
+  const offset = { value: 0 };
 
-  const geoCount = dv.getUint32(offset, true); offset += 4;
-  const geometries: GeometryData[] = [];
-  
-  for (let i = 0; i < geoCount; i++) {
-    const vertCount = dv.getUint32(offset, true); offset += 4;
-    const indexCount = dv.getUint32(offset, true); offset += 4;
-    
-    const posArr = new Float32Array(buffer.slice(offset, offset + vertCount * 12)); offset += vertCount * 12;
-    const normArr = new Float32Array(buffer.slice(offset, offset + vertCount * 12)); offset += vertCount * 12;
-    
-    const geo: GeometryData = {
-      position: posArr,
-      normal: normArr,
-      index: null
-    };
-    
-    if (indexCount > 0) {
-      const indexArr = new Uint32Array(buffer.slice(offset, offset + indexCount * 4)); offset += indexCount * 4;
-      geo.index = indexArr;
-    }
-    geometries.push(geo);
-  }
-
-  // Ensure all geometries have indices if any of them do (BatchedMesh requirement)
-  const hasAnyIndex = geometries.some(g => g.index !== null);
-  if (hasAnyIndex) {
-    geometries.forEach(g => {
-      if (!g.index) {
-        const count = g.position.length / 3;
-        const index = new Uint32Array(count);
-        for (let j = 0; j < count; j++) index[j] = j;
-        g.index = index;
-      }
-    });
-  }
-
-  const instanceCount = dv.getUint32(offset, true); offset += 4;
+  const geometries = parseGeometries(dv, buffer, offset);
+  const instanceCount = dv.getUint32(offset.value, true); offset.value += 4;
   const instances: InstanceData[] = [];
 
   for (let i = 0; i < instanceCount; i++) {
-    const bimIdIndex = dv.getUint32(offset, true); offset += 4;
-    dv.getUint32(offset, true); offset += 4; // 类型
-    const hex = dv.getUint32(offset, true); offset += 4;
+    const bimIdIndex = dv.getUint32(offset.value, true); offset.value += 4;
+    dv.getUint32(offset.value, true); offset.value += 4; // 类型
+    const hex = dv.getUint32(offset.value, true); offset.value += 4;
 
-    const matrix = new Float32Array(16);
-    for (let k = 0; k < 16; k++) {
-      matrix[k] = dv.getFloat32(offset, true); offset += 4;
-    }
-    const geoIdx = dv.getUint32(offset, true); offset += 4;
+    const matrix = parseMatrix(dv, offset);
+    const geoIdx = dv.getUint32(offset.value, true); offset.value += 4;
 
     instances.push({
       bimId: bimIdTable[bimIdIndex] ?? String(bimIdIndex),

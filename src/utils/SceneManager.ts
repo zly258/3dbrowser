@@ -24,6 +24,7 @@ export interface SceneSettings {
     bgColor: string;
     viewCubeSize?: number;
     frustumCulling?: boolean;
+    maxRenderDistance?: number;
 }
 
 export interface StructureTreeNode {
@@ -98,6 +99,7 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         viewCubeSize: 100,
+        maxRenderDistance: 5000,
     };
 
     // 资源
@@ -136,6 +138,7 @@ export class SceneManager {
     private maxConcurrentChunkLoads = 128; // 提高并发
     private maxChunkLoadsPerFrame = 64;   // 提高并发
     private chunkLoadingEnabled = true;
+    private maxRenderDistance = 5000; // 最大渲染距离 (LOD 思想，超过此距离的分块不渲染)
 
     // Worker 池
     private workers: Worker[] = [];
@@ -303,6 +306,13 @@ export class SceneManager {
             });
         }
 
+        // 应用最大渲染距离
+        if (newSettings.maxRenderDistance !== undefined) {
+            this.maxRenderDistance = newSettings.maxRenderDistance;
+            // 立即触发一次剔除检查
+            this.checkCullingAndLoad();
+        }
+
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
     }
@@ -439,7 +449,12 @@ export class SceneManager {
 
             const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
-            const shouldBeVisible = inFrustum && !isClipped;
+            
+            // 距离裁剪优化
+            const dist = c.center.distanceTo(cameraPos);
+            const inRange = dist < this.maxRenderDistance;
+            
+            const shouldBeVisible = inFrustum && !isClipped && inRange;
 
             if (c.loaded) {
                 if (c.mesh) {
@@ -873,8 +888,8 @@ export class SceneManager {
 
             if (onProgress) onProgress(35, "正在计算八叉树...");
 
-            const maxItemsPerNode = 1500;
-            const maxDepth = 5;
+            const maxItemsPerNode = 3000;
+            const maxDepth = 6;
             const octree = buildOctree(items, bounds, { maxItemsPerNode, maxDepth });
             const leafNodes = collectLeafNodes(octree);
             
@@ -1324,6 +1339,7 @@ export class SceneManager {
         });
         
         const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
+        (bm as any).perInstanceFrustumCulling = true;
         const geoIds = geometries.map(g => bm.addGeometry(g));
 
         const matrix = new THREE.Matrix4();
@@ -1407,6 +1423,7 @@ export class SceneManager {
         });
         
         const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
+        (bm as any).perInstanceFrustumCulling = true;
         const geoIds = geometries.map(g => bm.addGeometry(g));
 
         const matrix = new THREE.Matrix4();
@@ -1496,6 +1513,7 @@ export class SceneManager {
         });
         
         const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
+        (bm as any).perInstanceFrustumCulling = true;
         const geoIds = geometries.map(g => bm.addGeometry(g));
 
         const matrix = new THREE.Matrix4();
