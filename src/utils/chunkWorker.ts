@@ -80,6 +80,19 @@ function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseRes
     geometries.push(geo);
   }
 
+  // Ensure all geometries have indices if any of them do (BatchedMesh requirement)
+  const hasAnyIndex = geometries.some(g => g.index !== null);
+  if (hasAnyIndex) {
+    geometries.forEach(g => {
+      if (!g.index) {
+        const count = g.position.length / 3;
+        const index = new Uint32Array(count);
+        for (let j = 0; j < count; j++) index[j] = j;
+        g.index = index;
+      }
+    });
+  }
+
   const instanceCount = dv.getUint32(offset, true); offset += 4;
   const instances: InstanceData[] = [];
 
@@ -130,6 +143,19 @@ function parseChunkBinaryV8(buffer: ArrayBuffer, originalUuid: string, bimIdTabl
       geo.index = indexArr;
     }
     geometries.push(geo);
+  }
+
+  // Ensure all geometries have indices if any of them do (BatchedMesh requirement)
+  const hasAnyIndex = geometries.some(g => g.index !== null);
+  if (hasAnyIndex) {
+    geometries.forEach(g => {
+      if (!g.index) {
+        const count = g.position.length / 3;
+        const index = new Uint32Array(count);
+        for (let j = 0; j < count; j++) index[j] = j;
+        g.index = index;
+      }
+    });
   }
 
   const instanceCount = dv.getUint32(offset, true); offset += 4;

@@ -212,7 +212,7 @@ export class SceneManager {
         this.controls.mouseButtons = {
             LEFT: THREE.MOUSE.ROTATE,
             MIDDLE: THREE.MOUSE.PAN,
-            RIGHT: THREE.MOUSE.NONE
+            RIGHT: undefined as any
         };
         
         // 灯光
@@ -1296,12 +1296,22 @@ export class SceneManager {
     private reconstructBatchedMesh(data: any, material: THREE.Material): THREE.BatchedMesh | null {
         const { geometries: geoData, instances: instData, originalUuid } = data;
         
+        // BatchedMesh 要求所有几何体必须一致地拥有（或都没有）索引。
+        // 检查是否至少有一个几何体带有索引。
+        const hasAnyIndex = geoData.some((g: any) => g.index && g.index.length > 0);
+
         const geometries: THREE.BufferGeometry[] = geoData.map((g: any) => {
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(g.position, 3));
             geo.setAttribute('normal', new THREE.BufferAttribute(g.normal, 3));
-            if (g.index) {
+            if (g.index && g.index.length > 0) {
                 geo.setIndex(new THREE.BufferAttribute(g.index, 1));
+            } else if (hasAnyIndex) {
+                // 如果批次中有其他几何体带索引，则为此几何体生成顺序索引
+                const count = g.position.length / 3;
+                const index = new Uint32Array(count);
+                for (let i = 0; i < count; i++) index[i] = i;
+                geo.setIndex(new THREE.BufferAttribute(index, 1));
             }
             return geo;
         });
@@ -1377,6 +1387,20 @@ export class SceneManager {
         // 估算总顶点和索引数
         let totalVerts = 0;
         let totalIndices = 0;
+
+        // 检查是否至少有一个几何体带有索引
+        const hasAnyIndex = geometries.some(g => g.index !== null);
+        if (hasAnyIndex) {
+            geometries.forEach(g => {
+                if (!g.index) {
+                    const count = g.attributes.position.count;
+                    const index = new Uint32Array(count);
+                    for (let j = 0; j < count; j++) index[j] = j;
+                    g.setIndex(new THREE.BufferAttribute(index, 1));
+                }
+            });
+        }
+
         geometries.forEach(g => {
             totalVerts += g.attributes.position.count;
             if (g.index) totalIndices += g.index.count;
@@ -1452,6 +1476,20 @@ export class SceneManager {
         
         let totalVerts = 0;
         let totalIndices = 0;
+
+        // 检查是否至少有一个几何体带有索引
+        const hasAnyIndex = geometries.some(g => g.index !== null);
+        if (hasAnyIndex) {
+            geometries.forEach(g => {
+                if (!g.index) {
+                    const count = g.attributes.position.count;
+                    const index = new Uint32Array(count);
+                    for (let j = 0; j < count; j++) index[j] = j;
+                    g.setIndex(new THREE.BufferAttribute(index, 1));
+                }
+            });
+        }
+
         geometries.forEach(g => {
             totalVerts += g.attributes.position.count;
             if (g.index) totalIndices += g.index.count;
@@ -2120,7 +2158,6 @@ export class SceneManager {
             if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-                    if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
                 });
             }
         };
@@ -2130,7 +2167,6 @@ export class SceneManager {
             if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
-                    if (m.mesh.instanceColor) m.mesh.instanceColor.needsUpdate = true;
                 });
             }
         };
@@ -2290,7 +2326,9 @@ export class SceneManager {
                             };
 
                             // 覆盖 getPosition (针对某些 UI 组件)
-                            proxy.position.setFromMatrixPosition(new THREE.Matrix4().getMatrixAt ? new THREE.Matrix4() : new THREE.Matrix4()); // 占位
+                            const mat = new THREE.Matrix4();
+                            bm.getMatrixAt(batchId, mat);
+                            proxy.position.setFromMatrixPosition(mat);
 
                             (hit as any).object = proxy;
                         }

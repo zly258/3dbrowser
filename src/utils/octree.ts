@@ -86,9 +86,15 @@ export function sanitizeGeometry(source: THREE.BufferGeometry): THREE.BufferGeom
   }
 
   // 3. 复制索引（index；不存在则生成）
+  // BatchedMesh 要求所有几何体必须一致地拥有索引，因此这里强制生成索引
   const sourceIndex = source.getIndex();
   if (sourceIndex) {
     geometry.setIndex(sourceIndex.clone());
+  } else {
+    const count = posAttr.count;
+    const indices = new Uint32Array(count);
+    for (let i = 0; i < count; i++) indices[i] = i;
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   }
 
   // 4. 移除冗余属性（uv/uv2/color 等），确保 BatchedMesh 兼容性
