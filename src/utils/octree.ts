@@ -315,10 +315,19 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   let indexCount = 0;
 
   // 预先处理所有几何体，确保它们是标准化的（对齐 refs）
-  const sanitizedItems = items.map(item => ({
-    ...item,
-    geometry: sanitizeGeometry(item.geometry)
-  }));
+  // 优化：使用 Map 避免重复处理相同的几何体，节省内存
+  const sanitizedGeometries = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+  const sanitizedItems = items.map(item => {
+    let sanitized = sanitizedGeometries.get(item.geometry);
+    if (!sanitized) {
+      sanitized = sanitizeGeometry(item.geometry);
+      sanitizedGeometries.set(item.geometry, sanitized);
+    }
+    return {
+      ...item,
+      geometry: sanitized
+    };
+  });
 
   for (const item of sanitizedItems) {
     vertexCount += item.geometry.attributes.position.count;

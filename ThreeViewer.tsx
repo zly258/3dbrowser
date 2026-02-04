@@ -716,6 +716,10 @@ export const ThreeViewer = ({
             }
         };
 
+        manager.onMeasureUpdate = (records) => {
+            setMeasureHistory(records.map(r => ({ id: r.id, type: r.type, val: r.val })));
+        };
+
         // 监听瓦片更新（防抖刷新树）
         let debounceTimer: any;
         manager.onTilesUpdate = () => {
@@ -791,7 +795,9 @@ export const ThreeViewer = ({
                     // 如果选择了测量类型，优先进行测量点拾取
                     const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
                     if (intersect) {
-                        const record = mgr.addMeasurePoint(intersect.point);
+                        // 获取被点击物体的 UUID，用于关联测量
+                        const modelUuid = (intersect.object as any).uuid;
+                        const record = mgr.addMeasurePoint(intersect.point, modelUuid);
                         if (record) {
                             // 当前段测量完成
                             const localizedRecord = {...record, type: record.type };
