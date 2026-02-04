@@ -338,10 +338,10 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
 
   const batchedMesh = new THREE.BatchedMesh(sanitizedItems.length, vertexCount, indexCount, material);
   
-  batchedMesh.frustumCulled = true;
-  // 启用实例级视锥剔除 (Three.js R164+)
-  // 这对于超多模型非常关键，可以避免整个分块即使只有一小部分在视锥内也全部渲染的问题
-  (batchedMesh as any).perInstanceFrustumCulling = true;
+  // 禁用自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制。
+  // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
+  batchedMesh.frustumCulled = false;
+  (batchedMesh as any).perInstanceFrustumCulling = false;
 
   const geometryMap = new Map<THREE.BufferGeometry, number>();
   const batchIdToExpressId = new Map<number, number>();
@@ -360,6 +360,10 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
       const instanceId = batchedMesh.addInstance(geometryId);
       batchedMesh.setMatrixAt(instanceId, item.matrix);
       
+      // 设置实例包围盒，用于 perInstanceFrustumCulling
+      if (!item.geometry.boundingBox) item.geometry.computeBoundingBox();
+      (batchedMesh as any).setBoundingBoxAt(instanceId, item.geometry.boundingBox);
+      
       const color = new THREE.Color(item.color);
       batchedMesh.setColorAt(instanceId, color);
 
@@ -377,6 +381,8 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   batchedMesh.userData.batchIdToUuid = batchIdToUuid;
   batchedMesh.userData.batchIdToColor = batchIdToColor;
   batchedMesh.userData.batchIdToGeometry = batchIdToGeometry;
+  batchedMesh.computeBoundingBox();
+  batchedMesh.computeBoundingSphere();
   return batchedMesh;
 }
 

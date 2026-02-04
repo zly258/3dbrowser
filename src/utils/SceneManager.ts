@@ -102,7 +102,7 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         viewCubeSize: 100,
-        maxRenderDistance: 5000,
+        maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
     };
 
     // 资源
@@ -134,6 +134,7 @@ export class SceneManager {
     // 拾取优化
     private interactableList: THREE.Object3D[] = [];
     private interactableListValid: boolean = false;
+    private _needsBoundsUpdate: boolean = false;
 
     // 回调
     onTilesUpdate?: () => void;
@@ -142,13 +143,13 @@ export class SceneManager {
     onChunkProgress?: (loaded: number, total: number) => void;
 
     private lastReportedProgress = { loaded: -1, total: -1 };
+    private chunkLoadedCount: number = 0;
     private chunkPadding = 0.2;
-    private chunkTotalCount = 0;
-    private chunkLoadedCount = 0;
     private maxConcurrentChunkLoads = 128; // 提高并发
     private maxChunkLoadsPerFrame = 64;   // 提高并发
+    private maxLoadedChunks = 512;        // 最大已加载分块数，超过则卸载最远的
     private chunkLoadingEnabled = true;
-    private maxRenderDistance = 5000; // 最大渲染距离 (LOD 思想，超过此距离的分块不渲染)
+    private maxRenderDistance = 1000000; // 最大渲染距离
     private _lastCullingTime: number = 0;
 
     // Worker 池
@@ -171,7 +172,7 @@ export class SceneManager {
             canvas,
             antialias: true,
             alpha: true,
-            logarithmicDepthBuffer: true,
+            logarithmicDepthBuffer: false, // 正交相机不建议开启对数深度缓冲区，会导致 negative near 裁剪问题
             precision: "highp",
             powerPreference: "high-performance"
         });
@@ -290,11 +291,6 @@ export class SceneManager {
 
         this.mouse = new THREE.Vector2();
 
-        // 启动逻辑定时器 (对齐 refs)
-        this.logicTimer = window.setInterval(() => {
-            this.checkCullingAndLoad();
-        }, 300);
-
         this.animate = this.animate.bind(this);
         requestAnimationFrame(this.animate);
     }
@@ -312,8 +308,12 @@ export class SceneManager {
         // 应用视锥体剔除
         if (newSettings.frustumCulling !== undefined) {
             this.contentGroup.traverse(obj => {
-                if ((obj as THREE.Mesh).isMesh || (obj as any).isBatchedMesh) {
+                if ((obj as THREE.Mesh).isMesh) {
                     obj.frustumCulled = newSettings.frustumCulling!;
+                } else if ((obj as any).isBatchedMesh) {
+                    // BatchedMesh 由 SceneManager 的分块逻辑控制可见性，
+                    // 禁用其内部剔除以防止靠近消失的问题
+                    obj.frustumCulled = false;
                 }
             });
         }
@@ -348,26 +348,30 @@ export class SceneManager {
     animate() {
         requestAnimationFrame(this.animate);
         
-        const delta = this.clock ? this.clock.getDelta() : 0.016;
-
         if (this.controls) {
-            const changed = this.controls.update();
-            if (changed) {
-                // 限制 checkCullingAndLoad 的频率，避免在大场景下每帧执行昂贵的计算
-                const now = performance.now();
-                if (!this._lastCullingTime || now - this._lastCullingTime > 100) {
-                    this.checkCullingAndLoad();
-                    this._lastCullingTime = now;
-                }
-            }
+            this.controls.update();
+        }
+
+        // 如果需要更新边界 (例如分块加载/卸载后)
+        if (this._needsBoundsUpdate) {
+            this.updateSceneBounds();
+            this._needsBoundsUpdate = false;
+        }
+
+        // 先更新相机裁剪面，确保后续的视锥剔除和渲染使用正确的参数
+        this.updateCameraClipping();
+
+        // 限制 checkCullingAndLoad 的频率，避免在大场景下每帧执行昂贵的计算
+        const now = performance.now();
+        if (!this._lastCullingTime || now - this._lastCullingTime > 100) {
+            this.checkCullingAndLoad();
+            this._lastCullingTime = now;
         }
 
         if (this.tilesRenderer) {
             this.camera.updateMatrixWorld();
             this.tilesRenderer.update();
         }
-
-        this.updateCameraClipping();
 
         this.renderer.render(this.scene, this.camera);
     }
@@ -381,11 +385,15 @@ export class SceneManager {
         }
         
         const dist = this.camera.position.distanceTo(this.cachedSceneSphere.center);
-        // 增加范围系数，确保大模型不会被裁剪
-        const range = this.cachedSceneSphere.radius * 20 + dist; 
         
-        // 只有当范围变化超过 1% 时才更新，避免每帧 updateProjectionMatrix
-        if (Math.abs(this.camera.far - range) / this.camera.far > 0.01 || this.camera.near !== -range) {
+        // 增加更宽的裁剪范围，确保即便相机在模型内部或非常靠近时，也不会因为精度或计算误差导致裁剪
+        // 使用半径的 5 倍作为基础，加上到中心的距离，确保范围足够覆盖整个可能的视锥空间
+        const range = Math.max(this.cachedSceneSphere.radius * 5.0, dist + this.cachedSceneSphere.radius * 2.0);
+        
+        // 只有当变化显著时才更新，避免每帧都触发投影矩阵更新
+        const threshold = 0.05; // 5% 的变化阈值
+        if (Math.abs(this.camera.far - range) / Math.max(this.camera.far, 1) > threshold || 
+            Math.abs(this.camera.near - (-range)) / Math.max(Math.abs(this.camera.near), 1) > threshold) {
             this.camera.near = -range;
             this.camera.far = range;
             this.camera.updateProjectionMatrix();
@@ -438,9 +446,7 @@ export class SceneManager {
 
     private reportChunkProgress() {
         const total = this.chunks.length;
-        const loaded = this.chunks.reduce((acc, c) => acc + (c.loaded ? 1 : 0), 0);
-        this.chunkTotalCount = total;
-        this.chunkLoadedCount = loaded;
+        const loaded = this.chunkLoadedCount;
         if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
             this.lastReportedProgress = { loaded, total };
             this.onChunkProgress(loaded, total);
@@ -458,12 +464,16 @@ export class SceneManager {
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
 
-        // 增加视锥体预加载边距（通过稍微扩大 c.bounds 来实现预加载）
         const padding = this.chunkPadding;
         const cameraPos = this.camera.position;
+        const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
+        const canvasHeight = this.renderer.domElement.clientHeight;
 
         const toLoad: any[] = [];
+        const loadedChunks: any[] = [];
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
+
+        let anyNewLoaded = false;
 
         this.chunks.forEach(c => {
             if (!c.paddedBounds || c._padding !== padding) {
@@ -478,15 +488,25 @@ export class SceneManager {
             const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
             
-            // 距离裁剪优化
             const dist = c.center.distanceTo(cameraPos);
             const inRange = dist < this.maxRenderDistance;
             
-            const shouldBeVisible = inFrustum && !isClipped && inRange;
+            // 计算屏幕空间占用大小 (SSE 优化)
+            // 对于正交相机，大小与距离无关，只与 zoom 和 frustumSize 有关
+            const boxSize = c.bounds.getSize(new THREE.Vector3()).length();
+            const pixelSize = (boxSize / viewHeight) * canvasHeight;
+            
+            // 如果屏幕占比太小（例如小于 4 像素），则视为不可见 (LOD 优化)
+            const isTooSmall = pixelSize < 4;
+
+            const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall;
 
             if (c.loaded) {
+                loadedChunks.push(c);
                 if (c.mesh) {
-                    c.mesh.visible = shouldBeVisible;
+                    if (c.mesh.visible !== shouldBeVisible) {
+                        c.mesh.visible = shouldBeVisible;
+                    }
                 } else {
                     const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
                     const bm = optimizedGroup?.getObjectByName(c.id);
@@ -496,20 +516,42 @@ export class SceneManager {
                     }
                 }
             } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
-                // 加入待加载队列
+                // 计算优先级：距离越近、体积越大、越靠近屏幕中心，优先级越高
+                const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
+                const centrality = 1.0 - Math.min(1.0, Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y));
+                
+                // 优先级公式：(1/距离) * 体积 * 中心度
+                c.priority = (1000 / (dist + 1)) * (boxSize / 10) * (1 + centrality);
                 toLoad.push(c);
             }
         });
         
+        // 卸载策略
+        if (loadedChunks.length > this.maxLoadedChunks) {
+            loadedChunks.sort((a, b) => b.center.distanceToSquared(cameraPos) - a.center.distanceToSquared(cameraPos));
+            
+            let unloadedCount = 0;
+            const targetUnload = loadedChunks.length - this.maxLoadedChunks;
+            
+            for (const c of loadedChunks) {
+                if (unloadedCount >= targetUnload) break;
+                if (!c.mesh || !c.mesh.visible) {
+                    this.unloadChunk(c);
+                    unloadedCount++;
+                }
+            }
+        }
+        
         if (toLoad.length > 0) {
-            // 优先加载距离相机近的分块
-            toLoad.sort((a, b) => {
-                return a.center.distanceToSquared(cameraPos) - b.center.distanceToSquared(cameraPos);
-            });
+            // 按优先级排序
+            toLoad.sort((a, b) => b.priority - a.priority);
 
             const available = this.maxConcurrentChunkLoads - this.processingChunks.size;
             const count = Math.min(available, this.maxChunkLoadsPerFrame, toLoad.length);
-            for (let i = 0; i < count; i++) this.loadChunk(toLoad[i]);
+            for (let i = 0; i < count; i++) {
+                this.loadChunk(toLoad[i]);
+                anyNewLoaded = true;
+            }
         }
     }
 
@@ -558,6 +600,41 @@ export class SceneManager {
         worker.addEventListener('message', onMessage);
         worker.addEventListener('error', onError);
         worker.postMessage(task.data, task.transferables);
+    }
+
+    private unloadChunk(chunk: any) {
+        if (!chunk.loaded || !chunk.mesh) return;
+
+        const bm = chunk.mesh as THREE.BatchedMesh;
+        
+        // 1. 从优化映射中移除
+        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
+        if (batchIdToUuid) {
+            for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
+                const mapping = this.optimizedMapping.get(originalUuid);
+                if (mapping) {
+                    const index = mapping.findIndex(m => m.mesh === bm && m.instanceId === batchId);
+                    if (index !== -1) {
+                        mapping.splice(index, 1);
+                        if (mapping.length === 0) this.optimizedMapping.delete(originalUuid);
+                    }
+                }
+            }
+        }
+
+        // 2. 释放资源
+        if (bm.geometry) bm.geometry.dispose();
+        // 材质通常是共享的 (this.sharedMaterial)，不在这里释放
+        
+        // 3. 从场景中移除
+        if (bm.parent) bm.parent.remove(bm);
+        
+        // 4. 重置状态
+        chunk.mesh = null;
+        chunk.loaded = false;
+        this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - 1);
+        this.interactableListValid = false;
+        this._needsBoundsUpdate = true;
     }
 
     private async loadChunk(chunk: any) {
@@ -621,6 +698,7 @@ export class SceneManager {
                 chunk.mesh = bm;
                 loadedNow = true;
                 this.interactableListValid = false;
+                this._needsBoundsUpdate = true; // 标记需要更新场景范围
 
                 // 建立映射 (对齐 refs，记录原始颜色以便高亮恢复)
                 const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
@@ -1035,7 +1113,7 @@ export class SceneManager {
                     if (bm.geometry) bm.geometry.dispose();
                     if (bm.material) {
                         const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                        materials.forEach(m => m.dispose());
+                        materials.forEach((m: any) => m.dispose && m.dispose());
                     }
                 }
             });
@@ -1071,7 +1149,7 @@ export class SceneManager {
                 if (bm.geometry) bm.geometry.dispose();
                 if (bm.material) {
                     const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                    materials.forEach(m => m.dispose());
+                    materials.forEach((m: any) => m.dispose && m.dispose());
                 }
             }
 
@@ -1402,7 +1480,10 @@ export class SceneManager {
         });
         
         const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
-        (bm as any).perInstanceFrustumCulling = true;
+        // 关键：禁用 BatchedMesh 自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制可见性。
+        // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
+        bm.frustumCulled = false;
+        (bm as any).perInstanceFrustumCulling = false;
         const geoIds = geometries.map(g => bm.addGeometry(g));
 
         const matrix = new THREE.Matrix4();
@@ -1420,6 +1501,11 @@ export class SceneManager {
             bm.setMatrixAt(instId, matrix);
             bm.setColorAt(instId, color);
             
+            // 设置实例包围盒，用于 perInstanceFrustumCulling
+            const geo = geometries[inst.geoIdx];
+            if (!geo.boundingBox) geo.computeBoundingBox();
+            if (geo.boundingBox) (bm as any).setBoundingBoxAt(instId, geo.boundingBox);
+            
             const bimId = inst.bimId;
             const key = `${originalUuid}::${bimId}`;
             const nodeIds = this.bimIdToNodeIds.get(key);
@@ -1433,187 +1519,8 @@ export class SceneManager {
         bm.userData.batchIdToBimId = batchIdToBimId;
         bm.userData.batchIdToColor = batchIdToColor;
         bm.userData.batchIdToGeometry = batchIdToGeometry;
-        return bm;
-    }
-
-    private parseChunkBinaryV7(buffer: ArrayBuffer, material: THREE.Material, originalUuid: string): THREE.BatchedMesh | null {
-        const dv = new DataView(buffer);
-        let offset = 0;
-
-        const geoCount = dv.getUint32(offset, true); offset += 4;
-        const geometries: THREE.BufferGeometry[] = [];
-        
-        for (let i = 0; i < geoCount; i++) {
-            const vertCount = dv.getUint32(offset, true); offset += 4;
-            const indexCount = dv.getUint32(offset, true); offset += 4;
-            
-            const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-            const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-            
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
-            geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
-            
-            if (indexCount > 0) {
-                const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
-                geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
-            }
-            geometries.push(geo);
-        }
-
-        const instanceCount = dv.getUint32(offset, true); offset += 4;
-        
-        // 估算总顶点和索引数
-        let totalVerts = 0;
-        let totalIndices = 0;
-
-        // 检查是否至少有一个几何体带有索引
-        const hasAnyIndex = geometries.some(g => g.index !== null);
-        if (hasAnyIndex) {
-            geometries.forEach(g => {
-                if (!g.index) {
-                    const count = g.attributes.position.count;
-                    const index = new Uint32Array(count);
-                    for (let j = 0; j < count; j++) index[j] = j;
-                    g.setIndex(new THREE.BufferAttribute(index, 1));
-                }
-            });
-        }
-
-        geometries.forEach(g => {
-            totalVerts += g.attributes.position.count;
-            if (g.index) totalIndices += g.index.count;
-        });
-        
-        const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
-        (bm as any).perInstanceFrustumCulling = true;
-        const geoIds = geometries.map(g => bm.addGeometry(g));
-
-        const matrix = new THREE.Matrix4();
-        const color = new THREE.Color();
-        const batchIdToUuid = new Map<number, string>();
-        const batchIdToBimId = new Map<number, string>();
-        const batchIdToColor = new Map<number, number>();
-        const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
-
-        for (let i = 0; i < instanceCount; i++) {
-            const bimIdNum = dv.getUint32(offset, true); offset += 4;
-            dv.getUint32(offset, true); offset += 4; // 类型
-            const hex = dv.getUint32(offset, true); offset += 4;
-            color.setHex(hex);
-
-            for (let k = 0; k < 16; k++) {
-                matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
-            }
-            const geoIdx = dv.getUint32(offset, true); offset += 4;
-
-            const instId = bm.addInstance(geoIds[geoIdx]);
-            bm.setMatrixAt(instId, matrix);
-            bm.setColorAt(instId, color);
-            
-            const bimId = String(bimIdNum);
-            const key = `${originalUuid}::${bimId}`;
-            const nodeIds = this.bimIdToNodeIds.get(key);
-            batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
-            batchIdToBimId.set(instId, bimId);
-            batchIdToColor.set(instId, hex);
-            batchIdToGeometry.set(instId, geometries[geoIdx]);
-        }
-
-        bm.userData.batchIdToUuid = batchIdToUuid;
-        bm.userData.batchIdToBimId = batchIdToBimId;
-        bm.userData.batchIdToColor = batchIdToColor;
-        bm.userData.batchIdToGeometry = batchIdToGeometry;
-        return bm;
-    }
-
-    private parseChunkBinaryV8(buffer: ArrayBuffer, material: THREE.Material, originalUuid: string, bimIdTable: string[]): THREE.BatchedMesh | null {
-        const dv = new DataView(buffer);
-        let offset = 0;
-
-        const geoCount = dv.getUint32(offset, true); offset += 4;
-        const geometries: THREE.BufferGeometry[] = [];
-        
-        for (let i = 0; i < geoCount; i++) {
-            const vertCount = dv.getUint32(offset, true); offset += 4;
-            const indexCount = dv.getUint32(offset, true); offset += 4;
-            
-            const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-            const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-            
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
-            geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
-            
-            if (indexCount > 0) {
-                const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
-                geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
-            }
-            geometries.push(geo);
-        }
-
-        const instanceCount = dv.getUint32(offset, true); offset += 4;
-        
-        let totalVerts = 0;
-        let totalIndices = 0;
-
-        // 检查是否至少有一个几何体带有索引
-        const hasAnyIndex = geometries.some(g => g.index !== null);
-        if (hasAnyIndex) {
-            geometries.forEach(g => {
-                if (!g.index) {
-                    const count = g.attributes.position.count;
-                    const index = new Uint32Array(count);
-                    for (let j = 0; j < count; j++) index[j] = j;
-                    g.setIndex(new THREE.BufferAttribute(index, 1));
-                }
-            });
-        }
-
-        geometries.forEach(g => {
-            totalVerts += g.attributes.position.count;
-            if (g.index) totalIndices += g.index.count;
-        });
-        
-        const bm = new THREE.BatchedMesh(instanceCount, totalVerts, totalIndices, material);
-        (bm as any).perInstanceFrustumCulling = true;
-        const geoIds = geometries.map(g => bm.addGeometry(g));
-
-        const matrix = new THREE.Matrix4();
-        const color = new THREE.Color();
-        const batchIdToUuid = new Map<number, string>();
-        const batchIdToBimId = new Map<number, string>();
-        const batchIdToColor = new Map<number, number>();
-        const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
-
-        for (let i = 0; i < instanceCount; i++) {
-            const bimIdIndex = dv.getUint32(offset, true); offset += 4;
-            dv.getUint32(offset, true); offset += 4; // 类型
-            const hex = dv.getUint32(offset, true); offset += 4;
-            color.setHex(hex);
-
-            for (let k = 0; k < 16; k++) {
-                matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
-            }
-            const geoIdx = dv.getUint32(offset, true); offset += 4;
-
-            const instId = bm.addInstance(geoIds[geoIdx]);
-            bm.setMatrixAt(instId, matrix);
-            bm.setColorAt(instId, color);
-
-            const bimId = bimIdTable[bimIdIndex] ?? String(bimIdIndex);
-            const key = `${originalUuid}::${bimId}`;
-            const nodeIds = this.bimIdToNodeIds.get(key);
-            batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
-            batchIdToBimId.set(instId, bimId);
-            batchIdToColor.set(instId, hex);
-            batchIdToGeometry.set(instId, geometries[geoIdx]);
-        }
-
-        bm.userData.batchIdToUuid = batchIdToUuid;
-        bm.userData.batchIdToBimId = batchIdToBimId;
-        bm.userData.batchIdToColor = batchIdToColor;
-        bm.userData.batchIdToGeometry = batchIdToGeometry;
+        bm.computeBoundingBox();
+        bm.computeBoundingSphere();
         return bm;
     }
 
@@ -2365,13 +2272,43 @@ export class SceneManager {
         
         if (!this.interactableListValid) {
             this.interactableList = [];
-            this.contentGroup.traverse(o => {
-                if (o.visible && ((o as THREE.Mesh).isMesh || (o as any).isBatchedMesh)) {
-                    // 如果是被优化的原始网格，跳过它，我们拾取 BatchedMesh
-                    if (o.userData.isOptimized) return;
-                    this.interactableList.push(o);
+            
+            // 优化：优先从已加载的分块中收集网格，避免昂贵的 traverse
+            if (this.chunks.length > 0) {
+                this.chunks.forEach(c => {
+                    if (c.loaded && c.mesh && c.mesh.visible) {
+                        this.interactableList.push(c.mesh);
+                    }
+                });
+            }
+
+            // 收集非分块加载的可见普通 Mesh 或 Group 中的内容
+            // 限制遍历深度以提高性能
+            const traverseLimit = (o: THREE.Object3D, depth: number) => {
+                if (depth > 10) return;
+                if (!o.visible) return;
+                
+                // 跳过已经被分块系统处理的对象
+                if ((o as any).userData.chunkId) return;
+                
+                if ((o as THREE.Mesh).isMesh || (o as any).isBatchedMesh) {
+                    if (!o.userData.isOptimized) {
+                        this.interactableList.push(o);
+                    }
+                } else if (o.children.length > 0) {
+                    for (const child of o.children) {
+                        traverseLimit(child, depth + 1);
+                    }
                 }
-            });
+            };
+
+            // 遍历内容组
+            for (const child of this.contentGroup.children) {
+                // 如果是优化组，跳过它（已经在上面通过 chunks 处理过了）
+                if (child.userData.isOptimizedGroup) continue;
+                traverseLimit(child, 0);
+            }
+
             this.interactableListValid = true;
         }
 
@@ -2511,22 +2448,16 @@ export class SceneManager {
     }
 
     updateSceneBounds() {
-        // 更新场景包围盒时，如果是为了渲染辅助物或计算范围，通常使用完整范围更稳定
-        // 但为了 fitView 等功能，我们可能需要可见范围。
-        // 这里强制重新计算完整包围盒，并更新预计算值，以防物体增删后范围滞后
+        // 更新场景包围盒时，如果是为了计算渲染裁剪面，必须使用完整范围
+        // 否则当部分物体被剔除时，包围盒缩小，会导致裁剪面缩小，进而剔除更多物体的恶性循环
         const fullBox = this.computeTotalBounds(false, true);
         this.precomputedBounds = fullBox.clone();
         if (this.globalOffset.length() > 0) {
             this.precomputedBounds.translate(this.globalOffset);
         }
 
-        const visibleBox = this.computeTotalBounds(true);
-        
-        if (visibleBox.isEmpty()) {
-            this.sceneBounds.copy(fullBox);
-        } else {
-            this.sceneBounds.copy(visibleBox);
-        }
+        // sceneBounds 用于计算相机裁剪平面，应始终使用全场景范围
+        this.sceneBounds.copy(fullBox);
         this.sceneSphereValid = false;
     }
 
