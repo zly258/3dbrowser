@@ -100337,8 +100337,8 @@ const createLucideIcon = (iconName, iconNode) => {
  */
 
 
-const __iconNode$3 = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$3);
+const __iconNode$2 = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$2);
 
 /**
  * @license lucide-react v0.562.0 - ISC
@@ -100348,25 +100348,8 @@ const ChevronDown = createLucideIcon("chevron-down", __iconNode$3);
  */
 
 
-const __iconNode$2 = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$2);
-
-/**
- * @license lucide-react v0.562.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-
-
-const __iconNode$1 = [
-  ["path", { d: "M10 11v6", key: "nco0om" }],
-  ["path", { d: "M14 11v6", key: "outv1u" }],
-  ["path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", key: "miytrc" }],
-  ["path", { d: "M3 6h18", key: "d0wm0j" }],
-  ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", key: "e791ji" }]
-];
-const Trash2 = createLucideIcon("trash-2", __iconNode$1);
+const __iconNode$1 = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$1);
 
 /**
  * @license lucide-react v0.562.0 - ISC
@@ -100398,7 +100381,6 @@ const withThemeIcon = (Icon, props) => {
 };
 const IconChevronRight = (props) => withThemeIcon(ChevronRight, props);
 const IconChevronDown = (props) => withThemeIcon(ChevronDown, props);
-const IconClear = (props) => withThemeIcon(Trash2, props);
 const IconClose = (props) => withThemeIcon(X, props);
 
 const Button = ({
@@ -100432,18 +100414,21 @@ const Button = ({
     border: variant === "ghost" ? "none" : active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
     boxShadow: variant === "ghost" ? "none" : "none",
     // 不使用默认的黑色描边/阴影
+    opacity: props.disabled ? 0.4 : 1,
+    cursor: props.disabled ? "not-allowed" : "pointer",
+    pointerEvents: props.disabled ? "none" : "auto",
     ...style
   };
   return /* @__PURE__ */ jsx("button", { style: baseStyle, ...props, children });
 };
-const PanelSection = ({ title, children, theme, style }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16, ...style }, children: [
+const PanelSection = ({ title, children, theme, style }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 12, ...style }, children: [
   title && /* @__PURE__ */ jsxs("div", { style: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "bold",
     color: theme.textMuted,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    marginBottom: 8,
+    marginBottom: 6,
     display: "flex",
     alignItems: "center",
     gap: 8
@@ -100622,6 +100607,8 @@ const FloatingPanel = ({
   storageId
 }) => {
   const panelRef = useRef(null);
+  const minWidth = storageId === "tool_measure" ? 320 : 220;
+  const minHeight = storageId === "tool_measure" ? 400 : 120;
   const [pos, setPos] = useState(() => {
     if (storageId) {
       try {
@@ -100647,7 +100634,10 @@ const FloatingPanel = ({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed.size && typeof parsed.size.w === "number" && typeof parsed.size.h === "number") {
-            return parsed.size;
+            return {
+              w: Math.max(minWidth, parsed.size.w),
+              h: Math.max(minHeight, parsed.size.h)
+            };
           }
         }
       } catch (e) {
@@ -100693,8 +100683,8 @@ const FloatingPanel = ({
           setPos({ x: newX, y: newY });
         } else if (isResizing.current) {
           setSize({
-            w: Math.max(220, startSize.current.w + dx),
-            h: Math.max(120, startSize.current.h + dy)
+            w: Math.max(minWidth, startSize.current.w + dx),
+            h: Math.max(minHeight, startSize.current.h + dy)
           });
         }
       });
@@ -100804,9 +100794,9 @@ const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: "10px 16px",
+        padding: "8px 12px",
         borderBottom: `1px solid ${theme.border}`,
-        fontSize: 13,
+        fontSize: 12,
         backgroundColor: highlightedId === item.id ? theme.highlight : "transparent",
         cursor: "pointer",
         transition: "background-color 0.2s"
@@ -100840,18 +100830,18 @@ const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory
     setMeasureType(type);
     sceneMgr?.startMeasurement(type);
   };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px 16px 0 16px", display: "flex", flexDirection: "column", height: "100%" }, children: [
-    /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 }, children: [
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_none") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_dist") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "angle", onClick: () => handleTypeChange("angle"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_angle") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "coord", onClick: () => handleTypeChange("coord"), style: { flex: "1 1 45%", fontSize: 12, padding: "6px 0" }, children: t("measure_coord") })
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px 12px 0 12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+    /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, justifyContent: "flex-start" }, children: [
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_none") }),
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_dist") }),
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "angle", onClick: () => handleTypeChange("angle"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_angle") }),
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "coord", onClick: () => handleTypeChange("coord"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_coord") })
     ] }) }),
-    /* @__PURE__ */ jsxs("div", { style: { fontSize: 11, color: theme.textMuted, marginBottom: 12, minHeight: 32, padding: "0 4px", fontStyle: "italic", display: "flex", alignItems: "center" }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, color: theme.textMuted, marginBottom: 8, minHeight: 24, padding: "0 4px", fontStyle: "italic", display: "flex", alignItems: "center" }, children: [
       measureType === "dist" && t("measure_instruct_dist"),
       measureType === "angle" && t("measure_instruct_angle"),
       measureType === "coord" && t("measure_instruct_coord"),
-      measureType !== "none" && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", color: theme.accent, fontWeight: "bold" }, children: "[ESC]退出" })
+      measureType !== "none" && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", color: theme.accent, fontWeight: "bold", fontSize: 12 }, children: "[ESC]退出" })
     ] }),
     /* @__PURE__ */ jsx("div", { style: {
       border: `1px solid ${theme.border}`,
@@ -100864,9 +100854,9 @@ const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory
       if (items.length === 0) return null;
       return /* @__PURE__ */ jsxs("div", { children: [
         /* @__PURE__ */ jsx("div", { style: {
-          padding: "6px 12px",
+          padding: "4px 10px",
           backgroundColor: theme.highlight,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: "bold",
           color: theme.accent,
           textTransform: "uppercase",
@@ -100875,25 +100865,23 @@ const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory
         items.map(renderMeasureItem)
       ] }, type);
     }) }),
-    /* @__PURE__ */ jsx("div", { style: { padding: "12px 0", borderTop: `1px solid ${theme.border}`, display: "flex", gap: 8, backgroundColor: theme.bg }, children: /* @__PURE__ */ jsxs(
+    /* @__PURE__ */ jsx("div", { style: { padding: "8px 0", borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "flex-end", backgroundColor: theme.bg }, children: /* @__PURE__ */ jsx(
       Button,
       {
         variant: "danger",
         styles,
         theme,
         onClick: onClear,
-        style: { flex: 1, height: 36 },
-        children: [
-          /* @__PURE__ */ jsx(IconClear, { width: 16, height: 16 }),
-          t("measure_clear")
-        ]
+        disabled: measureHistory.length === 0,
+        style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" },
+        children: t("measure_clear")
       }
     ) })
   ] }) });
 };
 const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setClipValues, clipActive, setClipActive, styles, theme }) => {
-  const SliderRow = ({ axis, label }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 28 }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }, children: [
+  const SliderRow = ({ axis, label }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16 }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }, children: [
       /* @__PURE__ */ jsx(
         Checkbox,
         {
@@ -100901,7 +100889,7 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
           checked: clipActive[axis],
           onChange: (v) => setClipActive({ ...clipActive, [axis]: v }),
           styles,
-          style: { fontWeight: "600", fontSize: 14 }
+          style: { fontWeight: "600", fontSize: 12 }
         }
       ),
       /* @__PURE__ */ jsxs("span", { style: {
@@ -100910,10 +100898,10 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
         opacity: clipActive[axis] ? 1 : 0.5,
         fontFamily: "monospace",
         background: `${theme.accent}10`,
-        padding: "3px 8px",
+        padding: "2px 6px",
         borderRadius: 4,
         border: `1px solid ${theme.accent}30`,
-        minWidth: "85px",
+        minWidth: "80px",
         textAlign: "center"
       }, children: [
         Math.round(clipValues[axis][0]),
@@ -100934,15 +100922,15 @@ const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setCli
       }
     ) })
   ] });
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 360, height: 480, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "24px" }, children: [
-    /* @__PURE__ */ jsx("div", { style: { marginBottom: 24, borderBottom: `1px solid ${theme.border}`, paddingBottom: 16 }, children: /* @__PURE__ */ jsx(
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 300, height: 380, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px" }, children: [
+    /* @__PURE__ */ jsx("div", { style: { marginBottom: 12, borderBottom: `1px solid ${theme.border}`, paddingBottom: 10 }, children: /* @__PURE__ */ jsx(
       Checkbox,
       {
         label: t("clip_enable"),
         checked: clipEnabled,
         onChange: (v) => setClipEnabled(v),
         styles,
-        style: { fontWeight: "bold", fontSize: 15 }
+        style: { fontWeight: "bold", fontSize: 12 }
       }
     ) }),
     /* @__PURE__ */ jsxs("div", { style: {
@@ -101813,7 +101801,8 @@ const ThreeViewer = ({
   initialSettings,
   initialFiles,
   onSelect: propOnSelect,
-  onLoad
+  onLoad,
+  hideDeleteModel = false
 }) => {
   const [themeMode, setThemeMode] = useState(() => {
     if (defaultTheme) return defaultTheme;
@@ -103016,7 +103005,7 @@ const ThreeViewer = ({
                       }
                     }
                   ),
-                  /* @__PURE__ */ jsx(
+                  !hideDeleteModel && /* @__PURE__ */ jsx(
                     ContextMenuItem,
                     {
                       label: t("delete_item"),

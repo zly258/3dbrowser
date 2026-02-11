@@ -38,6 +38,9 @@ export const Button: React.FC<ButtonProps> = ({
         transition: 'all 0.2s',
         border: variant === 'ghost' ? 'none' : (active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`),
         boxShadow: variant === 'ghost' ? 'none' : 'none', // 不使用默认的黑色描边/阴影
+        opacity: props.disabled ? 0.4 : 1,
+        cursor: props.disabled ? 'not-allowed' : 'pointer',
+        pointerEvents: props.disabled ? 'none' : 'auto' as any,
         ...style
     };
 
@@ -49,15 +52,15 @@ export const Button: React.FC<ButtonProps> = ({
 };
 
 export const PanelSection = ({ title, children, theme, style }: any) => (
-    <div style={{ marginBottom: 16, ...style }}>
+    <div style={{ marginBottom: 12, ...style }}>
         {title && (
             <div style={{ 
-                fontSize: 11, 
+                fontSize: 12, 
                 fontWeight: 'bold', 
                 color: theme.textMuted, 
                 textTransform: 'uppercase', 
                 letterSpacing: '0.05em',
-                marginBottom: 8,
+                marginBottom: 6,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8
