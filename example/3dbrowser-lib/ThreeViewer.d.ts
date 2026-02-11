@@ -644,7 +644,7 @@ export declare interface ThemeColors {
 
 export declare const themes: Record<'dark' | 'light', ThemeColors>;
 
-export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad }: ThreeViewerProps) => JSX.Element;
+export declare const ThreeViewer: ({ allowDragOpen, hiddenMenus, libPath, defaultTheme, defaultLang, showStats: propShowStats, showOutline: propShowOutline, showProperties: propShowProperties, initialSettings, initialFiles, onSelect: propOnSelect, onLoad, hideDeleteModel }: ThreeViewerProps) => JSX.Element;
 
 export declare interface ThreeViewerProps {
     allowDragOpen?: boolean;
@@ -659,6 +659,7 @@ export declare interface ThreeViewerProps {
     initialFiles?: (string | File) | (string | File)[];
     onSelect?: (uuid: string, object: any) => void;
     onLoad?: (manager: SceneManager) => void;
+    hideDeleteModel?: boolean;
 }
 
 export { }

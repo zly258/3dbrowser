@@ -1,4 +1,5 @@
 import React, { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
+// @ts-ignore
 import * as THREE from "three";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
@@ -33,7 +34,6 @@ interface ErrorBoundaryState {
 // --- 错误边界组件 ---
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     public state: ErrorBoundaryState;
-    public props: ErrorBoundaryProps;
 
     constructor(props: ErrorBoundaryProps) {
         super(props);
@@ -98,6 +98,7 @@ export interface ThreeViewerProps {
     initialFiles?: (string | File) | (string | File)[];
     onSelect?: (uuid: string, object: any) => void;
     onLoad?: (manager: SceneManager) => void;
+    hideDeleteModel?: boolean;
 }
 
 // --- 辅助组件 ---
@@ -137,7 +138,8 @@ export const ThreeViewer = ({
      initialSettings,
      initialFiles,
      onSelect: propOnSelect,
-     onLoad
+     onLoad,
+     hideDeleteModel = false
  }: ThreeViewerProps) => {
     // 主题状态 - 从localStorage恢复或使用prop
     const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
@@ -1316,7 +1318,7 @@ export const ThreeViewer = ({
         }
 
         // 收集所有原始模型进行导出（非优化组）
-        const modelsToExport = content.children.filter(c => !c.userData.isOptimizedGroup && c.name !== "TilesRenderer");
+        const modelsToExport = content.children.filter((c: THREE.Object3D) => !c.userData.isOptimizedGroup && c.name !== "TilesRenderer");
         if (modelsToExport.length === 0) { 
             setToast({ message: t("no_models"), type: 'info' });
             return; 
@@ -1324,7 +1326,7 @@ export const ThreeViewer = ({
 
         // 创建一个临时组用于导出，包含所有要导出的模型
         const exportGroup = new THREE.Group();
-        modelsToExport.forEach(m => exportGroup.add(m.clone()));
+        modelsToExport.forEach((m: THREE.Object3D) => exportGroup.add(m.clone()));
         
         setLoading(true);
         setProgress(0);
@@ -1449,7 +1451,7 @@ export const ThreeViewer = ({
                 showProps={showProps}
                 setShowProps={setShowProps}
                 showStats={showStats}
-                setShowStats={(v) => {
+                setShowStats={(v: boolean) => {
                     setShowStats(v);
                     localStorage.setItem('3dbrowser_showStats', String(v));
                 }}
@@ -1579,18 +1581,20 @@ export const ThreeViewer = ({
                                             setContextMenu(prev => ({ ...prev, open: false }));
                                         }}
                                     />
-                                    <ContextMenuItem 
-                                        label={t("delete_item")}
-                                        theme={theme}
-                                        disabled={!contextMenu.targetUuid}
-                                        danger={true}
-                                        hasBorder={false}
-                                        onClick={() => {
-                                            if (!contextMenu.targetUuid) return;
-                                            handleDeleteObject(contextMenu.targetUuid);
-                                            setContextMenu(prev => ({ ...prev, open: false }));
-                                        }}
-                                    />
+                                    {!hideDeleteModel && (
+                                        <ContextMenuItem 
+                                            label={t("delete_item")}
+                                            theme={theme}
+                                            disabled={!contextMenu.targetUuid}
+                                            danger={true}
+                                            hasBorder={false}
+                                            onClick={() => {
+                                                if (!contextMenu.targetUuid) return;
+                                                handleDeleteObject(contextMenu.targetUuid);
+                                                setContextMenu(prev => ({ ...prev, open: false }));
+                                            }}
+                                        />
+                                    )}
                                 </>
                             )}
                         </div>
