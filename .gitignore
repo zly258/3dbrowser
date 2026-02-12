@@ -26,3 +26,5 @@ refs/**
 electron-runtime/
 build/
 server/
+
+3dbrowser-lib/**
