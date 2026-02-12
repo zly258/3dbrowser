@@ -214,7 +214,7 @@ export class SceneManager {
             frustumSize * aspect / 2,
             frustumSize / 2,
             frustumSize / -2,
-            0.1, 200000 
+            -1000000, 1000000 
         );
         this.camera.up.set(0, 0, 1);
         this.camera.position.set(1000, 1000, 1000);
@@ -387,11 +387,11 @@ export class SceneManager {
         const dist = this.camera.position.distanceTo(this.cachedSceneSphere.center);
         
         // 增加更宽的裁剪范围，确保即便相机在模型内部或非常靠近时，也不会因为精度或计算误差导致裁剪
-        // 使用半径的 5 倍作为基础，加上到中心的距离，确保范围足够覆盖整个可能的视锥空间
-        const range = Math.max(this.cachedSceneSphere.radius * 5.0, dist + this.cachedSceneSphere.radius * 2.0);
+        // 使用半径的 20 倍作为基础，加上到中心的距离，确保范围足够覆盖整个可能的视锥空间
+        const range = Math.max(this.cachedSceneSphere.radius * 20.0, dist + this.cachedSceneSphere.radius * 5.0);
         
         // 只有当变化显著时才更新，避免每帧都触发投影矩阵更新
-        const threshold = 0.05; // 5% 的变化阈值
+        const threshold = 0.01; // 1% 的变化阈值
         if (Math.abs(this.camera.far - range) / Math.max(this.camera.far, 1) > threshold || 
             Math.abs(this.camera.near - (-range)) / Math.max(Math.abs(this.camera.near), 1) > threshold) {
             this.camera.near = -range;
@@ -2588,6 +2588,69 @@ export class SceneManager {
         }
     }
 
+    getCameraState() {
+        return {
+            position: this.camera.position.toArray(),
+            target: this.controls.target.toArray(),
+            zoom: this.camera.zoom,
+            left: this.camera.left,
+            right: this.camera.right,
+            top: this.camera.top,
+            bottom: this.camera.bottom
+        };
+    }
+
+    setCameraState(state: any) {
+        if (!state) return;
+        this.camera.position.fromArray(state.position);
+        this.controls.target.fromArray(state.target);
+        if (state.zoom !== undefined) this.camera.zoom = state.zoom;
+        if (state.left !== undefined) this.camera.left = state.left;
+        if (state.right !== undefined) this.camera.right = state.right;
+        if (state.top !== undefined) this.camera.top = state.top;
+        if (state.bottom !== undefined) this.camera.bottom = state.bottom;
+        
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+    }
+
+    // --- 测量定位逻辑 ---
+    locateMeasurement(id: string) {
+        const record = this.measureRecords.get(id);
+        if (!record) return;
+
+        // 计算测量记录的中心点
+        const box = new THREE.Box3();
+        record.group.traverse((obj) => {
+            if ((obj as any).isMesh || (obj as any).isLine || (obj as any).isSprite) {
+                obj.updateMatrixWorld();
+                if (obj.geometry) {
+                    if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
+                    const b = obj.geometry.boundingBox!.clone();
+                    b.applyMatrix4(obj.matrixWorld);
+                    box.union(b);
+                }
+            }
+        });
+
+        if (box.isEmpty()) return;
+
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+
+        // 平滑移动相机
+        this.controls.target.copy(center);
+        
+        // 调整缩放级别以适应测量结果
+        const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
+        const targetZoom = (this.camera.top - this.camera.bottom) / (maxDim * 2.5); // 留出一点边距
+        
+        this.camera.zoom = Math.min(targetZoom, 20.0); // 限制最大缩放
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+    }
+
         // --- 测量逻辑 ---
     startMeasurement(type: MeasureType) {
         this.measureType = type;
@@ -2793,8 +2856,8 @@ export class SceneManager {
         sprite.position.copy(position);
         
         // 由于 sizeAttenuation 为 false，scale 现在代表在屏幕空间占用的比例 (0.0 到 1.0)
-        // 我们设定一个合适的大小，例如占据屏幕高度的 3%
-        const baseScale = 0.035;
+        // 我们设定一个合适的大小，例如占据屏幕高度的 5%
+        const baseScale = 0.05;
         sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
         sprite.renderOrder = 1001;
         sprite.userData = { type: 'label' };

@@ -149,6 +149,9 @@ const resources: Record<Lang, Record<string, string>> = {
         error_title: "Application Error",
         error_msg: "Sorry, the application encountered an unexpected error. You can try reloading the page or contact the developer.",
         error_reload: "Reload Page",
+        viewpoint_title: "Viewpoint Management",
+        viewpoint_save: "Save Current Viewpoint",
+        viewpoint_empty: "No saved viewpoints",
     },
     zh: {
         home: "首页",
@@ -292,6 +295,9 @@ const resources: Record<Lang, Record<string, string>> = {
         error_title: "应用发生错误",
         error_msg: "抱歉，程序运行过程中遇到了未预期的错误。您可以尝试重新加载页面，或联系开发人员。",
         error_reload: "重新加载页面",
+        viewpoint_title: "视点管理",
+        viewpoint_save: "保存当前视点",
+        viewpoint_empty: "暂无保存的视点",
     }
 };
 

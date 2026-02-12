@@ -262,9 +262,10 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
             style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '8px 12px', borderBottom: `1px solid ${theme.border}`, fontSize: 12,
-                backgroundColor: highlightedId === item.id ? theme.highlight : 'transparent',
+                backgroundColor: highlightedId === item.id ? `${theme.accent}15` : 'transparent',
+                borderLeft: highlightedId === item.id ? `4px solid ${theme.accent}` : '4px solid transparent',
                 cursor: 'pointer',
-                transition: 'background-color 0.2s'
+                transition: 'all 0.2s'
             }}
             onClick={() => onHighlight && onHighlight(item.id)}
         >
@@ -372,32 +373,15 @@ export const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measure
 };
 
 export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setClipValues, clipActive, setClipActive, styles, theme }: any) => {
-    const SliderRow = ({ axis, label }: { axis: 'x'|'y'|'z', label: string }) => (
-        <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Checkbox 
-                    label={label} 
-                    checked={clipActive[axis]} 
-                    onChange={(v: boolean) => setClipActive({ ...clipActive, [axis]: v })} 
-                    styles={styles} 
-                    style={{ fontWeight: '600', fontSize: 12 }}
-                />
-                <span style={{ 
-                    fontSize: 12, 
-                    color: theme.accent, 
-                    opacity: clipActive[axis] ? 1 : 0.5, 
-                    fontFamily: 'monospace', 
-                    background: `${theme.accent}10`, 
-                    padding: '2px 6px', 
-                    borderRadius: 4, 
-                    border: `1px solid ${theme.accent}30`,
-                    minWidth: '80px',
-                    textAlign: 'center'
-                }}>
-                    {Math.round(clipValues[axis][0])}% - {Math.round(clipValues[axis][1])}%
-                </span>
-            </div>
-            <div style={{ padding: '0 4px' }}>
+    const SliderRow = ({ axis }: { axis: 'x'|'y'|'z' }) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Checkbox 
+                checked={clipActive[axis]} 
+                onChange={(v: boolean) => setClipActive({ ...clipActive, [axis]: v })} 
+                styles={styles} 
+                style={{ flexShrink: 0 }}
+            />
+            <div style={{ flex: 1, padding: '0 4px' }}>
                 <DualSlider 
                     min={0} max={100} 
                     value={clipValues[axis]} 
@@ -406,13 +390,23 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
                     disabled={!clipActive[axis]}
                 />
             </div>
+            <span style={{ 
+                fontSize: 10, 
+                color: theme.accent, 
+                opacity: clipActive[axis] ? 1 : 0.5, 
+                fontFamily: 'monospace', 
+                minWidth: '40px',
+                textAlign: 'right'
+            }}>
+                {Math.round(clipValues[axis][0])}-{Math.round(clipValues[axis][1])}%
+            </span>
         </div>
     );
 
     return (
-        <FloatingPanel title={t("clip_title")} onClose={onClose} width={300} height={380} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
-             <div style={{ padding: '16px' }}>
-                 <div style={{ marginBottom: 12, borderBottom: `1px solid ${theme.border}`, paddingBottom: 10 }}>
+        <FloatingPanel title={t("clip_title")} onClose={onClose} width={260} height={220} resizable={false} styles={styles} theme={theme} storageId="tool_clip">
+             <div style={{ padding: '12px' }}>
+                 <div style={{ marginBottom: 12, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }}>
                     <Checkbox 
                         label={t("clip_enable")} 
                         checked={clipEnabled} 
@@ -426,9 +420,9 @@ export const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues,
                      pointerEvents: clipEnabled ? 'auto' : 'none', 
                      transition: 'all 0.3s ease' 
                  }}>
-                     <SliderRow axis="x" label={t("clip_x")} />
-                     <SliderRow axis="y" label={t("clip_y")} />
-                     <SliderRow axis="z" label={t("clip_z")} />
+                     <SliderRow axis="x" />
+                     <SliderRow axis="y" />
+                     <SliderRow axis="z" />
                  </div>
              </div>
         </FloatingPanel>
@@ -472,6 +466,87 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
                 >
                     {t("export_btn")}
                 </Button>
+            </div>
+        </FloatingPanel>
+    );
+};
+
+export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onLoad, onDelete, styles, theme }: any) => {
+    return (
+        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={450} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
+            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ marginBottom: 12 }}>
+                    <Button 
+                        styles={styles} 
+                        theme={theme} 
+                        onClick={onSave}
+                        style={{ width: '100%', height: 32, fontWeight: 'bold', gap: 8 }}
+                    >
+                        <span>+</span> {t("viewpoint_save") || "保存当前视点"}
+                    </Button>
+                </div>
+
+                <div style={{ 
+                    flex: 1, 
+                    overflowY: 'auto', 
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 4,
+                    backgroundColor: theme.bg
+                }}>
+                    {viewpoints.length === 0 ? (
+                        <div style={{ padding: '40px 20px', textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>
+                            {t("viewpoint_empty") || "暂无保存的视点"}
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 10 }}>
+                            {viewpoints.map((vp: any) => (
+                                <div 
+                                    key={vp.id}
+                                    style={{ 
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        border: `1px solid ${theme.border}`,
+                                        borderRadius: 4,
+                                        overflow: 'hidden',
+                                        backgroundColor: theme.panelBg,
+                                        transition: 'transform 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                    onDoubleClick={() => onLoad(vp)}
+                                >
+                                    <img 
+                                        src={vp.image} 
+                                        alt={vp.name} 
+                                        style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }}
+                                    />
+                                    <div style={{ 
+                                        padding: '4px 8px', 
+                                        fontSize: 10, 
+                                        color: theme.text,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        backgroundColor: theme.headerBg
+                                    }}>
+                                        {vp.name}
+                                    </div>
+                                    <div 
+                                        onClick={(e) => { e.stopPropagation(); onDelete(vp.id); }}
+                                        style={{ 
+                                            position: 'absolute', top: 2, right: 2, 
+                                            backgroundColor: 'rgba(0,0,0,0.5)', color: 'white',
+                                            borderRadius: '50%', padding: 2, cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}
+                                    >
+                                        <IconClose size={10} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </FloatingPanel>
     );

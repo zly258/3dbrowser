@@ -362,7 +362,9 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
       
       // 设置实例包围盒，用于 perInstanceFrustumCulling
       if (!item.geometry.boundingBox) item.geometry.computeBoundingBox();
-      (batchedMesh as any).setBoundingBoxAt(instanceId, item.geometry.boundingBox);
+      if ((batchedMesh as any).setBoundingBoxAt) {
+        (batchedMesh as any).setBoundingBoxAt(instanceId, item.geometry.boundingBox);
+      }
       
       const color = new THREE.Color(item.color);
       batchedMesh.setColorAt(instanceId, color);

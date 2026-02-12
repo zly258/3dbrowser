@@ -10,7 +10,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { MenuBar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
@@ -189,7 +189,11 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint'>('none');
+    
+    // Viewpoint State
+    const [viewpoints, setViewpoints] = useState<any[]>([]);
+    const [currentFileSetId, setCurrentFileSetId] = useState<string>("");
     
     // Measure State
     const [measureType, setMeasureType] = useState<MeasureType>('none');
@@ -410,6 +414,79 @@ export const ThreeViewer = ({
         if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
         return mb.toFixed(1) + ' MB';
     };
+
+    // --- 视点管理逻辑 ---
+    useEffect(() => {
+        if (!currentFileSetId) {
+            setViewpoints([]);
+            return;
+        }
+        try {
+            const key = `viewpoints_${currentFileSetId}`;
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                setViewpoints(JSON.parse(saved));
+            } else {
+                setViewpoints([]);
+            }
+        } catch (e) {
+            console.error("Failed to load viewpoints", e);
+            setViewpoints([]);
+        }
+    }, [currentFileSetId]);
+
+    const handleSaveViewpoint = useCallback(() => {
+        if (!sceneMgr.current || !currentFileSetId) {
+            setToast({ message: t("no_models"), type: 'info' });
+            return;
+        }
+
+        const name = `${t("viewpoint_title")} ${viewpoints.length + 1}`;
+        const cameraState = sceneMgr.current.getCameraState();
+        
+        // 截取缩略图
+        let image = "";
+        try {
+            // 确保在截图前渲染一帧
+            sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
+            image = sceneMgr.current.canvas.toDataURL("image/jpeg", 0.7);
+        } catch (e) {
+            console.error("Failed to capture thumbnail", e);
+        }
+
+        const newVP = {
+            id: Date.now().toString(),
+            name,
+            cameraState,
+            image
+        };
+
+        const nextViewpoints = [...viewpoints, newVP];
+        setViewpoints(nextViewpoints);
+        
+        try {
+            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
+            setToast({ message: t("success"), type: 'success' });
+        } catch (e) {
+            console.error("Failed to save viewpoints to storage", e);
+        }
+    }, [viewpoints, currentFileSetId, t]);
+
+    const handleLoadViewpoint = useCallback((vp: any) => {
+        if (!sceneMgr.current || !vp.cameraState) return;
+        sceneMgr.current.setCameraState(vp.cameraState);
+        setToast({ message: `${t("loading")} ${vp.name}`, type: 'info' });
+    }, [t]);
+
+    const handleDeleteViewpoint = useCallback((id: string) => {
+        const nextViewpoints = viewpoints.filter(v => v.id !== id);
+        setViewpoints(nextViewpoints);
+        try {
+            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
+        } catch (e) {
+            console.error("Failed to delete viewpoint", e);
+        }
+    }, [viewpoints, currentFileSetId]);
 
     // 1. 使用 ResizeObserver 处理容器尺寸变化
     useEffect(() => {
@@ -1060,6 +1137,12 @@ export const ThreeViewer = ({
 
     const processFiles = async (items: (File | string)[]) => {
         if (!items.length || !sceneMgr.current) return;
+        
+        // Update current file set ID
+        const names = items.map(item => typeof item === 'string' ? item : item.name).sort();
+        const setId = names.join('|');
+        setCurrentFileSetId(setId);
+        
         console.log("[ThreeViewer] processFiles called with", items.length, "items");
         (sceneMgr.current as any).setChunkLoadingEnabled?.(true);
         (sceneMgr.current as any).setContentVisible?.(true);
@@ -1606,37 +1689,42 @@ export const ThreeViewer = ({
                     {toast && (
                         <div style={{
                             position: 'fixed',
-                            top: '140px', // 位于菜单栏下方
+                            top: '40px', 
                             left: '50%',
                             transform: 'translateX(-50%)',
-                            backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.accent : theme.panelBg),
-                            color: toast.type === 'info' ? theme.text : '#fff',
-                            padding: '12px 20px 12px 24px',
-                            borderRadius: '4px', // 稍微增加一点圆角，更现代
-                            boxShadow: `0 8px 24px rgba(0,0,0,0.25)`,
+                            backgroundColor: theme.bg,
+                            color: theme.text,
+                            padding: '6px 16px',
+                            borderRadius: '4px',
+                            boxShadow: `0 4px 12px rgba(0,0,0,0.15)`,
                             zIndex: 10000,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '12px',
-                            fontSize: '14px',
-                            borderLeft: `4px solid rgba(255,255,255,0.4)`, 
-                            animation: 'fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+                            gap: '10px',
+                            fontSize: '13px',
+                            border: `1px solid ${theme.border}`,
+                            animation: 'fadeInDown 0.3s ease-out'
                         }}>
-                            <span>{toast.message}</span>
+                            <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.success : theme.accent)
+                            }} />
+                            <span style={{ fontWeight: 500 }}>{toast.message}</span>
                             <div 
                                 onClick={() => setToast(null)}
                                 style={{ 
                                     cursor: 'pointer', 
-                                    padding: '4px', 
+                                    padding: '2px', 
                                     display: 'flex', 
-                                    borderRadius: '50%',
-                                    marginLeft: '8px',
-                                    backgroundColor: 'rgba(255,255,255,0.1)'
+                                    opacity: 0.5,
+                                    marginLeft: '4px'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
                             >
-                                <IconClose size={14} />
+                                <IconClose size={12} />
                             </div>
                         </div>
                     )}
@@ -1653,6 +1741,7 @@ export const ThreeViewer = ({
                             onHighlight={(id: string) => {
                                 setHighlightedMeasureId(id);
                                 sceneMgr.current?.highlightMeasurement(id);
+                                if (id) sceneMgr.current?.locateMeasurement(id);
                             }}
                             onDelete={(id: string) => { 
                                 sceneMgr.current?.removeMeasurement(id); 
@@ -1693,6 +1782,19 @@ export const ThreeViewer = ({
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
                             showStats={showStats} setShowStats={setShowStats}
                             styles={styles} theme={theme}
+                        />
+                    )}
+
+                    {activeTool === 'viewpoint' && (
+                        <ViewpointPanel 
+                            t={t} 
+                            viewpoints={viewpoints}
+                            onSave={handleSaveViewpoint}
+                            onLoad={handleLoadViewpoint}
+                            onDelete={handleDeleteViewpoint}
+                            onClose={() => setActiveTool('none')}
+                            styles={styles} 
+                            theme={theme} 
                         />
                     )}
                 </div>
@@ -1737,14 +1839,15 @@ export const ThreeViewer = ({
              {/* Bottom Status Bar */}
              <div style={{
                 height: '24px',
-                backgroundColor: theme.accent,
-                color: 'white', 
+                backgroundColor: theme.bg,
+                color: theme.text, 
                 display: 'flex',
                 alignItems: 'center',
                 padding: '0 12px',
                 fontSize: '11px',
                 zIndex: 1000,
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                borderTop: `1px solid ${theme.border}`
              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <span>{status}</span>
@@ -1755,28 +1858,28 @@ export const ThreeViewer = ({
                             alignItems: 'center', 
                             gap: '8px',
                             paddingLeft: '8px', 
-                            borderLeft: '1px solid rgba(255,255,255,0.3)' 
+                            borderLeft: `1px solid ${theme.border}` 
                         }}>
                             {t("loading_chunks")}: {chunkProgress.loaded} / {chunkProgress.total}
                             {chunkProgress.loaded < chunkProgress.total && (
                                 <div style={{ 
                                     width: '40px', 
                                     height: '4px', 
-                                    backgroundColor: 'rgba(255,255,255,0.2)', 
+                                    backgroundColor: theme.highlight, 
                                     borderRadius: '2px',
                                     overflow: 'hidden'
                                 }}>
                                     <div style={{ 
                                         width: `${(chunkProgress.loaded / chunkProgress.total) * 100}%`, 
                                         height: '100%', 
-                                        backgroundColor: '#fff' 
+                                        backgroundColor: theme.accent 
                                     }} />
                                 </div>
                             )}
                         </span>
                     )}
                     {selectedUuid && selectedUuids.length > 1 && (
-                        <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: '1px solid rgba(255,255,255,0.3)' }}>
+                        <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: `1px solid ${theme.border}` }}>
                             {t("selected_count") || "已选择"}: {selectedUuids.length}
                         </span>
                     )}
@@ -1795,7 +1898,7 @@ export const ThreeViewer = ({
                             gap: '10px', 
                             alignItems: 'center', 
                             paddingLeft: '12px', 
-                            borderLeft: '1px solid rgba(255,255,255,0.3)' 
+                            borderLeft: `1px solid ${theme.border}` 
                         }}>
                             <span>{t("monitor_meshes")}: {formatNumber(stats.meshes)}</span>
                             <span>{t("monitor_faces")}: {formatNumber(stats.faces)}</span>
@@ -1803,7 +1906,7 @@ export const ThreeViewer = ({
                             <span>{t("monitor_calls")}: {stats.drawCalls}</span>
                         </div>
                     )}
-                    <div style={{ width: '1px', height: '12px', backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                    <div style={{ width: '1px', height: '12px', backgroundColor: theme.border }} />
                     <div style={{ opacity: 0.9 }}>{lang === 'zh' ? 'ZH' : 'EN'}</div>
                     
                     {/* Website Title/Logo */}
@@ -1814,7 +1917,7 @@ export const ThreeViewer = ({
                         marginLeft: '8px',
                         padding: '2px 8px',
                         borderRadius: '4px',
-                        backgroundColor: 'rgba(255,255,255,0.1)'
+                        backgroundColor: theme.itemHover
                     }}>
                         <span style={{ fontWeight: '600', letterSpacing: '0.5px' }}>3D BROWSER</span>
                     </div>

@@ -111,8 +111,8 @@ interface MenuBarProps {
     t: (key: string) => string;
     styles: any;
     theme: ThemeColors;
-    themeType?: string;
-    setThemeType?: (type: string) => void;
+    themeType?: 'dark' | 'light';
+    setThemeType?: (type: 'dark' | 'light') => void;
     handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleOpenFolder?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -121,8 +121,8 @@ interface MenuBarProps {
     handleClear?: () => void;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: string;
-    setActiveTool?: (tool: string) => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;
@@ -254,6 +254,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                         <>
                             {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool?.('measure'); close(); }} styles={styles} />}
                             {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool?.('clip'); close(); }} styles={styles} />}
+                            {!isHidden('viewpoint') && <ClassicSubItem label={t('viewpoint_title')} onClick={() => { props.setActiveTool?.('viewpoint'); close(); }} styles={styles} />}
                         </>
                     )}
                 </ClassicMenuItem>
