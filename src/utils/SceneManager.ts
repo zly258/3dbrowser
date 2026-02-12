@@ -2637,16 +2637,15 @@ export class SceneManager {
 
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
+        const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
 
         // 平滑移动相机
         this.controls.target.copy(center);
         
         // 调整缩放级别以适应测量结果
-        const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
-        const targetZoom = (this.camera.top - this.camera.bottom) / (maxDim * 2.5); // 留出一点边距
+        const targetZoom = (this.camera.top - this.camera.bottom) / (maxDim * 0.5); // 进一步减小系数，靠得更近
         
-        this.camera.zoom = Math.min(targetZoom, 20.0); // 限制最大缩放
+        this.camera.zoom = Math.min(targetZoom, 100.0); // 允许更大缩放
         this.camera.updateProjectionMatrix();
         this.controls.update();
     }
@@ -2668,9 +2667,7 @@ export class SceneManager {
         }
 
         this.currentMeasurePoints.push(point);
-        // addMarker 会创建一个临时的点显示在 measureGroup 中
-        // 我们不需要在这里手动 addMarker，因为 updatePreviewLine 已经处理了点的显示
-        // 或者我们可以只在这里添加一个临时的点
+        // 临时点标记只在预览阶段显示，finalize 时会清除预览并重新生成正式点
         this.addMarker(point, this.measureGroup); 
 
         // 检查完成状态
@@ -2682,34 +2679,11 @@ export class SceneManager {
             return this.finalizeMeasurement();
         }
         
-        this.updatePreviewLine();
+        this.updateMeasurePreview(); // 统一调用预览更新
         return null;
     }
 
-    updateMeasureHover(clientX: number, clientY: number) {
-        if (this.measureType === 'none') {
-            this.tempMarker.visible = false;
-            return;
-        }
-        
-        const intersect = this.getRayIntersects(clientX, clientY);
-        if (intersect) {
-            const p = intersect.point;
-            const attr = this.tempMarker.geometry.attributes.position as THREE.BufferAttribute;
-            attr.setXYZ(0, p.x, p.y, p.z);
-            attr.needsUpdate = true;
-            this.tempMarker.visible = true;
-
-            if (this.currentMeasurePoints.length > 0) {
-                 this.updatePreviewLine(p);
-            }
-        } else {
-            this.tempMarker.visible = false;
-            if(this.previewLine) this.previewLine.visible = false;
-        }
-    }
-
-    updatePreviewLine(hoverPoint?: THREE.Vector3) {
+    private updateMeasurePreview(hoverPoint?: THREE.Vector3) {
         if (this.previewLine) {
             this.measureGroup.remove(this.previewLine);
             this.previewLine = null;
@@ -2731,6 +2705,29 @@ export class SceneManager {
         this.previewLine.computeLineDistances();
         this.previewLine.renderOrder = 998;
         this.measureGroup.add(this.previewLine);
+    }
+
+    updateMeasureHover(clientX: number, clientY: number) {
+        if (this.measureType === 'none') {
+            this.tempMarker.visible = false;
+            return;
+        }
+        
+        const intersect = this.getRayIntersects(clientX, clientY);
+        if (intersect) {
+            const p = intersect.point;
+            const attr = this.tempMarker.geometry.attributes.position as THREE.BufferAttribute;
+            attr.setXYZ(0, p.x, p.y, p.z);
+            attr.needsUpdate = true;
+            this.tempMarker.visible = true;
+
+            if (this.currentMeasurePoints.length > 0) {
+                 this.updateMeasurePreview(p);
+            }
+        } else {
+            this.tempMarker.visible = false;
+            if(this.previewLine) this.previewLine.visible = false;
+        }
     }
 
     finalizeMeasurement() {
@@ -2856,8 +2853,8 @@ export class SceneManager {
         sprite.position.copy(position);
         
         // 由于 sizeAttenuation 为 false，scale 现在代表在屏幕空间占用的比例 (0.0 到 1.0)
-        // 我们设定一个合适的大小，例如占据屏幕高度的 5%
-        const baseScale = 0.05;
+        // 设定一个合适的大小，例如占据屏幕高度的 10%
+        const baseScale = 0.5;
         sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
         sprite.renderOrder = 1001;
         sprite.userData = { type: 'label' };

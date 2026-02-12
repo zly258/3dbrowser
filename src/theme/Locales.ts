@@ -35,7 +35,7 @@ const resources: Record<Lang, Record<string, string>> = {
         cube_left: "Left",
         cube_right: "Right",
         
-        op_pick: "Pick",
+        op_pick: "Select Model",
         op_clear: "Clear",
         tool_measure: "Measure",
         tool: "Tools",
@@ -152,6 +152,7 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_title: "Viewpoint Management",
         viewpoint_save: "Save Current Viewpoint",
         viewpoint_empty: "No saved viewpoints",
+        viewpoint_loading: "Restoring viewpoint",
     },
     zh: {
         home: "首页",
@@ -182,7 +183,7 @@ const resources: Record<Lang, Record<string, string>> = {
         cube_left: "左",
         cube_right: "右",
 
-        op_pick: "选取模型",
+        op_pick: "选择模式",
         op_clear: "清空场景",
         tool: "工具",
         tool_measure: "测量工具",
@@ -298,6 +299,7 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_title: "视点管理",
         viewpoint_save: "保存当前视点",
         viewpoint_empty: "暂无保存的视点",
+        viewpoint_loading: "正在恢复视点",
     }
 };
 
