@@ -26,5 +26,3 @@ refs/**
 electron-runtime/
 build/
 server/
-
-example/**
