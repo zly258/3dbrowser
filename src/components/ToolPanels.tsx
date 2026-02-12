@@ -471,19 +471,67 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
     );
 };
 
-export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onLoad, onDelete, styles, theme }: any) => {
+export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, onLoad, onDelete, styles, theme }: any) => {
+    const [isAdding, setIsAdding] = useState(false);
+    const [newName, setNewName] = useState("");
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editName, setEditName] = useState("");
+
+    const handleStartSave = () => {
+        setIsAdding(true);
+        setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
+    };
+
+    const handleConfirmSave = () => {
+        onSave(newName);
+        setIsAdding(false);
+        setNewName("");
+    };
+
+    const handleStartEdit = (vp: any) => {
+        setEditingId(vp.id);
+        setEditName(vp.name);
+    };
+
+    const handleConfirmEdit = (id: string) => {
+        if (editName.trim()) {
+            onUpdateName(id, editName.trim());
+        }
+        setEditingId(null);
+    };
+
     return (
         <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={450} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ marginBottom: 12 }}>
-                    <Button 
-                        styles={styles} 
-                        theme={theme} 
-                        onClick={onSave}
-                        style={{ width: '100%', height: 32, fontWeight: 'bold', gap: 8 }}
-                    >
-                        <span>+</span> {t("viewpoint_save") || "保存当前视点"}
-                    </Button>
+                    {isAdding ? (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                            <input 
+                                autoFocus
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleConfirmSave()}
+                                style={{ 
+                                    flex: 1, height: 32, padding: '0 8px', 
+                                    backgroundColor: theme.bg, color: theme.text, 
+                                    border: `1px solid ${theme.accent}`, borderRadius: 4,
+                                    fontSize: 12
+                                }}
+                            />
+                            <Button styles={styles} theme={theme} onClick={handleConfirmSave} style={{ height: 32, padding: '0 12px' }}>
+                                {t("confirm") || "确定"}
+                            </Button>
+                        </div>
+                    ) : (
+                        <Button 
+                            styles={styles} 
+                            theme={theme} 
+                            onClick={handleStartSave}
+                            style={{ width: '100%', height: 32, fontWeight: 'bold', gap: 8 }}
+                        >
+                            <span>+</span> {t("viewpoint_save") || "保存当前视点"}
+                        </Button>
+                    )}
                 </div>
 
                 <div style={{ 
@@ -505,15 +553,15 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onLoad, onDelet
                                     style={{ 
                                         position: 'relative',
                                         cursor: 'pointer',
-                                        border: `1px solid ${theme.border}`,
+                                        border: `1px solid ${editingId === vp.id ? theme.accent : theme.border}`,
                                         borderRadius: 4,
                                         overflow: 'hidden',
                                         backgroundColor: theme.panelBg,
                                         transition: 'transform 0.2s'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                    onDoubleClick={() => onLoad(vp)}
+                                    onMouseEnter={(e) => !editingId && (e.currentTarget.style.transform = 'scale(1.02)')}
+                                    onMouseLeave={(e) => !editingId && (e.currentTarget.style.transform = 'scale(1)')}
+                                    onDoubleClick={() => !editingId && onLoad(vp)}
                                 >
                                     <img 
                                         src={vp.image} 
@@ -522,14 +570,40 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onLoad, onDelet
                                     />
                                     <div style={{ 
                                         padding: '4px 8px', 
-                                        fontSize: 10, 
-                                        color: theme.text,
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        backgroundColor: theme.headerBg
+                                        backgroundColor: theme.headerBg,
+                                        minHeight: 24,
+                                        display: 'flex',
+                                        alignItems: 'center'
                                     }}>
-                                        {vp.name}
+                                        {editingId === vp.id ? (
+                                            <input 
+                                                autoFocus
+                                                value={editName}
+                                                onChange={(e) => setEditName(e.target.value)}
+                                                onBlur={() => handleConfirmEdit(vp.id)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleConfirmEdit(vp.id)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ 
+                                                    width: '100%', border: 'none', background: 'transparent', 
+                                                    color: theme.text, fontSize: 10, outline: 'none',
+                                                    padding: 0
+                                                }}
+                                            />
+                                        ) : (
+                                            <div 
+                                                onClick={(e) => { e.stopPropagation(); handleStartEdit(vp); }}
+                                                style={{ 
+                                                    fontSize: 10, 
+                                                    color: theme.text,
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    flex: 1
+                                                }}
+                                            >
+                                                {vp.name}
+                                            </div>
+                                        )}
                                     </div>
                                     <div 
                                         onClick={(e) => { e.stopPropagation(); onDelete(vp.id); }}
@@ -537,7 +611,8 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onLoad, onDelet
                                             position: 'absolute', top: 2, right: 2, 
                                             backgroundColor: 'rgba(0,0,0,0.5)', color: 'white',
                                             borderRadius: '50%', padding: 2, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            zIndex: 5
                                         }}
                                     >
                                         <IconClose size={10} />

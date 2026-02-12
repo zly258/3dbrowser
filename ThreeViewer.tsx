@@ -435,13 +435,13 @@ export const ThreeViewer = ({
         }
     }, [currentFileSetId]);
 
-    const handleSaveViewpoint = useCallback(() => {
+    const handleSaveViewpoint = useCallback((customName?: string) => {
         if (!sceneMgr.current || !currentFileSetId) {
             setToast({ message: t("no_models"), type: 'info' });
             return;
         }
 
-        const name = `${t("viewpoint_title")} ${viewpoints.length + 1}`;
+        const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
         const cameraState = sceneMgr.current.getCameraState();
         
         // 截取缩略图
@@ -471,6 +471,16 @@ export const ThreeViewer = ({
             console.error("Failed to save viewpoints to storage", e);
         }
     }, [viewpoints, currentFileSetId, t]);
+
+    const handleUpdateViewpointName = useCallback((id: string, newName: string) => {
+        const nextViewpoints = viewpoints.map(v => v.id === id ? { ...v, name: newName } : v);
+        setViewpoints(nextViewpoints);
+        try {
+            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
+        } catch (e) {
+            console.error("Failed to update viewpoint name", e);
+        }
+    }, [viewpoints, currentFileSetId]);
 
     const handleLoadViewpoint = useCallback((vp: any) => {
         if (!sceneMgr.current || !vp.cameraState) return;
@@ -1790,6 +1800,7 @@ export const ThreeViewer = ({
                             t={t} 
                             viewpoints={viewpoints}
                             onSave={handleSaveViewpoint}
+                            onUpdateName={handleUpdateViewpointName}
                             onLoad={handleLoadViewpoint}
                             onDelete={handleDeleteViewpoint}
                             onClose={() => setActiveTool('none')}
