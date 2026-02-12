@@ -1,0 +1,5 @@
+node_modules/
+dist/
+!3dbrowser-lib/
+!3dbrowser-lib/dist/
+!3dbrowser-lib/dist/**
