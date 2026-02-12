@@ -16,10 +16,10 @@
   "type": "module",
   "main": "./dist/3dbrowser.umd.js",
   "module": "./dist/3dbrowser.es.js",
-  "types": "./dist/ThreeViewer.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/ThreeViewer.d.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/3dbrowser.es.js",
       "require": "./dist/3dbrowser.umd.js"
     }
@@ -31,7 +31,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && npx @microsoft/api-extractor run --local && node -e \"const fs = require('fs'); const path = require('path'); fs.rmSync('dist/src', { recursive: true, force: true }); const dest = path.resolve('example/3dbrowser-lib'); if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true }); fs.mkdirSync(dest, { recursive: true }); fs.cpSync('dist', dest, { recursive: true }); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.main = './3dbrowser.umd.js'; pkg.module = './3dbrowser.es.js'; pkg.types = './ThreeViewer.d.ts'; if (pkg.exports) { pkg.exports['.'] = { types: './ThreeViewer.d.ts', import: './3dbrowser.es.js', require: './3dbrowser.umd.js' }; } fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify(pkg, null, 2)); if (fs.existsSync('README.md')) fs.copyFileSync('README.md', path.join(dest, 'README.md')); if (fs.existsSync('LICENSE')) fs.copyFileSync('LICENSE', path.join(dest, 'LICENSE'));\"",
+    "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && node -e \"const fs = require('fs'); const path = require('path'); const dest = path.resolve('example/3dbrowser-lib'); if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true }); fs.mkdirSync(dest, { recursive: true }); fs.cpSync('dist', dest, { recursive: true }); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.main = './3dbrowser.umd.js'; pkg.module = './3dbrowser.es.js'; pkg.types = './index.d.ts'; if (pkg.exports) { pkg.exports['.'] = { types: './index.d.ts', import: './3dbrowser.es.js', require: './3dbrowser.umd.js' }; } fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify(pkg, null, 2)); if (fs.existsSync('README.md')) fs.copyFileSync('README.md', path.join(dest, 'README.md')); if (fs.existsSync('LICENSE')) fs.copyFileSync('LICENSE', path.join(dest, 'LICENSE'));\"",
     "preview": "vite preview"
   },
   "dependencies": {
