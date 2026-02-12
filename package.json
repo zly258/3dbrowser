@@ -46,54 +46,10 @@
     "web-ifc": "^0.0.74"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.0.0",
-    "concurrently": "^9.2.1",
-    "electron": "^39.2.7",
-    "electron-builder": "^26.4.0",
+    "@vitejs/plugin-react": "^5.1.4",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "wait-on": "^9.0.3"
-  },
-  "build": {
-    "electronDist": "electron-runtime",
-    "appId": "com.3dbrowser.app",
-    "productName": "3D Browser",
-    "directories": {
-      "output": "dist_electron"
-    },
-    "files": [
-      "dist/**/*",
-      "main.cjs",
-      "package.json"
-    ],
-    "asar": true,
-    "win": {
-      "signAndEditExecutable": false,
-      "target": [
-        {
-          "target": "dir",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "3D Browser"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Graphics"
-    }
+    "vite": "^6.4.1"
   }
 }
