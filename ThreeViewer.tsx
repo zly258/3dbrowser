@@ -485,7 +485,7 @@ export const ThreeViewer = ({
     const handleLoadViewpoint = useCallback((vp: any) => {
         if (!sceneMgr.current || !vp.cameraState) return;
         sceneMgr.current.setCameraState(vp.cameraState);
-        setToast({ message: `${t("loading")} ${vp.name}`, type: 'info' });
+        setToast({ message: `${t("viewpoint_loading")}: ${vp.name}`, type: 'info' });
     }, [t]);
 
     const handleDeleteViewpoint = useCallback((id: string) => {
@@ -887,11 +887,6 @@ export const ThreeViewer = ({
                         // 获取被点击物体的 UUID，用于关联测量
                         const modelUuid = (intersect.object as any).uuid;
                         const record = mgr.addMeasurePoint(intersect.point, modelUuid);
-                        if (record) {
-                            // 当前段测量完成
-                            const localizedRecord = {...record, type: record.type };
-                            setMeasureHistory(prev => [localizedRecord, ...prev]);
-                        }
                         return; // 已经处理了测量点，不再尝试选中旧测量线
                     }
                 }

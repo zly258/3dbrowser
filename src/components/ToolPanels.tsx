@@ -519,7 +519,19 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
                                 }}
                             />
                             <Button styles={styles} theme={theme} onClick={handleConfirmSave} style={{ height: 32, padding: '0 12px' }}>
-                                {t("confirm") || "确定"}
+                                {t("btn_confirm") || "确定"}
+                            </Button>
+                            <Button 
+                                styles={styles} 
+                                theme={theme} 
+                                onClick={() => setIsAdding(false)} 
+                                style={{ 
+                                    height: 32, padding: '0 12px', 
+                                    backgroundColor: 'transparent', border: `1px solid ${theme.border}`,
+                                    color: theme.text
+                                }}
+                            >
+                                {t("btn_cancel") || "取消"}
                             </Button>
                         </div>
                     ) : (
@@ -529,7 +541,7 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
                             onClick={handleStartSave}
                             style={{ width: '100%', height: 32, fontWeight: 'bold', gap: 8 }}
                         >
-                            <span>+</span> {t("viewpoint_save") || "保存当前视点"}
+                            {t("viewpoint_save") || "保存当前视点"}
                         </Button>
                     )}
                 </div>
