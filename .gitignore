@@ -27,4 +27,4 @@ electron-runtime/
 build/
 server/
 
-examples/**
+example/**
