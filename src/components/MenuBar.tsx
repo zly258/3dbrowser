@@ -10,12 +10,10 @@ interface MenuItemProps {
 
 const ClassicMenuItem = ({ label, children, styles, enabled = true }: MenuItemProps) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [hover, setHover] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const closeMenu = () => {
         setIsOpen(false);
-        setHover(false);
     };
 
     useEffect(() => {
@@ -28,8 +26,14 @@ const ClassicMenuItem = ({ label, children, styles, enabled = true }: MenuItemPr
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    const toggleMenu = () => {
+        if (enabled) {
+            setIsOpen(!isOpen);
+        }
+    };
+
     const itemStyle = {
-        ...styles.classicMenuItem(isOpen, hover),
+        ...styles.classicMenuItem(isOpen, false),
         opacity: enabled ? 1 : 0.5,
         cursor: enabled ? 'pointer' : 'not-allowed',
         pointerEvents: enabled ? 'auto' : 'none' as any,
@@ -39,20 +43,10 @@ const ClassicMenuItem = ({ label, children, styles, enabled = true }: MenuItemPr
         <div 
             ref={menuRef}
             style={{ position: 'relative', height: '100%' }}
-            onMouseEnter={() => {
-                if (enabled) {
-                    setHover(true);
-                    setIsOpen(true);
-                }
-            }}
-            onMouseLeave={() => {
-                setHover(false);
-                setIsOpen(false);
-            }}
         >
             <div 
                 style={itemStyle} 
-                onClick={() => enabled && setIsOpen(!isOpen)}
+                onClick={toggleMenu}
             >
                 {label}
             </div>

@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { IconClose, IconClear } from "../theme/Icons";
 import { Button, PanelSection, DualSlider } from "./CommonUI";
+import { DEFAULT_FONT } from "../theme/Styles";
 
 // --- 通用浮动面板 ---
 interface FloatingPanelProps {
@@ -493,7 +494,7 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
     };
 
     return (
-        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={200} resizable={false} styles={styles} theme={theme} storageId="tool_viewpoint">
+        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={300} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ marginBottom: 12 }}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -503,14 +504,15 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
                             onChange={(e) => setNewName(e.target.value)}
                             onKeyDown={handleKeyDown}
                             style={{ 
-                                flex: 1, height: 32, padding: '0 8px', 
+                                flex: 1, height: 28, padding: '0 10px', 
                                 backgroundColor: theme.bg, color: theme.text, 
-                                border: `1px solid ${theme.accent}`, borderRadius: 4,
-                                fontSize: 12
+                                border: `1px solid ${theme.border}`, borderRadius: 3,
+                                fontSize: 12, outline: 'none', fontFamily: DEFAULT_FONT,
+                                boxSizing: 'border-box',
                             }}
                             placeholder={t("viewpoint_title") || "视点名称"}
                         />
-                        <Button styles={styles} theme={theme} onClick={handleSave} style={{ height: 32, padding: '0 12px', minWidth: '60px', whiteSpace: 'nowrap' }}>
+                        <Button styles={styles} theme={theme} onClick={handleSave} style={{ height: 28, padding: '0 12px', minWidth: '60px', whiteSpace: 'nowrap', fontSize: 12 }}>
                             {t("btn_confirm") || "保存"}
                         </Button>
                     </div>
