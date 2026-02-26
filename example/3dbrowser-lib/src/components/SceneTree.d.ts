@@ -20,7 +20,6 @@ interface SceneTreeProps {
     selectedUuid: string | null;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
-    onModelContextMenu?: (uuid: string, clientX: number, clientY: number) => void;
     styles: any;
     theme: any;
 }
