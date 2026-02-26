@@ -472,162 +472,111 @@ export const ExportPanel = ({ t, onClose, onExport, styles, theme }: any) => {
 };
 
 export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, onLoad, onDelete, styles, theme }: any) => {
-    const [isAdding, setIsAdding] = useState(false);
     const [newName, setNewName] = useState("");
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editName, setEditName] = useState("");
 
-    const handleStartSave = () => {
-        setIsAdding(true);
+    // 设置默认视点名称
+    useEffect(() => {
         setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
-    };
+    }, [viewpoints.length, t]);
 
-    const handleConfirmSave = () => {
-        onSave(newName);
-        setIsAdding(false);
-        setNewName("");
-    };
-
-    const handleStartEdit = (vp: any) => {
-        setEditingId(vp.id);
-        setEditName(vp.name);
-    };
-
-    const handleConfirmEdit = (id: string) => {
-        if (editName.trim()) {
-            onUpdateName(id, editName.trim());
+    const handleSave = () => {
+        if (newName.trim()) {
+            onSave(newName.trim());
+            setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
         }
-        setEditingId(null);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSave();
+        }
     };
 
     return (
-        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={450} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
+        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={200} resizable={false} styles={styles} theme={theme} storageId="tool_viewpoint">
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ marginBottom: 12 }}>
-                    {isAdding ? (
-                        <div style={{ display: 'flex', gap: 4 }}>
-                            <input 
-                                autoFocus
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleConfirmSave()}
-                                style={{ 
-                                    flex: 1, height: 32, padding: '0 8px', 
-                                    backgroundColor: theme.bg, color: theme.text, 
-                                    border: `1px solid ${theme.accent}`, borderRadius: 4,
-                                    fontSize: 12
-                                }}
-                            />
-                            <Button styles={styles} theme={theme} onClick={handleConfirmSave} style={{ height: 32, padding: '0 12px' }}>
-                                {t("btn_confirm") || "确定"}
-                            </Button>
-                            <Button 
-                                styles={styles} 
-                                theme={theme} 
-                                onClick={() => setIsAdding(false)} 
-                                style={{ 
-                                    height: 32, padding: '0 12px', 
-                                    backgroundColor: 'transparent', border: `1px solid ${theme.border}`,
-                                    color: theme.text
-                                }}
-                            >
-                                {t("btn_cancel") || "取消"}
-                            </Button>
-                        </div>
-                    ) : (
-                        <Button 
-                            styles={styles} 
-                            theme={theme} 
-                            onClick={handleStartSave}
-                            style={{ width: '100%', height: 32, fontWeight: 'bold', gap: 8 }}
-                        >
-                            {t("viewpoint_save") || "保存当前视点"}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                        <input 
+                            autoFocus
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            style={{ 
+                                flex: 1, height: 32, padding: '0 8px', 
+                                backgroundColor: theme.bg, color: theme.text, 
+                                border: `1px solid ${theme.accent}`, borderRadius: 4,
+                                fontSize: 12
+                            }}
+                            placeholder={t("viewpoint_title") || "视点名称"}
+                        />
+                        <Button styles={styles} theme={theme} onClick={handleSave} style={{ height: 32, padding: '0 12px', minWidth: '60px', whiteSpace: 'nowrap' }}>
+                            {t("btn_confirm") || "保存"}
                         </Button>
-                    )}
+                    </div>
                 </div>
 
+                {/* 简单显示现有视点数量 */}
                 <div style={{ 
                     flex: 1, 
                     overflowY: 'auto', 
                     border: `1px solid ${theme.border}`,
                     borderRadius: 4,
-                    backgroundColor: theme.bg
+                    backgroundColor: theme.bg,
+                    padding: '12px',
+                    fontSize: '12px',
+                    color: theme.textMuted
                 }}>
                     {viewpoints.length === 0 ? (
-                        <div style={{ padding: '40px 20px', textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>
+                        <div style={{ textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>
                             {t("viewpoint_empty") || "暂无保存的视点"}
                         </div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 10 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ marginBottom: '8px', color: theme.text, fontWeight: '500' }}>
+                                {t("viewpoint_title") || "视点"} ({viewpoints.length})
+                            </div>
                             {viewpoints.map((vp: any) => (
                                 <div 
                                     key={vp.id}
                                     style={{ 
-                                        position: 'relative',
-                                        cursor: 'pointer',
-                                        border: `1px solid ${editingId === vp.id ? theme.accent : theme.border}`,
-                                        borderRadius: 4,
-                                        overflow: 'hidden',
-                                        backgroundColor: theme.panelBg,
-                                        transition: 'transform 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => !editingId && (e.currentTarget.style.transform = 'scale(1.02)')}
-                                    onMouseLeave={(e) => !editingId && (e.currentTarget.style.transform = 'scale(1)')}
-                                    onDoubleClick={() => !editingId && onLoad(vp)}
-                                >
-                                    <img 
-                                        src={vp.image} 
-                                        alt={vp.name} 
-                                        style={{ width: '100%', height: 80, objectFit: 'cover', display: 'block' }}
-                                    />
-                                    <div style={{ 
-                                        padding: '4px 8px', 
-                                        backgroundColor: theme.headerBg,
-                                        minHeight: 24,
                                         display: 'flex',
-                                        alignItems: 'center'
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '6px 8px',
+                                        borderBottom: `1px solid ${theme.border}`,
+                                        cursor: 'pointer',
+                                        borderRadius: '2px',
+                                        backgroundColor: theme.panelBg,
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                    onClick={() => onLoad(vp)}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.panelBg}
+                                >
+                                    <div style={{ 
+                                        fontSize: '11px', 
+                                        color: theme.text,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        flex: 1
                                     }}>
-                                        {editingId === vp.id ? (
-                                            <input 
-                                                autoFocus
-                                                value={editName}
-                                                onChange={(e) => setEditName(e.target.value)}
-                                                onBlur={() => handleConfirmEdit(vp.id)}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleConfirmEdit(vp.id)}
-                                                onClick={(e) => e.stopPropagation()}
-                                                style={{ 
-                                                    width: '100%', border: 'none', background: 'transparent', 
-                                                    color: theme.text, fontSize: 10, outline: 'none',
-                                                    padding: 0
-                                                }}
-                                            />
-                                        ) : (
-                                            <div 
-                                                onClick={(e) => { e.stopPropagation(); handleStartEdit(vp); }}
-                                                style={{ 
-                                                    fontSize: 10, 
-                                                    color: theme.text,
-                                                    whiteSpace: 'nowrap',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    flex: 1
-                                                }}
-                                            >
-                                                {vp.name}
-                                            </div>
-                                        )}
+                                        {vp.name}
                                     </div>
                                     <div 
                                         onClick={(e) => { e.stopPropagation(); onDelete(vp.id); }}
                                         style={{ 
-                                            position: 'absolute', top: 2, right: 2, 
-                                            backgroundColor: 'rgba(0,0,0,0.5)', color: 'white',
-                                            borderRadius: '50%', padding: 2, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            zIndex: 5
+                                            cursor: 'pointer',
+                                            color: theme.danger,
+                                            opacity: 0.7,
+                                            padding: '2px',
+                                            borderRadius: '2px',
+                                            fontSize: '10px',
+                                            marginLeft: '8px'
                                         }}
                                     >
-                                        <IconClose size={10} />
+                                        删除
                                     </div>
                                 </div>
                             ))}

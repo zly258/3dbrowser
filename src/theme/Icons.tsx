@@ -2,6 +2,7 @@ import React from "react";
 import { 
   ChevronRight, 
   ChevronDown, 
+  ChevronUp,
   File, 
   Folder, 
   Download, 
@@ -44,6 +45,7 @@ const withThemeIcon = (Icon: any, props: any) => {
 
 export const IconChevronRight = (props: any) => withThemeIcon(ChevronRight, props);
 export const IconChevronDown = (props: any) => withThemeIcon(ChevronDown, props);
+export const IconChevronUp = (props: any) => withThemeIcon(ChevronUp, props);
 
 export const IconFile = (props: any) => withThemeIcon(File, props);
 export const IconFolder = (props: any) => withThemeIcon(Folder, props);

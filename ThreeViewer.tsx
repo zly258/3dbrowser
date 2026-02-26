@@ -101,29 +101,7 @@ export interface ThreeViewerProps {
     hideDeleteModel?: boolean;
 }
 
-// --- 辅助组件 ---
-const ContextMenuItem = ({ label, onClick, theme, disabled = false, danger = false, hasBorder = true }: any) => {
-    const [hover, setHover] = useState(false);
-    return (
-        <div
-            style={{
-                padding: '10px 12px',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                borderBottom: hasBorder ? `1px solid ${theme.border}` : 'none',
-                backgroundColor: hover && !disabled ? theme.itemHover : 'transparent',
-                opacity: disabled ? 0.5 : 1,
-                color: danger ? theme.danger : theme.text,
-                fontSize: '12px',
-                transition: 'background-color 0.1s'
-            }}
-            onMouseEnter={() => !disabled && setHover(true)}
-            onMouseLeave={() => setHover(false)}
-            onClick={() => !disabled && onClick()}
-        >
-            {label}
-        </div>
-    );
-};
+
 
 // --- 主应用 ---
 export const ThreeViewer = ({ 
@@ -181,7 +159,6 @@ export const ThreeViewer = ({
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
     const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
     const [selectedProps, setSelectedProps] = useState<any>(null);
-    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; open: boolean; source: 'canvas' | 'tree'; targetUuid: string | null }>({ x: 0, y: 0, open: false, source: 'canvas', targetUuid: null });
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -441,6 +418,13 @@ export const ThreeViewer = ({
             return;
         }
 
+        // 检查场景中是否有模型
+        const hasModels = sceneMgr.current.contentGroup.children.length > 0;
+        if (!hasModels) {
+            setToast({ message: t("no_models"), type: 'info' });
+            return;
+        }
+
         const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
         const cameraState = sceneMgr.current.getCameraState();
         
@@ -655,28 +639,59 @@ export const ThreeViewer = ({
 
         const expandedMap = new Map<string, boolean>();
         const collectExpanded = (nodes: any[]) => {
-            const stack = [...(nodes || [])];
+            const stack = (nodes || []).slice();
             while (stack.length) {
                 const n = stack.pop();
                 if (!n) continue;
                 if (typeof n.uuid === 'string') expandedMap.set(n.uuid, !!n.expanded);
-                if (Array.isArray(n.children) && n.children.length) stack.push(...n.children);
+                if (Array.isArray(n.children) && n.children.length) {
+                    for (const child of n.children) {
+                        stack.push(child);
+                    }
+                }
             }
         };
 
         const convertNode = (node: any, depth = 0, isFileNode = false): any => {
-            const uuid = node.id;
-            return {
-                uuid,
-                name: node.name,
-                type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
-                depth,
-                children: (node.children || []).map((c: any) => convertNode(c, depth + 1, false)),
-                expanded: expandedMap.get(uuid) ?? false,
-                visible: node.visible !== false,
-                object: node,
-                isFileNode
-            };
+            const stack: {node: any, depth: number, isFileNode: boolean}[] = [{node, depth, isFileNode}];
+            const nodeMap = new Map<any, any>();
+            const childrenMap = new Map<any, any[]>();
+            const order: any[] = [];
+
+            // 第一遍：收集所有节点
+            while (stack.length) {
+                const {node: curr, depth: currDepth, isFileNode: currIsFileNode} = stack.pop()!;
+                if (nodeMap.has(curr)) continue; // 避免循环引用
+                const uuid = curr.id;
+                const converted = {
+                    uuid,
+                    name: curr.name,
+                    type: curr.type === 'Mesh' ? 'MESH' : 'GROUP',
+                    depth: currDepth,
+                    children: [], // 暂空
+                    expanded: expandedMap.get(uuid) ?? false,
+                    visible: curr.visible !== false,
+                    object: curr,
+                    isFileNode: currIsFileNode
+                };
+                nodeMap.set(curr, converted);
+                order.push(curr);
+                const children = curr.children || [];
+                childrenMap.set(curr, children);
+                // 子节点压栈，深度加1，isFileNode 为 false
+                for (let i = children.length - 1; i >= 0; i--) {
+                    stack.push({node: children[i], depth: currDepth + 1, isFileNode: false});
+                }
+            }
+
+            // 第二遍：构建 children 引用
+            for (const curr of order) {
+                const converted = nodeMap.get(curr);
+                const children = childrenMap.get(curr) || [];
+                converted.children = children.map(child => nodeMap.get(child)).filter(Boolean);
+            }
+
+            return nodeMap.get(node);
         };
 
         // 只显示 Root 的子节点，从而移除 Root 和 ImportedModels 这一层
@@ -920,11 +935,6 @@ export const ThreeViewer = ({
         const handleContextMenu = (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
-            setContextMenu({ x: e.clientX, y: e.clientY, open: true, source: 'canvas', targetUuid: null });
-        };
-
-        const handleGlobalClick = () => {
-            setContextMenu(prev => prev.open ? { ...prev, open: false } : prev);
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -943,14 +953,12 @@ export const ThreeViewer = ({
         canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("contextmenu", handleContextMenu);
         window.addEventListener("keydown", handleKeyDown);
-        window.addEventListener("click", handleGlobalClick);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
             canvas.removeEventListener("contextmenu", handleContextMenu);
             window.removeEventListener("keydown", handleKeyDown);
-            window.removeEventListener("click", handleGlobalClick);
         };
     }, [pickEnabled, selectedUuids, activeTool, measureType]);
 
@@ -1583,7 +1591,7 @@ export const ThreeViewer = ({
                                 selectedUuid={selectedUuid}
                                 onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
-                                onModelContextMenu={(uuid, x, y) => setContextMenu({ x, y, open: true, source: 'tree', targetUuid: uuid })}
+
                                 styles={styles}
                                 theme={theme}
                             />
@@ -1608,85 +1616,7 @@ export const ThreeViewer = ({
                 }}>
                     <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
 
-                    {contextMenu.open && (
-                        <div
-                            style={{
-                                position: 'fixed',
-                                left: contextMenu.x,
-                                top: contextMenu.y,
-                                backgroundColor: theme.panelBg,
-                                color: theme.text,
-                                border: `1px solid ${theme.border}`,
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                                zIndex: 20000,
-                                minWidth: 160
-                            }}
-                            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {contextMenu.source === 'canvas' ? (
-                                <>
-                                    <ContextMenuItem 
-                                        label={t("ctx_show_all")}
-                                        theme={theme}
-                                        onClick={() => {
-                                            sceneMgr.current?.setAllVisibility(true);
-                                            updateTree();
-                                            setContextMenu(prev => ({ ...prev, open: false }));
-                                        }}
-                                    />
-                                    <ContextMenuItem 
-                                        label={t("ctx_hide_selection")}
-                                        theme={theme}
-                                        disabled={selectedUuids.length === 0}
-                                        hasBorder={false}
-                                        onClick={() => {
-                                            if (!sceneMgr.current || selectedUuids.length === 0) return;
-                                            sceneMgr.current.hideObjects(selectedUuids);
-                                            setSelectedUuids([]); // 隐藏后清除选择
-                                            setSelectedProps(null);
-                                            updateTree();
-                                            setContextMenu(prev => ({ ...prev, open: false }));
-                                        }}
-                                    />
-                                </>
-                            ) : (
-                                <>
-                                    <ContextMenuItem 
-                                        label={t("expand_all")}
-                                        theme={theme}
-                                        onClick={() => {
-                                            setAllTreeExpanded(true);
-                                            setContextMenu(prev => ({ ...prev, open: false }));
-                                        }}
-                                    />
-                                    <ContextMenuItem 
-                                        label={t("collapse_all")}
-                                        theme={theme}
-                                        onClick={() => {
-                                            setAllTreeExpanded(false);
-                                            setContextMenu(prev => ({ ...prev, open: false }));
-                                        }}
-                                    />
-                                    {!hideDeleteModel && (
-                                        <ContextMenuItem 
-                                            label={t("delete_item")}
-                                            theme={theme}
-                                            disabled={!contextMenu.targetUuid}
-                                            danger={true}
-                                            hasBorder={false}
-                                            onClick={() => {
-                                                if (!contextMenu.targetUuid) return;
-                                                handleDeleteObject(contextMenu.targetUuid);
-                                                setContextMenu(prev => ({ ...prev, open: false }));
-                                            }}
-                                        />
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    )}
+
                     
                     <ViewCube sceneMgr={mgrInstance} theme={theme} lang={lang} />
 
