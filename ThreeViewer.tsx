@@ -776,6 +776,15 @@ export const ThreeViewer = ({
         }
     };
 
+    const handleFocusObject = (obj: any) => {
+        if (!sceneMgr.current || !obj) return;
+        const uuid = obj.uuid || obj.id;
+        if (!uuid) return;
+        sceneMgr.current.fitViewToObject(uuid);
+        sceneMgr.current.highlightObjects([uuid]);
+        setSelectedUuids([uuid]);
+    };
+
     // --- Scene Initialization ---
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -892,6 +901,13 @@ export const ThreeViewer = ({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
+        const handleMouseDown = (e: MouseEvent) => {
+            if (e.button === 1) {
+                e.preventDefault();
+                mgr.fitView();
+            }
+        };
+
         const handleClick = (e: MouseEvent) => {
             // 测量点击
             if (activeTool === 'measure') {
@@ -952,12 +968,14 @@ export const ThreeViewer = ({
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("contextmenu", handleContextMenu);
+        canvas.addEventListener("mousedown", handleMouseDown);
         window.addEventListener("keydown", handleKeyDown);
 
         return () => {
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
             canvas.removeEventListener("contextmenu", handleContextMenu);
+            canvas.removeEventListener("mousedown", handleMouseDown);
             window.removeEventListener("keydown", handleKeyDown);
         };
     }, [pickEnabled, selectedUuids, activeTool, measureType]);
@@ -1591,6 +1609,11 @@ export const ThreeViewer = ({
                                 selectedUuid={selectedUuid}
                                 onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
+                                onDelete={(obj) => {
+                                    const uuid = obj?.uuid || obj?.id;
+                                    if (uuid) handleDeleteObject(uuid);
+                                }}
+                                onFocus={(obj) => handleFocusObject(obj)}
 
                                 styles={styles}
                                 theme={theme}
@@ -1821,36 +1844,53 @@ export const ThreeViewer = ({
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    {/* 操作提示 */}
                     <div style={{ display: 'flex', gap: '10px', opacity: 0.85 }}>
                         <span>{t("tips_rotate")}</span>
                         <span>{t("tips_pan")}</span>
                         <span>{t("tips_zoom")}</span>
                     </div>
-                    
                     {showStats && (
                         <div style={{ 
                             display: 'flex', 
                             gap: '10px', 
                             alignItems: 'center', 
-                            paddingLeft: '12px', 
-                            borderLeft: `1px solid ${theme.border}` 
                         }}>
                             <span>{t("monitor_meshes")}: {formatNumber(stats.meshes)}</span>
                             <span>{t("monitor_faces")}: {formatNumber(stats.faces)}</span>
                             <span>{t("monitor_mem")}: {formatMemory(stats.memory)}</span>
-                            <span>{t("monitor_calls")}: {stats.drawCalls}</span>
                         </div>
                     )}
+                    <div 
+                        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+                        style={{ 
+                            cursor: 'pointer', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px',
+                            backgroundColor: theme.itemHover,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                        }}
+                        title={themeMode === 'dark' ? 'Light' : 'Dark'}
+                    >
+                        <span>{themeMode === 'dark' ? '☀' : '☾'}</span>
+                    </div>
+                    <div 
+                        onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                        style={{ 
+                            cursor: 'pointer', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px',
+                            backgroundColor: theme.itemHover,
+                        }}
+                    >
+                        {lang === 'zh' ? 'EN' : '中文'}
+                    </div>
                     <div style={{ width: '1px', height: '12px', backgroundColor: theme.border }} />
-                    <div style={{ opacity: 0.9 }}>{lang === 'zh' ? 'ZH' : 'EN'}</div>
-                    
-                    {/* Website Title/Logo */}
                     <div style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        gap: '8px', 
-                        marginLeft: '8px',
+                        gap: '8px',
                         padding: '2px 8px',
                         borderRadius: '4px',
                         backgroundColor: theme.itemHover

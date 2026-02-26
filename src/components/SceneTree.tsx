@@ -79,16 +79,53 @@ interface SceneTreeProps {
     selectedUuid: string | null;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
+    onDelete?: (obj: any) => void;
+    onFocus?: (obj: any) => void;
     styles: any;
     theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({ 
-    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility,
+    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus,
     styles, theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
+    const [menuHover, setMenuHover] = useState<string | null>(null);
+    
+    const expandAll = () => {
+        const expand = (nodes: TreeNode[]): TreeNode[] => {
+            return nodes.map(n => ({
+                ...n,
+                expanded: n.children.length > 0,
+                children: expand(n.children)
+            }));
+        };
+        setTreeRoot(prev => expand(prev));
+    };
+
+    const collapseAll = () => {
+        const collapse = (nodes: TreeNode[]): TreeNode[] => {
+            return nodes.map(n => ({
+                ...n,
+                expanded: false,
+                children: collapse(n.children)
+            }));
+        };
+        setTreeRoot(prev => collapse(prev));
+    };
+
+    const handleContextMenu = (e: React.MouseEvent, node: TreeNode) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY, node });
+    };
+
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
+    }, []);
     
     // 过滤树结构的辅助函数
     const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
@@ -176,8 +213,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                     paddingLeft: 8,
                                 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
+                                onDoubleClick={() => onFocus?.(node.object)}
                                 onMouseEnter={() => setHoveredUuid(node.uuid)}
                                 onMouseLeave={() => setHoveredUuid(null)}
+                                onContextMenu={(e) => handleContextMenu(e, node)}
                         >
                             {/* Connection Lines */}
                             {node.depth > 0 && (
@@ -236,6 +275,68 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 </div>
                 </div>
             </div>
+            {contextMenu && (
+                <div style={{
+                    position: 'fixed',
+                    left: contextMenu.x,
+                    top: contextMenu.y,
+                    backgroundColor: theme.panelBg,
+                    border: `1px solid ${theme.border}`,
+                    boxShadow: theme.bg === '#ffffff' ? '0 2px 8px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.4)',
+                    zIndex: 1000,
+                    minWidth: '120px',
+                    padding: '4px 0',
+                    borderRadius: '4px',
+                }}>
+                    <div 
+                        style={{ 
+                            padding: '6px 16px', 
+                            fontSize: '12px', 
+                            color: theme.text, 
+                            cursor: 'pointer', 
+                            backgroundColor: menuHover === 'expand' ? theme.itemHover : 'transparent' 
+                        }}
+                        onMouseEnter={() => setMenuHover('expand')}
+                        onMouseLeave={() => setMenuHover(null)}
+                        onClick={() => { expandAll(); setContextMenu(null); }}
+                    >
+                        {t("expand_all")}
+                    </div>
+                    <div 
+                        style={{ 
+                            padding: '6px 16px', 
+                            fontSize: '12px', 
+                            color: theme.text, 
+                            cursor: 'pointer', 
+                            backgroundColor: menuHover === 'collapse' ? theme.itemHover : 'transparent' 
+                        }}
+                        onMouseEnter={() => setMenuHover('collapse')}
+                        onMouseLeave={() => setMenuHover(null)}
+                        onClick={() => { collapseAll(); setContextMenu(null); }}
+                    >
+                        {t("collapse_all")}
+                    </div>
+                    {contextMenu.node.isFileNode && (
+                        <>
+                            <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                            <div 
+                                style={{ 
+                                    padding: '6px 16px', 
+                                    fontSize: '12px', 
+                                    color: theme.text, 
+                                    cursor: 'pointer', 
+                                    backgroundColor: menuHover === 'delete' ? theme.itemHover : 'transparent' 
+                                }}
+                                onMouseEnter={() => setMenuHover('delete')}
+                                onMouseLeave={() => setMenuHover(null)}
+                                onClick={() => { onDelete?.(contextMenu.node.object); setContextMenu(null); }}
+                            >
+                                {t("delete_item")}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

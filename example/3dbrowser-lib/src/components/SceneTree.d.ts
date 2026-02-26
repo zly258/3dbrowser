@@ -20,6 +20,8 @@ interface SceneTreeProps {
     selectedUuid: string | null;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
+    onDelete?: (obj: any) => void;
+    onFocus?: (obj: any) => void;
     styles: any;
     theme: any;
 }

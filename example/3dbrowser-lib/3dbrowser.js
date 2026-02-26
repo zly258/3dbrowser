@@ -4176,6 +4176,7 @@ const resources = {
     failed: "Failed",
     processing: "Processing",
     no_selection: "No selection",
+    no_models: "No model loaded",
     no_measurements: "No measurements",
     search_nodes: "Search nodes...",
     search_props: "Search properties...",
@@ -4330,6 +4331,7 @@ const resources = {
     failed: "失败",
     processing: "处理中",
     no_selection: "未选择对象",
+    no_models: "未加载模型",
     no_measurements: "无测量结果",
     search_nodes: "搜索节点...",
     search_props: "搜索属性...",
@@ -4445,11 +4447,9 @@ const getTranslation = (lang, key) => {
 
 const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [hover, setHover] = useState(false);
   const menuRef = useRef(null);
   const closeMenu = () => {
     setIsOpen(false);
-    setHover(false);
   };
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -4460,8 +4460,13 @@ const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+  const toggleMenu = () => {
+    if (enabled) {
+      setIsOpen(!isOpen);
+    }
+  };
   const itemStyle = {
-    ...styles.classicMenuItem(isOpen, hover),
+    ...styles.classicMenuItem(isOpen, false),
     opacity: enabled ? 1 : 0.5,
     cursor: enabled ? "pointer" : "not-allowed",
     pointerEvents: enabled ? "auto" : "none"
@@ -4471,22 +4476,12 @@ const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
     {
       ref: menuRef,
       style: { position: "relative", height: "100%" },
-      onMouseEnter: () => {
-        if (enabled) {
-          setHover(true);
-          setIsOpen(true);
-        }
-      },
-      onMouseLeave: () => {
-        setHover(false);
-        setIsOpen(false);
-      },
       children: [
         /* @__PURE__ */ jsx(
           "div",
           {
             style: itemStyle,
-            onClick: () => enabled && setIsOpen(!isOpen),
+            onClick: toggleMenu,
             children: label
           }
         ),
@@ -4705,7 +4700,7 @@ const MenuBar = (props) => {
 
 const iconSize = 18;
 const iconStrokeWidth = 1.5;
-const createIcon = (pathD, props = {}) => {
+const createIcon = (paths, props = {}) => {
   const { size, color, ...rest } = props;
   return /* @__PURE__ */ jsx(
     "svg",
@@ -4719,14 +4714,20 @@ const createIcon = (pathD, props = {}) => {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       ...rest,
-      children: pathD
+      children: paths
     }
   );
 };
-const IconChevronRight = (props) => createIcon("<polyline points='9 18 15 12 9 6' />", props);
-const IconChevronDown = (props) => createIcon("<polyline points='6 9 12 15 18 9' />", props);
-const IconChevronUp = (props) => createIcon("<polyline points='18 15 12 9 6 15' />", props);
-const IconClose = (props) => createIcon("<line x1='18' y1='6' x2='6' y2='18'></line><line x1='6' y1='6' x2='18' y2='18'></line>", props);
+const IconChevronRight = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "9 18 15 12 9 6" }), props);
+const IconChevronDown = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "6 9 12 15 18 9" }), props);
+const IconChevronUp = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "18 15 12 9 6 15" }), props);
+const IconClose = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
+    /* @__PURE__ */ jsx("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
+  ] }),
+  props
+);
 
 const Button = ({
   children,
@@ -5340,7 +5341,7 @@ const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, onLoad, 
       handleSave();
     }
   };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("viewpoint_title") || "视点管理", onClose, width: 280, height: 200, resizable: false, styles, theme, storageId: "tool_viewpoint", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("viewpoint_title") || "视点管理", onClose, width: 280, height: 300, resizable: true, styles, theme, storageId: "tool_viewpoint", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
     /* @__PURE__ */ jsx("div", { style: { marginBottom: 12 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4 }, children: [
       /* @__PURE__ */ jsx(
         "input",
@@ -5351,18 +5352,21 @@ const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, onLoad, 
           onKeyDown: handleKeyDown,
           style: {
             flex: 1,
-            height: 32,
-            padding: "0 8px",
+            height: 28,
+            padding: "0 10px",
             backgroundColor: theme.bg,
             color: theme.text,
-            border: `1px solid ${theme.accent}`,
-            borderRadius: 4,
-            fontSize: 12
+            border: `1px solid ${theme.border}`,
+            borderRadius: 3,
+            fontSize: 12,
+            outline: "none",
+            fontFamily: DEFAULT_FONT,
+            boxSizing: "border-box"
           },
           placeholder: t("viewpoint_title") || "视点名称"
         }
       ),
-      /* @__PURE__ */ jsx(Button, { styles, theme, onClick: handleSave, style: { height: 32, padding: "0 12px", minWidth: "60px", whiteSpace: "nowrap" }, children: t("btn_confirm") || "保存" })
+      /* @__PURE__ */ jsx(Button, { styles, theme, onClick: handleSave, style: { height: 28, padding: "0 12px", minWidth: "60px", whiteSpace: "nowrap", fontSize: 12 }, children: t("btn_confirm") || "保存" })
     ] }) }),
     /* @__PURE__ */ jsx("div", { style: {
       flex: 1,
@@ -5453,11 +5457,44 @@ const SceneTree = ({
   selectedUuid,
   onSelect,
   onToggleVisibility,
+  onDelete,
+  onFocus,
   styles,
   theme
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [hoveredUuid, setHoveredUuid] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [menuHover, setMenuHover] = useState(null);
+  const expandAll = () => {
+    const expand = (nodes) => {
+      return nodes.map((n) => ({
+        ...n,
+        expanded: n.children.length > 0,
+        children: expand(n.children)
+      }));
+    };
+    setTreeRoot((prev) => expand(prev));
+  };
+  const collapseAll = () => {
+    const collapse = (nodes) => {
+      return nodes.map((n) => ({
+        ...n,
+        expanded: false,
+        children: collapse(n.children)
+      }));
+    };
+    setTreeRoot((prev) => collapse(prev));
+  };
+  const handleContextMenu = (e, node) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, node });
+  };
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, []);
   const filterTree = (nodes, query) => {
     if (!query) return nodes;
     const lowercaseQuery = query.toLowerCase();
@@ -5534,8 +5571,10 @@ const SceneTree = ({
           paddingLeft: 8
         },
         onClick: () => onSelect(node.uuid, node.object),
+        onDoubleClick: () => onFocus?.(node.object),
         onMouseEnter: () => setHoveredUuid(node.uuid),
         onMouseLeave: () => setHoveredUuid(null),
+        onContextMenu: (e) => handleContextMenu(e, node),
         children: [
           node.depth > 0 && /* @__PURE__ */ jsxs("div", { style: { display: "flex", height: "100%", alignItems: "center", flexShrink: 0 }, children: [
             node.parentIsLast?.map((isLast, i) => /* @__PURE__ */ jsx("div", { style: {
@@ -5584,7 +5623,80 @@ const SceneTree = ({
         ]
       },
       node.uuid
-    )) }) }) })
+    )) }) }) }),
+    contextMenu && /* @__PURE__ */ jsxs("div", { style: {
+      position: "fixed",
+      left: contextMenu.x,
+      top: contextMenu.y,
+      backgroundColor: theme.panelBg,
+      border: `1px solid ${theme.border}`,
+      boxShadow: theme.bg === "#ffffff" ? "0 2px 8px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.4)",
+      zIndex: 1e3,
+      minWidth: "120px",
+      padding: "4px 0",
+      borderRadius: "4px"
+    }, children: [
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          style: {
+            padding: "6px 16px",
+            fontSize: "12px",
+            color: theme.text,
+            cursor: "pointer",
+            backgroundColor: menuHover === "expand" ? theme.itemHover : "transparent"
+          },
+          onMouseEnter: () => setMenuHover("expand"),
+          onMouseLeave: () => setMenuHover(null),
+          onClick: () => {
+            expandAll();
+            setContextMenu(null);
+          },
+          children: t("expand_all")
+        }
+      ),
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          style: {
+            padding: "6px 16px",
+            fontSize: "12px",
+            color: theme.text,
+            cursor: "pointer",
+            backgroundColor: menuHover === "collapse" ? theme.itemHover : "transparent"
+          },
+          onMouseEnter: () => setMenuHover("collapse"),
+          onMouseLeave: () => setMenuHover(null),
+          onClick: () => {
+            collapseAll();
+            setContextMenu(null);
+          },
+          children: t("collapse_all")
+        }
+      ),
+      contextMenu.node.isFileNode && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: {
+              padding: "6px 16px",
+              fontSize: "12px",
+              color: theme.text,
+              cursor: "pointer",
+              backgroundColor: menuHover === "delete" ? theme.itemHover : "transparent"
+            },
+            onMouseEnter: () => setMenuHover("delete"),
+            onMouseLeave: () => setMenuHover(null),
+            onClick: () => {
+              onDelete?.(contextMenu.node.object);
+              setContextMenu(null);
+            },
+            children: t("delete_item")
+          }
+        )
+      ] })
+    ] })
   ] });
 };
 
@@ -6785,6 +6897,48 @@ const ThreeViewer = ({
     sceneMgr.current.setObjectVisibility(uuid, visible);
     updateTree();
   };
+  const handleDeleteObject = (uuid) => {
+    if (!sceneMgr.current) return;
+    const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
+    const nodes = sceneMgr.current.getStructureNodes(uuid);
+    if (obj || nodes) {
+      const name = obj?.name || nodes?.[0]?.name || "Item";
+      setConfirmState({
+        isOpen: true,
+        title: t("delete_item"),
+        message: `${t("confirm_delete")} "${name}"?`,
+        action: async () => {
+          setLoading(true);
+          setStatus(t("delete_item") + "...");
+          try {
+            await sceneMgr.current?.removeModel(uuid);
+            setSelectedUuids((prev) => {
+              const next = prev.filter((id) => id !== uuid);
+              sceneMgr.current?.highlightObjects(next);
+              if (next.length === 0) setSelectedProps(null);
+              return next;
+            });
+            updateTree();
+            setStatus(t("ready"));
+            setToast({ message: t("success"), type: "success" });
+          } catch (error) {
+            console.error("删除对象失败:", error);
+            setToast({ message: t("failed") + ": " + (error instanceof Error ? error.message : String(error)), type: "error" });
+          } finally {
+            setLoading(false);
+          }
+        }
+      });
+    }
+  };
+  const handleFocusObject = (obj) => {
+    if (!sceneMgr.current || !obj) return;
+    const uuid = obj.uuid || obj.id;
+    if (!uuid) return;
+    sceneMgr.current.fitViewToObject(uuid);
+    sceneMgr.current.highlightObjects([uuid]);
+    setSelectedUuids([uuid]);
+  };
   useEffect(() => {
     if (!canvasRef.current) return;
     const manager = new SceneManager(canvasRef.current);
@@ -6872,6 +7026,12 @@ const ThreeViewer = ({
     if (!mgr) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const handleMouseDown = (e) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        mgr.fitView();
+      }
+    };
     const handleClick = (e) => {
       if (activeTool === "measure") {
         if (measureType !== "none") {
@@ -6921,11 +7081,13 @@ const ThreeViewer = ({
     canvas.addEventListener("click", handleClick);
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("contextmenu", handleContextMenu);
+    canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("contextmenu", handleContextMenu);
+      canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [pickEnabled, selectedUuids, activeTool, measureType]);
@@ -7462,6 +7624,11 @@ const ThreeViewer = ({
                 selectedUuid,
                 onSelect: (_uuid, obj) => handleSelect(obj),
                 onToggleVisibility: handleToggleVisibility,
+                onDelete: (obj) => {
+                  const uuid = obj?.uuid || obj?.id;
+                  if (uuid) handleDeleteObject(uuid);
+                },
+                onFocus: (obj) => handleFocusObject(obj),
                 styles,
                 theme
               }
@@ -7712,9 +7879,7 @@ const ThreeViewer = ({
             showStats && /* @__PURE__ */ jsxs("div", { style: {
               display: "flex",
               gap: "10px",
-              alignItems: "center",
-              paddingLeft: "12px",
-              borderLeft: `1px solid ${theme.border}`
+              alignItems: "center"
             }, children: [
               /* @__PURE__ */ jsxs("span", { children: [
                 t("monitor_meshes"),
@@ -7730,20 +7895,43 @@ const ThreeViewer = ({
                 t("monitor_mem"),
                 ": ",
                 formatMemory(stats.memory)
-              ] }),
-              /* @__PURE__ */ jsxs("span", { children: [
-                t("monitor_calls"),
-                ": ",
-                stats.drawCalls
               ] })
             ] }),
+            /* @__PURE__ */ jsx(
+              "div",
+              {
+                onClick: () => setThemeMode(themeMode === "dark" ? "light" : "dark"),
+                style: {
+                  cursor: "pointer",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  backgroundColor: theme.itemHover,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                },
+                title: themeMode === "dark" ? "Light" : "Dark",
+                children: /* @__PURE__ */ jsx("span", { children: themeMode === "dark" ? "☀" : "☾" })
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              "div",
+              {
+                onClick: () => setLang(lang === "zh" ? "en" : "zh"),
+                style: {
+                  cursor: "pointer",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  backgroundColor: theme.itemHover
+                },
+                children: lang === "zh" ? "EN" : "中文"
+              }
+            ),
             /* @__PURE__ */ jsx("div", { style: { width: "1px", height: "12px", backgroundColor: theme.border } }),
-            /* @__PURE__ */ jsx("div", { style: { opacity: 0.9 }, children: lang === "zh" ? "ZH" : "EN" }),
             /* @__PURE__ */ jsx("div", { style: {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              marginLeft: "8px",
               padding: "2px 8px",
               borderRadius: "4px",
               backgroundColor: theme.itemHover
