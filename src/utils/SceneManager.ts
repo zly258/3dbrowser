@@ -1504,7 +1504,7 @@ export class SceneManager {
             // 设置实例包围盒，用于 perInstanceFrustumCulling
             const geo = geometries[inst.geoIdx];
             if (!geo.boundingBox) geo.computeBoundingBox();
-            if (geo.boundingBox) (bm as any).setBoundingBoxAt(instId, geo.boundingBox);
+            if (geo.boundingBox && (bm as any).setBoundingBoxAt) (bm as any).setBoundingBoxAt(instId, geo.boundingBox);
             
             const bimId = inst.bimId;
             const key = `${originalUuid}::${bimId}`;

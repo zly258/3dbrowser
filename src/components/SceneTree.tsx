@@ -79,14 +79,13 @@ interface SceneTreeProps {
     selectedUuid: string | null;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
-    onModelContextMenu?: (uuid: string, clientX: number, clientY: number) => void;
     styles: any;
     theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({ 
     t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility,
-    onModelContextMenu, styles, theme 
+    styles, theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
@@ -179,12 +178,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 onClick={() => onSelect(node.uuid, node.object)}
                                 onMouseEnter={() => setHoveredUuid(node.uuid)}
                                 onMouseLeave={() => setHoveredUuid(null)}
-                                onContextMenu={(e) => {
-                                    if (!node.isFileNode || !onModelContextMenu) return;
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    onModelContextMenu(node.uuid, e.clientX, e.clientY);
-                                }}
                         >
                             {/* Connection Lines */}
                             {node.depth > 0 && (

@@ -72,6 +72,7 @@ function App() {
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or File objects to load on mount |
 | `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
 | `onLoad` | `(manager: SceneManager) => void` | - | Callback when the scene manager is initialized |
+| `hideDeleteModel` | `boolean` | `false` | Hide delete model button |
 
 ### SceneManager
 
@@ -169,6 +170,7 @@ function App() {
 | `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的文件（URL 或 File 对象） |
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
 | `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
+| `hideDeleteModel` | `boolean` | `false` | 隐藏删除模型按钮 |
 
 ## 许可证
 
