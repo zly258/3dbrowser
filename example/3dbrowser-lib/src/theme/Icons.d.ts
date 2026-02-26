@@ -1,5 +1,6 @@
 export declare const IconChevronRight: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconChevronDown: (props: any) => import("react/jsx-runtime").JSX.Element;
+export declare const IconChevronUp: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconFile: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconFolder: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconExport: (props: any) => import("react/jsx-runtime").JSX.Element;

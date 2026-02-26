@@ -13,12 +13,18 @@ export default defineConfig(() => {
       })],
       assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.lmb', '**/*.lmbz', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges'],
       optimizeDeps: {
-        exclude: ['web-ifc']
+        exclude: ['web-ifc', '3d-tiles-renderer', 'occt-import-js']
       },
       build: {
         target: 'esnext',
-        minify: false,
-        chunkSizeWarningLimit: 1000, // 提高警告阈值到 1MB
+        minify: 'terser',
+        terserOptions: {
+          compress: {
+            drop_console: false,
+            drop_debugger: true
+          }
+        },
+        chunkSizeWarningLimit: 2000,
         lib: {
           entry: 'ThreeViewer.tsx',
           name: 'ThreeBrowser',
@@ -26,8 +32,37 @@ export default defineConfig(() => {
           formats: ['es']
         },
         rollupOptions: {
-          external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'three'],
+          external: [
+            'react',
+            'react-dom',
+            'react-dom/client',
+            'react/jsx-runtime',
+            'three',
+            '3d-tiles-renderer',
+            'occt-import-js',
+            'web-ifc'
+          ],
           output: {
+            manualChunks: {
+              'loaders': [
+                'three/examples/jsm/loaders/GLTFLoader.js',
+                'three/examples/jsm/loaders/FBXLoader.js',
+                'three/examples/jsm/loaders/OBJLoader.js',
+                'three/examples/jsm/loaders/STLLoader.js',
+                'three/examples/jsm/loaders/PLYLoader.js',
+                'three/examples/jsm/loaders/3MFLoader.js',
+                'three/examples/jsm/exporters/GLTFExporter.js',
+                'three/examples/jsm/controls/OrbitControls.js',
+                'three/examples/jsm/utils/BufferGeometryUtils.js'
+              ],
+              'utils': [
+                './src/utils/exportLMB.ts',
+                './src/utils/exportGLB.ts',
+                './src/utils/converter.ts',
+                './src/utils/threeDTiles.ts',
+                './src/utils/octree.ts'
+              ]
+            },
             globals: {
               react: 'React',
               'react-dom': 'ReactDOM',

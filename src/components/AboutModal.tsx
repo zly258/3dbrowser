@@ -22,8 +22,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, styl
         { name: "react-dom", version: "^19.2.0", description: "React DOM renderer" },
         { name: "3d-tiles-renderer", version: "0.3.31", description: "3D Tiles rendering" },
         { name: "web-ifc", version: "^0.0.74", description: "IFC file parser" },
-        { name: "occt-import-js", version: "^0.0.23", description: "CAD file import" },
-        { name: "lucide-react", version: "^0.562.0", description: "Icon library" }
+        { name: "occt-import-js", version: "^0.0.23", description: "CAD file import" }
     ];
 
 

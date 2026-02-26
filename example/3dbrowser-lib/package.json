@@ -1,7 +1,7 @@
 {
   "name": "@zhangly1403/3dbrowser",
   "private": false,
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A high-performance 3D model browser based on Three.js, supporting IFC, 3D Tiles, GLB, and more.",
   "keywords": [
     "threejs",
@@ -16,32 +16,33 @@
   "type": "module",
   "main": "./3dbrowser.js",
   "module": "./3dbrowser.js",
-  "types": "./index.d.ts",
+  "types": "./ThreeViewer.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
+      "types": "./ThreeViewer.d.ts",
       "import": "./3dbrowser.js",
       "require": "./3dbrowser.js"
     }
   },
   "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
+    "3dbrowser.js",
+    "loaders-CUgi9oyM.js",
+    "utils-CbdbJT3N.js",
+    "ThreeViewer.d.ts",
+    "assets",
+    "libs",
+    "src"
   ],
   "scripts": {
     "dev": "vite",
     "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck",
     "preview": "vite preview"
   },
-  "dependencies": {
+  "peerDependencies": {
     "3d-tiles-renderer": "0.3.31",
-    "lucide-react": "^0.562.0",
     "occt-import-js": "^0.0.23",
-    "pako": "^2.1.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "terser": "^5.44.1",
     "three": "^0.181.2",
     "web-ifc": "^0.0.74"
   },
