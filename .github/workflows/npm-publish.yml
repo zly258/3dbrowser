@@ -33,6 +33,14 @@ jobs:
           npx tsc -p tsconfig.lib.json --skipLibCheck
 
       - name: Publish to npm
+        if: ${{ secrets.NPM_TOKEN != '' }}
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Missing NPM token hint
+        if: ${{ secrets.NPM_TOKEN == '' }}
+        run: |
+          echo "NPM_TOKEN is not configured."
+          echo "Create an npm Automation token (Publish scope) and save it as GitHub Actions secret NPM_TOKEN."
+          exit 1
