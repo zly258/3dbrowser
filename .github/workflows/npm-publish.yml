@@ -21,7 +21,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://registry.npmjs.org'
           cache: npm
 
       - name: Install dependencies
@@ -32,9 +31,13 @@ jobs:
           npx vite build
           npx tsc -p tsconfig.lib.json --skipLibCheck
 
-      - name: Publish to npm
+      - name: Ensure tokenless publish config
+        run: |
+          rm -f "$HOME/.npmrc" .npmrc
+
+      - name: Publish to npm with Trusted Publishing (OIDC)
         run: npm publish --access public --provenance
         env:
-          # Keep backward compatibility for teams still using token-based publish.
-          # For npm Trusted Publishing, this can be omitted and OIDC will be used.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Force OIDC path and prevent fallback to token auth (which can require OTP/EOTP).
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
