@@ -1,0 +1,43 @@
+name: Publish Package to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: |
+          npx vite build
+          npx tsc -p tsconfig.lib.json --skipLibCheck
+
+      - name: Ensure tokenless publish config
+        run: |
+          rm -f "$HOME/.npmrc" .npmrc
+
+      - name: Publish to npm with Trusted Publishing (OIDC)
+        run: npm publish --access public --provenance
+        env:
+          # Force OIDC path and prevent fallback to token auth (which can require OTP/EOTP).
+          NODE_AUTH_TOKEN: ''
+          NPM_TOKEN: ''
