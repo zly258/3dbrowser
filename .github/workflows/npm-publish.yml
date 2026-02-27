@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -32,6 +33,8 @@ jobs:
           npx tsc -p tsconfig.lib.json --skipLibCheck
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
+          # Keep backward compatibility for teams still using token-based publish.
+          # For npm Trusted Publishing, this can be omitted and OIDC will be used.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
