@@ -14,6 +14,13 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Paths */
+    "baseUrl": ".",
+    "paths": {
+      "@zhangly1403/3dbrowser": ["./3dbrowser-lib"],
+      "@zhangly1403/3dbrowser/*": ["./3dbrowser-lib/*"]
+    },
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

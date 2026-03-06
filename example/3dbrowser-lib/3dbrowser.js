@@ -7026,12 +7026,6 @@ const ThreeViewer = ({
     if (!mgr) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const handleMouseDown = (e) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        mgr.fitView();
-      }
-    };
     const handleClick = (e) => {
       if (activeTool === "measure") {
         if (measureType !== "none") {
@@ -7081,13 +7075,11 @@ const ThreeViewer = ({
     canvas.addEventListener("click", handleClick);
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("contextmenu", handleContextMenu);
-    canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("contextmenu", handleContextMenu);
-      canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [pickEnabled, selectedUuids, activeTool, measureType]);
