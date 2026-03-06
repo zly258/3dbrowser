@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
-import React, { useState, useRef, useEffect, useMemo, useCallback, Component } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Component } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
@@ -3738,7 +3738,7 @@ const createGlobalStyle = (theme) => `
 `;
 const createStyles = (theme) => ({
   // 桌面端 / 通用
-  container: { display: "flex", flexDirection: "column", height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none", overflow: "hidden" },
+  container: { display: "flex", flexDirection: "column", height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none", overflow: "hidden", position: "relative" },
   // 传统菜单样式
   classicMenuBar: {
     display: "flex",
@@ -3782,6 +3782,69 @@ const createStyles = (theme) => ({
     justifyContent: "space-between",
     backgroundColor: hover ? theme.itemHover : "transparent"
   }),
+  toolbarBar: {
+    position: "absolute",
+    bottom: "8px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.panelBg,
+    border: `1px solid ${theme.border}`,
+    borderRadius: "8px",
+    padding: "2px 4px",
+    height: "48px",
+    gap: "2px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+    zIndex: 1e3,
+    WebkitAppRegion: "no-drag"
+  },
+  toolbarGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1px",
+    padding: "0 4px",
+    borderRight: `1px solid ${theme.border}`,
+    height: "100%"
+  },
+  toolbarGroupLast: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1px",
+    padding: "0 4px",
+    height: "100%"
+  },
+  toolbarBtn: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    padding: "4px 10px",
+    height: "48px",
+    minWidth: "52px",
+    gap: "2px",
+    fontSize: "10px",
+    color: theme.text,
+    cursor: "pointer",
+    backgroundColor: "transparent",
+    border: "none",
+    borderRadius: "4px",
+    transition: "background-color 0.1s"
+  },
+  toolbarBtnActive: {
+    backgroundColor: theme.highlight
+  },
+  toolbarIcon: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  toolbarLabel: {
+    fontSize: "10px",
+    color: theme.text,
+    whiteSpace: "nowrap"
+  },
   statusBar: {
     height: "24px",
     backgroundColor: "#ffffff",
@@ -3804,22 +3867,6 @@ const createStyles = (theme) => ({
     gap: "4px",
     fontFamily: "'Segoe UI', monospace",
     opacity: 0.9
-  },
-  toolbarBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "32px",
-    height: "32px",
-    borderRadius: "0px",
-    cursor: "pointer",
-    color: theme.textMuted,
-    backgroundColor: "transparent",
-    transition: "all 0.1s ease",
-    border: "none",
-    outline: "none",
-    position: "relative",
-    WebkitAppRegion: "no-drag"
   },
   toolbarBtnHover: {
     backgroundColor: theme.itemHover,
@@ -4248,6 +4295,22 @@ const resources = {
     st_lang: "Language",
     st_import_settings: "Import Settings",
     st_theme: "Theme",
+    st_menu_mode: "Menu Mode",
+    menu_mode_menu: "Menu",
+    menu_mode_toolbar: "Toolbar",
+    tb_file: "File",
+    tb_folder: "Folder",
+    tb_export: "Export",
+    tb_clear: "Clear",
+    tb_fit: "Fit",
+    tb_view: "View",
+    tb_model: "Model",
+    tb_props: "Props",
+    tb_pick: "Pick",
+    tb_measure: "Measure",
+    tb_clip: "Clip",
+    tb_settings: "Set",
+    tb_about: "About",
     st_monitor: "Performance Panel",
     st_instancing: "Instancing Render",
     st_viewport: "Viewport",
@@ -4402,6 +4465,22 @@ const resources = {
     st_lang: "界面语言",
     st_import_settings: "导入设置",
     st_theme: "界面主题",
+    st_menu_mode: "菜单模式",
+    menu_mode_menu: "菜单",
+    menu_mode_toolbar: "工具栏",
+    tb_file: "文件",
+    tb_folder: "目录",
+    tb_export: "导出",
+    tb_clear: "清空",
+    tb_fit: "充满",
+    tb_view: "视图",
+    tb_model: "模型",
+    tb_props: "属性",
+    tb_pick: "选择",
+    tb_measure: "测量",
+    tb_clip: "剖切",
+    tb_settings: "设置",
+    tb_about: "关于",
     st_monitor: "性能面板",
     st_instancing: "实例化渲染",
     st_viewport: "视口设置",
@@ -4444,6 +4523,385 @@ const resources = {
 const getTranslation = (lang, key) => {
   return resources[lang][key] || key;
 };
+
+const Button = ({
+  children,
+  variant = "primary",
+  active,
+  styles,
+  theme,
+  style,
+  ...props
+}) => {
+  const getVariantStyles = () => {
+    switch (variant) {
+      case "primary":
+        return active ? styles.btnActive : styles.btn;
+      case "danger":
+        return { ...styles.btn, backgroundColor: theme.danger, borderColor: theme.danger, color: "white" };
+      case "ghost":
+        return { ...styles.btn, backgroundColor: "transparent", borderColor: "transparent", boxShadow: "none" };
+      default:
+        return styles.btn;
+    }
+  };
+  const baseStyle = {
+    ...getVariantStyles(),
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    transition: "all 0.2s",
+    border: variant === "ghost" ? "none" : active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
+    boxShadow: variant === "ghost" ? "none" : "none",
+    // 不使用默认的黑色描边/阴影
+    opacity: props.disabled ? 0.4 : 1,
+    cursor: props.disabled ? "not-allowed" : "pointer",
+    pointerEvents: props.disabled ? "none" : "auto",
+    ...style
+  };
+  return /* @__PURE__ */ jsx("button", { style: baseStyle, ...props, children });
+};
+const ImageButton = ({
+  icon,
+  label,
+  active,
+  styles,
+  theme,
+  style,
+  ...props
+}) => {
+  const [hover, setHover] = React.useState(false);
+  const baseStyle = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    padding: "4px 10px",
+    height: "44px",
+    minWidth: "48px",
+    gap: "1px",
+    fontSize: "10px",
+    color: theme?.text || "#333",
+    cursor: props.disabled ? "not-allowed" : "pointer",
+    backgroundColor: active ? styles?.toolbarBtnActive?.backgroundColor || "#e0e0e0" : hover ? theme?.itemHover || "#f0f0f0" : "transparent",
+    border: "none",
+    borderRadius: "4px",
+    transition: "background-color 0.1s",
+    opacity: props.disabled ? 0.4 : 1,
+    pointerEvents: props.disabled ? "none" : "auto",
+    ...style
+  };
+  const iconStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "2px"
+  };
+  const labelStyle = {
+    fontSize: "10px",
+    color: theme?.text || "#333",
+    whiteSpace: "nowrap",
+    marginBottom: "1px"
+  };
+  return /* @__PURE__ */ jsxs(
+    "button",
+    {
+      style: baseStyle,
+      ...props,
+      onMouseEnter: () => setHover(true),
+      onMouseLeave: () => setHover(false),
+      children: [
+        /* @__PURE__ */ jsx("div", { style: iconStyle, children: icon }),
+        label && /* @__PURE__ */ jsx("div", { style: labelStyle, children: label })
+      ]
+    }
+  );
+};
+const PanelSection = ({ title, children, theme, style }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 12, ...style }, children: [
+  title && /* @__PURE__ */ jsxs("div", { style: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: theme.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 6,
+    display: "flex",
+    alignItems: "center",
+    gap: 8
+  }, children: [
+    title,
+    /* @__PURE__ */ jsx("div", { style: { flex: 1, height: 1, background: theme.border, opacity: 0.5 } })
+  ] }),
+  children
+] });
+const SLIDER_TRACK_HEIGHT = 4;
+const SLIDER_THUMB_SIZE = 14;
+const Slider = ({ min, max, step = 1, value, onChange, theme, disabled, style }) => {
+  return /* @__PURE__ */ jsxs("div", { style: {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    height: 32,
+    padding: "0 4px",
+    opacity: disabled ? 0.5 : 1,
+    ...style
+  }, children: [
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "range",
+        min,
+        max,
+        step,
+        value,
+        disabled,
+        onChange: (e) => onChange(parseFloat(e.target.value)),
+        style: {
+          flex: 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+          height: SLIDER_TRACK_HEIGHT,
+          appearance: "none",
+          WebkitAppearance: "none",
+          background: theme.border,
+          borderRadius: SLIDER_TRACK_HEIGHT / 2,
+          outline: "none"
+        }
+      }
+    ),
+    /* @__PURE__ */ jsx("style", { dangerouslySetInnerHTML: { __html: `
+                input[type=range]::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    height: ${SLIDER_THUMB_SIZE}px;
+                    width: ${SLIDER_THUMB_SIZE}px;
+                    border-radius: 50%;
+                    background: #fff;
+                    cursor: pointer;
+                    border: 2px solid ${theme.accent};
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    margin-top: 0;
+                }
+                input[type=range]::-moz-range-thumb {
+                    height: ${SLIDER_THUMB_SIZE}px;
+                    width: ${SLIDER_THUMB_SIZE}px;
+                    border-radius: 50%;
+                    background: #fff;
+                    cursor: pointer;
+                    border: 2px solid ${theme.accent};
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                }
+            ` } })
+  ] });
+};
+const DualSlider = ({ min, max, value, onChange, theme, disabled, style }) => {
+  const trackRef = React.useRef(null);
+  const getPercentage = (val) => (val - min) / (max - min) * 100;
+  const handleMouseDown = (index) => (e) => {
+    if (disabled || e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startVal = value[index];
+    const trackWidth = trackRef.current?.getBoundingClientRect().width || 1;
+    const onMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      const dx = moveEvent.clientX - startX;
+      const diff = dx / trackWidth * (max - min);
+      let newVal = startVal + diff;
+      newVal = Math.max(min, Math.min(max, newVal));
+      const nextValue = [value[0], value[1]];
+      if (index === 0) {
+        nextValue[0] = Math.min(newVal, value[1]);
+      } else {
+        nextValue[1] = Math.max(newVal, value[0]);
+      }
+      onChange(nextValue);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+  return /* @__PURE__ */ jsxs("div", { ref: trackRef, style: {
+    position: "relative",
+    width: "100%",
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+    padding: "0 4px",
+    ...style
+  }, children: [
+    /* @__PURE__ */ jsx("div", { style: {
+      position: "absolute",
+      left: 4,
+      right: 4,
+      height: SLIDER_TRACK_HEIGHT,
+      background: theme.border,
+      borderRadius: SLIDER_TRACK_HEIGHT / 2
+    } }),
+    /* @__PURE__ */ jsx("div", { style: {
+      position: "absolute",
+      left: `calc(4px + ${getPercentage(value[0])}%)`,
+      width: `calc(${getPercentage(value[1]) - getPercentage(value[0])}%)`,
+      height: SLIDER_TRACK_HEIGHT,
+      background: theme.accent,
+      borderRadius: SLIDER_TRACK_HEIGHT / 2
+    } }),
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        onMouseDown: handleMouseDown(0),
+        style: {
+          position: "absolute",
+          left: `calc(4px + ${getPercentage(value[0])}% - ${SLIDER_THUMB_SIZE / 2}px)`,
+          width: SLIDER_THUMB_SIZE,
+          height: SLIDER_THUMB_SIZE,
+          background: "white",
+          borderRadius: "50%",
+          cursor: disabled ? "not-allowed" : "pointer",
+          boxShadow: `0 1px 3px rgba(0,0,0,0.2)`,
+          zIndex: 2,
+          border: `2px solid ${theme.accent}`
+        }
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        onMouseDown: handleMouseDown(1),
+        style: {
+          position: "absolute",
+          left: `calc(4px + ${getPercentage(value[1])}% - ${SLIDER_THUMB_SIZE / 2}px)`,
+          width: SLIDER_THUMB_SIZE,
+          height: SLIDER_THUMB_SIZE,
+          background: "white",
+          borderRadius: "50%",
+          cursor: disabled ? "not-allowed" : "pointer",
+          boxShadow: `0 1px 3px rgba(0,0,0,0.2)`,
+          zIndex: 2,
+          border: `2px solid ${theme.accent}`
+        }
+      }
+    )
+  ] });
+};
+
+const iconSize = 18;
+const iconStrokeWidth = 1.5;
+const createIcon = (paths, props = {}) => {
+  const { size, color, ...rest } = props;
+  return /* @__PURE__ */ jsx(
+    "svg",
+    {
+      width: size || iconSize,
+      height: size || iconSize,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: color || "currentColor",
+      strokeWidth: iconStrokeWidth,
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      ...rest,
+      children: paths
+    }
+  );
+};
+const IconChevronRight = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "9 18 15 12 9 6" }), props);
+const IconChevronDown = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "6 9 12 15 18 9" }), props);
+const IconChevronUp = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "18 15 12 9 6 15" }), props);
+const IconClose = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
+    /* @__PURE__ */ jsx("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
+  ] }),
+  props
+);
+const IconFile = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" }),
+    /* @__PURE__ */ jsx("polyline", { points: "14 2 14 8 20 8" })
+  ] }),
+  props
+);
+const IconMaximize = (props) => createIcon(
+  /* @__PURE__ */ jsx(Fragment, { children: /* @__PURE__ */ jsx("path", { d: "M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" }) }),
+  props
+);
+const IconRuler = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M21.21 15.89A10 10 0 1 1 8 2.83" }),
+    /* @__PURE__ */ jsx("path", { d: "M22 12A10 10 0 0 0 12 2v10z" })
+  ] }),
+  props
+);
+const IconScissors = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("circle", { cx: "6", cy: "6", r: "3" }),
+    /* @__PURE__ */ jsx("circle", { cx: "6", cy: "18", r: "3" }),
+    /* @__PURE__ */ jsx("line", { x1: "20", y1: "4", x2: "8.12", y2: "15.88" }),
+    /* @__PURE__ */ jsx("line", { x1: "14.47", y1: "14.48", x2: "20", y2: "20" }),
+    /* @__PURE__ */ jsx("line", { x1: "8.12", y1: "8.12", x2: "12", y2: "12" })
+  ] }),
+  props
+);
+const IconSettings = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "3" }),
+    /* @__PURE__ */ jsx("path", { d: "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" })
+  ] }),
+  props
+);
+const IconInfo = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "10" }),
+    /* @__PURE__ */ jsx("line", { x1: "12", y1: "16", x2: "12", y2: "12" }),
+    /* @__PURE__ */ jsx("line", { x1: "12", y1: "8", x2: "12.01", y2: "8" })
+  ] }),
+  props
+);
+const IconMousePointer = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" }),
+    /* @__PURE__ */ jsx("path", { d: "M13 13l6 6" })
+  ] }),
+  props
+);
+const IconBox = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" }),
+    /* @__PURE__ */ jsx("polyline", { points: "3.27 6.96 12 12.01 20.73 6.96" }),
+    /* @__PURE__ */ jsx("line", { x1: "12", y1: "22.08", x2: "12", y2: "12" })
+  ] }),
+  props
+);
+const IconList = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("line", { x1: "8", y1: "6", x2: "21", y2: "6" }),
+    /* @__PURE__ */ jsx("line", { x1: "8", y1: "12", x2: "21", y2: "12" }),
+    /* @__PURE__ */ jsx("line", { x1: "8", y1: "18", x2: "21", y2: "18" }),
+    /* @__PURE__ */ jsx("line", { x1: "3", y1: "6", x2: "3.01", y2: "6" }),
+    /* @__PURE__ */ jsx("line", { x1: "3", y1: "12", x2: "3.01", y2: "12" }),
+    /* @__PURE__ */ jsx("line", { x1: "3", y1: "18", x2: "3.01", y2: "18" })
+  ] }),
+  props
+);
+const IconCamera = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" }),
+    /* @__PURE__ */ jsx("circle", { cx: "12", cy: "13", r: "4" })
+  ] }),
+  props
+);
+const IconEye = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }),
+    /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "3" })
+  ] }),
+  props
+);
 
 const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -4496,7 +4954,8 @@ const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }) => 
     ...styles.classicMenuSubItem(hover),
     opacity: enabled ? 1 : 0.5,
     cursor: enabled ? "pointer" : "not-allowed",
-    pointerEvents: enabled ? "auto" : "none"
+    pointerEvents: enabled ? "auto" : "none",
+    outline: "none"
   };
   return /* @__PURE__ */ jsx(
     "div",
@@ -4510,6 +4969,10 @@ const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }) => 
       },
       onMouseEnter: () => enabled && setHover(true),
       onMouseLeave: () => setHover(false),
+      tabIndex: 0,
+      onKeyDown: (e) => {
+        if (e.key === "Enter" || e.key === " ") onClick();
+      },
       children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
         checked !== void 0 && /* @__PURE__ */ jsx("div", { style: styles.checkboxCustom(checked), children: checked && /* @__PURE__ */ jsx("div", { style: styles.checkboxCheckmark, children: "✓" }) }),
         label
@@ -4697,244 +5160,405 @@ const MenuBar = (props) => {
     ] }) })
   ] });
 };
-
-const iconSize = 18;
-const iconStrokeWidth = 1.5;
-const createIcon = (paths, props = {}) => {
-  const { size, color, ...rest } = props;
-  return /* @__PURE__ */ jsx(
-    "svg",
-    {
-      width: size || iconSize,
-      height: size || iconSize,
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: color || "currentColor",
-      strokeWidth: iconStrokeWidth,
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      ...rest,
-      children: paths
-    }
-  );
-};
-const IconChevronRight = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "9 18 15 12 9 6" }), props);
-const IconChevronDown = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "6 9 12 15 18 9" }), props);
-const IconChevronUp = (props) => createIcon(/* @__PURE__ */ jsx("polyline", { points: "18 15 12 9 6 15" }), props);
-const IconClose = (props) => createIcon(
-  /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
-    /* @__PURE__ */ jsx("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
-  ] }),
-  props
-);
-
-const Button = ({
-  children,
-  variant = "primary",
-  active,
-  styles,
-  theme,
-  style,
-  ...props
-}) => {
-  const getVariantStyles = () => {
-    switch (variant) {
-      case "primary":
-        return active ? styles.btnActive : styles.btn;
-      case "danger":
-        return { ...styles.btn, backgroundColor: theme.danger, borderColor: theme.danger, color: "white" };
-      case "ghost":
-        return { ...styles.btn, backgroundColor: "transparent", borderColor: "transparent", boxShadow: "none" };
-      default:
-        return styles.btn;
-    }
+const Toolbar = (props) => {
+  const {
+    t,
+    styles,
+    theme,
+    hiddenMenus = []
+  } = props;
+  const isHidden = (id) => (hiddenMenus || []).includes(id);
+  const fileInputRef = React.useRef(null);
+  const folderInputRef = React.useRef(null);
+  const batchConvertInputRef = React.useRef(null);
+  const [openMenu, setOpenMenu] = useState(null);
+  const menuRef = React.useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+  const toggleMenu = (menuId) => {
+    setOpenMenu(openMenu === menuId ? null : menuId);
   };
-  const baseStyle = {
-    ...getVariantStyles(),
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "6px",
-    transition: "all 0.2s",
-    border: variant === "ghost" ? "none" : active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
-    boxShadow: variant === "ghost" ? "none" : "none",
-    // 不使用默认的黑色描边/阴影
-    opacity: props.disabled ? 0.4 : 1,
-    cursor: props.disabled ? "not-allowed" : "pointer",
-    pointerEvents: props.disabled ? "none" : "auto",
-    ...style
+  const renderDropdown = (menuId, items) => {
+    if (openMenu !== menuId) return null;
+    return /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: menuRef,
+        style: {
+          position: "absolute",
+          bottom: "100%",
+          left: 0,
+          marginBottom: "4px",
+          backgroundColor: theme.panelBg,
+          border: `1px solid ${theme.border}`,
+          boxShadow: "0 -4px 12px rgba(0,0,0,0.15)",
+          zIndex: 2e3,
+          minWidth: "140px",
+          padding: "4px 0"
+        },
+        children: items
+      }
+    );
   };
-  return /* @__PURE__ */ jsx("button", { style: baseStyle, ...props, children });
-};
-const PanelSection = ({ title, children, theme, style }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 12, ...style }, children: [
-  title && /* @__PURE__ */ jsxs("div", { style: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: theme.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    marginBottom: 6,
-    display: "flex",
-    alignItems: "center",
-    gap: 8
-  }, children: [
-    title,
-    /* @__PURE__ */ jsx("div", { style: { flex: 1, height: 1, background: theme.border, opacity: 0.5 } })
-  ] }),
-  children
-] });
-const SLIDER_TRACK_HEIGHT = 4;
-const SLIDER_THUMB_SIZE = 14;
-const Slider = ({ min, max, step = 1, value, onChange, theme, disabled, style }) => {
-  return /* @__PURE__ */ jsxs("div", { style: {
-    display: "flex",
-    alignItems: "center",
-    width: "100%",
-    height: 32,
-    padding: "0 4px",
-    opacity: disabled ? 0.5 : 1,
-    ...style
-  }, children: [
+  return /* @__PURE__ */ jsxs("div", { style: styles.toolbarBar, children: [
     /* @__PURE__ */ jsx(
       "input",
       {
-        type: "range",
-        min,
-        max,
-        step,
-        value,
-        disabled,
-        onChange: (e) => onChange(parseFloat(e.target.value)),
-        style: {
-          flex: 1,
-          cursor: disabled ? "not-allowed" : "pointer",
-          height: SLIDER_TRACK_HEIGHT,
-          appearance: "none",
-          WebkitAppearance: "none",
-          background: theme.border,
-          borderRadius: SLIDER_TRACK_HEIGHT / 2,
-          outline: "none"
-        }
-      }
-    ),
-    /* @__PURE__ */ jsx("style", { dangerouslySetInnerHTML: { __html: `
-                input[type=range]::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    height: ${SLIDER_THUMB_SIZE}px;
-                    width: ${SLIDER_THUMB_SIZE}px;
-                    border-radius: 50%;
-                    background: #fff;
-                    cursor: pointer;
-                    border: 2px solid ${theme.accent};
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                    margin-top: 0;
-                }
-                input[type=range]::-moz-range-thumb {
-                    height: ${SLIDER_THUMB_SIZE}px;
-                    width: ${SLIDER_THUMB_SIZE}px;
-                    border-radius: 50%;
-                    background: #fff;
-                    cursor: pointer;
-                    border: 2px solid ${theme.accent};
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                }
-            ` } })
-  ] });
-};
-const DualSlider = ({ min, max, value, onChange, theme, disabled, style }) => {
-  const trackRef = React.useRef(null);
-  const getPercentage = (val) => (val - min) / (max - min) * 100;
-  const handleMouseDown = (index) => (e) => {
-    if (disabled || e.button !== 0) return;
-    e.preventDefault();
-    const startX = e.clientX;
-    const startVal = value[index];
-    const trackWidth = trackRef.current?.getBoundingClientRect().width || 1;
-    const onMove = (moveEvent) => {
-      moveEvent.preventDefault();
-      const dx = moveEvent.clientX - startX;
-      const diff = dx / trackWidth * (max - min);
-      let newVal = startVal + diff;
-      newVal = Math.max(min, Math.min(max, newVal));
-      const nextValue = [value[0], value[1]];
-      if (index === 0) {
-        nextValue[0] = Math.min(newVal, value[1]);
-      } else {
-        nextValue[1] = Math.max(newVal, value[0]);
-      }
-      onChange(nextValue);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
-  return /* @__PURE__ */ jsxs("div", { ref: trackRef, style: {
-    position: "relative",
-    width: "100%",
-    height: 32,
-    display: "flex",
-    alignItems: "center",
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-    padding: "0 4px",
-    ...style
-  }, children: [
-    /* @__PURE__ */ jsx("div", { style: {
-      position: "absolute",
-      left: 4,
-      right: 4,
-      height: SLIDER_TRACK_HEIGHT,
-      background: theme.border,
-      borderRadius: SLIDER_TRACK_HEIGHT / 2
-    } }),
-    /* @__PURE__ */ jsx("div", { style: {
-      position: "absolute",
-      left: `calc(4px + ${getPercentage(value[0])}%)`,
-      width: `calc(${getPercentage(value[1]) - getPercentage(value[0])}%)`,
-      height: SLIDER_TRACK_HEIGHT,
-      background: theme.accent,
-      borderRadius: SLIDER_TRACK_HEIGHT / 2
-    } }),
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        onMouseDown: handleMouseDown(0),
-        style: {
-          position: "absolute",
-          left: `calc(4px + ${getPercentage(value[0])}% - ${SLIDER_THUMB_SIZE / 2}px)`,
-          width: SLIDER_THUMB_SIZE,
-          height: SLIDER_THUMB_SIZE,
-          background: "white",
-          borderRadius: "50%",
-          cursor: disabled ? "not-allowed" : "pointer",
-          boxShadow: `0 1px 3px rgba(0,0,0,0.2)`,
-          zIndex: 2,
-          border: `2px solid ${theme.accent}`
-        }
+        type: "file",
+        ref: fileInputRef,
+        style: { display: "none" },
+        multiple: true,
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleOpenFiles
       }
     ),
     /* @__PURE__ */ jsx(
-      "div",
+      "input",
       {
-        onMouseDown: handleMouseDown(1),
-        style: {
-          position: "absolute",
-          left: `calc(4px + ${getPercentage(value[1])}% - ${SLIDER_THUMB_SIZE / 2}px)`,
-          width: SLIDER_THUMB_SIZE,
-          height: SLIDER_THUMB_SIZE,
-          background: "white",
-          borderRadius: "50%",
-          cursor: disabled ? "not-allowed" : "pointer",
-          boxShadow: `0 1px 3px rgba(0,0,0,0.2)`,
-          zIndex: 2,
-          border: `2px solid ${theme.accent}`
-        }
+        type: "file",
+        ref: batchConvertInputRef,
+        style: { display: "none" },
+        multiple: true,
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleBatchConvert
       }
-    )
+    ),
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "file",
+        ref: folderInputRef,
+        style: { display: "none" },
+        ...{ webkitdirectory: "", directory: "" },
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleOpenFolder
+      }
+    ),
+    !isHidden("file") && /* @__PURE__ */ jsx("div", { style: styles.toolbarGroup, children: /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
+      /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconFile, { width: 16, height: 16 }),
+          label: t("tb_file"),
+          active: openMenu === "file",
+          onClick: () => toggleMenu("file"),
+          styles,
+          theme
+        }
+      ),
+      renderDropdown("file", /* @__PURE__ */ jsxs(Fragment, { children: [
+        !isHidden("open_file") && /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+            onClick: () => {
+              fileInputRef.current?.click();
+              setOpenMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+            onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+            children: t("menu_open_file")
+          }
+        ),
+        !isHidden("open_folder") && /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+            onClick: () => {
+              folderInputRef.current?.click();
+              setOpenMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+            onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+            children: t("menu_open_folder")
+          }
+        ),
+        !isHidden("export") && /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+            onClick: () => {
+              props.setActiveTool?.("export");
+              setOpenMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+            onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+            children: t("menu_export")
+          }
+        ),
+        !isHidden("clear") && /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+            onClick: () => {
+              props.handleClear?.();
+              setOpenMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+            onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+            children: t("op_clear")
+          }
+        )
+      ] }))
+    ] }) }),
+    !isHidden("view") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroup, children: [
+      /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconMaximize, { width: 16, height: 16 }),
+          label: t("tb_fit"),
+          onClick: () => props.sceneMgr?.fitView(),
+          styles,
+          theme
+        }
+      ),
+      /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
+        /* @__PURE__ */ jsx(
+          ImageButton,
+          {
+            icon: /* @__PURE__ */ jsx(IconEye, { width: 16, height: 16 }),
+            label: t("tb_view"),
+            active: openMenu === "views",
+            onClick: () => toggleMenu("views"),
+            styles,
+            theme
+          }
+        ),
+        renderDropdown("views", /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("front");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_front")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("back");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_back")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("top");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_top")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("bottom");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_bottom")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("left");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_left")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("right");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_right")
+            }
+          ),
+          /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("se");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_se")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("sw");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_sw")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("ne");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_ne")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+              onClick: () => {
+                props.handleView?.("nw");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+              children: t("view_nw")
+            }
+          )
+        ] }))
+      ] })
+    ] }),
+    !isHidden("interface") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroup, children: [
+      !isHidden("outline") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconBox, { width: 16, height: 16 }),
+          label: t("tb_model"),
+          active: props.showOutline,
+          onClick: () => props.setShowOutline?.(!props.showOutline),
+          styles,
+          theme
+        }
+      ),
+      !isHidden("props") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconList, { width: 16, height: 16 }),
+          label: t("tb_props"),
+          active: props.showProps,
+          onClick: () => props.setShowProps?.(!props.showProps),
+          styles,
+          theme
+        }
+      ),
+      !isHidden("pick") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconMousePointer, { width: 16, height: 16 }),
+          label: t("tb_pick"),
+          active: props.pickEnabled,
+          onClick: () => props.setPickEnabled?.(!props.pickEnabled),
+          styles,
+          theme
+        }
+      )
+    ] }),
+    !isHidden("tool") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroup, children: [
+      !isHidden("measure") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconRuler, { width: 16, height: 16 }),
+          label: t("tb_measure"),
+          active: props.activeTool === "measure",
+          onClick: () => props.setActiveTool?.(props.activeTool === "measure" ? "none" : "measure"),
+          styles,
+          theme
+        }
+      ),
+      !isHidden("clip") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconScissors, { width: 16, height: 16 }),
+          label: t("tb_clip"),
+          active: props.activeTool === "clip",
+          onClick: () => props.setActiveTool?.(props.activeTool === "clip" ? "none" : "clip"),
+          styles,
+          theme
+        }
+      ),
+      !isHidden("viewpoint") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconCamera, { width: 16, height: 16 }),
+          label: t("tb_view"),
+          active: props.activeTool === "viewpoint",
+          onClick: () => props.setActiveTool?.(props.activeTool === "viewpoint" ? "none" : "viewpoint"),
+          styles,
+          theme
+        }
+      )
+    ] }),
+    !isHidden("settings_panel") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroupLast, children: [
+      !isHidden("settings") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconSettings, { width: 16, height: 16 }),
+          label: t("tb_settings"),
+          active: props.activeTool === "settings",
+          onClick: () => props.setActiveTool?.(props.activeTool === "settings" ? "none" : "settings"),
+          styles,
+          theme
+        }
+      ),
+      !isHidden("about") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconInfo, { width: 16, height: 16 }),
+          label: t("tb_about"),
+          onClick: () => props.onOpenAbout?.(),
+          styles,
+          theme
+        }
+      )
+    ] })
   ] });
 };
 
@@ -5719,6 +6343,8 @@ const SettingsPanel = ({
   setThemeMode,
   showStats,
   setShowStats,
+  menuMode,
+  setMenuMode,
   styles,
   theme
 }) => {
@@ -5769,6 +6395,40 @@ const SettingsPanel = ({
                 color: themeMode === "dark" ? "white" : theme.text
               },
               children: t("theme_dark")
+            }
+          )
+        ] }) }),
+        /* @__PURE__ */ jsx(Row, { label: t("st_menu_mode"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, background: theme.bg, padding: 2, borderRadius: 0, border: `1px solid ${theme.border}` }, children: [
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              onClick: () => setMenuMode("menu"),
+              style: {
+                padding: "4px 12px",
+                borderRadius: 0,
+                border: "none",
+                fontSize: 11,
+                cursor: "pointer",
+                background: menuMode === "menu" ? theme.accent : "transparent",
+                color: menuMode === "menu" ? "white" : theme.text
+              },
+              children: t("menu_mode_menu")
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              onClick: () => setMenuMode("toolbar"),
+              style: {
+                padding: "4px 12px",
+                borderRadius: 0,
+                border: "none",
+                fontSize: 11,
+                cursor: "pointer",
+                background: menuMode === "toolbar" ? theme.accent : "transparent",
+                color: menuMode === "toolbar" ? "white" : theme.text
+              },
+              children: t("menu_mode_toolbar")
             }
           )
         ] }) }),
@@ -6436,6 +7096,14 @@ const ThreeViewer = ({
       setLang(defaultLang);
     }
   }, [defaultLang]);
+  const [menuMode, setMenuMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem("3dbrowser_menuMode");
+      return saved === "menu" || saved === "toolbar" ? saved : "menu";
+    } catch {
+      return "menu";
+    }
+  });
   const [treeRoot, setTreeRoot] = useState([]);
   const [selectedUuids, setSelectedUuids] = useState([]);
   const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
@@ -7552,7 +8220,7 @@ const ThreeViewer = ({
       onDrop: handleDrop,
       children: [
         /* @__PURE__ */ jsx(GlobalStyle, { theme }),
-        /* @__PURE__ */ jsx(
+        menuMode === "menu" ? /* @__PURE__ */ jsx(
           MenuBar,
           {
             t,
@@ -7583,8 +8251,40 @@ const ThreeViewer = ({
             hiddenMenus,
             onOpenAbout: () => setIsAboutOpen(true)
           }
-        ),
+        ) : null,
         /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", position: "relative", overflow: "hidden" }, children: [
+          menuMode === "toolbar" && /* @__PURE__ */ jsx(
+            Toolbar,
+            {
+              t,
+              themeType: themeMode,
+              setThemeType: setThemeMode,
+              handleOpenFiles,
+              handleBatchConvert,
+              handleOpenFolder,
+              handleOpenUrl,
+              handleView,
+              handleClear,
+              pickEnabled,
+              setPickEnabled,
+              activeTool,
+              setActiveTool,
+              showOutline,
+              setShowOutline,
+              showProps,
+              setShowProps,
+              showStats,
+              setShowStats: (v) => {
+                setShowStats(v);
+                localStorage.setItem("3dbrowser_showStats", String(v));
+              },
+              sceneMgr: sceneMgr.current,
+              styles,
+              theme,
+              hiddenMenus,
+              onOpenAbout: () => setIsAboutOpen(true)
+            }
+          ),
           showOutline && /* @__PURE__ */ jsxs("div", { style: {
             width: `${leftWidth}px`,
             backgroundColor: theme.panelBg,
@@ -7755,6 +8455,11 @@ const ThreeViewer = ({
                 setThemeMode,
                 showStats,
                 setShowStats,
+                menuMode,
+                setMenuMode: (m) => {
+                  setMenuMode(m);
+                  localStorage.setItem("3dbrowser_menuMode", m);
+                },
                 styles,
                 theme
               }

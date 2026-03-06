@@ -3,6 +3,7 @@ import { Lang } from "./src/theme/Locales";
 export interface ThreeViewerProps {
     allowDragOpen?: boolean;
     hiddenMenus?: string[];
+    menuMode?: 'menu' | 'toolbar';
     libPath?: string;
     defaultTheme?: 'dark' | 'light';
     defaultLang?: Lang;

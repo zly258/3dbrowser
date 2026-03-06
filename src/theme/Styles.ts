@@ -77,7 +77,7 @@ export const createGlobalStyle = (theme: ThemeColors) => `
 
 export const createStyles = (theme: ThemeColors) => ({
     // 桌面端 / 通用
-    container: { display: "flex", flexDirection: "column" as const, height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none" as const, overflow: "hidden" },
+    container: { display: "flex", flexDirection: "column" as const, height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none" as const, overflow: "hidden", position: "relative" as const },
     
     // 传统菜单样式
     classicMenuBar: {
@@ -122,6 +122,70 @@ export const createStyles = (theme: ThemeColors) => ({
         justifyContent: "space-between",
         backgroundColor: hover ? theme.itemHover : "transparent",
     }),
+
+    toolbarBar: {
+        position: "absolute" as const,
+        bottom: "8px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: theme.panelBg,
+        border: `1px solid ${theme.border}`,
+        borderRadius: "8px",
+        padding: "2px 4px",
+        height: "48px",
+        gap: "2px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        zIndex: 1000,
+        WebkitAppRegion: "no-drag" as any,
+    },
+    toolbarGroup: {
+        display: "flex",
+        alignItems: "center",
+        gap: "1px",
+        padding: "0 4px",
+        borderRight: `1px solid ${theme.border}`,
+        height: "100%",
+    },
+    toolbarGroupLast: {
+        display: "flex",
+        alignItems: "center",
+        gap: "1px",
+        padding: "0 4px",
+        height: "100%",
+    },
+    toolbarBtn: {
+        display: "flex",
+        flexDirection: "column" as const,
+        alignItems: "center",
+        justifyContent: "flex-start",
+        padding: "4px 10px",
+        height: "48px",
+        minWidth: "52px",
+        gap: "2px",
+        fontSize: "10px",
+        color: theme.text,
+        cursor: "pointer",
+        backgroundColor: "transparent",
+        border: "none",
+        borderRadius: "4px",
+        transition: "background-color 0.1s",
+    },
+    toolbarBtnActive: {
+        backgroundColor: theme.highlight,
+    },
+    toolbarIcon: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    toolbarLabel: {
+        fontSize: "10px",
+        color: theme.text,
+        whiteSpace: "nowrap" as const,
+    },
     
     statusBar: {
         height: "24px",
@@ -147,22 +211,6 @@ export const createStyles = (theme: ThemeColors) => ({
         opacity: 0.9
     },
 
-    toolbarBtn: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "32px",
-        height: "32px",
-        borderRadius: "0px", 
-        cursor: "pointer",
-        color: theme.textMuted,
-        backgroundColor: "transparent",
-        transition: "all 0.1s ease",
-        border: "none", 
-        outline: "none",
-        position: "relative" as const,
-        WebkitAppRegion: "no-drag" as any,
-    },
     toolbarBtnHover: {
         backgroundColor: theme.itemHover,
         color: theme.text,

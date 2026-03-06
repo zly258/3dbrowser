@@ -12,6 +12,8 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
+    menuMode: 'menu' | 'toolbar';
+    setMenuMode: (m: 'menu' | 'toolbar') => void;
     styles: any;
     theme: any;
 }

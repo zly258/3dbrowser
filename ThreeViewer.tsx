@@ -8,7 +8,7 @@ import { createStyles, createGlobalStyle, themes, ThemeColors, DEFAULT_FONT } fr
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
-import { MenuBar } from "./src/components/MenuBar";
+import { MenuBar, Toolbar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
 import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
@@ -88,6 +88,7 @@ const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
 export interface ThreeViewerProps {
     allowDragOpen?: boolean;
     hiddenMenus?: string[];
+    menuMode?: 'menu' | 'toolbar';
     libPath?: string;
     defaultTheme?: 'dark' | 'light';
     defaultLang?: Lang;
@@ -153,6 +154,16 @@ export const ThreeViewer = ({
             setLang(defaultLang);
         }
     }, [defaultLang]);
+
+    // 菜单模式状态 - 从localStorage恢复
+    const [menuMode, setMenuMode] = useState<'menu' | 'toolbar'>(() => {
+        try {
+            const saved = localStorage.getItem('3dbrowser_menuMode');
+            return (saved === 'menu' || saved === 'toolbar') ? saved : 'menu';
+        } catch {
+            return 'menu';
+        }
+    });
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
@@ -1537,38 +1548,73 @@ export const ThreeViewer = ({
             >
              <GlobalStyle theme={theme} />
 
-             <MenuBar 
-                t={t}
-                themeType={themeMode}
-                setThemeType={setThemeMode}
-                handleOpenFiles={handleOpenFiles}
-                handleBatchConvert={handleBatchConvert}
-                handleOpenFolder={handleOpenFolder}
-                handleOpenUrl={handleOpenUrl}
-                handleView={handleView}
-                handleClear={handleClear}
-                pickEnabled={pickEnabled}
-                setPickEnabled={setPickEnabled}
-                activeTool={activeTool}
-                setActiveTool={setActiveTool}
-                showOutline={showOutline}
-                setShowOutline={setShowOutline}
-                showProps={showProps}
-                setShowProps={setShowProps}
-                showStats={showStats}
-                setShowStats={(v: boolean) => {
-                    setShowStats(v);
-                    localStorage.setItem('3dbrowser_showStats', String(v));
-                }}
-                sceneMgr={sceneMgr.current}
-                styles={styles}
-                theme={theme}
-                hiddenMenus={hiddenMenus}
-                onOpenAbout={() => setIsAboutOpen(true)}
-             />
+             {menuMode === 'menu' ? (
+                <MenuBar 
+                    t={t}
+                    themeType={themeMode}
+                    setThemeType={setThemeMode}
+                    handleOpenFiles={handleOpenFiles}
+                    handleBatchConvert={handleBatchConvert}
+                    handleOpenFolder={handleOpenFolder}
+                    handleOpenUrl={handleOpenUrl}
+                    handleView={handleView}
+                    handleClear={handleClear}
+                    pickEnabled={pickEnabled}
+                    setPickEnabled={setPickEnabled}
+                    activeTool={activeTool}
+                    setActiveTool={setActiveTool}
+                    showOutline={showOutline}
+                    setShowOutline={setShowOutline}
+                    showProps={showProps}
+                    setShowProps={setShowProps}
+                    showStats={showStats}
+                    setShowStats={(v: boolean) => {
+                        setShowStats(v);
+                        localStorage.setItem('3dbrowser_showStats', String(v));
+                    }}
+                    sceneMgr={sceneMgr.current}
+                    styles={styles}
+                    theme={theme}
+                    hiddenMenus={hiddenMenus}
+                    onOpenAbout={() => setIsAboutOpen(true)}
+                />
+             ) : null}
 
-             {/* Main Content Area: Flex Row */}
+             {/* Main Content Area */}
              <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+                
+                {/* Toolbar overlay for toolbar mode */}
+                {menuMode === 'toolbar' && (
+                    <Toolbar 
+                        t={t}
+                        themeType={themeMode}
+                        setThemeType={setThemeMode}
+                        handleOpenFiles={handleOpenFiles}
+                        handleBatchConvert={handleBatchConvert}
+                        handleOpenFolder={handleOpenFolder}
+                        handleOpenUrl={handleOpenUrl}
+                        handleView={handleView}
+                        handleClear={handleClear}
+                        pickEnabled={pickEnabled}
+                        setPickEnabled={setPickEnabled}
+                        activeTool={activeTool}
+                        setActiveTool={setActiveTool}
+                        showOutline={showOutline}
+                        setShowOutline={setShowOutline}
+                        showProps={showProps}
+                        setShowProps={setShowProps}
+                        showStats={showStats}
+                        setShowStats={(v: boolean) => {
+                            setShowStats(v);
+                            localStorage.setItem('3dbrowser_showStats', String(v));
+                        }}
+                        sceneMgr={sceneMgr.current}
+                        styles={styles}
+                        theme={theme}
+                        hiddenMenus={hiddenMenus}
+                        onOpenAbout={() => setIsAboutOpen(true)}
+                    />
+                )}
                 
                 {/* Left Sidebar: Outline */}
                 {showOutline && (
@@ -1730,6 +1776,7 @@ export const ThreeViewer = ({
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
                             showStats={showStats} setShowStats={setShowStats}
+                            menuMode={menuMode} setMenuMode={(m) => { setMenuMode(m); localStorage.setItem('3dbrowser_menuMode', m); }}
                             styles={styles} theme={theme}
                         />
                     )}

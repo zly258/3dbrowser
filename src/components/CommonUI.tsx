@@ -51,6 +51,75 @@ export const Button: React.FC<ButtonProps> = ({
     );
 };
 
+export interface ImageButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+    icon: React.ReactNode;
+    label?: string;
+    active?: boolean;
+    styles?: any;
+    theme?: any;
+}
+
+export const ImageButton: React.FC<ImageButtonProps> = ({ 
+    icon, 
+    label, 
+    active, 
+    styles, 
+    theme, 
+    style, 
+    ...props 
+}) => {
+    const [hover, setHover] = React.useState(false);
+    
+    const baseStyle = {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        padding: '4px 10px',
+        height: '44px',
+        minWidth: '48px',
+        gap: '1px',
+        fontSize: '10px',
+        color: theme?.text || '#333',
+        cursor: props.disabled ? 'not-allowed' : 'pointer',
+        backgroundColor: active 
+            ? (styles?.toolbarBtnActive?.backgroundColor || '#e0e0e0')
+            : (hover ? (theme?.itemHover || '#f0f0f0') : 'transparent'),
+        border: 'none',
+        borderRadius: '4px',
+        transition: 'background-color 0.1s',
+        opacity: props.disabled ? 0.4 : 1,
+        pointerEvents: props.disabled ? 'none' as any : 'auto',
+        ...style
+    };
+
+    const iconStyle = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: '2px',
+    };
+
+    const labelStyle = {
+        fontSize: '10px',
+        color: theme?.text || '#333',
+        whiteSpace: 'nowrap' as const,
+        marginBottom: '1px',
+    };
+
+    return (
+        <button 
+            style={baseStyle} 
+            {...props}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            <div style={iconStyle}>{icon}</div>
+            {label && <div style={labelStyle}>{label}</div>}
+        </button>
+    );
+};
+
 export const PanelSection = ({ title, children, theme, style }: any) => (
     <div style={{ marginBottom: 12, ...style }}>
         {title && (

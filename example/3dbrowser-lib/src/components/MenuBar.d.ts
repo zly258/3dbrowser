@@ -27,4 +27,5 @@ interface MenuBarProps {
     onOpenAbout?: () => void;
 }
 export declare const MenuBar: React.FC<MenuBarProps>;
+export declare const Toolbar: React.FC<MenuBarProps>;
 export {};

@@ -78,6 +78,7 @@ const App: React.FC = () => {
                     libPath="./libs"
                     showStats={true}
                     defaultLang={lang}
+                    menuMode={'toolbar'}
                 />
             </div>
         </div>

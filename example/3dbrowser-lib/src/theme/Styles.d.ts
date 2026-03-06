@@ -30,6 +30,7 @@ export declare const createStyles: (theme: ThemeColors) => {
         fontFamily: string;
         userSelect: "none";
         overflow: string;
+        position: "relative";
     };
     classicMenuBar: {
         display: string;
@@ -73,6 +74,69 @@ export declare const createStyles: (theme: ThemeColors) => {
         justifyContent: string;
         backgroundColor: string;
     };
+    toolbarBar: {
+        position: "absolute";
+        bottom: string;
+        left: string;
+        transform: string;
+        display: string;
+        alignItems: string;
+        justifyContent: string;
+        backgroundColor: string;
+        border: string;
+        borderRadius: string;
+        padding: string;
+        height: string;
+        gap: string;
+        boxShadow: string;
+        zIndex: number;
+        WebkitAppRegion: any;
+    };
+    toolbarGroup: {
+        display: string;
+        alignItems: string;
+        gap: string;
+        padding: string;
+        borderRight: string;
+        height: string;
+    };
+    toolbarGroupLast: {
+        display: string;
+        alignItems: string;
+        gap: string;
+        padding: string;
+        height: string;
+    };
+    toolbarBtn: {
+        display: string;
+        flexDirection: "column";
+        alignItems: string;
+        justifyContent: string;
+        padding: string;
+        height: string;
+        minWidth: string;
+        gap: string;
+        fontSize: string;
+        color: string;
+        cursor: string;
+        backgroundColor: string;
+        border: string;
+        borderRadius: string;
+        transition: string;
+    };
+    toolbarBtnActive: {
+        backgroundColor: string;
+    };
+    toolbarIcon: {
+        display: string;
+        alignItems: string;
+        justifyContent: string;
+    };
+    toolbarLabel: {
+        fontSize: string;
+        color: string;
+        whiteSpace: "nowrap";
+    };
     statusBar: {
         height: string;
         backgroundColor: string;
@@ -95,22 +159,6 @@ export declare const createStyles: (theme: ThemeColors) => {
         gap: string;
         fontFamily: string;
         opacity: number;
-    };
-    toolbarBtn: {
-        display: string;
-        alignItems: string;
-        justifyContent: string;
-        width: string;
-        height: string;
-        borderRadius: string;
-        cursor: string;
-        color: string;
-        backgroundColor: string;
-        transition: string;
-        border: string;
-        outline: string;
-        position: "relative";
-        WebkitAppRegion: any;
     };
     toolbarBtnHover: {
         backgroundColor: string;
