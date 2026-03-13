@@ -4,7 +4,7 @@ import { IconClose } from "../theme/Icons";
 import { TFunc, Lang } from "../theme/Locales";
 import { SceneSettings } from "../utils/SceneManager";
 import { Slider } from "./CommonUI";
-import { Checkbox } from "./ToolPanels";
+import { Checkbox } from "./ToolPanels/Checkbox";
 
 interface SettingsModalProps {
     t: TFunc;

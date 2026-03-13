@@ -241,6 +241,7 @@ export const ThreeViewer = ({
             sunLatitude: 0,
             sunLongitude: 0,
             sunTime: 12,
+            sunShadow: false,
         };
         try {
             const saved = localStorage.getItem('3dbrowser_sceneSettings');
@@ -258,6 +259,7 @@ export const ThreeViewer = ({
                     sunLatitude: parsed.sunLatitude || 0,
                     sunLongitude: parsed.sunLongitude || 0,
                     sunTime: parsed.sunTime !== undefined ? parsed.sunTime : 12,
+                    sunShadow: parsed.sunShadow || false,
                 };
             }
         } catch (e) { console.error("Failed to load sceneSettings", e); }

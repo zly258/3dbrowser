@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { IconChevronRight, IconChevronDown } from "../theme/Icons";
-import { Checkbox } from "./ToolPanels";
+import { Checkbox } from "./ToolPanels/Checkbox";
 
 interface TreeNode {
     uuid: string;

@@ -16,6 +16,12 @@ export interface SceneSettings {
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
+    renderMode?: 'standard' | 'mayo' | 'blender';
+    sunLatitude?: number;
+    sunLongitude?: number;
+    sunTime?: number;
+    sunEnabled?: boolean;
+    sunShadow?: boolean;
 }
 export interface StructureTreeNode {
     id: string;
@@ -42,6 +48,7 @@ export declare class SceneManager {
     ambientLight: THREE.AmbientLight;
     dirLight: THREE.DirectionalLight;
     backLight: THREE.DirectionalLight;
+    sunLight: THREE.DirectionalLight;
     structureRoot: StructureTreeNode;
     private nodeMap;
     private bimIdToNodeIds;
@@ -107,6 +114,10 @@ export declare class SceneManager {
     private maxWorkers;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
+    private updateSunPosition;
+    private updateSunShadow;
+    private applyRenderMode;
+    private applyMaterialMode;
     createCircleTexture(): any;
     animate(): void;
     updateCameraClipping(): void;

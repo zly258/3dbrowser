@@ -33,6 +33,7 @@ export interface SceneSettings {
     sunLongitude?: number;  // 经度 (-180 ~ 180)
     sunTime?: number;       // 时间 (0-24，12为正午)
     sunEnabled?: boolean;   // 是否启用太阳光模拟
+    sunShadow?: boolean;    // 是否显示阴影
 }
 
 export interface StructureTreeNode {
@@ -253,6 +254,17 @@ export class SceneManager {
         this.sunLight = new THREE.DirectionalLight(0xfff4e5, 1.5);
         this.sunLight.position.set(100, 100, 50);
         this.sunLight.visible = false;
+        // 启用阴影
+        this.sunLight.castShadow = true;
+        this.sunLight.shadow.mapSize.width = 2048;
+        this.sunLight.shadow.mapSize.height = 2048;
+        this.sunLight.shadow.camera.near = 0.1;
+        this.sunLight.shadow.camera.far = 500;
+        this.sunLight.shadow.camera.left = -100;
+        this.sunLight.shadow.camera.right = 100;
+        this.sunLight.shadow.camera.top = 100;
+        this.sunLight.shadow.camera.bottom = -100;
+        this.sunLight.shadow.bias = -0.0005;
         this.scene.add(this.sunLight);
 
         // 选择辅助器
@@ -322,8 +334,9 @@ export class SceneManager {
         }
 
         // 应用光照模拟（太阳光）
-        if (newSettings.sunEnabled !== undefined || newSettings.sunLatitude !== undefined || 
-            newSettings.sunLongitude !== undefined || newSettings.sunTime !== undefined) {
+        if (newSettings.sunEnabled !== undefined || newSettings.sunLatitude !== undefined ||
+            newSettings.sunLongitude !== undefined || newSettings.sunTime !== undefined ||
+            newSettings.sunShadow !== undefined) {
             this.updateSunPosition();
         }
 
@@ -412,6 +425,33 @@ export class SceneManager {
 
         // 降低方向光强度，避免过曝
         this.dirLight.intensity = this.settings.dirInt * 0.3;
+
+        // 处理阴影
+        this.updateSunShadow();
+    }
+
+    // 更新阴影设置
+    private updateSunShadow() {
+        const shadowEnabled = this.settings.sunShadow === true && this.settings.sunEnabled !== false;
+
+        if (shadowEnabled) {
+            // 启用渲染器阴影
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // 遍历场景中的物体启用阴影
+            this.contentGroup.traverse((obj) => {
+                if ((obj as THREE.Mesh).isMesh) {
+                    const mesh = obj as THREE.Mesh;
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                }
+            });
+
+            this.sunLight.castShadow = true;
+        } else {
+            this.sunLight.castShadow = false;
+        }
     }
 
     // 应用渲染模式

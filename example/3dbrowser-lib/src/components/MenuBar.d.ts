@@ -14,8 +14,8 @@ interface MenuBarProps {
     handleClear?: () => void;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;

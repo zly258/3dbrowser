@@ -19,3 +19,4 @@ export declare const IconActivity: (props: any) => import("react/jsx-runtime").J
 export declare const IconCamera: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconNavigation: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconEye: (props: any) => import("react/jsx-runtime").JSX.Element;
+export declare const IconSun: (props: any) => import("react/jsx-runtime").JSX.Element;

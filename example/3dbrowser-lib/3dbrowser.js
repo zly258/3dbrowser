@@ -134,6 +134,20 @@ class SceneManager {
     this.backLight = new THREE.DirectionalLight(16777215, 0.8);
     this.backLight.position.set(-50, -50, -10);
     this.scene.add(this.backLight);
+    this.sunLight = new THREE.DirectionalLight(16774373, 1.5);
+    this.sunLight.position.set(100, 100, 50);
+    this.sunLight.visible = false;
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.width = 2048;
+    this.sunLight.shadow.mapSize.height = 2048;
+    this.sunLight.shadow.camera.near = 0.1;
+    this.sunLight.shadow.camera.far = 500;
+    this.sunLight.shadow.camera.left = -100;
+    this.sunLight.shadow.camera.right = 100;
+    this.sunLight.shadow.camera.top = 100;
+    this.sunLight.shadow.camera.bottom = -100;
+    this.sunLight.shadow.bias = -5e-4;
+    this.scene.add(this.sunLight);
     const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
     this.selectionBox = new THREE.Box3Helper(box, new THREE.Color(16776960));
     this.selectionBox.visible = false;
@@ -178,6 +192,12 @@ class SceneManager {
     this.settings = { ...this.settings, ...newSettings };
     this.ambientLight.intensity = this.settings.ambientInt;
     this.dirLight.intensity = this.settings.dirInt;
+    if (newSettings.renderMode !== void 0) {
+      this.applyRenderMode(this.settings.renderMode);
+    }
+    if (newSettings.sunEnabled !== void 0 || newSettings.sunLatitude !== void 0 || newSettings.sunLongitude !== void 0 || newSettings.sunTime !== void 0 || newSettings.sunShadow !== void 0) {
+      this.updateSunPosition();
+    }
     this.renderer.setClearColor(this.settings.bgColor);
     if (newSettings.frustumCulling !== void 0) {
       this.contentGroup.traverse((obj) => {
@@ -193,6 +213,98 @@ class SceneManager {
       this.checkCullingAndLoad();
     }
     this.renderer.render(this.scene, this.camera);
+  }
+  // 根据经纬度和时间计算太阳位置
+  updateSunPosition() {
+    const lat = this.settings.sunLatitude || 0;
+    const lng = this.settings.sunLongitude || 0;
+    const time = this.settings.sunTime !== void 0 ? this.settings.sunTime : 12;
+    const enabled = this.settings.sunEnabled !== false;
+    this.sunLight.visible = enabled;
+    if (!enabled) {
+      this.dirLight.intensity = this.settings.dirInt;
+      return;
+    }
+    const hourAngle = (time - 12) * 15 * (Math.PI / 180);
+    const sunElevation = 90 - Math.abs(lat) + 23.5 * Math.sin((time - 6) * 15 * (Math.PI / 180));
+    const elevationRad = sunElevation * (Math.PI / 180);
+    const azimuthAngle = hourAngle + lng * Math.PI / 180;
+    const distance = 100;
+    const x = distance * Math.cos(elevationRad) * Math.sin(azimuthAngle);
+    const y = distance * Math.sin(elevationRad);
+    const z = distance * Math.cos(elevationRad) * Math.cos(azimuthAngle);
+    this.sunLight.position.set(x, Math.max(y, 1), z);
+    const intensity = Math.max(0.2, Math.sin(elevationRad)) * 2;
+    this.sunLight.intensity = intensity;
+    const sunColor = new THREE.Color();
+    if (time < 7 || time > 18) {
+      sunColor.setHex(16755302);
+    } else if (time < 9 || time > 16) {
+      sunColor.setHex(16764040);
+    } else {
+      sunColor.setHex(16774373);
+    }
+    this.sunLight.color = sunColor;
+    this.dirLight.intensity = this.settings.dirInt * 0.3;
+    this.updateSunShadow();
+  }
+  // 更新阴影设置
+  updateSunShadow() {
+    const shadowEnabled = this.settings.sunShadow === true && this.settings.sunEnabled !== false;
+    if (shadowEnabled) {
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.contentGroup.traverse((obj) => {
+        if (obj.isMesh) {
+          const mesh = obj;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+        }
+      });
+      this.sunLight.castShadow = true;
+    } else {
+      this.sunLight.castShadow = false;
+    }
+  }
+  // 应用渲染模式
+  applyRenderMode(mode) {
+    this.contentGroup.traverse((obj) => {
+      if (obj.isMesh) {
+        const mesh = obj;
+        const material = mesh.material;
+        if (material) {
+          this.applyMaterialMode(material, mode);
+        }
+        if (Array.isArray(material)) {
+          material.forEach((mat) => this.applyMaterialMode(mat, mode));
+        }
+      }
+    });
+  }
+  applyMaterialMode(material, mode) {
+    if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhongMaterial || material instanceof THREE.MeshLambertMaterial) {
+      switch (mode) {
+        case "mayo":
+          material.envMapIntensity = 1.2;
+          material.roughness = Math.max(0.3, material.roughness * 0.8);
+          material.metalness = Math.min(0.8, material.metalness * 1.2);
+          break;
+        case "blender":
+          material.envMapIntensity = 0.8;
+          material.roughness = Math.min(0.9, material.roughness * 1.1);
+          material.metalness = Math.min(0.5, material.metalness * 0.8);
+          if (material instanceof THREE.MeshStandardMaterial) {
+            material.ambientLight = new THREE.Color(4210752);
+          }
+          break;
+        case "standard":
+        default:
+          material.envMapIntensity = 1;
+          material.roughness = 0.5;
+          material.metalness = 0;
+          break;
+      }
+    }
   }
   createCircleTexture() {
     const size = 64;
@@ -4291,6 +4403,17 @@ const resources = {
     st_lighting: "Lighting",
     st_ambient: "Ambient Int.",
     st_dir: "Direct Int.",
+    st_render_mode: "Render Mode",
+    st_render_standard: "Standard",
+    st_render_mayo: "Mayo",
+    st_render_blender: "Blender",
+    st_sun_simulation: "Sun Simulation",
+    st_sun_enabled: "Enable Sun",
+    st_sun_latitude: "Latitude",
+    st_sun_longitude: "Longitude",
+    st_sun_time: "Time",
+    st_sun_info: "Set location and time for realistic sunlight",
+    st_sun_shadow: "Show Shadows",
     st_bg: "Background",
     st_lang: "Language",
     st_import_settings: "Import Settings",
@@ -4461,6 +4584,17 @@ const resources = {
     st_lighting: "场景光照",
     st_ambient: "环境光强度",
     st_dir: "直射光强度",
+    st_render_mode: "渲染模式",
+    st_render_standard: "标准",
+    st_render_mayo: "Mayo",
+    st_render_blender: "Blender",
+    st_sun_simulation: "光照模拟",
+    st_sun_enabled: "启用太阳光",
+    st_sun_latitude: "纬度",
+    st_sun_longitude: "经度",
+    st_sun_time: "时间",
+    st_sun_info: "设置位置和时间以模拟真实光照效果",
+    st_sun_shadow: "显示阴影",
     st_bg: "背景颜色",
     st_lang: "界面语言",
     st_import_settings: "导入设置",
@@ -4832,8 +4966,11 @@ const IconMaximize = (props) => createIcon(
 );
 const IconRuler = (props) => createIcon(
   /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("path", { d: "M21.21 15.89A10 10 0 1 1 8 2.83" }),
-    /* @__PURE__ */ jsx("path", { d: "M22 12A10 10 0 0 0 12 2v10z" })
+    /* @__PURE__ */ jsx("rect", { x: "2", y: "14", width: "20", height: "6", rx: "1" }),
+    /* @__PURE__ */ jsx("line", { x1: "6", y1: "14", x2: "6", y2: "17" }),
+    /* @__PURE__ */ jsx("line", { x1: "10", y1: "14", x2: "10", y2: "16" }),
+    /* @__PURE__ */ jsx("line", { x1: "14", y1: "14", x2: "14", y2: "17" }),
+    /* @__PURE__ */ jsx("line", { x1: "18", y1: "14", x2: "18", y2: "16" })
   ] }),
   props
 );
@@ -4899,6 +5036,20 @@ const IconEye = (props) => createIcon(
   /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx("path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }),
     /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "3" })
+  ] }),
+  props
+);
+const IconSun = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("circle", { cx: "12", cy: "12", r: "5" }),
+    /* @__PURE__ */ jsx("line", { x1: "12", y1: "1", x2: "12", y2: "3" }),
+    /* @__PURE__ */ jsx("line", { x1: "12", y1: "21", x2: "12", y2: "23" }),
+    /* @__PURE__ */ jsx("line", { x1: "4.22", y1: "4.22", x2: "5.64", y2: "5.64" }),
+    /* @__PURE__ */ jsx("line", { x1: "18.36", y1: "18.36", x2: "19.78", y2: "19.78" }),
+    /* @__PURE__ */ jsx("line", { x1: "1", y1: "12", x2: "3", y2: "12" }),
+    /* @__PURE__ */ jsx("line", { x1: "21", y1: "12", x2: "23", y2: "12" }),
+    /* @__PURE__ */ jsx("line", { x1: "4.22", y1: "19.78", x2: "5.64", y2: "18.36" }),
+    /* @__PURE__ */ jsx("line", { x1: "18.36", y1: "5.64", x2: "19.78", y2: "4.22" })
   ] }),
   props
 );
@@ -5143,7 +5294,14 @@ const MenuBar = (props) => {
       !isHidden("viewpoint") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("viewpoint_title"), onClick: () => {
         props.setActiveTool?.("viewpoint");
         close();
-      }, styles })
+      }, styles }),
+      !isHidden("sun") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_sun_simulation"), onClick: () => {
+          props.setActiveTool?.("sun");
+          close();
+        }, styles })
+      ] })
     ] }) }),
     !isHidden("settings_panel") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("settings"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
       !isHidden("settings") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("settings"), onClick: () => {
@@ -5534,6 +5692,17 @@ const Toolbar = (props) => {
           styles,
           theme
         }
+      ),
+      !isHidden("sun") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconSun, { width: 16, height: 16 }),
+          label: t("st_sun_simulation"),
+          active: props.activeTool === "sun",
+          onClick: () => props.setActiveTool?.(props.activeTool === "sun" ? "none" : "sun"),
+          styles,
+          theme
+        }
       )
     ] }),
     !isHidden("settings_panel") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroupLast, children: [
@@ -5562,170 +5731,6 @@ const Toolbar = (props) => {
   ] });
 };
 
-const FloatingPanel = ({
-  title,
-  onClose,
-  children,
-  width = 300,
-  height = 200,
-  x = 100,
-  y = 100,
-  resizable = false,
-  movable = true,
-  styles,
-  theme,
-  storageId
-}) => {
-  const panelRef = useRef(null);
-  const minWidth = storageId === "tool_measure" ? 320 : 220;
-  const minHeight = storageId === "tool_measure" ? 400 : 120;
-  const [pos, setPos] = useState(() => {
-    if (storageId) {
-      try {
-        const saved = localStorage.getItem(`panel_${storageId}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.pos && typeof parsed.pos.x === "number" && typeof parsed.pos.y === "number") {
-            const loadedX = Math.min(Math.max(0, parsed.pos.x), window.innerWidth - 50);
-            const loadedY = Math.min(Math.max(0, parsed.pos.y), window.innerHeight - 50);
-            return { x: loadedX, y: loadedY };
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load panel state", e);
-      }
-    }
-    return { x, y };
-  });
-  const [size, setSize] = useState(() => {
-    if (storageId && resizable) {
-      try {
-        const saved = localStorage.getItem(`panel_${storageId}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.size && typeof parsed.size.w === "number" && typeof parsed.size.h === "number") {
-            return {
-              w: Math.max(minWidth, parsed.size.w),
-              h: Math.max(minHeight, parsed.size.h)
-            };
-          }
-        }
-      } catch (e) {
-      }
-    }
-    return { w: width, h: height };
-  });
-  const isDragging = useRef(false);
-  const isResizing = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-  const startPos = useRef({ x: 0, y: 0 });
-  const startSize = useRef({ w: 0, h: 0 });
-  const currentPosRef = useRef(pos);
-  const currentSizeRef = useRef(size);
-  const animationFrame = useRef(0);
-  useEffect(() => {
-    currentPosRef.current = pos;
-  }, [pos]);
-  useEffect(() => {
-    currentSizeRef.current = size;
-  }, [size]);
-  useEffect(() => {
-    const handleMove = (e) => {
-      if (!isDragging.current && !isResizing.current) return;
-      e.preventDefault();
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-      animationFrame.current = requestAnimationFrame(() => {
-        const dx = e.clientX - dragStart.current.x;
-        const dy = e.clientY - dragStart.current.y;
-        if (isDragging.current) {
-          let newX = startPos.current.x + dx;
-          let newY = startPos.current.y + dy;
-          let limitW = window.innerWidth;
-          let limitH = window.innerHeight;
-          if (panelRef.current?.parentElement) {
-            limitW = panelRef.current.parentElement.clientWidth;
-            limitH = panelRef.current.parentElement.clientHeight;
-          }
-          const maxX = limitW - size.w;
-          const maxY = limitH - size.h;
-          newX = Math.max(0, Math.min(newX, maxX));
-          newY = Math.max(0, Math.min(newY, maxY));
-          setPos({ x: newX, y: newY });
-        } else if (isResizing.current) {
-          setSize({
-            w: Math.max(minWidth, startSize.current.w + dx),
-            h: Math.max(minHeight, startSize.current.h + dy)
-          });
-        }
-      });
-    };
-    const handleUp = () => {
-      if ((isDragging.current || isResizing.current) && storageId) {
-        try {
-          const stateToSave = {
-            pos: currentPosRef.current,
-            size: currentSizeRef.current
-          };
-          localStorage.setItem(`panel_${storageId}`, JSON.stringify(stateToSave));
-        } catch (e) {
-          console.error("Failed to save panel state", e);
-        }
-      }
-      isDragging.current = false;
-      isResizing.current = false;
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-    };
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
-    return () => {
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-    };
-  }, [size, storageId]);
-  const onHeaderDown = (e) => {
-    if (e.button !== 0 || !movable) return;
-    e.preventDefault();
-    e.stopPropagation();
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    startPos.current = { ...pos };
-  };
-  const onResizeDown = (e) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    isResizing.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    startSize.current = { ...size };
-  };
-  return /* @__PURE__ */ jsxs("div", { ref: panelRef, style: { ...styles.floatingPanel, left: pos.x, top: pos.y, width: size.w, height: size.h }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { ...styles.floatingHeader, cursor: movable ? "move" : "default" }, onMouseDown: onHeaderDown, children: [
-      /* @__PURE__ */ jsx("span", { children: title }),
-      onClose && /* @__PURE__ */ jsx(
-        "div",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onClose();
-          },
-          style: { cursor: "pointer", opacity: 0.8, display: "flex", padding: 4 },
-          onMouseEnter: (e) => {
-            e.currentTarget.style.backgroundColor = "#e81123";
-            e.currentTarget.style.color = "white";
-          },
-          onMouseLeave: (e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "inherit";
-          },
-          children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsx("div", { style: styles.floatingContent, children }),
-    resizable && /* @__PURE__ */ jsx("div", { style: styles.resizeHandle, onMouseDown: onResizeDown })
-  ] });
-};
 const Checkbox = ({ label, checked, onChange, styles, style }) => {
   return /* @__PURE__ */ jsxs(
     "label",
@@ -5744,321 +5749,6 @@ const Checkbox = ({ label, checked, onChange, styles, style }) => {
       ]
     }
   );
-};
-const MeasurePanel = ({ t, sceneMgr, measureType, setMeasureType, measureHistory, onDelete, onClear, onClose, styles, theme, highlightedId, onHighlight }) => {
-  const groupedHistory = useMemo(() => {
-    const groups = {
-      "dist": [],
-      "angle": [],
-      "coord": []
-    };
-    measureHistory.forEach((item) => {
-      if (groups[item.type]) groups[item.type].push(item);
-    });
-    return groups;
-  }, [measureHistory]);
-  const renderMeasureItem = (item) => /* @__PURE__ */ jsxs(
-    "div",
-    {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "8px 12px",
-        borderBottom: `1px solid ${theme.border}`,
-        fontSize: 12,
-        backgroundColor: highlightedId === item.id ? `${theme.accent}15` : "transparent",
-        borderLeft: highlightedId === item.id ? `4px solid ${theme.accent}` : "4px solid transparent",
-        cursor: "pointer",
-        transition: "all 0.2s"
-      },
-      onClick: () => onHighlight && onHighlight(item.id),
-      children: [
-        /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", flex: 1, marginRight: 8, overflow: "hidden" }, children: /* @__PURE__ */ jsx("span", { style: {
-          color: highlightedId === item.id ? theme.accent : theme.text,
-          fontFamily: "monospace",
-          fontWeight: highlightedId === item.id ? "bold" : "normal",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis"
-        }, children: item.val }) }),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            style: { cursor: "pointer", opacity: 0.7, color: theme.danger, padding: 4, borderRadius: 4 },
-            onClick: (e) => {
-              e.stopPropagation();
-              onDelete(item.id);
-            },
-            children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
-          }
-        )
-      ]
-    },
-    item.id
-  );
-  const handleTypeChange = (type) => {
-    setMeasureType(type);
-    sceneMgr?.startMeasurement(type);
-  };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px 12px 0 12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
-    /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, justifyContent: "flex-start" }, children: [
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_none") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_dist") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "angle", onClick: () => handleTypeChange("angle"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_angle") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "coord", onClick: () => handleTypeChange("coord"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_coord") })
-    ] }) }),
-    /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, color: theme.textMuted, marginBottom: 8, minHeight: 24, padding: "0 4px", fontStyle: "italic", display: "flex", alignItems: "center" }, children: [
-      measureType === "dist" && t("measure_instruct_dist"),
-      measureType === "angle" && t("measure_instruct_angle"),
-      measureType === "coord" && t("measure_instruct_coord"),
-      measureType !== "none" && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", color: theme.accent, fontWeight: "bold", fontSize: 12 }, children: "[ESC]退出" })
-    ] }),
-    /* @__PURE__ */ jsx("div", { style: {
-      border: `1px solid ${theme.border}`,
-      borderRadius: 4,
-      backgroundColor: theme.bg,
-      flex: 1,
-      overflowY: "auto",
-      marginBottom: 12
-    }, children: measureHistory.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 40, textAlign: "center", color: theme.textMuted, fontSize: 12 }, children: t("no_measurements") }) : Object.entries(groupedHistory).map(([type, items]) => {
-      if (items.length === 0) return null;
-      return /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("div", { style: {
-          padding: "4px 10px",
-          backgroundColor: theme.highlight,
-          fontSize: 12,
-          fontWeight: "bold",
-          color: theme.accent,
-          textTransform: "uppercase",
-          borderBottom: `1px solid ${theme.border}`
-        }, children: type === "dist" ? t("measure_dist") : type === "angle" ? t("measure_angle") : t("measure_coord") }),
-        items.map(renderMeasureItem)
-      ] }, type);
-    }) }),
-    /* @__PURE__ */ jsx("div", { style: { padding: "8px 0", borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "flex-end", backgroundColor: theme.bg }, children: /* @__PURE__ */ jsx(
-      Button,
-      {
-        variant: "danger",
-        styles,
-        theme,
-        onClick: onClear,
-        disabled: measureHistory.length === 0,
-        style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" },
-        children: t("measure_clear")
-      }
-    ) })
-  ] }) });
-};
-const ClipPanel = ({ t, onClose, clipEnabled, setClipEnabled, clipValues, setClipValues, clipActive, setClipActive, styles, theme }) => {
-  const SliderRow = ({ axis }) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }, children: [
-    /* @__PURE__ */ jsx(
-      Checkbox,
-      {
-        checked: clipActive[axis],
-        onChange: (v) => setClipActive({ ...clipActive, [axis]: v }),
-        styles,
-        style: { flexShrink: 0 }
-      }
-    ),
-    /* @__PURE__ */ jsx("div", { style: { flex: 1, padding: "0 4px" }, children: /* @__PURE__ */ jsx(
-      DualSlider,
-      {
-        min: 0,
-        max: 100,
-        value: clipValues[axis],
-        onChange: (val) => setClipValues({ ...clipValues, [axis]: val }),
-        theme,
-        disabled: !clipActive[axis]
-      }
-    ) }),
-    /* @__PURE__ */ jsxs("span", { style: {
-      fontSize: 10,
-      color: theme.accent,
-      opacity: clipActive[axis] ? 1 : 0.5,
-      fontFamily: "monospace",
-      minWidth: "40px",
-      textAlign: "right"
-    }, children: [
-      Math.round(clipValues[axis][0]),
-      "-",
-      Math.round(clipValues[axis][1]),
-      "%"
-    ] })
-  ] });
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 260, height: 220, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px" }, children: [
-    /* @__PURE__ */ jsx("div", { style: { marginBottom: 12, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }, children: /* @__PURE__ */ jsx(
-      Checkbox,
-      {
-        label: t("clip_enable"),
-        checked: clipEnabled,
-        onChange: (v) => setClipEnabled(v),
-        styles,
-        style: { fontWeight: "bold", fontSize: 12 }
-      }
-    ) }),
-    /* @__PURE__ */ jsxs("div", { style: {
-      opacity: clipEnabled ? 1 : 0.4,
-      pointerEvents: clipEnabled ? "auto" : "none",
-      transition: "all 0.3s ease"
-    }, children: [
-      /* @__PURE__ */ jsx(SliderRow, { axis: "x" }),
-      /* @__PURE__ */ jsx(SliderRow, { axis: "y" }),
-      /* @__PURE__ */ jsx(SliderRow, { axis: "z" })
-    ] })
-  ] }) });
-};
-const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
-  const [format, setFormat] = useState("glb");
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, theme, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10, fontSize: 12, color: theme.textMuted }, children: [
-      t("export_format"),
-      ":"
-    ] }),
-    [
-      { id: "glb", label: "GLB", desc: t("export_glb") },
-      { id: "lmb", label: "LMB", desc: t("export_lmb") },
-      { id: "3dtiles", label: "3D Tiles", desc: t("export_3dtiles") },
-      { id: "nbim", label: "NBIM", desc: t("export_nbim") }
-    ].map((opt) => /* @__PURE__ */ jsxs("label", { style: {
-      display: "flex",
-      alignItems: "center",
-      padding: "10px",
-      cursor: "pointer",
-      border: `1px solid ${format === opt.id ? theme.accent : theme.border}`,
-      borderRadius: 0,
-      marginBottom: 8,
-      backgroundColor: format === opt.id ? `${theme.accent}15` : "transparent",
-      transition: "all 0.2s"
-    }, children: [
-      /* @__PURE__ */ jsx("input", { type: "radio", name: "exportFmt", checked: format === opt.id, onChange: () => setFormat(opt.id), style: { marginRight: 10 } }),
-      /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("div", { style: { color: theme.text, fontWeight: "bold", fontSize: 14 }, children: opt.label }),
-        /* @__PURE__ */ jsx("div", { style: { fontSize: 11, color: theme.textMuted }, children: opt.desc })
-      ] })
-    ] }, opt.id)),
-    /* @__PURE__ */ jsx(
-      Button,
-      {
-        styles,
-        theme,
-        onClick: () => onExport(format),
-        style: { width: "100%", marginTop: 10, height: 40 },
-        children: t("export_btn")
-      }
-    )
-  ] }) });
-};
-const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, onLoad, onDelete, styles, theme }) => {
-  const [newName, setNewName] = useState("");
-  useEffect(() => {
-    setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
-  }, [viewpoints.length, t]);
-  const handleSave = () => {
-    if (newName.trim()) {
-      onSave(newName.trim());
-      setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
-    }
-  };
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      handleSave();
-    }
-  };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("viewpoint_title") || "视点管理", onClose, width: 280, height: 300, resizable: true, styles, theme, storageId: "tool_viewpoint", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
-    /* @__PURE__ */ jsx("div", { style: { marginBottom: 12 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4 }, children: [
-      /* @__PURE__ */ jsx(
-        "input",
-        {
-          autoFocus: true,
-          value: newName,
-          onChange: (e) => setNewName(e.target.value),
-          onKeyDown: handleKeyDown,
-          style: {
-            flex: 1,
-            height: 28,
-            padding: "0 10px",
-            backgroundColor: theme.bg,
-            color: theme.text,
-            border: `1px solid ${theme.border}`,
-            borderRadius: 3,
-            fontSize: 12,
-            outline: "none",
-            fontFamily: DEFAULT_FONT,
-            boxSizing: "border-box"
-          },
-          placeholder: t("viewpoint_title") || "视点名称"
-        }
-      ),
-      /* @__PURE__ */ jsx(Button, { styles, theme, onClick: handleSave, style: { height: 28, padding: "0 12px", minWidth: "60px", whiteSpace: "nowrap", fontSize: 12 }, children: t("btn_confirm") || "保存" })
-    ] }) }),
-    /* @__PURE__ */ jsx("div", { style: {
-      flex: 1,
-      overflowY: "auto",
-      border: `1px solid ${theme.border}`,
-      borderRadius: 4,
-      backgroundColor: theme.bg,
-      padding: "12px",
-      fontSize: "12px",
-      color: theme.textMuted
-    }, children: viewpoints.length === 0 ? /* @__PURE__ */ jsx("div", { style: { textAlign: "center", color: theme.textMuted, fontSize: 12 }, children: t("viewpoint_empty") || "暂无保存的视点" }) : /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "6px" }, children: [
-      /* @__PURE__ */ jsxs("div", { style: { marginBottom: "8px", color: theme.text, fontWeight: "500" }, children: [
-        t("viewpoint_title") || "视点",
-        " (",
-        viewpoints.length,
-        ")"
-      ] }),
-      viewpoints.map((vp) => /* @__PURE__ */ jsxs(
-        "div",
-        {
-          style: {
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "6px 8px",
-            borderBottom: `1px solid ${theme.border}`,
-            cursor: "pointer",
-            borderRadius: "2px",
-            backgroundColor: theme.panelBg,
-            transition: "background-color 0.2s"
-          },
-          onClick: () => onLoad(vp),
-          onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
-          onMouseLeave: (e) => e.currentTarget.style.backgroundColor = theme.panelBg,
-          children: [
-            /* @__PURE__ */ jsx("div", { style: {
-              fontSize: "11px",
-              color: theme.text,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              flex: 1
-            }, children: vp.name }),
-            /* @__PURE__ */ jsx(
-              "div",
-              {
-                onClick: (e) => {
-                  e.stopPropagation();
-                  onDelete(vp.id);
-                },
-                style: {
-                  cursor: "pointer",
-                  color: theme.danger,
-                  opacity: 0.7,
-                  padding: "2px",
-                  borderRadius: "2px",
-                  fontSize: "10px",
-                  marginLeft: "8px"
-                },
-                children: "删除"
-              }
-            )
-          ]
-        },
-        vp.id
-      ))
-    ] }) })
-  ] }) });
 };
 
 const flattenTree = (nodes, result = [], parentIsLast = []) => {
@@ -6324,6 +6014,684 @@ const SceneTree = ({
   ] });
 };
 
+const FloatingPanel = ({
+  title,
+  onClose,
+  children,
+  width = 300,
+  height = 200,
+  x = 100,
+  y = 100,
+  resizable = false,
+  movable = true,
+  styles,
+  theme,
+  storageId
+}) => {
+  const panelRef = useRef(null);
+  const minWidth = storageId === "tool_measure" ? 320 : 220;
+  const minHeight = storageId === "tool_measure" ? 400 : 120;
+  const [pos, setPos] = useState(() => {
+    if (storageId) {
+      try {
+        const saved = localStorage.getItem(`panel_${storageId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.pos && typeof parsed.pos.x === "number" && typeof parsed.pos.y === "number") {
+            const loadedX = Math.min(Math.max(0, parsed.pos.x), window.innerWidth - 50);
+            const loadedY = Math.min(Math.max(0, parsed.pos.y), window.innerHeight - 50);
+            return { x: loadedX, y: loadedY };
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load panel state", e);
+      }
+    }
+    return { x, y };
+  });
+  const [size, setSize] = useState(() => {
+    if (storageId && resizable) {
+      try {
+        const saved = localStorage.getItem(`panel_${storageId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.size && typeof parsed.size.w === "number" && typeof parsed.size.h === "number") {
+            return {
+              w: Math.max(minWidth, parsed.size.w),
+              h: Math.max(minHeight, parsed.size.h)
+            };
+          }
+        }
+      } catch (e) {
+      }
+    }
+    return { w: width, h: height };
+  });
+  const isDragging = useRef(false);
+  const isResizing = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const startPos = useRef({ x: 0, y: 0 });
+  const startSize = useRef({ w: 0, h: 0 });
+  const currentPosRef = useRef(pos);
+  const currentSizeRef = useRef(size);
+  const animationFrame = useRef(0);
+  useEffect(() => {
+    currentPosRef.current = pos;
+  }, [pos]);
+  useEffect(() => {
+    currentSizeRef.current = size;
+  }, [size]);
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!isDragging.current && !isResizing.current) return;
+      e.preventDefault();
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+      animationFrame.current = requestAnimationFrame(() => {
+        const dx = e.clientX - dragStart.current.x;
+        const dy = e.clientY - dragStart.current.y;
+        if (isDragging.current) {
+          let newX = startPos.current.x + dx;
+          let newY = startPos.current.y + dy;
+          let limitW = window.innerWidth;
+          let limitH = window.innerHeight;
+          if (panelRef.current?.parentElement) {
+            limitW = panelRef.current.parentElement.clientWidth;
+            limitH = panelRef.current.parentElement.clientHeight;
+          }
+          const maxX = limitW - size.w;
+          const maxY = limitH - size.h;
+          newX = Math.max(0, Math.min(newX, maxX));
+          newY = Math.max(0, Math.min(newY, maxY));
+          setPos({ x: newX, y: newY });
+        } else if (isResizing.current) {
+          setSize({
+            w: Math.max(minWidth, startSize.current.w + dx),
+            h: Math.max(minHeight, startSize.current.h + dy)
+          });
+        }
+      });
+    };
+    const handleUp = () => {
+      if ((isDragging.current || isResizing.current) && storageId) {
+        try {
+          const stateToSave = {
+            pos: currentPosRef.current,
+            size: currentSizeRef.current
+          };
+          localStorage.setItem(`panel_${storageId}`, JSON.stringify(stateToSave));
+        } catch (e) {
+          console.error("Failed to save panel state", e);
+        }
+      }
+      isDragging.current = false;
+      isResizing.current = false;
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    };
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    };
+  }, [size, storageId]);
+  const onHeaderDown = (e) => {
+    if (e.button !== 0 || !movable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    startPos.current = { ...pos };
+  };
+  const onResizeDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isResizing.current = true;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    startSize.current = { ...size };
+  };
+  return /* @__PURE__ */ jsxs("div", { ref: panelRef, style: { ...styles.floatingPanel, left: pos.x, top: pos.y, width: size.w, height: size.h }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { ...styles.floatingHeader, cursor: movable ? "move" : "default" }, onMouseDown: onHeaderDown, children: [
+      /* @__PURE__ */ jsx("span", { children: title }),
+      onClose && /* @__PURE__ */ jsx(
+        "div",
+        {
+          onClick: (e) => {
+            e.stopPropagation();
+            onClose();
+          },
+          style: { cursor: "pointer", opacity: 0.8, display: "flex", padding: 4 },
+          onMouseEnter: (e) => {
+            e.currentTarget.style.backgroundColor = "#e81123";
+            e.currentTarget.style.color = "white";
+          },
+          onMouseLeave: (e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+            e.currentTarget.style.color = "inherit";
+          },
+          children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsx("div", { style: styles.floatingContent, children }),
+    resizable && /* @__PURE__ */ jsx("div", { style: styles.resizeHandle, onMouseDown: onResizeDown })
+  ] });
+};
+
+const MeasurePanel = ({
+  t,
+  sceneMgr,
+  measureType,
+  setMeasureType,
+  measureHistory,
+  onDelete,
+  onClear,
+  onClose,
+  styles,
+  theme,
+  highlightedId,
+  onHighlight
+}) => {
+  const groupedHistory = useMemo(() => {
+    const groups = {
+      "dist": [],
+      "angle": [],
+      "coord": []
+    };
+    measureHistory.forEach((item) => {
+      if (groups[item.type]) groups[item.type].push(item);
+    });
+    return groups;
+  }, [measureHistory]);
+  const renderMeasureItem = (item) => /* @__PURE__ */ jsxs(
+    "div",
+    {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "8px 12px",
+        borderBottom: `1px solid ${theme.border}`,
+        fontSize: 12,
+        backgroundColor: highlightedId === item.id ? `${theme.accent}15` : "transparent",
+        borderLeft: highlightedId === item.id ? `4px solid ${theme.accent}` : "4px solid transparent",
+        cursor: "pointer",
+        transition: "all 0.2s"
+      },
+      onClick: () => onHighlight && onHighlight(item.id),
+      children: [
+        /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", flex: 1, marginRight: 8, overflow: "hidden" }, children: /* @__PURE__ */ jsx("span", { style: {
+          color: highlightedId === item.id ? theme.accent : theme.text,
+          fontFamily: "monospace",
+          fontWeight: highlightedId === item.id ? "bold" : "normal",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis"
+        }, children: item.val }) }),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: { cursor: "pointer", opacity: 0.7, color: theme.danger, padding: 4, borderRadius: 4 },
+            onClick: (e) => {
+              e.stopPropagation();
+              onDelete(item.id);
+            },
+            children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
+          }
+        )
+      ]
+    },
+    item.id
+  );
+  const handleTypeChange = (type) => {
+    setMeasureType(type);
+    sceneMgr?.startMeasurement(type);
+  };
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px 12px 0 12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+    /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, justifyContent: "flex-start" }, children: [
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_none") }),
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_dist") }),
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "angle", onClick: () => handleTypeChange("angle"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_angle") }),
+      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "coord", onClick: () => handleTypeChange("coord"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_coord") })
+    ] }) }),
+    /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, color: theme.textMuted, marginBottom: 8, minHeight: 24, padding: "0 4px", fontStyle: "italic", display: "flex", alignItems: "center" }, children: [
+      measureType === "dist" && t("measure_instruct_dist"),
+      measureType === "angle" && t("measure_instruct_angle"),
+      measureType === "coord" && t("measure_instruct_coord"),
+      measureType !== "none" && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", color: theme.accent, fontWeight: "bold", fontSize: 12 }, children: "[ESC]退出" })
+    ] }),
+    /* @__PURE__ */ jsx("div", { style: {
+      border: `1px solid ${theme.border}`,
+      borderRadius: 4,
+      backgroundColor: theme.bg,
+      flex: 1,
+      overflowY: "auto",
+      marginBottom: 12
+    }, children: measureHistory.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 40, textAlign: "center", color: theme.textMuted, fontSize: 12 }, children: t("no_measurements") }) : Object.entries(groupedHistory).map(([type, items]) => {
+      if (items.length === 0) return null;
+      return /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("div", { style: {
+          padding: "4px 10px",
+          backgroundColor: theme.highlight,
+          fontSize: 12,
+          fontWeight: "bold",
+          color: theme.accent,
+          textTransform: "uppercase",
+          borderBottom: `1px solid ${theme.border}`
+        }, children: type === "dist" ? t("measure_dist") : type === "angle" ? t("measure_angle") : t("measure_coord") }),
+        items.map(renderMeasureItem)
+      ] }, type);
+    }) }),
+    /* @__PURE__ */ jsx("div", { style: { padding: "8px 0", borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "flex-end", backgroundColor: theme.bg }, children: /* @__PURE__ */ jsx(
+      Button,
+      {
+        variant: "danger",
+        styles,
+        theme,
+        onClick: onClear,
+        disabled: measureHistory.length === 0,
+        style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" },
+        children: t("measure_clear")
+      }
+    ) })
+  ] }) });
+};
+
+const ClipPanel = ({
+  t,
+  onClose,
+  clipEnabled,
+  setClipEnabled,
+  clipValues,
+  setClipValues,
+  clipActive,
+  setClipActive,
+  styles,
+  theme
+}) => {
+  const SliderRow = ({ axis }) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }, children: [
+    /* @__PURE__ */ jsx(
+      Checkbox,
+      {
+        checked: clipActive[axis],
+        onChange: (v) => setClipActive({ ...clipActive, [axis]: v }),
+        styles,
+        style: { flexShrink: 0 }
+      }
+    ),
+    /* @__PURE__ */ jsx("div", { style: { flex: 1, padding: "0 4px" }, children: /* @__PURE__ */ jsx(
+      DualSlider,
+      {
+        min: 0,
+        max: 100,
+        value: clipValues[axis],
+        onChange: (val) => setClipValues({ ...clipValues, [axis]: val }),
+        theme,
+        disabled: !clipActive[axis]
+      }
+    ) }),
+    /* @__PURE__ */ jsxs("span", { style: {
+      fontSize: 10,
+      color: theme.accent,
+      opacity: clipActive[axis] ? 1 : 0.5,
+      fontFamily: "monospace",
+      minWidth: "40px",
+      textAlign: "right"
+    }, children: [
+      Math.round(clipValues[axis][0]),
+      "-",
+      Math.round(clipValues[axis][1]),
+      "%"
+    ] })
+  ] });
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 260, height: 220, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px" }, children: [
+    /* @__PURE__ */ jsx("div", { style: { marginBottom: 12, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }, children: /* @__PURE__ */ jsx(
+      Checkbox,
+      {
+        label: t("clip_enable"),
+        checked: clipEnabled,
+        onChange: (v) => setClipEnabled(v),
+        styles,
+        style: { fontWeight: "bold", fontSize: 12 }
+      }
+    ) }),
+    /* @__PURE__ */ jsxs("div", { style: {
+      opacity: clipEnabled ? 1 : 0.4,
+      pointerEvents: clipEnabled ? "auto" : "none",
+      transition: "all 0.3s ease"
+    }, children: [
+      /* @__PURE__ */ jsx(SliderRow, { axis: "x" }),
+      /* @__PURE__ */ jsx(SliderRow, { axis: "y" }),
+      /* @__PURE__ */ jsx(SliderRow, { axis: "z" })
+    ] })
+  ] }) });
+};
+
+const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
+  const [format, setFormat] = useState("glb");
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, theme, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10, fontSize: 12, color: theme.textMuted }, children: [
+      t("export_format"),
+      ":"
+    ] }),
+    [
+      { id: "glb", label: "GLB", desc: t("export_glb") },
+      { id: "lmb", label: "LMB", desc: t("export_lmb") },
+      { id: "3dtiles", label: "3D Tiles", desc: t("export_3dtiles") },
+      { id: "nbim", label: "NBIM", desc: t("export_nbim") }
+    ].map((opt) => /* @__PURE__ */ jsxs("label", { style: {
+      display: "flex",
+      alignItems: "center",
+      padding: "10px",
+      cursor: "pointer",
+      border: `1px solid ${format === opt.id ? theme.accent : theme.border}`,
+      borderRadius: 0,
+      marginBottom: 8,
+      backgroundColor: format === opt.id ? `${theme.accent}15` : "transparent",
+      transition: "all 0.2s"
+    }, children: [
+      /* @__PURE__ */ jsx("input", { type: "radio", name: "exportFmt", checked: format === opt.id, onChange: () => setFormat(opt.id), style: { marginRight: 10 } }),
+      /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("div", { style: { color: theme.text, fontWeight: "bold", fontSize: 14 }, children: opt.label }),
+        /* @__PURE__ */ jsx("div", { style: { fontSize: 11, color: theme.textMuted }, children: opt.desc })
+      ] })
+    ] }, opt.id)),
+    /* @__PURE__ */ jsx(
+      Button,
+      {
+        styles,
+        theme,
+        onClick: () => onExport(format),
+        style: { width: "100%", marginTop: 10, height: 40 },
+        children: t("export_btn")
+      }
+    )
+  ] }) });
+};
+
+const ViewpointPanel = ({
+  t,
+  onClose,
+  viewpoints,
+  onSave,
+  onUpdateName,
+  onLoad,
+  onDelete,
+  styles,
+  theme
+}) => {
+  const [newName, setNewName] = useState("");
+  useEffect(() => {
+    setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
+  }, [viewpoints.length, t]);
+  const handleSave = () => {
+    if (newName.trim()) {
+      onSave(newName.trim());
+      setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
+    }
+  };
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleSave();
+    }
+  };
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("viewpoint_title") || "视点管理", onClose, width: 360, height: 450, resizable: true, styles, theme, storageId: "tool_viewpoint", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+    /* @__PURE__ */ jsx("div", { style: { marginBottom: 12 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4 }, children: [
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          autoFocus: true,
+          value: newName,
+          onChange: (e) => setNewName(e.target.value),
+          onKeyDown: handleKeyDown,
+          style: {
+            flex: 1,
+            height: 28,
+            padding: "0 10px",
+            backgroundColor: theme.bg,
+            color: theme.text,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 3,
+            fontSize: 12,
+            outline: "none",
+            fontFamily: DEFAULT_FONT,
+            boxSizing: "border-box",
+            width: "140px"
+          },
+          placeholder: t("viewpoint_title") || "视点名称"
+        }
+      ),
+      /* @__PURE__ */ jsx(Button, { styles, theme, onClick: handleSave, style: { height: 28, padding: "0 12px", minWidth: "60px", whiteSpace: "nowrap", fontSize: 12 }, children: t("btn_confirm") || "保存" })
+    ] }) }),
+    /* @__PURE__ */ jsx("div", { style: {
+      flex: 1,
+      overflowY: "auto",
+      border: `1px solid ${theme.border}`,
+      borderRadius: 4,
+      backgroundColor: theme.bg,
+      padding: "8px",
+      fontSize: "12px",
+      color: theme.textMuted
+    }, children: viewpoints.length === 0 ? /* @__PURE__ */ jsx("div", { style: { textAlign: "center", color: theme.textMuted, fontSize: 12, padding: "40px 0" }, children: t("viewpoint_empty") || "暂无保存的视点" }) : /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "8px" }, children: viewpoints.map((vp) => /* @__PURE__ */ jsxs(
+      "div",
+      {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "8px",
+          border: `1px solid ${theme.border}`,
+          borderRadius: 4,
+          cursor: "pointer",
+          backgroundColor: theme.panelBg,
+          transition: "all 0.2s"
+        },
+        onClick: () => onLoad(vp),
+        onMouseEnter: (e) => {
+          e.currentTarget.style.backgroundColor = theme.itemHover;
+          e.currentTarget.style.borderColor = theme.accent;
+        },
+        onMouseLeave: (e) => {
+          e.currentTarget.style.backgroundColor = theme.panelBg;
+          e.currentTarget.style.borderColor = theme.border;
+        },
+        children: [
+          /* @__PURE__ */ jsx("div", { style: {
+            width: 96,
+            height: 72,
+            backgroundColor: theme.bg,
+            borderRadius: 3,
+            overflow: "hidden",
+            flexShrink: 0,
+            border: `1px solid ${theme.border}`
+          }, children: vp.image ? /* @__PURE__ */ jsx(
+            "img",
+            {
+              src: vp.image,
+              alt: vp.name,
+              style: { width: "100%", height: "100%", objectFit: "cover" }
+            }
+          ) : /* @__PURE__ */ jsx("div", { style: {
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: theme.textMuted,
+            fontSize: 10
+          }, children: "无图" }) }),
+          /* @__PURE__ */ jsx("div", { style: {
+            fontSize: "12px",
+            color: theme.text,
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }, children: vp.name }),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              onClick: (e) => {
+                e.stopPropagation();
+                onDelete(vp.id);
+              },
+              style: {
+                cursor: "pointer",
+                color: theme.danger,
+                opacity: 0.7,
+                padding: "4px",
+                borderRadius: 3,
+                fontSize: "11px",
+                flexShrink: 0
+              },
+              onMouseEnter: (e) => {
+                e.currentTarget.style.opacity = "1";
+                e.currentTarget.style.backgroundColor = `${theme.danger}20`;
+              },
+              onMouseLeave: (e) => {
+                e.currentTarget.style.opacity = "0.7";
+                e.currentTarget.style.backgroundColor = "transparent";
+              },
+              children: "删除"
+            }
+          )
+        ]
+      },
+      vp.id
+    )) }) })
+  ] }) });
+};
+
+const formatTime = (val) => {
+  const hours = Math.floor(val / 2);
+  const mins = val % 2 * 30;
+  return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
+};
+const timeToSlider = (time) => {
+  return Math.round(time * 2);
+};
+const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
+  const timeValue = timeToSlider(settings.sunTime !== void 0 ? settings.sunTime : 12);
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("st_sun_simulation") || "光照模拟", onClose, width: 320, height: 320, resizable: false, styles, theme, storageId: "tool_sun", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }, children: [
+      /* @__PURE__ */ jsx(
+        Checkbox,
+        {
+          label: t("st_sun_enabled") || "启用太阳光",
+          checked: settings.sunEnabled || false,
+          onChange: (val) => onUpdate({ sunEnabled: val }),
+          styles,
+          theme,
+          style: { fontWeight: "bold", fontSize: 13 }
+        }
+      ),
+      /* @__PURE__ */ jsx("div", { style: { fontSize: 11, color: theme.textMuted, marginTop: 8, fontStyle: "italic" }, children: t("st_sun_info") })
+    ] }),
+    settings.sunEnabled && /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: theme.textMuted }, children: [
+        /* @__PURE__ */ jsx("span", { children: t("st_sun_latitude") || "纬度" }),
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 4 }, children: [
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              type: "number",
+              min: -90,
+              max: 90,
+              value: settings.sunLatitude || 0,
+              onChange: (e) => {
+                let val = parseFloat(e.target.value);
+                val = Math.max(-90, Math.min(90, val));
+                onUpdate({ sunLatitude: val });
+              },
+              style: {
+                width: 70,
+                padding: "4px 8px",
+                fontSize: 12,
+                backgroundColor: theme.bg,
+                color: theme.text,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 3,
+                textAlign: "right",
+                fontFamily: "monospace"
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx("span", { style: { color: theme.accent }, children: "°" })
+        ] })
+      ] }) }),
+      /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: theme.textMuted }, children: [
+        /* @__PURE__ */ jsx("span", { children: t("st_sun_longitude") || "经度" }),
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 4 }, children: [
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              type: "number",
+              min: -180,
+              max: 180,
+              value: settings.sunLongitude || 0,
+              onChange: (e) => {
+                let val = parseFloat(e.target.value);
+                val = Math.max(-180, Math.min(180, val));
+                onUpdate({ sunLongitude: val });
+              },
+              style: {
+                width: 70,
+                padding: "4px 8px",
+                fontSize: 12,
+                backgroundColor: theme.bg,
+                color: theme.text,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 3,
+                textAlign: "right",
+                fontFamily: "monospace"
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx("span", { style: { color: theme.accent }, children: "°" })
+        ] })
+      ] }) }),
+      /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16 }, children: [
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: theme.textMuted }, children: [
+          /* @__PURE__ */ jsx("span", { children: t("st_sun_time") || "时间" }),
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, fontFamily: "monospace", color: theme.accent }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
+        ] }),
+        /* @__PURE__ */ jsx(
+          Slider,
+          {
+            min: 0,
+            max: 48,
+            step: 1,
+            value: timeValue,
+            onChange: (val) => {
+              onUpdate({ sunTime: val / 2 });
+            },
+            theme
+          }
+        ),
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: theme.textMuted, padding: "0 4px", marginTop: 2 }, children: [
+          /* @__PURE__ */ jsx("span", { children: "0:00" }),
+          /* @__PURE__ */ jsx("span", { children: "6:00" }),
+          /* @__PURE__ */ jsx("span", { children: "12:00" }),
+          /* @__PURE__ */ jsx("span", { children: "18:00" }),
+          /* @__PURE__ */ jsx("span", { children: "24:00" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx("div", { style: { marginBottom: 8 }, children: /* @__PURE__ */ jsx(
+        Checkbox,
+        {
+          label: t("st_sun_shadow") || "显示阴影",
+          checked: settings.sunShadow || false,
+          onChange: (val) => onUpdate({ sunShadow: val }),
+          styles,
+          theme,
+          style: { fontSize: 12 }
+        }
+      ) })
+    ] })
+  ] }) });
+};
+
 const Section = ({ title, children, theme }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 20 }, children: [
   /* @__PURE__ */ jsx("div", { style: { fontSize: 11, fontWeight: "600", color: theme.accent, marginBottom: 10, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, opacity: 0.9, textTransform: "uppercase", letterSpacing: "0.5px" }, children: title }),
   children
@@ -6500,6 +6868,103 @@ const SettingsPanel = ({
             theme
           }
         ) })
+      ] }),
+      /* @__PURE__ */ jsx(Section, { title: t("st_render_mode"), theme, children: /* @__PURE__ */ jsx(Row, { label: t("st_render_mode"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, background: theme.bg, padding: 2, borderRadius: 0, border: `1px solid ${theme.border}` }, children: [
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            onClick: () => onUpdate({ renderMode: "standard" }),
+            style: {
+              padding: "4px 10px",
+              borderRadius: 0,
+              border: "none",
+              fontSize: 10,
+              cursor: "pointer",
+              background: (settings.renderMode || "standard") === "standard" ? theme.accent : "transparent",
+              color: (settings.renderMode || "standard") === "standard" ? "white" : theme.text
+            },
+            children: t("st_render_standard")
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            onClick: () => onUpdate({ renderMode: "mayo" }),
+            style: {
+              padding: "4px 10px",
+              borderRadius: 0,
+              border: "none",
+              fontSize: 10,
+              cursor: "pointer",
+              background: settings.renderMode === "mayo" ? theme.accent : "transparent",
+              color: settings.renderMode === "mayo" ? "white" : theme.text
+            },
+            children: t("st_render_mayo")
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            onClick: () => onUpdate({ renderMode: "blender" }),
+            style: {
+              padding: "4px 10px",
+              borderRadius: 0,
+              border: "none",
+              fontSize: 10,
+              cursor: "pointer",
+              background: settings.renderMode === "blender" ? theme.accent : "transparent",
+              color: settings.renderMode === "blender" ? "white" : theme.text
+            },
+            children: t("st_render_blender")
+          }
+        )
+      ] }) }) }),
+      /* @__PURE__ */ jsxs(Section, { title: t("st_sun_simulation"), theme, children: [
+        /* @__PURE__ */ jsx("div", { style: { fontSize: 10, color: theme.textMuted, marginBottom: 10, fontStyle: "italic" }, children: t("st_sun_info") }),
+        /* @__PURE__ */ jsx(Row, { label: t("st_sun_enabled"), theme, children: /* @__PURE__ */ jsx(
+          Checkbox,
+          {
+            checked: settings.sunEnabled || false,
+            onChange: (val) => onUpdate({ sunEnabled: val }),
+            styles,
+            theme
+          }
+        ) }),
+        settings.sunEnabled && /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx(Row, { label: `${t("st_sun_latitude")} (${settings.sunLatitude || 0}°)`, theme, children: /* @__PURE__ */ jsx(
+            Slider,
+            {
+              min: -90,
+              max: 90,
+              step: 1,
+              value: settings.sunLatitude || 0,
+              onChange: (val) => onUpdate({ sunLatitude: val }),
+              theme
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: `${t("st_sun_longitude")} (${settings.sunLongitude || 0}°)`, theme, children: /* @__PURE__ */ jsx(
+            Slider,
+            {
+              min: -180,
+              max: 180,
+              step: 1,
+              value: settings.sunLongitude || 0,
+              onChange: (val) => onUpdate({ sunLongitude: val }),
+              theme
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: `${t("st_sun_time")} (${settings.sunTime !== void 0 ? settings.sunTime : 12}:00)`, theme, children: /* @__PURE__ */ jsx(
+            Slider,
+            {
+              min: 0,
+              max: 24,
+              step: 0.5,
+              value: settings.sunTime !== void 0 ? settings.sunTime : 12,
+              onChange: (val) => onUpdate({ sunTime: val }),
+              theme
+            }
+          ) })
+        ] })
       ] })
     ] })
   ] }) });
@@ -7161,7 +7626,13 @@ const ThreeViewer = ({
       ambientInt: 2,
       dirInt: 1,
       bgColor: theme.canvasBg,
-      viewCubeSize: 100
+      viewCubeSize: 100,
+      renderMode: "standard",
+      sunEnabled: false,
+      sunLatitude: 0,
+      sunLongitude: 0,
+      sunTime: 12,
+      sunShadow: false
     };
     try {
       const saved = localStorage.getItem("3dbrowser_sceneSettings");
@@ -7171,7 +7642,15 @@ const ThreeViewer = ({
           ambientInt: typeof parsed.ambientInt === "number" ? parsed.ambientInt : 2,
           dirInt: typeof parsed.dirInt === "number" ? parsed.dirInt : 1,
           bgColor: typeof parsed.bgColor === "string" ? parsed.bgColor : theme.canvasBg,
-          viewCubeSize: typeof parsed.viewCubeSize === "number" ? parsed.viewCubeSize : 100
+          viewCubeSize: typeof parsed.viewCubeSize === "number" ? parsed.viewCubeSize : 100,
+          frustumCulling: parsed.frustumCulling,
+          maxRenderDistance: parsed.maxRenderDistance,
+          renderMode: parsed.renderMode || "standard",
+          sunEnabled: parsed.sunEnabled || false,
+          sunLatitude: parsed.sunLatitude || 0,
+          sunLongitude: parsed.sunLongitude || 0,
+          sunTime: parsed.sunTime !== void 0 ? parsed.sunTime : 12,
+          sunShadow: parsed.sunShadow || false
         };
       }
     } catch (e) {
@@ -8473,6 +8952,17 @@ const ThreeViewer = ({
                 onUpdateName: handleUpdateViewpointName,
                 onLoad: handleLoadViewpoint,
                 onDelete: handleDeleteViewpoint,
+                onClose: () => setActiveTool("none"),
+                styles,
+                theme
+              }
+            ),
+            activeTool === "sun" && /* @__PURE__ */ jsx(
+              SunPanel,
+              {
+                t,
+                settings: sceneSettings,
+                onUpdate: handleSettingsUpdate,
                 onClose: () => setActiveTool("none"),
                 styles,
                 theme
