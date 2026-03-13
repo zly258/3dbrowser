@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
-import React, { useState, useEffect, useRef, useMemo, useCallback, Component } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, Component } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
@@ -4658,6 +4658,272 @@ const getTranslation = (lang, key) => {
   return resources[lang][key] || key;
 };
 
+const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+  const closeMenu = () => {
+    setIsOpen(false);
+  };
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+  const toggleMenu = () => {
+    if (enabled) {
+      setIsOpen(!isOpen);
+    }
+  };
+  const itemStyle = {
+    ...styles.classicMenuItem(isOpen, false),
+    opacity: enabled ? 1 : 0.5,
+    cursor: enabled ? "pointer" : "not-allowed",
+    pointerEvents: enabled ? "auto" : "none"
+  };
+  return /* @__PURE__ */ jsxs(
+    "div",
+    {
+      ref: menuRef,
+      style: { position: "relative", height: "100%" },
+      children: [
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: itemStyle,
+            onClick: toggleMenu,
+            children: label
+          }
+        ),
+        isOpen && enabled && /* @__PURE__ */ jsx("div", { style: styles.classicMenuDropdown, children: children(closeMenu) })
+      ]
+    }
+  );
+};
+const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }) => {
+  const [hover, setHover] = useState(false);
+  const itemStyle = {
+    ...styles.classicMenuSubItem(hover),
+    opacity: enabled ? 1 : 0.5,
+    cursor: enabled ? "pointer" : "not-allowed",
+    pointerEvents: enabled ? "auto" : "none",
+    outline: "none"
+  };
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      style: itemStyle,
+      onClick: () => {
+        if (enabled) {
+          setHover(false);
+          onClick();
+        }
+      },
+      onMouseEnter: () => enabled && setHover(true),
+      onMouseLeave: () => setHover(false),
+      tabIndex: 0,
+      onKeyDown: (e) => {
+        if (e.key === "Enter" || e.key === " ") onClick();
+      },
+      children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
+        checked !== void 0 && /* @__PURE__ */ jsx("div", { style: styles.checkboxCustom(checked), children: checked && /* @__PURE__ */ jsx("div", { style: styles.checkboxCheckmark, children: "✓" }) }),
+        label
+      ] })
+    }
+  );
+};
+
+const MenuBar = (props) => {
+  const {
+    t,
+    styles,
+    theme,
+    hiddenMenus = []
+  } = props;
+  const isHidden = (id) => (hiddenMenus || []).includes(id);
+  const fileInputRef = React.useRef(null);
+  const folderInputRef = React.useRef(null);
+  const batchConvertInputRef = React.useRef(null);
+  return /* @__PURE__ */ jsxs("div", { style: styles.classicMenuBar, children: [
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "file",
+        ref: fileInputRef,
+        style: { display: "none" },
+        multiple: true,
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleOpenFiles
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "file",
+        ref: batchConvertInputRef,
+        style: { display: "none" },
+        multiple: true,
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleBatchConvert
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "file",
+        ref: folderInputRef,
+        style: { display: "none" },
+        ...{ webkitdirectory: "", directory: "" },
+        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
+        onChange: props.handleOpenFolder
+      }
+    ),
+    !isHidden("file") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("menu_file"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+      !isHidden("open_file") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_file"), onClick: () => {
+        fileInputRef.current?.click();
+        close();
+      }, styles }),
+      !isHidden("open_folder") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_folder"), onClick: () => {
+        folderInputRef.current?.click();
+        close();
+      }, styles }),
+      !isHidden("open_url") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_url"), onClick: () => {
+        props.handleOpenUrl?.();
+        close();
+      }, styles }),
+      !isHidden("batch_convert") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_batch_convert"), onClick: () => {
+          batchConvertInputRef.current?.click();
+          close();
+        }, styles })
+      ] }),
+      !isHidden("export") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_export"), onClick: () => {
+          props.setActiveTool?.("export");
+          close();
+        }, styles })
+      ] }),
+      !isHidden("clear") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("op_clear"), onClick: () => {
+          props.handleClear?.();
+          close();
+        }, styles })
+      ] })
+    ] }) }),
+    !isHidden("view") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("view"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+      !isHidden("fit_view") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_fit_view"), onClick: () => {
+        props.sceneMgr?.fitView();
+        close();
+      }, styles }),
+      !isHidden("views") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_front"), onClick: () => {
+          props.handleView?.("front");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_back"), onClick: () => {
+          props.handleView?.("back");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_top"), onClick: () => {
+          props.handleView?.("top");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_bottom"), onClick: () => {
+          props.handleView?.("bottom");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_left"), onClick: () => {
+          props.handleView?.("left");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_right"), onClick: () => {
+          props.handleView?.("right");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_se"), onClick: () => {
+          props.handleView?.("se");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_sw"), onClick: () => {
+          props.handleView?.("sw");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_ne"), onClick: () => {
+          props.handleView?.("ne");
+          close();
+        }, styles }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_nw"), onClick: () => {
+          props.handleView?.("nw");
+          close();
+        }, styles })
+      ] })
+    ] }) }),
+    !isHidden("interface") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("interface_display"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+      !isHidden("outline") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_outline"), checked: props.showOutline, onClick: () => {
+        props.setShowOutline?.(!props.showOutline);
+        close();
+      }, styles }),
+      !isHidden("props") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_props"), checked: props.showProps, onClick: () => {
+        props.setShowProps?.(!props.showProps);
+        close();
+      }, styles }),
+      !isHidden("stats") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_monitor"), checked: props.showStats, onClick: () => {
+        props.setShowStats?.(!props.showStats);
+        close();
+      }, styles }),
+      !isHidden("pick") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("op_pick"), checked: props.pickEnabled, onClick: () => {
+          props.setPickEnabled?.(!props.pickEnabled);
+          close();
+        }, styles })
+      ] })
+    ] }) }),
+    !isHidden("tool") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("tool"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+      !isHidden("measure") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_measure"), onClick: () => {
+        props.setActiveTool?.("measure");
+        close();
+      }, styles }),
+      !isHidden("clip") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_clip"), onClick: () => {
+        props.setActiveTool?.("clip");
+        close();
+      }, styles }),
+      !isHidden("viewpoint") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("viewpoint_title"), onClick: () => {
+        props.setActiveTool?.("viewpoint");
+        close();
+      }, styles }),
+      !isHidden("sun") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_sun_simulation"), onClick: () => {
+          props.setActiveTool?.("sun");
+          close();
+        }, styles })
+      ] })
+    ] }) }),
+    !isHidden("settings_panel") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("settings"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
+      !isHidden("settings") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("settings"), onClick: () => {
+        props.setActiveTool?.("settings");
+        close();
+      }, styles }),
+      !isHidden("about") && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_about"), onClick: () => {
+          props.onOpenAbout?.();
+          close();
+        }, styles })
+      ] })
+    ] }) })
+  ] });
+};
+
 const Button = ({
   children,
   variant = "primary",
@@ -5054,270 +5320,6 @@ const IconSun = (props) => createIcon(
   props
 );
 
-const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
-  const closeMenu = () => {
-    setIsOpen(false);
-  };
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-  const toggleMenu = () => {
-    if (enabled) {
-      setIsOpen(!isOpen);
-    }
-  };
-  const itemStyle = {
-    ...styles.classicMenuItem(isOpen, false),
-    opacity: enabled ? 1 : 0.5,
-    cursor: enabled ? "pointer" : "not-allowed",
-    pointerEvents: enabled ? "auto" : "none"
-  };
-  return /* @__PURE__ */ jsxs(
-    "div",
-    {
-      ref: menuRef,
-      style: { position: "relative", height: "100%" },
-      children: [
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            style: itemStyle,
-            onClick: toggleMenu,
-            children: label
-          }
-        ),
-        isOpen && enabled && /* @__PURE__ */ jsx("div", { style: styles.classicMenuDropdown, children: children(closeMenu) })
-      ]
-    }
-  );
-};
-const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }) => {
-  const [hover, setHover] = useState(false);
-  const itemStyle = {
-    ...styles.classicMenuSubItem(hover),
-    opacity: enabled ? 1 : 0.5,
-    cursor: enabled ? "pointer" : "not-allowed",
-    pointerEvents: enabled ? "auto" : "none",
-    outline: "none"
-  };
-  return /* @__PURE__ */ jsx(
-    "div",
-    {
-      style: itemStyle,
-      onClick: () => {
-        if (enabled) {
-          setHover(false);
-          onClick();
-        }
-      },
-      onMouseEnter: () => enabled && setHover(true),
-      onMouseLeave: () => setHover(false),
-      tabIndex: 0,
-      onKeyDown: (e) => {
-        if (e.key === "Enter" || e.key === " ") onClick();
-      },
-      children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
-        checked !== void 0 && /* @__PURE__ */ jsx("div", { style: styles.checkboxCustom(checked), children: checked && /* @__PURE__ */ jsx("div", { style: styles.checkboxCheckmark, children: "✓" }) }),
-        label
-      ] })
-    }
-  );
-};
-const MenuBar = (props) => {
-  const {
-    t,
-    styles,
-    theme,
-    hiddenMenus = []
-  } = props;
-  const isHidden = (id) => (hiddenMenus || []).includes(id);
-  const fileInputRef = React.useRef(null);
-  const folderInputRef = React.useRef(null);
-  const batchConvertInputRef = React.useRef(null);
-  return /* @__PURE__ */ jsxs("div", { style: styles.classicMenuBar, children: [
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "file",
-        ref: fileInputRef,
-        style: { display: "none" },
-        multiple: true,
-        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
-        onChange: props.handleOpenFiles
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "file",
-        ref: batchConvertInputRef,
-        style: { display: "none" },
-        multiple: true,
-        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
-        onChange: props.handleBatchConvert
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "file",
-        ref: folderInputRef,
-        style: { display: "none" },
-        ...{ webkitdirectory: "", directory: "" },
-        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
-        onChange: props.handleOpenFolder
-      }
-    ),
-    !isHidden("file") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("menu_file"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("open_file") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_file"), onClick: () => {
-        fileInputRef.current?.click();
-        close();
-      }, styles }),
-      !isHidden("open_folder") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_folder"), onClick: () => {
-        folderInputRef.current?.click();
-        close();
-      }, styles }),
-      !isHidden("open_url") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_url"), onClick: () => {
-        props.handleOpenUrl?.();
-        close();
-      }, styles }),
-      !isHidden("batch_convert") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_batch_convert"), onClick: () => {
-          batchConvertInputRef.current?.click();
-          close();
-        }, styles })
-      ] }),
-      !isHidden("export") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_export"), onClick: () => {
-          props.setActiveTool?.("export");
-          close();
-        }, styles })
-      ] }),
-      !isHidden("clear") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("op_clear"), onClick: () => {
-          props.handleClear?.();
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("view") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("view"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("fit_view") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_fit_view"), onClick: () => {
-        props.sceneMgr?.fitView();
-        close();
-      }, styles }),
-      !isHidden("views") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_front"), onClick: () => {
-          props.handleView?.("front");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_back"), onClick: () => {
-          props.handleView?.("back");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_top"), onClick: () => {
-          props.handleView?.("top");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_bottom"), onClick: () => {
-          props.handleView?.("bottom");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_left"), onClick: () => {
-          props.handleView?.("left");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_right"), onClick: () => {
-          props.handleView?.("right");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_se"), onClick: () => {
-          props.handleView?.("se");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_sw"), onClick: () => {
-          props.handleView?.("sw");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_ne"), onClick: () => {
-          props.handleView?.("ne");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_nw"), onClick: () => {
-          props.handleView?.("nw");
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("interface") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("interface_display"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("outline") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_outline"), checked: props.showOutline, onClick: () => {
-        props.setShowOutline?.(!props.showOutline);
-        close();
-      }, styles }),
-      !isHidden("props") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_props"), checked: props.showProps, onClick: () => {
-        props.setShowProps?.(!props.showProps);
-        close();
-      }, styles }),
-      !isHidden("stats") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_monitor"), checked: props.showStats, onClick: () => {
-        props.setShowStats?.(!props.showStats);
-        close();
-      }, styles }),
-      !isHidden("pick") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("op_pick"), checked: props.pickEnabled, onClick: () => {
-          props.setPickEnabled?.(!props.pickEnabled);
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("tool") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("tool"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("measure") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_measure"), onClick: () => {
-        props.setActiveTool?.("measure");
-        close();
-      }, styles }),
-      !isHidden("clip") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_clip"), onClick: () => {
-        props.setActiveTool?.("clip");
-        close();
-      }, styles }),
-      !isHidden("viewpoint") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("viewpoint_title"), onClick: () => {
-        props.setActiveTool?.("viewpoint");
-        close();
-      }, styles }),
-      !isHidden("sun") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_sun_simulation"), onClick: () => {
-          props.setActiveTool?.("sun");
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("settings_panel") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("settings"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("settings") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("settings"), onClick: () => {
-        props.setActiveTool?.("settings");
-        close();
-      }, styles }),
-      !isHidden("about") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_about"), onClick: () => {
-          props.onOpenAbout?.();
-          close();
-        }, styles })
-      ] })
-    ] }) })
-  ] });
-};
 const Toolbar = (props) => {
   const {
     t,
@@ -5745,7 +5747,7 @@ const Checkbox = ({ label, checked, onChange, styles, style }) => {
       },
       children: [
         /* @__PURE__ */ jsx("div", { style: styles.checkboxCustom(checked), children: checked && /* @__PURE__ */ jsx("div", { style: styles.checkboxCheckmark, children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", style: { width: "100%", height: "100%" }, children: /* @__PURE__ */ jsx("polyline", { points: "20 6 9 17 4 12" }) }) }) }),
-        label && /* @__PURE__ */ jsx("span", { style: { marginLeft: 8 }, children: label })
+        label && /* @__PURE__ */ jsx("span", { style: { marginLeft: 4 }, children: label })
       ]
     }
   );
@@ -6573,7 +6575,7 @@ const timeToSlider = (time) => {
 };
 const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
   const timeValue = timeToSlider(settings.sunTime !== void 0 ? settings.sunTime : 12);
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("st_sun_simulation") || "光照模拟", onClose, width: 320, height: 320, resizable: false, styles, theme, storageId: "tool_sun", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("st_sun_simulation") || "光照模拟", onClose, width: 320, height: 350, resizable: false, styles, theme, storageId: "tool_sun", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }, children: [
     /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }, children: [
       /* @__PURE__ */ jsx(
         Checkbox,
@@ -6868,103 +6870,6 @@ const SettingsPanel = ({
             theme
           }
         ) })
-      ] }),
-      /* @__PURE__ */ jsx(Section, { title: t("st_render_mode"), theme, children: /* @__PURE__ */ jsx(Row, { label: t("st_render_mode"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, background: theme.bg, padding: 2, borderRadius: 0, border: `1px solid ${theme.border}` }, children: [
-        /* @__PURE__ */ jsx(
-          "button",
-          {
-            onClick: () => onUpdate({ renderMode: "standard" }),
-            style: {
-              padding: "4px 10px",
-              borderRadius: 0,
-              border: "none",
-              fontSize: 10,
-              cursor: "pointer",
-              background: (settings.renderMode || "standard") === "standard" ? theme.accent : "transparent",
-              color: (settings.renderMode || "standard") === "standard" ? "white" : theme.text
-            },
-            children: t("st_render_standard")
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          "button",
-          {
-            onClick: () => onUpdate({ renderMode: "mayo" }),
-            style: {
-              padding: "4px 10px",
-              borderRadius: 0,
-              border: "none",
-              fontSize: 10,
-              cursor: "pointer",
-              background: settings.renderMode === "mayo" ? theme.accent : "transparent",
-              color: settings.renderMode === "mayo" ? "white" : theme.text
-            },
-            children: t("st_render_mayo")
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          "button",
-          {
-            onClick: () => onUpdate({ renderMode: "blender" }),
-            style: {
-              padding: "4px 10px",
-              borderRadius: 0,
-              border: "none",
-              fontSize: 10,
-              cursor: "pointer",
-              background: settings.renderMode === "blender" ? theme.accent : "transparent",
-              color: settings.renderMode === "blender" ? "white" : theme.text
-            },
-            children: t("st_render_blender")
-          }
-        )
-      ] }) }) }),
-      /* @__PURE__ */ jsxs(Section, { title: t("st_sun_simulation"), theme, children: [
-        /* @__PURE__ */ jsx("div", { style: { fontSize: 10, color: theme.textMuted, marginBottom: 10, fontStyle: "italic" }, children: t("st_sun_info") }),
-        /* @__PURE__ */ jsx(Row, { label: t("st_sun_enabled"), theme, children: /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            checked: settings.sunEnabled || false,
-            onChange: (val) => onUpdate({ sunEnabled: val }),
-            styles,
-            theme
-          }
-        ) }),
-        settings.sunEnabled && /* @__PURE__ */ jsxs(Fragment, { children: [
-          /* @__PURE__ */ jsx(Row, { label: `${t("st_sun_latitude")} (${settings.sunLatitude || 0}°)`, theme, children: /* @__PURE__ */ jsx(
-            Slider,
-            {
-              min: -90,
-              max: 90,
-              step: 1,
-              value: settings.sunLatitude || 0,
-              onChange: (val) => onUpdate({ sunLatitude: val }),
-              theme
-            }
-          ) }),
-          /* @__PURE__ */ jsx(Row, { label: `${t("st_sun_longitude")} (${settings.sunLongitude || 0}°)`, theme, children: /* @__PURE__ */ jsx(
-            Slider,
-            {
-              min: -180,
-              max: 180,
-              step: 1,
-              value: settings.sunLongitude || 0,
-              onChange: (val) => onUpdate({ sunLongitude: val }),
-              theme
-            }
-          ) }),
-          /* @__PURE__ */ jsx(Row, { label: `${t("st_sun_time")} (${settings.sunTime !== void 0 ? settings.sunTime : 12}:00)`, theme, children: /* @__PURE__ */ jsx(
-            Slider,
-            {
-              min: 0,
-              max: 24,
-              step: 0.5,
-              value: settings.sunTime !== void 0 ? settings.sunTime : 12,
-              onChange: (val) => onUpdate({ sunTime: val }),
-              theme
-            }
-          ) })
-        ] })
       ] })
     ] })
   ] }) });
