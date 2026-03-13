@@ -10,7 +10,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { MenuBar, Toolbar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel, SunPanel } from "./src/components/ToolPanels";
 import { SettingsPanel } from "./src/components/SettingsPanel";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
@@ -177,7 +177,7 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun'>('none');
     
     // Viewpoint State
     const [viewpoints, setViewpoints] = useState<any[]>([]);
@@ -231,11 +231,16 @@ export const ThreeViewer = ({
 
     // Settings State (mirrors SceneManager) - 从localStorage恢复
     const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
-        let baseSettings = {
+        let baseSettings: SceneSettings = {
             ambientInt: 2.0,
             dirInt: 1.0,
             bgColor: theme.canvasBg,
             viewCubeSize: 100,
+            renderMode: 'standard',
+            sunEnabled: false,
+            sunLatitude: 0,
+            sunLongitude: 0,
+            sunTime: 12,
         };
         try {
             const saved = localStorage.getItem('3dbrowser_sceneSettings');
@@ -246,6 +251,13 @@ export const ThreeViewer = ({
                     dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
                     bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
                     viewCubeSize: typeof parsed.viewCubeSize === 'number' ? parsed.viewCubeSize : 100,
+                    frustumCulling: parsed.frustumCulling,
+                    maxRenderDistance: parsed.maxRenderDistance,
+                    renderMode: parsed.renderMode || 'standard',
+                    sunEnabled: parsed.sunEnabled || false,
+                    sunLatitude: parsed.sunLatitude || 0,
+                    sunLongitude: parsed.sunLongitude || 0,
+                    sunTime: parsed.sunTime !== undefined ? parsed.sunTime : 12,
                 };
             }
         } catch (e) { console.error("Failed to load sceneSettings", e); }
@@ -1792,6 +1804,17 @@ export const ThreeViewer = ({
                             onClose={() => setActiveTool('none')}
                             styles={styles} 
                             theme={theme} 
+                        />
+                    )}
+
+                    {activeTool === 'sun' && (
+                        <SunPanel 
+                            t={t}
+                            settings={sceneSettings}
+                            onUpdate={handleSettingsUpdate}
+                            onClose={() => setActiveTool('none')}
+                            styles={styles}
+                            theme={theme}
                         />
                     )}
                 </div>

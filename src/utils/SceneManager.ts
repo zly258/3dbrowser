@@ -26,6 +26,13 @@ export interface SceneSettings {
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
+    // 渲染模式: 'standard' | 'mayo' | 'blender'
+    renderMode?: 'standard' | 'mayo' | 'blender';
+    // 光照模拟参数
+    sunLatitude?: number;   // 纬度 (-90 ~ 90)
+    sunLongitude?: number;  // 经度 (-180 ~ 180)
+    sunTime?: number;       // 时间 (0-24，12为正午)
+    sunEnabled?: boolean;   // 是否启用太阳光模拟
 }
 
 export interface StructureTreeNode {
@@ -58,6 +65,7 @@ export class SceneManager {
     ambientLight: THREE.AmbientLight;
     dirLight: THREE.DirectionalLight;
     backLight: THREE.DirectionalLight;
+    sunLight: THREE.DirectionalLight; // 太阳光（用于光照模拟）
 
     // 结构树
     structureRoot: StructureTreeNode = { id: 'root', name: 'Root', type: 'Group', children: [] };
@@ -232,7 +240,7 @@ export class SceneManager {
         };
         
         // 灯光
-        this.ambientLight = new THREE.AmbientLight(0xffffff, this.settings.ambientInt); 
+        this.ambientLight = new THREE.AmbientLight(0xffffff, this.settings.ambientInt);
         this.scene.add(this.ambientLight);
         this.dirLight = new THREE.DirectionalLight(0xffffff, this.settings.dirInt);
         this.dirLight.position.set(50, 50, 100);
@@ -240,6 +248,12 @@ export class SceneManager {
         this.backLight = new THREE.DirectionalLight(0xffffff, 0.8);
         this.backLight.position.set(-50, -50, -10);
         this.scene.add(this.backLight);
+        
+        // 太阳光（光照模拟）
+        this.sunLight = new THREE.DirectionalLight(0xfff4e5, 1.5);
+        this.sunLight.position.set(100, 100, 50);
+        this.sunLight.visible = false;
+        this.scene.add(this.sunLight);
 
         // 选择辅助器
         const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
@@ -302,6 +316,17 @@ export class SceneManager {
         this.ambientLight.intensity = this.settings.ambientInt;
         this.dirLight.intensity = this.settings.dirInt;
 
+        // 应用渲染模式
+        if (newSettings.renderMode !== undefined) {
+            this.applyRenderMode(this.settings.renderMode);
+        }
+
+        // 应用光照模拟（太阳光）
+        if (newSettings.sunEnabled !== undefined || newSettings.sunLatitude !== undefined || 
+            newSettings.sunLongitude !== undefined || newSettings.sunTime !== undefined) {
+            this.updateSunPosition();
+        }
+
         // 应用背景
         this.renderer.setClearColor(this.settings.bgColor);
 
@@ -327,6 +352,121 @@ export class SceneManager {
 
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
+    }
+
+    // 根据经纬度和时间计算太阳位置
+    private updateSunPosition() {
+        const lat = this.settings.sunLatitude || 0;
+        const lng = this.settings.sunLongitude || 0;
+        const time = this.settings.sunTime !== undefined ? this.settings.sunTime : 12;
+        const enabled = this.settings.sunEnabled !== false;
+
+        this.sunLight.visible = enabled;
+
+        if (!enabled) {
+            // 如果禁用太阳光，降低方向光强度作为补偿
+            this.dirLight.intensity = this.settings.dirInt;
+            return;
+        }
+
+        // 计算太阳位置
+        // 将时间转换为角度（12点为0度，每小时15度）
+        const hourAngle = (time - 12) * 15 * (Math.PI / 180);
+        
+        // 纬度转换为弧度
+        const latRad = lat * (Math.PI / 180);
+        
+        // 太阳高度角（简化计算，假设春分/秋分）
+        // 一天中太阳高度变化
+        const sunElevation = 90 - Math.abs(lat) + 23.5 * Math.sin((time - 6) * 15 * (Math.PI / 180));
+        const elevationRad = sunElevation * (Math.PI / 180);
+        
+        // 太阳方位角
+        const azimuthAngle = hourAngle + (lng * Math.PI / 180);
+
+        // 计算太阳位置（相对于场景中心）
+        const distance = 100;
+        const x = distance * Math.cos(elevationRad) * Math.sin(azimuthAngle);
+        const y = distance * Math.sin(elevationRad);
+        const z = distance * Math.cos(elevationRad) * Math.cos(azimuthAngle);
+
+        this.sunLight.position.set(x, Math.max(y, 1), z);
+        
+        // 调整太阳光强度（根据高度角）
+        const intensity = Math.max(0.2, Math.sin(elevationRad)) * 2;
+        this.sunLight.intensity = intensity;
+
+        // 太阳光颜色：早晨/傍晚偏橙红，中午偏黄白
+        const sunColor = new THREE.Color();
+        if (time < 7 || time > 18) {
+            // 早晚：橙红色
+            sunColor.setHex(0xffaa66);
+        } else if (time < 9 || time > 16) {
+            // 早晨/傍晚：金黄色
+            sunColor.setHex(0xffcc88);
+        } else {
+            // 中午：暖白色
+            sunColor.setHex(0xfff4e5);
+        }
+        this.sunLight.color = sunColor;
+
+        // 降低方向光强度，避免过曝
+        this.dirLight.intensity = this.settings.dirInt * 0.3;
+    }
+
+    // 应用渲染模式
+    private applyRenderMode(mode: 'standard' | 'mayo' | 'blender') {
+        // 遍历所有材质并应用渲染模式
+        this.contentGroup.traverse((obj) => {
+            if ((obj as THREE.Mesh).isMesh) {
+                const mesh = obj as THREE.Mesh;
+                const material = mesh.material as THREE.Material;
+                
+                if (material) {
+                    this.applyMaterialMode(material, mode);
+                }
+                
+                // 处理多材质
+                if (Array.isArray(material)) {
+                    material.forEach(mat => this.applyMaterialMode(mat, mode));
+                }
+            }
+        });
+    }
+
+    private applyMaterialMode(material: THREE.Material, mode: 'standard' | 'mayo' | 'blender') {
+        if (material instanceof THREE.MeshStandardMaterial || 
+            material instanceof THREE.MeshPhongMaterial ||
+            material instanceof THREE.MeshLambertMaterial) {
+            
+            switch (mode) {
+                case 'mayo':
+                    // Mayo 模式：更鲜艳的颜色，更高的对比度
+                    material.envMapIntensity = 1.2;
+                    material.roughness = Math.max(0.3, material.roughness * 0.8);
+                    material.metalness = Math.min(0.8, material.metalness * 1.2);
+                    break;
+                    
+                case 'blender':
+                    // Blender 模式：类似 Blender 的渲染效果
+                    material.envMapIntensity = 0.8;
+                    material.roughness = Math.min(0.9, material.roughness * 1.1);
+                    material.metalness = Math.min(0.5, material.metalness * 0.8);
+                    // 增加漫反射
+                    if (material instanceof THREE.MeshStandardMaterial) {
+                        material.ambientLight = new THREE.Color(0x404040);
+                    }
+                    break;
+                    
+                case 'standard':
+                default:
+                    // 标准模式：恢复默认
+                    material.envMapIntensity = 1.0;
+                    material.roughness = 0.5;
+                    material.metalness = 0.0;
+                    break;
+            }
+        }
     }
     
     createCircleTexture() {

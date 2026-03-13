@@ -5,7 +5,7 @@ import {
     IconFolderOpen, IconFile, IconDownload, IconMaximize, 
     IconRuler, IconScissors, IconSettings, IconInfo, 
     IconTrash2, IconMousePointer, IconBox, IconList, 
-    IconActivity, IconCamera, IconEye 
+    IconActivity, IconCamera, IconEye, IconSun 
 } from "../theme/Icons";
 
 interface MenuItemProps {
@@ -125,8 +125,8 @@ interface MenuBarProps {
     handleClear?: () => void;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;
@@ -259,6 +259,12 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                             {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool?.('measure'); close(); }} styles={styles} />}
                             {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool?.('clip'); close(); }} styles={styles} />}
                             {!isHidden('viewpoint') && <ClassicSubItem label={t('viewpoint_title')} onClick={() => { props.setActiveTool?.('viewpoint'); close(); }} styles={styles} />}
+                            {!isHidden('sun') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('st_sun_simulation')} onClick={() => { props.setActiveTool?.('sun'); close(); }} styles={styles} />
+                                </>
+                            )}
                         </>
                     )}
                 </ClassicMenuItem>
@@ -591,6 +597,16 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_view')}
                             active={props.activeTool === 'viewpoint'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'viewpoint' ? 'none' : 'viewpoint')}
+                            styles={styles}
+                            theme={theme}
+                        />
+                    )}
+                    {!isHidden('sun') && (
+                        <ImageButton 
+                            icon={<IconSun width={16} height={16} />}
+                            label={t('st_sun_simulation')}
+                            active={props.activeTool === 'sun'}
+                            onClick={() => props.setActiveTool?.(props.activeTool === 'sun' ? 'none' : 'sun')}
                             styles={styles}
                             theme={theme}
                         />

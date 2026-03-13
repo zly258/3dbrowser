@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { IconClose, IconClear } from "../theme/Icons";
-import { Button, PanelSection, DualSlider } from "./CommonUI";
+import { Button, PanelSection, DualSlider, Slider } from "./CommonUI";
 import { DEFAULT_FONT } from "../theme/Styles";
 
 // --- 通用浮动面板 ---
@@ -494,7 +494,7 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
     };
 
     return (
-        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={280} height={300} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
+        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={360} height={450} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ marginBottom: 12 }}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -508,7 +508,7 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
                                 backgroundColor: theme.bg, color: theme.text, 
                                 border: `1px solid ${theme.border}`, borderRadius: 3,
                                 fontSize: 12, outline: 'none', fontFamily: DEFAULT_FONT,
-                                boxSizing: 'border-box',
+                                boxSizing: 'border-box', width: '140px'
                             }}
                             placeholder={t("viewpoint_title") || "视点名称"}
                         />
@@ -518,64 +518,109 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
                     </div>
                 </div>
 
-                {/* 简单显示现有视点数量 */}
+                {/* 显示视点列表：图片+名称 */}
                 <div style={{ 
                     flex: 1, 
                     overflowY: 'auto', 
                     border: `1px solid ${theme.border}`,
                     borderRadius: 4,
                     backgroundColor: theme.bg,
-                    padding: '12px',
+                    padding: '8px',
                     fontSize: '12px',
                     color: theme.textMuted
                 }}>
                     {viewpoints.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>
+                        <div style={{ textAlign: 'center', color: theme.textMuted, fontSize: 12, padding: '40px 0' }}>
                             {t("viewpoint_empty") || "暂无保存的视点"}
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <div style={{ marginBottom: '8px', color: theme.text, fontWeight: '500' }}>
-                                {t("viewpoint_title") || "视点"} ({viewpoints.length})
-                            </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {viewpoints.map((vp: any) => (
                                 <div 
                                     key={vp.id}
                                     style={{ 
                                         display: 'flex',
-                                        justifyContent: 'space-between',
                                         alignItems: 'center',
-                                        padding: '6px 8px',
-                                        borderBottom: `1px solid ${theme.border}`,
+                                        gap: '10px',
+                                        padding: '8px',
+                                        border: `1px solid ${theme.border}`,
+                                        borderRadius: 4,
                                         cursor: 'pointer',
-                                        borderRadius: '2px',
                                         backgroundColor: theme.panelBg,
-                                        transition: 'background-color 0.2s'
+                                        transition: 'all 0.2s'
                                     }}
                                     onClick={() => onLoad(vp)}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.panelBg}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = theme.itemHover;
+                                        e.currentTarget.style.borderColor = theme.accent;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = theme.panelBg;
+                                        e.currentTarget.style.borderColor = theme.border;
+                                    }}
                                 >
+                                    {/* 缩略图 */}
                                     <div style={{ 
-                                        fontSize: '11px', 
+                                        width: 96, 
+                                        height: 72, 
+                                        backgroundColor: theme.bg,
+                                        borderRadius: 3,
+                                        overflow: 'hidden',
+                                        flexShrink: 0,
+                                        border: `1px solid ${theme.border}`
+                                    }}>
+                                        {vp.image ? (
+                                            <img 
+                                                src={vp.image} 
+                                                alt={vp.name}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                        ) : (
+                                            <div style={{ 
+                                                width: '100%', 
+                                                height: '100%', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center',
+                                                color: theme.textMuted,
+                                                fontSize: 10
+                                            }}>
+                                                无图
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* 名称 */}
+                                    <div style={{ 
+                                        fontSize: '12px', 
                                         color: theme.text,
-                                        whiteSpace: 'nowrap',
+                                        flex: 1,
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
-                                        flex: 1
+                                        whiteSpace: 'nowrap'
                                     }}>
                                         {vp.name}
                                     </div>
+                                    
+                                    {/* 删除按钮 */}
                                     <div 
                                         onClick={(e) => { e.stopPropagation(); onDelete(vp.id); }}
                                         style={{ 
                                             cursor: 'pointer',
                                             color: theme.danger,
                                             opacity: 0.7,
-                                            padding: '2px',
-                                            borderRadius: '2px',
-                                            fontSize: '10px',
-                                            marginLeft: '8px'
+                                            padding: '4px',
+                                            borderRadius: 3,
+                                            fontSize: '11px',
+                                            flexShrink: 0
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.opacity = '1';
+                                            e.currentTarget.style.backgroundColor = `${theme.danger}20`;
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.opacity = '0.7';
+                                            e.currentTarget.style.backgroundColor = 'transparent';
                                         }}
                                     >
                                         删除
@@ -585,6 +630,132 @@ export const ViewpointPanel = ({ t, onClose, viewpoints, onSave, onUpdateName, o
                         </div>
                     )}
                 </div>
+            </div>
+        </FloatingPanel>
+    );
+};
+
+// --- 光照模拟面板 ---
+export const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }: any) => {
+    return (
+        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} height={280} resizable={false} styles={styles} theme={theme} storageId="tool_sun">
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+                
+                {/* 启用开关 */}
+                <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
+                    <Checkbox 
+                        label={t("st_sun_enabled") || "启用太阳光"} 
+                        checked={settings.sunEnabled || false} 
+                        onChange={(val: boolean) => onUpdate({sunEnabled: val})} 
+                        styles={styles} 
+                        theme={theme}
+                        style={{ fontWeight: 'bold', fontSize: 13 }}
+                    />
+                    <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, fontStyle: 'italic' }}>
+                        {t("st_sun_info")}
+                    </div>
+                </div>
+
+                {settings.sunEnabled && (
+                    <>
+                        {/* 纬度 */}
+                        <div style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: theme.textMuted }}>
+                                <span>{t("st_sun_latitude") || "纬度"}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <input 
+                                        type="number" 
+                                        min={-90} 
+                                        max={90}
+                                        value={settings.sunLatitude || 0}
+                                        onChange={(e) => {
+                                            let val = parseFloat(e.target.value);
+                                            val = Math.max(-90, Math.min(90, val));
+                                            onUpdate({sunLatitude: val});
+                                        }}
+                                        style={{ 
+                                            width: 70, 
+                                            padding: '4px 8px', 
+                                            fontSize: 12, 
+                                            backgroundColor: theme.bg, 
+                                            color: theme.text, 
+                                            border: `1px solid ${theme.border}`, 
+                                            borderRadius: 3,
+                                            textAlign: 'right',
+                                            fontFamily: 'monospace'
+                                        }}
+                                    />
+                                    <span style={{ color: theme.accent }}>°</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 经度 */}
+                        <div style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: theme.textMuted }}>
+                                <span>{t("st_sun_longitude") || "经度"}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <input 
+                                        type="number" 
+                                        min={-180} 
+                                        max={180}
+                                        value={settings.sunLongitude || 0}
+                                        onChange={(e) => {
+                                            let val = parseFloat(e.target.value);
+                                            val = Math.max(-180, Math.min(180, val));
+                                            onUpdate({sunLongitude: val});
+                                        }}
+                                        style={{ 
+                                            width: 70, 
+                                            padding: '4px 8px', 
+                                            fontSize: 12, 
+                                            backgroundColor: theme.bg, 
+                                            color: theme.text, 
+                                            border: `1px solid ${theme.border}`, 
+                                            borderRadius: 3,
+                                            textAlign: 'right',
+                                            fontFamily: 'monospace'
+                                        }}
+                                    />
+                                    <span style={{ color: theme.accent }}>°</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 时间 */}
+                        <div style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: theme.textMuted }}>
+                                <span>{t("st_sun_time") || "时间"}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <input 
+                                        type="number" 
+                                        min={0} 
+                                        max={24}
+                                        step={0.5}
+                                        value={settings.sunTime !== undefined ? settings.sunTime : 12}
+                                        onChange={(e) => {
+                                            let val = parseFloat(e.target.value);
+                                            val = Math.max(0, Math.min(24, val));
+                                            onUpdate({sunTime: val});
+                                        }}
+                                        style={{ 
+                                            width: 70, 
+                                            padding: '4px 8px', 
+                                            fontSize: 12, 
+                                            backgroundColor: theme.bg, 
+                                            color: theme.text, 
+                                            border: `1px solid ${theme.border}`, 
+                                            borderRadius: 3,
+                                            textAlign: 'right',
+                                            fontFamily: 'monospace'
+                                        }}
+                                    />
+                                    <span style={{ color: theme.accent }}>时</span>
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </FloatingPanel>
     );
