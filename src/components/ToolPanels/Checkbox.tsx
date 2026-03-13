@@ -17,7 +17,7 @@ export const Checkbox = ({ label, checked, onChange, styles, style }: any) => {
                     </div>
                 )}
             </div>
-            {label && <span style={{ marginLeft: 8 }}>{label}</span>}
+            {label && <span style={{ marginLeft: 4 }}>{label}</span>}
         </label>
     );
 };

@@ -1,0 +1,181 @@
+import React, { useRef } from "react";
+import { ThemeColors } from "../../theme/Styles";
+import { ClassicMenuItem, ClassicSubItem } from "./MenuItem";
+
+interface MenuBarProps {
+    t: (key: string) => string;
+    styles: any;
+    theme: ThemeColors;
+    themeType?: 'dark' | 'light';
+    setThemeType?: (type: 'dark' | 'light') => void;
+    handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleOpenFolder?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleOpenUrl?: () => void;
+    handleView?: (view: string) => void;
+    handleClear?: () => void;
+    pickEnabled?: boolean;
+    setPickEnabled?: (enabled: boolean) => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun') => void;
+    showOutline?: boolean;
+    setShowOutline?: (show: boolean) => void;
+    showProps?: boolean;
+    setShowProps?: (show: boolean) => void;
+    showStats?: boolean;
+    setShowStats?: (show: boolean) => void;
+    sceneMgr?: any;
+    hiddenMenus?: string[];
+    onOpenAbout?: () => void;
+}
+
+export const MenuBar: React.FC<MenuBarProps> = (props) => {
+    const {
+        t, styles, theme,
+        hiddenMenus = []
+    } = props;
+
+    const isHidden = (id: string) => (hiddenMenus || []).includes(id);
+
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const folderInputRef = React.useRef<HTMLInputElement>(null);
+    const batchConvertInputRef = React.useRef<HTMLInputElement>(null);
+
+    return (
+        <div style={styles.classicMenuBar}>
+            {/* Hidden inputs for file/folder opening */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                multiple
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                onChange={props.handleOpenFiles}
+            />
+            <input
+                type="file"
+                ref={batchConvertInputRef}
+                style={{ display: 'none' }}
+                multiple
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                onChange={props.handleBatchConvert}
+            />
+            <input
+                type="file"
+                ref={folderInputRef}
+                style={{ display: 'none' }}
+                {...{ webkitdirectory: "", directory: "" } as any}
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                onChange={props.handleOpenFolder}
+            />
+
+            {!isHidden('file') && (
+                <ClassicMenuItem label={t('menu_file')} styles={styles}>
+                    {(close) => (
+                        <>
+                            {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} styles={styles} />}
+                            {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); }} styles={styles} />}
+                            {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl?.(); close(); }} styles={styles} />}
+                            {!isHidden('batch_convert') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('menu_batch_convert')} onClick={() => { batchConvertInputRef.current?.click(); close(); }} styles={styles} />
+                                </>
+                            )}
+                            {!isHidden('export') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool?.('export'); close(); }} styles={styles} />
+                                </>
+                            )}
+                            {!isHidden('clear') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear?.(); close(); }} styles={styles} />
+                                </>
+                            )}
+                        </>
+                    )}
+                </ClassicMenuItem>
+            )}
+
+            {!isHidden('view') && (
+                <ClassicMenuItem label={t('view')} styles={styles}>
+                    {(close) => (
+                        <>
+                            {!isHidden('fit_view') && <ClassicSubItem label={t('menu_fit_view')} onClick={() => { props.sceneMgr?.fitView(); close(); }} styles={styles} />}
+                            {!isHidden('views') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('view_front')} onClick={() => { props.handleView?.('front'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_back')} onClick={() => { props.handleView?.('back'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_top')} onClick={() => { props.handleView?.('top'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_bottom')} onClick={() => { props.handleView?.('bottom'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_left')} onClick={() => { props.handleView?.('left'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_right')} onClick={() => { props.handleView?.('right'); close(); }} styles={styles} />
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('view_se')} onClick={() => { props.handleView?.('se'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_sw')} onClick={() => { props.handleView?.('sw'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_ne')} onClick={() => { props.handleView?.('ne'); close(); }} styles={styles} />
+                                    <ClassicSubItem label={t('view_nw')} onClick={() => { props.handleView?.('nw'); close(); }} styles={styles} />
+                                </>
+                            )}
+                        </>
+                    )}
+                </ClassicMenuItem>
+            )}
+
+            {!isHidden('interface') && (
+                <ClassicMenuItem label={t('interface_display')} styles={styles}>
+                    {(close) => (
+                        <>
+                            {!isHidden('outline') && <ClassicSubItem label={t('interface_outline')} checked={props.showOutline} onClick={() => { props.setShowOutline?.(!props.showOutline); close(); }} styles={styles} />}
+                            {!isHidden('props') && <ClassicSubItem label={t('interface_props')} checked={props.showProps} onClick={() => { props.setShowProps?.(!props.showProps); close(); }} styles={styles} />}
+                            {!isHidden('stats') && <ClassicSubItem label={t('st_monitor')} checked={props.showStats} onClick={() => { props.setShowStats?.(!props.showStats); close(); }} styles={styles} />}
+                            {!isHidden('pick') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('op_pick')} checked={props.pickEnabled} onClick={() => { props.setPickEnabled?.(!props.pickEnabled); close(); }} styles={styles} />
+                                </>
+                            )}
+                        </>
+                    )}
+                </ClassicMenuItem>
+            )}
+
+            {!isHidden('tool') && (
+                <ClassicMenuItem label={t('tool')} styles={styles}>
+                    {(close) => (
+                        <>
+                            {!isHidden('measure') && <ClassicSubItem label={t('tool_measure')} onClick={() => { props.setActiveTool?.('measure'); close(); }} styles={styles} />}
+                            {!isHidden('clip') && <ClassicSubItem label={t('tool_clip')} onClick={() => { props.setActiveTool?.('clip'); close(); }} styles={styles} />}
+                            {!isHidden('viewpoint') && <ClassicSubItem label={t('viewpoint_title')} onClick={() => { props.setActiveTool?.('viewpoint'); close(); }} styles={styles} />}
+                            {!isHidden('sun') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('st_sun_simulation')} onClick={() => { props.setActiveTool?.('sun'); close(); }} styles={styles} />
+                                </>
+                            )}
+                        </>
+                    )}
+                </ClassicMenuItem>
+            )}
+
+            {!isHidden('settings_panel') && (
+                <ClassicMenuItem label={t('settings')} styles={styles}>
+                    {(close) => (
+                        <>
+                            {!isHidden('settings') && <ClassicSubItem label={t('settings')} onClick={() => { props.setActiveTool?.('settings'); close(); }} styles={styles} />}
+                            {!isHidden('about') && (
+                                <>
+                                    <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                                    <ClassicSubItem label={t('menu_about')} onClick={() => { props.onOpenAbout?.(); close(); }} styles={styles} />
+                                </>
+                            )}
+                        </>
+                    )}
+                </ClassicMenuItem>
+            )}
+        </div>
+    );
+};

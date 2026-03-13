@@ -35,7 +35,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
     const timeValue = timeToSlider(settings.sunTime !== undefined ? settings.sunTime : 12);
 
     return (
-        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} height={320} resizable={false} styles={styles} theme={theme} storageId="tool_sun">
+        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} height={350} resizable={false} styles={styles} theme={theme} storageId="tool_sun">
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
                 {/* 启用开关 */}
