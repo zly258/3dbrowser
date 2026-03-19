@@ -2,9 +2,9 @@
   "$schema": "https://v2.tauri.app/schemas/desktop.schema.json",
   "productName": "3DBrowser",
   "version": "1.0.0",
-  "identifier": "com.3dbrowser.app",
+  "identifier": "com.3dbrowser.desktop",
   "build": {
-    "frontendDist": "./dist",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
@@ -34,7 +34,6 @@
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "windows": {
