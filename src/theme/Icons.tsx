@@ -75,13 +75,10 @@ export const IconMaximize = (props: any) => createIcon(
 
 export const IconRuler = (props: any) => createIcon(
   <>
-    {/* 尺子图标 - 真正的尺子形状 */}
-    <rect x="2" y="14" width="20" height="6" rx="1" />
-    {/* 尺子刻度 */}
+    <rect x="2" y="2" width="20" height="16" rx="1" />
     <line x1="6" y1="14" x2="6" y2="17" />
-    <line x1="10" y1="14" x2="10" y2="16" />
-    <line x1="14" y1="14" x2="14" y2="17" />
-    <line x1="18" y1="14" x2="18" y2="16" />
+    <line x1="12" y1="14" x2="12" y2="16" />
+    <line x1="18" y1="14" x2="18" y2="17" />
   </>,
   props
 );

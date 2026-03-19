@@ -2153,6 +2153,8 @@ export class SceneManager {
             this.lastReportedProgress = { loaded: -1, total: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
+            this.chunkLoadedCount = 0;
+            this.reportChunkProgress(); // 通知前端分片进度已重置
             this.componentMap.clear();
             this.chunkLoadingEnabled = true;
             this.contentGroup.visible = true;

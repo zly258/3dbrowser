@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
-import React, { useState, useRef, useEffect, useMemo, Component, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Component, useCallback } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
@@ -1655,6 +1655,8 @@ class SceneManager {
       this.lastReportedProgress = { loaded: -1, total: -1 };
       this.processingChunks.clear();
       this.cancelledChunkIds.clear();
+      this.chunkLoadedCount = 0;
+      this.reportChunkProgress();
       this.componentMap.clear();
       this.chunkLoadingEnabled = true;
       this.contentGroup.visible = true;
@@ -3847,6 +3849,8 @@ const createGlobalStyle = (theme) => `
     * { scrollbar-width: thin; scrollbar-color: #c2c2c2 ${theme.bg}; }
     body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${DEFAULT_FONT}; -webkit-font-smoothing: antialiased; }
     * { box-sizing: border-box; }
+    button { outline: none; }
+    button:focus { outline: none; }
 `;
 const createStyles = (theme) => ({
   // 桌面端 / 通用
@@ -3895,27 +3899,21 @@ const createStyles = (theme) => ({
     backgroundColor: hover ? theme.itemHover : "transparent"
   }),
   toolbarBar: {
-    position: "absolute",
-    bottom: "8px",
-    left: "50%",
-    transform: "translateX(-50%)",
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     backgroundColor: theme.panelBg,
-    border: `1px solid ${theme.border}`,
-    borderRadius: "8px",
-    padding: "2px 4px",
-    height: "48px",
+    borderBottom: `1px solid ${theme.border}`,
+    padding: "6px 8px",
+    height: "52px",
     gap: "2px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
     zIndex: 1e3,
     WebkitAppRegion: "no-drag"
   },
   toolbarGroup: {
     display: "flex",
     alignItems: "center",
-    gap: "1px",
+    gap: "2px",
     padding: "0 4px",
     borderRight: `1px solid ${theme.border}`,
     height: "100%"
@@ -3931,12 +3929,12 @@ const createStyles = (theme) => ({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "flex-start",
-    padding: "4px 10px",
-    height: "48px",
-    minWidth: "52px",
+    justifyContent: "center",
+    padding: "6px 12px",
+    height: "44px",
+    minWidth: "48px",
     gap: "2px",
-    fontSize: "10px",
+    fontSize: "11px",
     color: theme.text,
     cursor: "pointer",
     backgroundColor: "transparent",
@@ -3945,7 +3943,8 @@ const createStyles = (theme) => ({
     transition: "background-color 0.1s"
   },
   toolbarBtnActive: {
-    backgroundColor: theme.highlight
+    backgroundColor: theme.highlight,
+    outline: "none"
   },
   toolbarIcon: {
     display: "flex",
@@ -3953,7 +3952,7 @@ const createStyles = (theme) => ({
     justifyContent: "center"
   },
   toolbarLabel: {
-    fontSize: "10px",
+    fontSize: "11px",
     color: theme.text,
     whiteSpace: "nowrap"
   },
@@ -4032,7 +4031,7 @@ const createStyles = (theme) => ({
   },
   floatingHeader: {
     height: "29px",
-    padding: "0 12px",
+    padding: "0 8px",
     backgroundColor: theme.headerBg,
     borderBottom: `1px solid ${theme.border}`,
     cursor: "default",
@@ -4341,6 +4340,7 @@ const resources = {
     search_props: "Search properties...",
     expand_all: "Expand All",
     collapse_all: "Collapse All",
+    isolate_selection: "Isolate Selection",
     ctx_show_all: "Show All",
     hide_selected: "Hide Selected",
     show_all: "Show All",
@@ -4434,7 +4434,7 @@ const resources = {
     tb_pick: "Pick",
     tb_measure: "Measure",
     tb_clip: "Clip",
-    tb_settings: "Set",
+    tb_settings: "Setting",
     tb_about: "About",
     tb_sun: "Sun",
     st_monitor: "Performance Panel",
@@ -4526,6 +4526,7 @@ const resources = {
     search_props: "搜索属性...",
     expand_all: "全部展开",
     collapse_all: "全部折叠",
+    isolate_selection: "隔离选择",
     ctx_show_all: "显示所有",
     hide_selected: "隐藏选中",
     show_all: "显示全部",
@@ -4664,272 +4665,6 @@ const getTranslation = (lang, key) => {
   return resources[lang][key] || key;
 };
 
-const ClassicMenuItem = ({ label, children, styles, enabled = true }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
-  const closeMenu = () => {
-    setIsOpen(false);
-  };
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-  const toggleMenu = () => {
-    if (enabled) {
-      setIsOpen(!isOpen);
-    }
-  };
-  const itemStyle = {
-    ...styles.classicMenuItem(isOpen, false),
-    opacity: enabled ? 1 : 0.5,
-    cursor: enabled ? "pointer" : "not-allowed",
-    pointerEvents: enabled ? "auto" : "none"
-  };
-  return /* @__PURE__ */ jsxs(
-    "div",
-    {
-      ref: menuRef,
-      style: { position: "relative", height: "100%" },
-      children: [
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            style: itemStyle,
-            onClick: toggleMenu,
-            children: label
-          }
-        ),
-        isOpen && enabled && /* @__PURE__ */ jsx("div", { style: styles.classicMenuDropdown, children: children(closeMenu) })
-      ]
-    }
-  );
-};
-const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }) => {
-  const [hover, setHover] = useState(false);
-  const itemStyle = {
-    ...styles.classicMenuSubItem(hover),
-    opacity: enabled ? 1 : 0.5,
-    cursor: enabled ? "pointer" : "not-allowed",
-    pointerEvents: enabled ? "auto" : "none",
-    outline: "none"
-  };
-  return /* @__PURE__ */ jsx(
-    "div",
-    {
-      style: itemStyle,
-      onClick: () => {
-        if (enabled) {
-          setHover(false);
-          onClick();
-        }
-      },
-      onMouseEnter: () => enabled && setHover(true),
-      onMouseLeave: () => setHover(false),
-      tabIndex: 0,
-      onKeyDown: (e) => {
-        if (e.key === "Enter" || e.key === " ") onClick();
-      },
-      children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
-        checked !== void 0 && /* @__PURE__ */ jsx("div", { style: styles.checkboxCustom(checked), children: checked && /* @__PURE__ */ jsx("div", { style: styles.checkboxCheckmark, children: "✓" }) }),
-        label
-      ] })
-    }
-  );
-};
-
-const MenuBar = (props) => {
-  const {
-    t,
-    styles,
-    theme,
-    hiddenMenus = []
-  } = props;
-  const isHidden = (id) => (hiddenMenus || []).includes(id);
-  const fileInputRef = React.useRef(null);
-  const folderInputRef = React.useRef(null);
-  const batchConvertInputRef = React.useRef(null);
-  return /* @__PURE__ */ jsxs("div", { style: styles.classicMenuBar, children: [
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "file",
-        ref: fileInputRef,
-        style: { display: "none" },
-        multiple: true,
-        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
-        onChange: props.handleOpenFiles
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "file",
-        ref: batchConvertInputRef,
-        style: { display: "none" },
-        multiple: true,
-        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
-        onChange: props.handleBatchConvert
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "file",
-        ref: folderInputRef,
-        style: { display: "none" },
-        ...{ webkitdirectory: "", directory: "" },
-        accept: ".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges",
-        onChange: props.handleOpenFolder
-      }
-    ),
-    !isHidden("file") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("menu_file"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("open_file") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_file"), onClick: () => {
-        fileInputRef.current?.click();
-        close();
-      }, styles }),
-      !isHidden("open_folder") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_folder"), onClick: () => {
-        folderInputRef.current?.click();
-        close();
-      }, styles }),
-      !isHidden("open_url") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_open_url"), onClick: () => {
-        props.handleOpenUrl?.();
-        close();
-      }, styles }),
-      !isHidden("batch_convert") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_batch_convert"), onClick: () => {
-          batchConvertInputRef.current?.click();
-          close();
-        }, styles })
-      ] }),
-      !isHidden("export") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_export"), onClick: () => {
-          props.setActiveTool?.("export");
-          close();
-        }, styles })
-      ] }),
-      !isHidden("clear") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("op_clear"), onClick: () => {
-          props.handleClear?.();
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("view") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("view"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("fit_view") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_fit_view"), onClick: () => {
-        props.sceneMgr?.fitView();
-        close();
-      }, styles }),
-      !isHidden("views") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_front"), onClick: () => {
-          props.handleView?.("front");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_back"), onClick: () => {
-          props.handleView?.("back");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_top"), onClick: () => {
-          props.handleView?.("top");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_bottom"), onClick: () => {
-          props.handleView?.("bottom");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_left"), onClick: () => {
-          props.handleView?.("left");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_right"), onClick: () => {
-          props.handleView?.("right");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_se"), onClick: () => {
-          props.handleView?.("se");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_sw"), onClick: () => {
-          props.handleView?.("sw");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_ne"), onClick: () => {
-          props.handleView?.("ne");
-          close();
-        }, styles }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("view_nw"), onClick: () => {
-          props.handleView?.("nw");
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("interface") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("interface_display"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("outline") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_outline"), checked: props.showOutline, onClick: () => {
-        props.setShowOutline?.(!props.showOutline);
-        close();
-      }, styles }),
-      !isHidden("props") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("interface_props"), checked: props.showProps, onClick: () => {
-        props.setShowProps?.(!props.showProps);
-        close();
-      }, styles }),
-      !isHidden("stats") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_monitor"), checked: props.showStats, onClick: () => {
-        props.setShowStats?.(!props.showStats);
-        close();
-      }, styles }),
-      !isHidden("pick") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("op_pick"), checked: props.pickEnabled, onClick: () => {
-          props.setPickEnabled?.(!props.pickEnabled);
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("tool") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("tool"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("measure") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_measure"), onClick: () => {
-        props.setActiveTool?.("measure");
-        close();
-      }, styles }),
-      !isHidden("clip") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("tool_clip"), onClick: () => {
-        props.setActiveTool?.("clip");
-        close();
-      }, styles }),
-      !isHidden("viewpoint") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("viewpoint_title"), onClick: () => {
-        props.setActiveTool?.("viewpoint");
-        close();
-      }, styles }),
-      !isHidden("sun") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("st_sun_simulation"), onClick: () => {
-          props.setActiveTool?.("sun");
-          close();
-        }, styles })
-      ] })
-    ] }) }),
-    !isHidden("settings_panel") && /* @__PURE__ */ jsx(ClassicMenuItem, { label: t("settings"), styles, children: (close) => /* @__PURE__ */ jsxs(Fragment, { children: [
-      !isHidden("settings") && /* @__PURE__ */ jsx(ClassicSubItem, { label: t("settings"), onClick: () => {
-        props.setActiveTool?.("settings");
-        close();
-      }, styles }),
-      !isHidden("about") && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
-        /* @__PURE__ */ jsx(ClassicSubItem, { label: t("menu_about"), onClick: () => {
-          props.onOpenAbout?.();
-          close();
-        }, styles })
-      ] })
-    ] }) })
-  ] });
-};
-
 const Button = ({
   children,
   variant = "primary",
@@ -4982,12 +4717,12 @@ const ImageButton = ({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "flex-start",
-    padding: "4px 10px",
+    justifyContent: "center",
+    padding: "4px 12px",
     height: "44px",
     minWidth: "48px",
-    gap: "1px",
-    fontSize: "10px",
+    gap: "2px",
+    fontSize: "11px",
     color: theme?.text || "#333",
     cursor: props.disabled ? "not-allowed" : "pointer",
     backgroundColor: active ? styles?.toolbarBtnActive?.backgroundColor || "#e0e0e0" : hover ? theme?.itemHover || "#f0f0f0" : "transparent",
@@ -4996,19 +4731,18 @@ const ImageButton = ({
     transition: "background-color 0.1s",
     opacity: props.disabled ? 0.4 : 1,
     pointerEvents: props.disabled ? "none" : "auto",
+    outline: "none",
     ...style
   };
   const iconStyle = {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    marginTop: "2px"
+    justifyContent: "center"
   };
   const labelStyle = {
     fontSize: "10px",
     color: theme?.text || "#333",
-    whiteSpace: "nowrap",
-    marginBottom: "1px"
+    whiteSpace: "nowrap"
   };
   return /* @__PURE__ */ jsxs(
     "button",
@@ -5238,11 +4972,10 @@ const IconMaximize = (props) => createIcon(
 );
 const IconRuler = (props) => createIcon(
   /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("rect", { x: "2", y: "14", width: "20", height: "6", rx: "1" }),
+    /* @__PURE__ */ jsx("rect", { x: "2", y: "2", width: "20", height: "16", rx: "1" }),
     /* @__PURE__ */ jsx("line", { x1: "6", y1: "14", x2: "6", y2: "17" }),
-    /* @__PURE__ */ jsx("line", { x1: "10", y1: "14", x2: "10", y2: "16" }),
-    /* @__PURE__ */ jsx("line", { x1: "14", y1: "14", x2: "14", y2: "17" }),
-    /* @__PURE__ */ jsx("line", { x1: "18", y1: "14", x2: "18", y2: "16" })
+    /* @__PURE__ */ jsx("line", { x1: "12", y1: "14", x2: "12", y2: "16" }),
+    /* @__PURE__ */ jsx("line", { x1: "18", y1: "14", x2: "18", y2: "17" })
   ] }),
   props
 );
@@ -5376,12 +5109,12 @@ const Toolbar = (props) => {
         ref: menuRef,
         style: {
           position: "absolute",
-          bottom: "100%",
+          top: "100%",
           left: 0,
-          marginBottom: "4px",
+          marginTop: "4px",
           backgroundColor: theme.panelBg,
           border: `1px solid ${theme.border}`,
-          boxShadow: "0 -4px 12px rgba(0,0,0,0.15)",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
           zIndex: 2e3,
           minWidth: "140px",
           padding: "4px 0"
@@ -5428,7 +5161,7 @@ const Toolbar = (props) => {
       /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconFile, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconFile, { width: 20, height: 20 }),
           label: t("tb_file"),
           active: openMenu === "file",
           onClick: () => toggleMenu("file"),
@@ -5495,7 +5228,7 @@ const Toolbar = (props) => {
       /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconMaximize, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconMaximize, { width: 20, height: 20 }),
           label: t("tb_fit"),
           onClick: () => props.sceneMgr?.fitView(),
           styles,
@@ -5506,7 +5239,7 @@ const Toolbar = (props) => {
         /* @__PURE__ */ jsx(
           ImageButton,
           {
-            icon: /* @__PURE__ */ jsx(IconEye, { width: 16, height: 16 }),
+            icon: /* @__PURE__ */ jsx(IconEye, { width: 20, height: 20 }),
             label: t("tb_view"),
             active: openMenu === "views",
             onClick: () => toggleMenu("views"),
@@ -5654,7 +5387,7 @@ const Toolbar = (props) => {
       !isHidden("outline") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconBox, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconBox, { width: 20, height: 20 }),
           label: t("tb_model"),
           active: props.showOutline,
           onClick: () => props.setShowOutline?.(!props.showOutline),
@@ -5665,7 +5398,7 @@ const Toolbar = (props) => {
       !isHidden("props") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconList, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconList, { width: 20, height: 20 }),
           label: t("tb_props"),
           active: props.showProps,
           onClick: () => props.setShowProps?.(!props.showProps),
@@ -5676,7 +5409,7 @@ const Toolbar = (props) => {
       !isHidden("pick") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconMousePointer, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconMousePointer, { width: 20, height: 20 }),
           label: t("tb_pick"),
           active: props.pickEnabled,
           onClick: () => props.setPickEnabled?.(!props.pickEnabled),
@@ -5689,7 +5422,7 @@ const Toolbar = (props) => {
       !isHidden("measure") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconRuler, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconRuler, { width: 24, height: 24, strokeWidth: 2 }),
           label: t("tb_measure"),
           active: props.activeTool === "measure",
           onClick: () => props.setActiveTool?.(props.activeTool === "measure" ? "none" : "measure"),
@@ -5701,7 +5434,7 @@ const Toolbar = (props) => {
       !isHidden("clip") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconScissors, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconScissors, { width: 20, height: 20 }),
           label: t("tb_clip"),
           active: props.activeTool === "clip",
           onClick: () => props.setActiveTool?.(props.activeTool === "clip" ? "none" : "clip"),
@@ -5713,7 +5446,7 @@ const Toolbar = (props) => {
       !isHidden("viewpoint") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconCamera, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconCamera, { width: 20, height: 20 }),
           label: t("tb_view"),
           active: props.activeTool === "viewpoint",
           onClick: () => props.setActiveTool?.(props.activeTool === "viewpoint" ? "none" : "viewpoint"),
@@ -5725,7 +5458,7 @@ const Toolbar = (props) => {
       !isHidden("sun") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconSun, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconSun, { width: 20, height: 20 }),
           label: t("tb_sun"),
           active: props.activeTool === "sun",
           onClick: () => props.setActiveTool?.(props.activeTool === "sun" ? "none" : "sun"),
@@ -5735,11 +5468,11 @@ const Toolbar = (props) => {
         }
       )
     ] }),
-    !isHidden("settings_panel") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroupLast, children: [
+    !isHidden("about") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroupLast, children: [
       !isHidden("settings") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconSettings, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconSettings, { width: 20, height: 20 }),
           label: t("tb_settings"),
           active: props.activeTool === "settings",
           onClick: () => props.setActiveTool?.(props.activeTool === "settings" ? "none" : "settings"),
@@ -5747,10 +5480,10 @@ const Toolbar = (props) => {
           theme
         }
       ),
-      !isHidden("about") && /* @__PURE__ */ jsx(
+      /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconInfo, { width: 16, height: 16 }),
+          icon: /* @__PURE__ */ jsx(IconInfo, { width: 20, height: 20 }),
           label: t("tb_about"),
           onClick: () => props.onOpenAbout?.(),
           styles,
@@ -5803,6 +5536,7 @@ const SceneTree = ({
   onToggleVisibility,
   onDelete,
   onFocus,
+  onIsolate,
   styles,
   theme
 }) => {
@@ -5887,26 +5621,45 @@ const SceneTree = ({
   const endIndex = Math.min(flatData.length, startIndex + visibleCount + 1);
   const visibleItems = flatData.slice(startIndex, endIndex);
   return /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }, children: [
-    /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: `1px solid ${theme.border}` }, children: /* @__PURE__ */ jsx(
-      "input",
-      {
-        type: "text",
-        placeholder: t("search_nodes"),
-        value: searchQuery,
-        onChange: (e) => setSearchQuery(e.target.value),
-        style: {
-          width: "100%",
-          padding: "4px 8px",
-          fontSize: "12px",
-          backgroundColor: theme.bg,
-          color: theme.text,
-          border: `1px solid ${theme.border}`,
-          borderRadius: "0px",
-          outline: "none",
-          boxSizing: "border-box"
+    /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: `1px solid ${theme.border}` }, children: /* @__PURE__ */ jsxs("div", { style: { position: "relative", display: "flex", alignItems: "center" }, children: [
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          type: "text",
+          placeholder: t("search_nodes"),
+          value: searchQuery,
+          onChange: (e) => setSearchQuery(e.target.value),
+          style: {
+            width: "100%",
+            padding: "4px 28px 4px 8px",
+            fontSize: "12px",
+            backgroundColor: theme.bg,
+            color: theme.text,
+            border: `1px solid ${theme.border}`,
+            borderRadius: "0px",
+            outline: "none",
+            boxSizing: "border-box"
+          }
         }
-      }
-    ) }),
+      ),
+      searchQuery && /* @__PURE__ */ jsx(
+        "div",
+        {
+          onClick: () => setSearchQuery(""),
+          style: {
+            position: "absolute",
+            right: 4,
+            cursor: "pointer",
+            opacity: 0.6,
+            display: "flex",
+            padding: 2
+          },
+          onMouseEnter: (e) => e.currentTarget.style.opacity = "1",
+          onMouseLeave: (e) => e.currentTarget.style.opacity = "0.6",
+          children: /* @__PURE__ */ jsx(IconClose, { width: 14, height: 14 })
+        }
+      )
+    ] }) }),
     /* @__PURE__ */ jsx("div", { ref: containerRef, style: { ...styles.treeContainer, flex: 1 }, onScroll: (e) => setScrollTop(e.currentTarget.scrollTop), children: /* @__PURE__ */ jsx("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }, children: visibleItems.map((node) => /* @__PURE__ */ jsxs(
       "div",
       {
@@ -6020,6 +5773,25 @@ const SceneTree = ({
       ),
       contextMenu.node.isFileNode && /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: {
+              padding: "6px 16px",
+              fontSize: "12px",
+              color: theme.text,
+              cursor: "pointer",
+              backgroundColor: menuHover === "isolate" ? theme.itemHover : "transparent"
+            },
+            onMouseEnter: () => setMenuHover("isolate"),
+            onMouseLeave: () => setMenuHover(null),
+            onClick: () => {
+              onIsolate?.(contextMenu.node.uuid);
+              setContextMenu(null);
+            },
+            children: t("isolate_selection")
+          }
+        ),
         /* @__PURE__ */ jsx(
           "div",
           {
@@ -6741,8 +6513,6 @@ const SettingsPanel = ({
   setThemeMode,
   showStats,
   setShowStats,
-  menuMode,
-  setMenuMode,
   styles,
   theme
 }) => {
@@ -6793,40 +6563,6 @@ const SettingsPanel = ({
                 color: themeMode === "dark" ? "white" : theme.text
               },
               children: t("theme_dark")
-            }
-          )
-        ] }) }),
-        /* @__PURE__ */ jsx(Row, { label: t("st_menu_mode"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, background: theme.bg, padding: 2, borderRadius: 0, border: `1px solid ${theme.border}` }, children: [
-          /* @__PURE__ */ jsx(
-            "button",
-            {
-              onClick: () => setMenuMode("menu"),
-              style: {
-                padding: "4px 12px",
-                borderRadius: 0,
-                border: "none",
-                fontSize: 11,
-                cursor: "pointer",
-                background: menuMode === "menu" ? theme.accent : "transparent",
-                color: menuMode === "menu" ? "white" : theme.text
-              },
-              children: t("menu_mode_menu")
-            }
-          ),
-          /* @__PURE__ */ jsx(
-            "button",
-            {
-              onClick: () => setMenuMode("toolbar"),
-              style: {
-                padding: "4px 12px",
-                borderRadius: 0,
-                border: "none",
-                fontSize: 11,
-                cursor: "pointer",
-                background: menuMode === "toolbar" ? theme.accent : "transparent",
-                color: menuMode === "toolbar" ? "white" : theme.text
-              },
-              children: t("menu_mode_toolbar")
             }
           )
         ] }) }),
@@ -7569,14 +7305,6 @@ const ThreeViewer = ({
       setLang(defaultLang);
     }
   }, [defaultLang]);
-  const [menuMode, setMenuMode] = useState(() => {
-    try {
-      const saved = localStorage.getItem("3dbrowser_menuMode");
-      return saved === "menu" || saved === "toolbar" ? saved : "toolbar";
-    } catch {
-      return "toolbar";
-    }
-  });
   const [treeRoot, setTreeRoot] = useState([]);
   const [selectedUuids, setSelectedUuids] = useState([]);
   const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
@@ -8736,8 +8464,8 @@ const ThreeViewer = ({
       onDrop: handleDrop,
       children: [
         /* @__PURE__ */ jsx(GlobalStyle, { theme }),
-        menuMode === "menu" ? /* @__PURE__ */ jsx(
-          MenuBar,
+        /* @__PURE__ */ jsx(
+          Toolbar,
           {
             t,
             themeType: themeMode,
@@ -8765,43 +8493,11 @@ const ThreeViewer = ({
             styles,
             theme,
             hiddenMenus,
-            onOpenAbout: () => setIsAboutOpen(true)
+            onOpenAbout: () => setIsAboutOpen(true),
+            hasModels
           }
-        ) : null,
+        ),
         /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", position: "relative", overflow: "hidden" }, children: [
-          menuMode === "toolbar" && /* @__PURE__ */ jsx(
-            Toolbar,
-            {
-              t,
-              themeType: themeMode,
-              setThemeType: setThemeMode,
-              handleOpenFiles,
-              handleBatchConvert,
-              handleOpenFolder,
-              handleOpenUrl,
-              handleView,
-              handleClear,
-              pickEnabled,
-              setPickEnabled,
-              activeTool,
-              setActiveTool,
-              showOutline,
-              setShowOutline,
-              showProps,
-              setShowProps,
-              showStats,
-              setShowStats: (v) => {
-                setShowStats(v);
-                localStorage.setItem("3dbrowser_showStats", String(v));
-              },
-              sceneMgr: sceneMgr.current,
-              styles,
-              theme,
-              hiddenMenus,
-              onOpenAbout: () => setIsAboutOpen(true),
-              hasModels
-            }
-          ),
           showOutline && /* @__PURE__ */ jsxs("div", { style: {
             width: `${leftWidth}px`,
             backgroundColor: theme.panelBg,
@@ -8875,6 +8571,15 @@ const ThreeViewer = ({
                   {
                     label: t("hide_selected"),
                     onClick: handleHideSelected,
+                    disabled: selectedUuids.length === 0
+                  },
+                  {
+                    label: t("isolate_selection"),
+                    onClick: () => {
+                      if (selectedUuids.length > 0 && sceneMgr.current) {
+                        sceneMgr.current.isolateObjects(selectedUuids);
+                      }
+                    },
                     disabled: selectedUuids.length === 0
                   },
                   {
@@ -8992,11 +8697,6 @@ const ThreeViewer = ({
                 setThemeMode,
                 showStats,
                 setShowStats,
-                menuMode,
-                setMenuMode: (m) => {
-                  setMenuMode(m);
-                  localStorage.setItem("3dbrowser_menuMode", m);
-                },
                 styles,
                 theme
               }
@@ -9084,30 +8784,6 @@ const ThreeViewer = ({
             loading && /* @__PURE__ */ jsxs("span", { children: [
               progress,
               "%"
-            ] }),
-            chunkProgress.total > 0 && /* @__PURE__ */ jsxs("span", { style: {
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              paddingLeft: "8px",
-              borderLeft: `1px solid ${theme.border}`
-            }, children: [
-              t("loading_chunks"),
-              ": ",
-              chunkProgress.loaded,
-              " / ",
-              chunkProgress.total,
-              chunkProgress.loaded < chunkProgress.total && /* @__PURE__ */ jsx("div", { style: {
-                width: "40px",
-                height: "4px",
-                backgroundColor: theme.highlight,
-                borderRadius: "2px",
-                overflow: "hidden"
-              }, children: /* @__PURE__ */ jsx("div", { style: {
-                width: `${chunkProgress.loaded / chunkProgress.total * 100}%`,
-                height: "100%",
-                backgroundColor: theme.accent
-              } }) })
             ] }),
             selectedUuid && selectedUuids.length > 1 && /* @__PURE__ */ jsxs("span", { style: { opacity: 0.8, paddingLeft: "8px", borderLeft: `1px solid ${theme.border}` }, children: [
               t("selected_count") || "已选择",

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { IconChevronRight, IconChevronDown } from "../theme/Icons";
+import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
 import { Checkbox } from "./ToolPanels/Checkbox";
 
 interface TreeNode {
@@ -81,12 +81,13 @@ interface SceneTreeProps {
     onToggleVisibility: (uuid: string, visible: boolean) => void;
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
+    onIsolate?: (uuid: string) => void;
     styles: any;
     theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({ 
-    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus,
+    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus, onIsolate,
     styles, theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
@@ -185,23 +186,42 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
-                <input
-                    type="text"
-                    placeholder={t("search_nodes")}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '4px 8px',
-                        fontSize: '12px',
-                        backgroundColor: theme.bg,
-                        color: theme.text,
-                        border: `1px solid ${theme.border}`,
-                        borderRadius: '0px',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                    }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                        type="text"
+                        placeholder={t("search_nodes")}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '4px 28px 4px 8px',
+                            fontSize: '12px',
+                            backgroundColor: theme.bg,
+                            color: theme.text,
+                            border: `1px solid ${theme.border}`,
+                            borderRadius: '0px',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+                    {searchQuery && (
+                        <div
+                            onClick={() => setSearchQuery('')}
+                            style={{
+                                position: 'absolute',
+                                right: 4,
+                                cursor: 'pointer',
+                                opacity: 0.6,
+                                display: 'flex',
+                                padding: 2,
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                        >
+                            <IconClose width={14} height={14} />
+                        </div>
+                    )}
+                </div>
             </div>
             <div ref={containerRef} style={{ ...styles.treeContainer, flex: 1 }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
                 <div style={{ height: totalHeight, position: "relative" }}>
@@ -319,6 +339,20 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     {contextMenu.node.isFileNode && (
                         <>
                             <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                            <div 
+                                style={{ 
+                                    padding: '6px 16px', 
+                                    fontSize: '12px', 
+                                    color: theme.text, 
+                                    cursor: 'pointer', 
+                                    backgroundColor: menuHover === 'isolate' ? theme.itemHover : 'transparent' 
+                                }}
+                                onMouseEnter={() => setMenuHover('isolate')}
+                                onMouseLeave={() => setMenuHover(null)}
+                                onClick={() => { onIsolate?.(contextMenu.node.uuid); setContextMenu(null); }}
+                            >
+                                {t("isolate_selection")}
+                            </div>
                             <div 
                                 style={{ 
                                     padding: '6px 16px', 

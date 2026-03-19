@@ -75,20 +75,14 @@ export declare const createStyles: (theme: ThemeColors) => {
         backgroundColor: string;
     };
     toolbarBar: {
-        position: "absolute";
-        bottom: string;
-        left: string;
-        transform: string;
         display: string;
         alignItems: string;
         justifyContent: string;
         backgroundColor: string;
-        border: string;
-        borderRadius: string;
+        borderBottom: string;
         padding: string;
         height: string;
         gap: string;
-        boxShadow: string;
         zIndex: number;
         WebkitAppRegion: any;
     };
@@ -126,6 +120,7 @@ export declare const createStyles: (theme: ThemeColors) => {
     };
     toolbarBtnActive: {
         backgroundColor: string;
+        outline: string;
     };
     toolbarIcon: {
         display: string;

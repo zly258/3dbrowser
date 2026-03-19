@@ -17,8 +17,6 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
-    menuMode: 'menu' | 'toolbar';
-    setMenuMode: (m: 'menu' | 'toolbar') => void;
     styles: any;
     theme: any;
 }
@@ -43,7 +41,7 @@ const Row = ({ label, children, theme }: { label: string, children?: React.React
 
 export const SettingsPanel: React.FC<SettingsModalProps> = ({ 
     t, onClose, settings, onUpdate, currentLang, setLang, themeMode, setThemeMode,
-    showStats, setShowStats, menuMode, setMenuMode, styles, theme 
+    showStats, setShowStats, styles, theme 
 }) => {
     return (
         <div style={styles.modalOverlay}>
@@ -83,31 +81,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                                     }}
                                 >
                                     {t("theme_dark")}
-                                </button>
-                            </div>
-                        </Row>
-
-                        <Row label={t("st_menu_mode")} theme={theme}>
-                            <div style={{display:'flex', gap:4, background:theme.bg, padding:2, borderRadius:0, border:`1px solid ${theme.border}`}}>
-                                <button 
-                                    onClick={() => setMenuMode('menu')}
-                                    style={{
-                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
-                                        background: menuMode === 'menu' ? theme.accent : 'transparent',
-                                        color: menuMode === 'menu' ? 'white' : theme.text
-                                    }}
-                                >
-                                    {t("menu_mode_menu")}
-                                </button>
-                                <button 
-                                    onClick={() => setMenuMode('toolbar')}
-                                    style={{
-                                        padding:'4px 12px', borderRadius:0, border:'none', fontSize:11, cursor:'pointer',
-                                        background: menuMode === 'toolbar' ? theme.accent : 'transparent',
-                                        color: menuMode === 'toolbar' ? 'white' : theme.text
-                                    }}
-                                >
-                                    {t("menu_mode_toolbar")}
                                 </button>
                             </div>
                         </Row>
