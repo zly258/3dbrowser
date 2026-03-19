@@ -1662,6 +1662,8 @@ export class SceneManager {
         const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
         // 关键：禁用 BatchedMesh 自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制可见性。
         // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
+        // 关键：禁用 BatchedMesh 自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制可见性。
+        // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
         bm.frustumCulled = false;
         (bm as any).perInstanceFrustumCulling = false;
         const geoIds = geometries.map(g => bm.addGeometry(g));
@@ -1680,8 +1682,7 @@ export class SceneManager {
             const instId = bm.addInstance(geoIds[inst.geoIdx]);
             bm.setMatrixAt(instId, matrix);
             bm.setColorAt(instId, color);
-            
-            // 设置实例包围盒，用于 perInstanceFrustumCulling
+            // 设置实例包围盒，用于 perInstanceFrustumCulling（实例级视锥剔除）
             const geo = geometries[inst.geoIdx];
             if (!geo.boundingBox) geo.computeBoundingBox();
             if (geo.boundingBox && (bm as any).setBoundingBoxAt) (bm as any).setBoundingBoxAt(instId, geo.boundingBox);

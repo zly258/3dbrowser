@@ -17,66 +17,9 @@ import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
 import { AboutModal } from "./src/components/AboutModal";
 import { ViewCube } from "./src/components/ViewCube";
-import { IconClose } from "./src/theme/Icons";
-
-interface ErrorBoundaryProps {
-    children: React.ReactNode;
-    t: any;
-    styles: any;
-    theme: any;
-}
-
-interface ErrorBoundaryState {
-    hasError: boolean;
-    error: Error | null;
-}
-
-// --- 错误边界组件 ---
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-    public state: ErrorBoundaryState;
-
-    constructor(props: ErrorBoundaryProps) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
-
-    static getDerivedStateFromError(error: Error) {
-        return { hasError: true, error };
-    }
-
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error("ErrorBoundary caught an error:", error, errorInfo);
-    }
-
-    render() {
-        if (this.state.hasError) {
-            const { t, theme } = this.props;
-            return (
-                <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', width: '100%', backgroundColor: theme.bg, color: theme.text,
-                    fontFamily: DEFAULT_FONT, gap: '20px', padding: '40px', textAlign: 'center'
-                }}>
-                    <div style={{ fontSize: '64px' }}>⚠️</div>
-                    <h1 style={{ fontSize: '24px', margin: 0 }}>{t("error_title")}</h1>
-                    <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6' }}>
-                        {t("error_msg")}
-                    </p>
-                    <button 
-                        onClick={() => window.location.reload()}
-                        style={{
-                            padding: '10px 24px', backgroundColor: theme.accent, color: '#fff',
-                            border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
-                        }}
-                    >
-                        {t("error_reload")}
-                    </button>
-                </div>
-            );
-        }
-        return this.props.children;
-    }
-}
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { ContextMenu } from "./src/components/ContextMenu";
+import { IconClose, IconSun, IconMoon, IconBox, IconActivity, IconGrid } from "./src/theme/Icons";
 
 // --- 全局样式注入 ---
 const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
@@ -159,9 +102,9 @@ export const ThreeViewer = ({
     const [menuMode, setMenuMode] = useState<'menu' | 'toolbar'>(() => {
         try {
             const saved = localStorage.getItem('3dbrowser_menuMode');
-            return (saved === 'menu' || saved === 'toolbar') ? saved : 'menu';
+            return (saved === 'menu' || saved === 'toolbar') ? saved : 'toolbar';
         } catch {
-            return 'menu';
+            return 'toolbar';
         }
     });
 
@@ -288,6 +231,12 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
+    
+    // 是否加载了模型（基于treeRoot判断）
+    const hasModels = treeRoot.length > 0;
+    
+    // 跟踪已完成首次加载的文件集,避免重复toast提示
+    const completedFileSetsRef = useRef<Set<string>>(new Set());
 
     // Error State
     const [errorState, setErrorState] = useState<{
@@ -299,6 +248,42 @@ export const ThreeViewer = ({
 
     // Toast Message State
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+    
+    // 右键菜单状态
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        visible: boolean;
+    }>({ x: 0, y: 0, visible: false });
+    
+    // 隐藏对象记录
+    const [hiddenUuids, setHiddenUuids] = useState<Set<string>>(new Set());
+    
+    // 隐藏选中的对象
+    const handleHideSelected = useCallback(() => {
+        if (selectedUuids.length === 0 || !sceneMgr.current) return;
+        
+        selectedUuids.forEach(uuid => {
+            sceneMgr.current?.setObjectVisibility(uuid, false);
+            hiddenUuids.add(uuid);
+        });
+        setHiddenUuids(new Set(hiddenUuids));
+        setSelectedUuids([]);
+        setSelectedProps(null);
+        sceneMgr.current?.highlightObjects([]);
+        updateTree();
+    }, [selectedUuids, hiddenUuids]);
+    
+    // 显示全部对象
+    const handleShowAll = useCallback(() => {
+        if (!sceneMgr.current) return;
+        
+        hiddenUuids.forEach(uuid => {
+            sceneMgr.current?.setObjectVisibility(uuid, true);
+        });
+        setHiddenUuids(new Set());
+        updateTree();
+    }, [hiddenUuids]);
     
     // 状态清理工具
     const cleanStatus = (msg: string) => {
@@ -827,16 +812,16 @@ export const ThreeViewer = ({
         });
 
         // 监听分块加载进度
-        let lastReportedSuccess = false;
         let clearProgressTimer: any = null;
 
         manager.onChunkProgress = (loaded, total) => {
             setChunkProgress({ loaded, total });
             
-            if (loaded === total && total > 0) {
-                if (!lastReportedSuccess) {
+            if (loaded === total && total > 0 && currentFileSetId) {
+                // 只在首次完成加载时显示toast
+                if (!completedFileSetsRef.current.has(currentFileSetId)) {
                     setToast({ message: t("all_chunks_loaded"), type: 'success' });
-                    lastReportedSuccess = true;
+                    completedFileSetsRef.current.add(currentFileSetId);
                     
                     // 加载完成后，延迟 3 秒清空进度信息
                     if (clearProgressTimer) clearTimeout(clearProgressTimer);
@@ -846,7 +831,6 @@ export const ThreeViewer = ({
                     }, 3000);
                 }
             } else {
-                lastReportedSuccess = false;
                 if (clearProgressTimer) {
                     clearTimeout(clearProgressTimer);
                     clearProgressTimer = null;
@@ -969,6 +953,13 @@ export const ThreeViewer = ({
         const handleContextMenu = (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // 显示右键菜单
+            setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                visible: true
+            });
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -1542,6 +1533,8 @@ export const ThreeViewer = ({
                     setSelectedUuids([]);
                     setSelectedProps(null);
                     setMeasureHistory([]);
+                    setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
+                    completedFileSetsRef.current.clear(); // 清除已完成的文件集记录
                     updateTree();
                     setStatus(t("ready"));
                 } catch (error) {
@@ -1627,6 +1620,7 @@ export const ThreeViewer = ({
                         theme={theme}
                         hiddenMenus={hiddenMenus}
                         onOpenAbout={() => setIsAboutOpen(true)}
+                        hasModels={hasModels}
                     />
                 )}
                 
@@ -1693,6 +1687,27 @@ export const ThreeViewer = ({
 
                     
                     <ViewCube sceneMgr={mgrInstance} theme={theme} lang={lang} />
+
+                    {/* 右键菜单 */}
+                    {contextMenu.visible && (
+                        <ContextMenu
+                            x={contextMenu.x}
+                            y={contextMenu.y}
+                            items={[
+                                {
+                                    label: t("hide_selected"),
+                                    onClick: handleHideSelected,
+                                    disabled: selectedUuids.length === 0
+                                },
+                                {
+                                    label: t("show_all"),
+                                    onClick: handleShowAll
+                                }
+                            ]}
+                            onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
+                            theme={theme}
+                        />
+                    )}
 
                     {/* Toast Notification */}
                     {toast && (
@@ -1915,28 +1930,41 @@ export const ThreeViewer = ({
                     {showStats && (
                         <div style={{ 
                             display: 'flex', 
-                            gap: '10px', 
-                            alignItems: 'center', 
+                            gap: '12px', 
+                            alignItems: 'center',
+                            paddingLeft: '12px',
+                            borderLeft: `1px solid ${theme.border}`
                         }}>
-                            <span>{t("monitor_meshes")}: {formatNumber(stats.meshes)}</span>
-                            <span>{t("monitor_faces")}: {formatNumber(stats.faces)}</span>
-                            <span>{t("monitor_mem")}: {formatMemory(stats.memory)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
+                                <IconBox width={14} height={14} />
+                                <span>{formatNumber(stats.meshes)}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
+                                <IconGrid width={14} height={14} />
+                                <span>{formatNumber(stats.faces)}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
+                                <IconActivity width={14} height={14} />
+                                <span>{formatMemory(stats.memory)}</span>
+                            </div>
                         </div>
                     )}
                     <div 
                         onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
                         style={{ 
                             cursor: 'pointer', 
-                            padding: '2px 8px', 
+                            padding: '4px', 
                             borderRadius: '4px',
-                            backgroundColor: theme.itemHover,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            justifyContent: 'center',
+                            transition: 'background-color 0.2s'
                         }}
-                        title={themeMode === 'dark' ? 'Light' : 'Dark'}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        title={themeMode === 'dark' ? t("theme_light") : t("theme_dark")}
                     >
-                        <span>{themeMode === 'dark' ? '☀' : '☾'}</span>
+                        {themeMode === 'dark' ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
                     </div>
                     <div 
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}

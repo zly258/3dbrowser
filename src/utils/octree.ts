@@ -340,6 +340,7 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   
   // 禁用自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制。
   // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
+  // 禁用批量网格的视锥剔除，由 SceneManager 的分块加载逻辑控制可见性
   batchedMesh.frustumCulled = false;
   (batchedMesh as any).perInstanceFrustumCulling = false;
 

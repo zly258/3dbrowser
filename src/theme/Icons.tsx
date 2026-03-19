@@ -197,3 +197,20 @@ export const IconSun = (props: any) => createIcon(
   </>,
   props
 );
+
+export const IconMoon = (props: any) => createIcon(
+  <>
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </>,
+  props
+);
+
+export const IconGrid = (props: any) => createIcon(
+  <>
+    <rect x="3" y="3" width="7" height="7" />
+    <rect x="14" y="3" width="7" height="7" />
+    <rect x="14" y="14" width="7" height="7" />
+    <rect x="3" y="14" width="7" height="7" />
+  </>,
+  props
+);
