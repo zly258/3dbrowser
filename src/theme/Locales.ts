@@ -151,7 +151,7 @@ const resources: Record<Lang, Record<string, string>> = {
         tb_pick: "Pick",
         tb_measure: "Measure",
         tb_clip: "Clip",
-        tb_settings: "Set",
+        tb_settings: "Setting",
         tb_about: "About",
         tb_sun: "Sun",
         st_monitor: "Performance Panel",

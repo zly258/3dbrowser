@@ -20,3 +20,5 @@ export declare const IconCamera: (props: any) => import("react/jsx-runtime").JSX
 export declare const IconNavigation: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconEye: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconSun: (props: any) => import("react/jsx-runtime").JSX.Element;
+export declare const IconMoon: (props: any) => import("react/jsx-runtime").JSX.Element;
+export declare const IconGrid: (props: any) => import("react/jsx-runtime").JSX.Element;

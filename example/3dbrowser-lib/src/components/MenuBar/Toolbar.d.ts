@@ -25,6 +25,7 @@ interface MenuBarProps {
     sceneMgr?: any;
     hiddenMenus?: string[];
     onOpenAbout?: () => void;
+    hasModels?: boolean;
 }
 export declare const Toolbar: React.FC<MenuBarProps>;
 export {};

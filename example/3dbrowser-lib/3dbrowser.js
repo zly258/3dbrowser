@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
-import React, { useState, useRef, useEffect, useMemo, useCallback, Component } from 'react';
+import React, { useState, useRef, useEffect, useMemo, Component, useCallback } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
@@ -4342,6 +4342,8 @@ const resources = {
     expand_all: "Expand All",
     collapse_all: "Collapse All",
     ctx_show_all: "Show All",
+    hide_selected: "Hide Selected",
+    show_all: "Show All",
     ctx_hide_selection: "Hide Selection",
     monitor_meshes: "Mesh",
     monitor_faces: "Faces",
@@ -4434,6 +4436,7 @@ const resources = {
     tb_clip: "Clip",
     tb_settings: "Set",
     tb_about: "About",
+    tb_sun: "Sun",
     st_monitor: "Performance Panel",
     st_instancing: "Instancing Render",
     st_viewport: "Viewport",
@@ -4524,6 +4527,8 @@ const resources = {
     expand_all: "全部展开",
     collapse_all: "全部折叠",
     ctx_show_all: "显示所有",
+    hide_selected: "隐藏选中",
+    show_all: "显示全部",
     ctx_hide_selection: "隐藏选择",
     monitor_meshes: "网格",
     monitor_faces: "面",
@@ -4615,6 +4620,7 @@ const resources = {
     tb_clip: "剖切",
     tb_settings: "设置",
     tb_about: "关于",
+    tb_sun: "光照",
     st_monitor: "性能面板",
     st_instancing: "实例化渲染",
     st_viewport: "视口设置",
@@ -5291,6 +5297,10 @@ const IconList = (props) => createIcon(
   ] }),
   props
 );
+const IconActivity = (props) => createIcon(
+  /* @__PURE__ */ jsx(Fragment, { children: /* @__PURE__ */ jsx("polyline", { points: "22 12 18 12 15 21 9 3 6 12 2 12" }) }),
+  props
+);
 const IconCamera = (props) => createIcon(
   /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx("path", { d: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" }),
@@ -5316,6 +5326,19 @@ const IconSun = (props) => createIcon(
     /* @__PURE__ */ jsx("line", { x1: "21", y1: "12", x2: "23", y2: "12" }),
     /* @__PURE__ */ jsx("line", { x1: "4.22", y1: "19.78", x2: "5.64", y2: "18.36" }),
     /* @__PURE__ */ jsx("line", { x1: "18.36", y1: "5.64", x2: "19.78", y2: "4.22" })
+  ] }),
+  props
+);
+const IconMoon = (props) => createIcon(
+  /* @__PURE__ */ jsx(Fragment, { children: /* @__PURE__ */ jsx("path", { d: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" }) }),
+  props
+);
+const IconGrid = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("rect", { x: "3", y: "3", width: "7", height: "7" }),
+    /* @__PURE__ */ jsx("rect", { x: "14", y: "3", width: "7", height: "7" }),
+    /* @__PURE__ */ jsx("rect", { x: "14", y: "14", width: "7", height: "7" }),
+    /* @__PURE__ */ jsx("rect", { x: "3", y: "14", width: "7", height: "7" })
   ] }),
   props
 );
@@ -5487,6 +5510,7 @@ const Toolbar = (props) => {
             label: t("tb_view"),
             active: openMenu === "views",
             onClick: () => toggleMenu("views"),
+            disabled: !props.hasModels,
             styles,
             theme
           }
@@ -5669,6 +5693,7 @@ const Toolbar = (props) => {
           label: t("tb_measure"),
           active: props.activeTool === "measure",
           onClick: () => props.setActiveTool?.(props.activeTool === "measure" ? "none" : "measure"),
+          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5680,6 +5705,7 @@ const Toolbar = (props) => {
           label: t("tb_clip"),
           active: props.activeTool === "clip",
           onClick: () => props.setActiveTool?.(props.activeTool === "clip" ? "none" : "clip"),
+          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5691,6 +5717,7 @@ const Toolbar = (props) => {
           label: t("tb_view"),
           active: props.activeTool === "viewpoint",
           onClick: () => props.setActiveTool?.(props.activeTool === "viewpoint" ? "none" : "viewpoint"),
+          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5699,9 +5726,10 @@ const Toolbar = (props) => {
         ImageButton,
         {
           icon: /* @__PURE__ */ jsx(IconSun, { width: 16, height: 16 }),
-          label: t("st_sun_simulation"),
+          label: t("tb_sun"),
           active: props.activeTool === "sun",
           onClick: () => props.setActiveTool?.(props.activeTool === "sun" ? "none" : "sun"),
+          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -6825,28 +6853,17 @@ const SettingsPanel = ({
           }
         ) })
       ] }),
-      /* @__PURE__ */ jsxs(Section, { title: t("st_viewport"), theme, children: [
-        /* @__PURE__ */ jsx(Row, { label: `${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`, theme, children: /* @__PURE__ */ jsx(
-          Slider,
-          {
-            min: 80,
-            max: 300,
-            step: 10,
-            value: settings.viewCubeSize || 100,
-            onChange: (val) => onUpdate({ viewCubeSize: val }),
-            theme
-          }
-        ) }),
-        /* @__PURE__ */ jsx(Row, { label: t("st_frustum_culling"), theme, children: /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            checked: !!settings.frustumCulling,
-            onChange: (val) => onUpdate({ frustumCulling: val }),
-            styles,
-            theme
-          }
-        ) })
-      ] }),
+      /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), theme, children: /* @__PURE__ */ jsx(Row, { label: `${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`, theme, children: /* @__PURE__ */ jsx(
+        Slider,
+        {
+          min: 80,
+          max: 300,
+          step: 10,
+          value: settings.viewCubeSize || 100,
+          onChange: (val) => onUpdate({ viewCubeSize: val }),
+          theme
+        }
+      ) }) }),
       /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), theme, children: [
         /* @__PURE__ */ jsx(Row, { label: `${t("st_ambient")} (${settings.ambientInt.toFixed(1)})`, theme, children: /* @__PURE__ */ jsx(
           Slider,
@@ -7380,7 +7397,7 @@ class ErrorBoundary extends Component {
     return { hasError: true, error };
   }
   componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    console.error("ErrorBoundary捕获到错误:", error, errorInfo);
   }
   render() {
     if (this.state.hasError) {
@@ -7423,6 +7440,92 @@ class ErrorBoundary extends Component {
     return this.props.children;
   }
 }
+
+const ContextMenu = ({ x, y, items, onClose, theme }) => {
+  const menuRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose]);
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      ref: menuRef,
+      style: {
+        position: "fixed",
+        left: x,
+        top: y,
+        backgroundColor: theme.panelBg,
+        border: `1px solid ${theme.border}`,
+        borderRadius: "4px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        zIndex: 1e4,
+        minWidth: "160px",
+        padding: "4px 0"
+      },
+      children: items.map((item, index) => {
+        if (item.divider) {
+          return /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: {
+                height: "1px",
+                backgroundColor: theme.border,
+                margin: "4px 0"
+              }
+            },
+            index
+          );
+        }
+        return /* @__PURE__ */ jsx(
+          "div",
+          {
+            onClick: () => {
+              if (!item.disabled && item.onClick) {
+                item.onClick();
+                onClose();
+              }
+            },
+            style: {
+              padding: "8px 16px",
+              fontSize: "12px",
+              color: item.disabled ? theme.textMuted : theme.text,
+              cursor: item.disabled ? "not-allowed" : "pointer",
+              backgroundColor: "transparent",
+              transition: "background-color 0.1s",
+              opacity: item.disabled ? 0.5 : 1
+            },
+            onMouseEnter: (e) => {
+              if (!item.disabled) {
+                e.currentTarget.style.backgroundColor = theme.itemHover;
+              }
+            },
+            onMouseLeave: (e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+            },
+            children: item.label
+          },
+          index
+        );
+      })
+    }
+  );
+};
+
 const GlobalStyle = ({ theme }) => /* @__PURE__ */ jsx("style", { dangerouslySetInnerHTML: { __html: createGlobalStyle(theme) } });
 const ThreeViewer = ({
   allowDragOpen = true,
@@ -7469,9 +7572,9 @@ const ThreeViewer = ({
   const [menuMode, setMenuMode] = useState(() => {
     try {
       const saved = localStorage.getItem("3dbrowser_menuMode");
-      return saved === "menu" || saved === "toolbar" ? saved : "menu";
+      return saved === "menu" || saved === "toolbar" ? saved : "toolbar";
     } catch {
-      return "menu";
+      return "toolbar";
     }
   });
   const [treeRoot, setTreeRoot] = useState([]);
@@ -7574,8 +7677,32 @@ const ThreeViewer = ({
   const viewportRef = useRef(null);
   const sceneMgr = useRef(null);
   const [mgrInstance, setMgrInstance] = useState(null);
+  const hasModels = treeRoot.length > 0;
+  const completedFileSetsRef = useRef(/* @__PURE__ */ new Set());
   const [errorState, setErrorState] = useState({ isOpen: false, title: "", message: "" });
   const [toast, setToast] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ x: 0, y: 0, visible: false });
+  const [hiddenUuids, setHiddenUuids] = useState(/* @__PURE__ */ new Set());
+  const handleHideSelected = useCallback(() => {
+    if (selectedUuids.length === 0 || !sceneMgr.current) return;
+    selectedUuids.forEach((uuid) => {
+      sceneMgr.current?.setObjectVisibility(uuid, false);
+      hiddenUuids.add(uuid);
+    });
+    setHiddenUuids(new Set(hiddenUuids));
+    setSelectedUuids([]);
+    setSelectedProps(null);
+    sceneMgr.current?.highlightObjects([]);
+    updateTree();
+  }, [selectedUuids, hiddenUuids]);
+  const handleShowAll = useCallback(() => {
+    if (!sceneMgr.current) return;
+    hiddenUuids.forEach((uuid) => {
+      sceneMgr.current?.setObjectVisibility(uuid, true);
+    });
+    setHiddenUuids(/* @__PURE__ */ new Set());
+    updateTree();
+  }, [hiddenUuids]);
   const cleanStatus = (msg) => {
     if (!msg) return "";
     return msg.replace(/:\s*\d+%/g, "").replace(/\(\d+%\)/g, "").replace(/\d+%/g, "").trim();
@@ -7697,8 +7824,8 @@ const ThreeViewer = ({
       setToast({ message: t("no_models"), type: "info" });
       return;
     }
-    const hasModels = sceneMgr.current.contentGroup.children.length > 0;
-    if (!hasModels) {
+    const hasModels2 = sceneMgr.current.contentGroup.children.length > 0;
+    if (!hasModels2) {
       setToast({ message: t("no_models"), type: "info" });
       return;
     }
@@ -8001,14 +8128,13 @@ const ThreeViewer = ({
     requestAnimationFrame(() => {
       manager.resize();
     });
-    let lastReportedSuccess = false;
     let clearProgressTimer = null;
     manager.onChunkProgress = (loaded, total) => {
       setChunkProgress({ loaded, total });
-      if (loaded === total && total > 0) {
-        if (!lastReportedSuccess) {
+      if (loaded === total && total > 0 && currentFileSetId) {
+        if (!completedFileSetsRef.current.has(currentFileSetId)) {
           setToast({ message: t("all_chunks_loaded"), type: "success" });
-          lastReportedSuccess = true;
+          completedFileSetsRef.current.add(currentFileSetId);
           if (clearProgressTimer) clearTimeout(clearProgressTimer);
           clearProgressTimer = setTimeout(() => {
             setChunkProgress({ loaded: 0, total: 0 });
@@ -8016,7 +8142,6 @@ const ThreeViewer = ({
           }, 3e3);
         }
       } else {
-        lastReportedSuccess = false;
         if (clearProgressTimer) {
           clearTimeout(clearProgressTimer);
           clearProgressTimer = null;
@@ -8112,6 +8237,11 @@ const ThreeViewer = ({
     const handleContextMenu = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        visible: true
+      });
     };
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
@@ -8586,6 +8716,8 @@ const ThreeViewer = ({
           setSelectedUuids([]);
           setSelectedProps(null);
           setMeasureHistory([]);
+          setChunkProgress({ loaded: 0, total: 0 });
+          completedFileSetsRef.current.clear();
           updateTree();
           setStatus(t("ready"));
         } catch (error) {
@@ -8666,7 +8798,8 @@ const ThreeViewer = ({
               styles,
               theme,
               hiddenMenus,
-              onOpenAbout: () => setIsAboutOpen(true)
+              onOpenAbout: () => setIsAboutOpen(true),
+              hasModels
             }
           ),
           showOutline && /* @__PURE__ */ jsxs("div", { style: {
@@ -8733,6 +8866,26 @@ const ThreeViewer = ({
           }, children: [
             /* @__PURE__ */ jsx("canvas", { ref: canvasRef, style: { width: "100%", height: "100%", outline: "none" } }),
             /* @__PURE__ */ jsx(ViewCube, { sceneMgr: mgrInstance, theme, lang }),
+            contextMenu.visible && /* @__PURE__ */ jsx(
+              ContextMenu,
+              {
+                x: contextMenu.x,
+                y: contextMenu.y,
+                items: [
+                  {
+                    label: t("hide_selected"),
+                    onClick: handleHideSelected,
+                    disabled: selectedUuids.length === 0
+                  },
+                  {
+                    label: t("show_all"),
+                    onClick: handleShowAll
+                  }
+                ],
+                onClose: () => setContextMenu((prev) => ({ ...prev, visible: false })),
+                theme
+              }
+            ),
             toast && /* @__PURE__ */ jsxs("div", { style: {
               position: "fixed",
               top: "40px",
@@ -8970,23 +9123,22 @@ const ThreeViewer = ({
             ] }),
             showStats && /* @__PURE__ */ jsxs("div", { style: {
               display: "flex",
-              gap: "10px",
-              alignItems: "center"
+              gap: "12px",
+              alignItems: "center",
+              paddingLeft: "12px",
+              borderLeft: `1px solid ${theme.border}`
             }, children: [
-              /* @__PURE__ */ jsxs("span", { children: [
-                t("monitor_meshes"),
-                ": ",
-                formatNumber(stats.meshes)
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, children: [
+                /* @__PURE__ */ jsx(IconBox, { width: 14, height: 14 }),
+                /* @__PURE__ */ jsx("span", { children: formatNumber(stats.meshes) })
               ] }),
-              /* @__PURE__ */ jsxs("span", { children: [
-                t("monitor_faces"),
-                ": ",
-                formatNumber(stats.faces)
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, children: [
+                /* @__PURE__ */ jsx(IconGrid, { width: 14, height: 14 }),
+                /* @__PURE__ */ jsx("span", { children: formatNumber(stats.faces) })
               ] }),
-              /* @__PURE__ */ jsxs("span", { children: [
-                t("monitor_mem"),
-                ": ",
-                formatMemory(stats.memory)
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, children: [
+                /* @__PURE__ */ jsx(IconActivity, { width: 14, height: 14 }),
+                /* @__PURE__ */ jsx("span", { children: formatMemory(stats.memory) })
               ] })
             ] }),
             /* @__PURE__ */ jsx(
@@ -8995,15 +9147,17 @@ const ThreeViewer = ({
                 onClick: () => setThemeMode(themeMode === "dark" ? "light" : "dark"),
                 style: {
                   cursor: "pointer",
-                  padding: "2px 8px",
+                  padding: "4px",
                   borderRadius: "4px",
-                  backgroundColor: theme.itemHover,
                   display: "flex",
                   alignItems: "center",
-                  gap: "4px"
+                  justifyContent: "center",
+                  transition: "background-color 0.2s"
                 },
-                title: themeMode === "dark" ? "Light" : "Dark",
-                children: /* @__PURE__ */ jsx("span", { children: themeMode === "dark" ? "☀" : "☾" })
+                onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+                onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+                title: themeMode === "dark" ? t("theme_light") : t("theme_dark"),
+                children: themeMode === "dark" ? /* @__PURE__ */ jsx(IconSun, { width: 16, height: 16 }) : /* @__PURE__ */ jsx(IconMoon, { width: 16, height: 16 })
               }
             ),
             /* @__PURE__ */ jsx(
