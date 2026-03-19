@@ -119,8 +119,8 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 <div style={styles.toolbarGroup}>
                     <div style={{ position: 'relative' }}>
                         <ImageButton
-                            icon={<IconFile width={20} height={20} />}
-                            label={t('tb_file')}
+                        icon={<IconFile />}
+                        label={t('tb_file')}
                             active={openMenu === 'file'}
                             onClick={() => toggleMenu('file')}
                             styles={styles}
@@ -177,7 +177,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     {!isHidden('view') && (
                 <div style={styles.toolbarGroup}>
                     <ImageButton
-                        icon={<IconMaximize width={20} height={20} />}
+                        icon={<IconMaximize />}
                         label={t('tb_fit')}
                         onClick={() => props.sceneMgr?.fitView()}
                         styles={styles}
@@ -185,7 +185,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     />
                     <div style={{ position: 'relative' }}>
                         <ImageButton
-                            icon={<IconEye width={20} height={20} />}
+                            icon={<IconEye />}
                             label={t('tb_view')}
                             active={openMenu === 'views'}
                             onClick={() => toggleMenu('views')}
@@ -286,7 +286,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 <div style={styles.toolbarGroup}>
                     {!isHidden('outline') && (
                         <ImageButton
-                            icon={<IconBox width={20} height={20} />}
+                            icon={<IconBox />}
                             label={t('tb_model')}
                             active={props.showOutline}
                             onClick={() => props.setShowOutline?.(!props.showOutline)}
@@ -296,7 +296,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     )}
                     {!isHidden('props') && (
                         <ImageButton
-                            icon={<IconList width={20} height={20} />}
+                            icon={<IconList />}
                             label={t('tb_props')}
                             active={props.showProps}
                             onClick={() => props.setShowProps?.(!props.showProps)}
@@ -306,7 +306,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     )}
                     {!isHidden('pick') && (
                         <ImageButton
-                            icon={<IconMousePointer width={20} height={20} />}
+                            icon={<IconMousePointer />}
                             label={t('tb_pick')}
                             active={props.pickEnabled}
                             onClick={() => props.setPickEnabled?.(!props.pickEnabled)}
@@ -321,7 +321,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 <div style={styles.toolbarGroup}>
                     {!isHidden('measure') && (
                         <ImageButton
-                            icon={<IconRuler width={24} height={24} strokeWidth={2} />}
+                            icon={<IconRuler />}
                             label={t('tb_measure')}
                             active={props.activeTool === 'measure'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'measure' ? 'none' : 'measure')}
@@ -332,7 +332,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     )}
                     {!isHidden('clip') && (
                         <ImageButton
-                            icon={<IconScissors width={20} height={20} />}
+                            icon={<IconScissors />}
                             label={t('tb_clip')}
                             active={props.activeTool === 'clip'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'clip' ? 'none' : 'clip')}
@@ -343,7 +343,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     )}
                     {!isHidden('viewpoint') && (
                         <ImageButton
-                            icon={<IconCamera width={20} height={20} />}
+                            icon={<IconCamera />}
                             label={t('tb_view')}
                             active={props.activeTool === 'viewpoint'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'viewpoint' ? 'none' : 'viewpoint')}
@@ -354,7 +354,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     )}
                     {!isHidden('sun') && (
                         <ImageButton
-                            icon={<IconSun width={20} height={20} />}
+                            icon={<IconSun />}
                             label={t('tb_sun')}
                             active={props.activeTool === 'sun'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'sun' ? 'none' : 'sun')}
@@ -370,7 +370,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 <div style={styles.toolbarGroupLast}>
                     {!isHidden('settings') && (
                         <ImageButton
-                            icon={<IconSettings width={20} height={20} />}
+                            icon={<IconSettings />}
                             label={t('tb_settings')}
                             active={props.activeTool === 'settings'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'settings' ? 'none' : 'settings')}
@@ -379,7 +379,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                         />
                     )}
                     <ImageButton
-                        icon={<IconInfo width={20} height={20} />}
+                        icon={<IconInfo />}
                         label={t('tb_about')}
                         onClick={() => props.onOpenAbout?.()}
                         styles={styles}

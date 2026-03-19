@@ -1,6 +1,6 @@
 import React from "react";
 
-const iconSize = 18;
+const iconSize = 24;
 const iconStrokeWidth = 1.5;
 
 const createIcon = (paths: React.ReactNode, props: any = {}) => {
