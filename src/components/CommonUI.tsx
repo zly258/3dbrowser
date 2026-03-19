@@ -74,12 +74,12 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
         display: 'flex',
         flexDirection: 'column' as const,
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        padding: '4px 10px',
+        justifyContent: 'center',
+        padding: '4px 12px',
         height: '44px',
         minWidth: '48px',
-        gap: '1px',
-        fontSize: '10px',
+        gap: '2px',
+        fontSize: '11px',
         color: theme?.text || '#333',
         cursor: props.disabled ? 'not-allowed' : 'pointer',
         backgroundColor: active 
@@ -90,6 +90,7 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
         transition: 'background-color 0.1s',
         opacity: props.disabled ? 0.4 : 1,
         pointerEvents: props.disabled ? 'none' as any : 'auto',
+        outline: 'none',
         ...style
     };
 
@@ -97,14 +98,12 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: '2px',
     };
 
     const labelStyle = {
         fontSize: '10px',
         color: theme?.text || '#333',
         whiteSpace: 'nowrap' as const,
-        marginBottom: '1px',
     };
 
     return (

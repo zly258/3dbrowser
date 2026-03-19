@@ -62,10 +62,9 @@ function App() {
 |------|------|---------|-------------|
 | `libPath` | `string` | `'./libs'` | Path to the folder containing WASM/Worker files (relative to window.location) |
 | `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
-| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `settings_panel`, `settings`, `about`. |
+| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`. |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
-| `menuMode` | `'menu' \| 'toolbar'` | `'menu'` | Menu display mode: traditional menu bar or bottom toolbar |
 | `showStats` | `boolean` | `true` | Show performance statistics panel |
 | `showOutline` | `boolean` | `true` | Show scene structure outline panel |
 | `showProperties` | `boolean` | `true` | Show object properties panel |
@@ -161,10 +160,9 @@ function App() {
 |------|------|---------|-------------|
 | `libPath` | `string` | `'./libs'` | 包含 WASM/Worker 文件的文件夹路径（相对于 window.location） |
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
-| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `open_url`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `settings_panel`, `settings`, `about`。 |
+| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`。 |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
-| `menuMode` | `'menu' \| 'toolbar'` | `'menu'` | 菜单显示模式：传统菜单栏或底部工具栏 |
 | `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
 | `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
 | `showProperties` | `boolean` | `true` | 是否显示对象属性面板 |

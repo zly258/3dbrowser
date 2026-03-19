@@ -73,6 +73,8 @@ export const createGlobalStyle = (theme: ThemeColors) => `
     * { scrollbar-width: thin; scrollbar-color: #c2c2c2 ${theme.bg}; }
     body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${DEFAULT_FONT}; -webkit-font-smoothing: antialiased; }
     * { box-sizing: border-box; }
+    button { outline: none; }
+    button:focus { outline: none; }
 `;
 
 export const createStyles = (theme: ThemeColors) => ({
@@ -124,27 +126,21 @@ export const createStyles = (theme: ThemeColors) => ({
     }),
 
     toolbarBar: {
-        position: "absolute" as const,
-        bottom: "8px",
-        left: "50%",
-        transform: "translateX(-50%)",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "flex-start",
         backgroundColor: theme.panelBg,
-        border: `1px solid ${theme.border}`,
-        borderRadius: "8px",
-        padding: "2px 4px",
-        height: "48px",
+        borderBottom: `1px solid ${theme.border}`,
+        padding: "6px 8px",
+        height: "52px",
         gap: "2px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
         zIndex: 1000,
         WebkitAppRegion: "no-drag" as any,
     },
     toolbarGroup: {
         display: "flex",
         alignItems: "center",
-        gap: "1px",
+        gap: "2px",
         padding: "0 4px",
         borderRight: `1px solid ${theme.border}`,
         height: "100%",
@@ -160,12 +156,12 @@ export const createStyles = (theme: ThemeColors) => ({
         display: "flex",
         flexDirection: "column" as const,
         alignItems: "center",
-        justifyContent: "flex-start",
-        padding: "4px 10px",
-        height: "48px",
-        minWidth: "52px",
+        justifyContent: "center",
+        padding: "6px 12px",
+        height: "44px",
+        minWidth: "48px",
         gap: "2px",
-        fontSize: "10px",
+        fontSize: "11px",
         color: theme.text,
         cursor: "pointer",
         backgroundColor: "transparent",
@@ -175,6 +171,7 @@ export const createStyles = (theme: ThemeColors) => ({
     },
     toolbarBtnActive: {
         backgroundColor: theme.highlight,
+        outline: 'none',
     },
     toolbarIcon: {
         display: "flex",
@@ -182,7 +179,7 @@ export const createStyles = (theme: ThemeColors) => ({
         justifyContent: "center",
     },
     toolbarLabel: {
-        fontSize: "10px",
+        fontSize: "11px",
         color: theme.text,
         whiteSpace: "nowrap" as const,
     },
@@ -263,7 +260,7 @@ export const createStyles = (theme: ThemeColors) => ({
     },
     floatingHeader: {
         height: "29px",
-        padding: "0 12px",
+        padding: "0 8px",
         backgroundColor: theme.headerBg, 
         borderBottom: `1px solid ${theme.border}`,
         cursor: "default",
