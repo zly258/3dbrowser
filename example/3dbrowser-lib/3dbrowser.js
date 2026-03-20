@@ -1,5 +1,5 @@
-import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
-import React, { useState, useEffect, useMemo, useRef, useCallback, Component } from 'react';
+import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
+import React, { useRef, useCallback, useState, useEffect, useMemo, Component } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
@@ -192,9 +192,6 @@ class SceneManager {
     this.settings = { ...this.settings, ...newSettings };
     this.ambientLight.intensity = this.settings.ambientInt;
     this.dirLight.intensity = this.settings.dirInt;
-    if (newSettings.renderMode !== void 0) {
-      this.applyRenderMode(this.settings.renderMode);
-    }
     if (newSettings.sunEnabled !== void 0 || newSettings.sunLatitude !== void 0 || newSettings.sunLongitude !== void 0 || newSettings.sunTime !== void 0 || newSettings.sunShadow !== void 0) {
       this.updateSunPosition();
     }
@@ -264,46 +261,6 @@ class SceneManager {
       this.sunLight.castShadow = true;
     } else {
       this.sunLight.castShadow = false;
-    }
-  }
-  // 应用渲染模式
-  applyRenderMode(mode) {
-    this.contentGroup.traverse((obj) => {
-      if (obj.isMesh) {
-        const mesh = obj;
-        const material = mesh.material;
-        if (material) {
-          this.applyMaterialMode(material, mode);
-        }
-        if (Array.isArray(material)) {
-          material.forEach((mat) => this.applyMaterialMode(mat, mode));
-        }
-      }
-    });
-  }
-  applyMaterialMode(material, mode) {
-    if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhongMaterial || material instanceof THREE.MeshLambertMaterial) {
-      switch (mode) {
-        case "mayo":
-          material.envMapIntensity = 1.2;
-          material.roughness = Math.max(0.3, material.roughness * 0.8);
-          material.metalness = Math.min(0.8, material.metalness * 1.2);
-          break;
-        case "blender":
-          material.envMapIntensity = 0.8;
-          material.roughness = Math.min(0.9, material.roughness * 1.1);
-          material.metalness = Math.min(0.5, material.metalness * 0.8);
-          if (material instanceof THREE.MeshStandardMaterial) {
-            material.ambientLight = new THREE.Color(4210752);
-          }
-          break;
-        case "standard":
-        default:
-          material.envMapIntensity = 1;
-          material.roughness = 0.5;
-          material.metalness = 0;
-          break;
-      }
     }
   }
   createCircleTexture() {
@@ -4694,18 +4651,19 @@ const Button = ({
   styles,
   theme,
   style,
+  className = "",
   ...props
 }) => {
   const getVariantStyles = () => {
     switch (variant) {
       case "primary":
-        return active ? styles.btnActive : styles.btn;
+        return active ? styles?.btnActive : styles?.btn;
       case "danger":
-        return { ...styles.btn, backgroundColor: theme.danger, borderColor: theme.danger, color: "white" };
+        return { ...styles?.btn, backgroundColor: theme?.danger, borderColor: theme?.danger, color: "white" };
       case "ghost":
-        return { ...styles.btn, backgroundColor: "transparent", borderColor: "transparent", boxShadow: "none" };
+        return { ...styles?.btn, backgroundColor: "transparent", borderColor: "transparent", boxShadow: "none" };
       default:
-        return styles.btn;
+        return styles?.btn;
     }
   };
   const baseStyle = {
@@ -4715,15 +4673,16 @@ const Button = ({
     justifyContent: "center",
     gap: "6px",
     transition: "all 0.2s",
-    border: variant === "ghost" ? "none" : active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
+    border: variant === "ghost" ? "none" : active ? `1px solid ${theme?.accent}` : `1px solid ${theme?.border}`,
     boxShadow: variant === "ghost" ? "none" : "none",
     opacity: props.disabled ? 0.4 : 1,
     cursor: props.disabled ? "not-allowed" : "pointer",
     pointerEvents: props.disabled ? "none" : "auto",
     ...style
   };
-  return /* @__PURE__ */ jsx("button", { style: baseStyle, ...props, children });
+  return /* @__PURE__ */ jsx("button", { style: baseStyle, className: `ui-btn ${className}`, ...props, children });
 };
+
 const ImageButton = ({
   icon,
   label,
@@ -4731,6 +4690,7 @@ const ImageButton = ({
   styles,
   theme,
   style,
+  className = "",
   ...props
 }) => {
   const [hover, setHover] = React.useState(false);
@@ -4777,6 +4737,7 @@ const ImageButton = ({
     "button",
     {
       style: baseStyle,
+      className: `ui-toolbar-btn ${active ? "active" : ""} ${className}`,
       ...props,
       onMouseEnter: () => setHover(true),
       onMouseLeave: () => setHover(false),
@@ -4787,63 +4748,492 @@ const ImageButton = ({
     }
   );
 };
-const SLIDER_TRACK_HEIGHT = 4;
-const SLIDER_THUMB_SIZE = 14;
-const Slider = ({ min, max, step = 1, value, onChange, theme, disabled, style }) => {
-  return /* @__PURE__ */ jsxs("div", { style: {
-    display: "flex",
-    alignItems: "center",
-    width: "100%",
-    height: 32,
-    padding: "0 4px",
-    opacity: disabled ? 0.5 : 1,
-    ...style
-  }, children: [
-    /* @__PURE__ */ jsx(
-      "input",
+
+const Slider = ({
+  min,
+  max,
+  step = 1,
+  value,
+  onChange,
+  theme,
+  disabled = false,
+  style
+}) => {
+  const percentage = (value - min) / (max - min) * 100;
+  const sliderRef = useRef(null);
+  const calcValueFromX = useCallback((clientX) => {
+    if (!sliderRef.current) return value;
+    const rect = sliderRef.current.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const newValue = min + percent * (max - min);
+    return Math.round(newValue / step) * step;
+  }, [min, max, step, value]);
+  const handleMouseDown = useCallback((e) => {
+    if (disabled) return;
+    e.preventDefault();
+    const targetValue = calcValueFromX(e.clientX);
+    onChange(Math.max(min, Math.min(max, targetValue)));
+    const handleMouseMove = (moveEvent) => {
+      const newValue = calcValueFromX(moveEvent.clientX);
+      onChange(Math.max(min, Math.min(max, newValue)));
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [calcValueFromX, onChange, min, max, disabled]);
+  return /* @__PURE__ */ jsxs(
+    "div",
+    {
+      ref: sliderRef,
+      className: "ui-slider",
+      style: {
+        opacity: disabled ? 0.5 : 1,
+        width: "100%",
+        minWidth: 0,
+        height: "24px",
+        position: "relative",
+        cursor: disabled ? "not-allowed" : "pointer",
+        display: "flex",
+        alignItems: "center",
+        ...style
+      },
+      onMouseDown: handleMouseDown,
+      children: [
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-track",
+            style: {
+              position: "absolute",
+              width: "100%",
+              height: "6px",
+              backgroundColor: "var(--border-color)",
+              borderRadius: "3px"
+            }
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-progress",
+            style: {
+              position: "absolute",
+              width: `${percentage}%`,
+              height: "6px",
+              backgroundColor: "var(--accent)",
+              borderRadius: "3px"
+            }
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-thumb",
+            style: {
+              left: `${percentage}%`,
+              width: "16px",
+              height: "16px",
+              backgroundColor: "var(--bg-primary)",
+              border: `2px solid var(--accent)`,
+              borderRadius: "50%",
+              cursor: disabled ? "not-allowed" : "default",
+              position: "absolute",
+              transform: "translateX(-50%)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+            }
+          }
+        )
+      ]
+    }
+  );
+};
+
+const DualSlider = ({
+  min,
+  max,
+  value,
+  onChange,
+  theme,
+  disabled = false,
+  style
+}) => {
+  const sliderRef = useRef(null);
+  const percentage1 = (value[0] - min) / (max - min) * 100;
+  const percentage2 = (value[1] - min) / (max - min) * 100;
+  const calcValueFromX = useCallback((clientX) => {
+    if (!sliderRef.current) return min;
+    const rect = sliderRef.current.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return min + percent * (max - min);
+  }, [min, max]);
+  const handleThumb1MouseDown = useCallback((e) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const handleMouseMove = (moveEvent) => {
+      const newValue = calcValueFromX(moveEvent.clientX);
+      onChange([Math.max(min, Math.min(value[1] - 1, Math.round(newValue))), value[1]]);
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [disabled, calcValueFromX, onChange, min, value]);
+  const handleThumb2MouseDown = useCallback((e) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const handleMouseMove = (moveEvent) => {
+      const newValue = calcValueFromX(moveEvent.clientX);
+      onChange([value[0], Math.min(max, Math.max(value[0] + 1, Math.round(newValue)))]);
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [disabled, calcValueFromX, onChange, max, value]);
+  const handleTrackClick = useCallback((e) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const clickValue = calcValueFromX(e.clientX);
+    const dist1 = Math.abs(clickValue - value[0]);
+    const dist2 = Math.abs(clickValue - value[1]);
+    if (dist1 <= dist2) {
+      onChange([Math.max(min, Math.min(value[1] - 1, Math.round(clickValue))), value[1]]);
+    } else {
+      onChange([value[0], Math.min(max, Math.max(value[0] + 1, Math.round(clickValue)))]);
+    }
+  }, [disabled, calcValueFromX, onChange, min, max, value]);
+  return /* @__PURE__ */ jsxs(
+    "div",
+    {
+      ref: sliderRef,
+      className: "ui-slider",
+      style: {
+        opacity: disabled ? 0.5 : 1,
+        width: "100%",
+        minWidth: 0,
+        height: "24px",
+        position: "relative",
+        cursor: disabled ? "not-allowed" : "pointer",
+        display: "flex",
+        alignItems: "center",
+        ...style
+      },
+      onClick: handleTrackClick,
+      children: [
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-track",
+            style: {
+              position: "absolute",
+              width: "100%",
+              height: "6px",
+              backgroundColor: "var(--border-color)",
+              borderRadius: "3px"
+            }
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-progress",
+            style: {
+              position: "absolute",
+              left: `${percentage1}%`,
+              width: `${percentage2 - percentage1}%`,
+              height: "6px",
+              backgroundColor: "var(--accent)",
+              borderRadius: "3px"
+            }
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-thumb",
+            style: {
+              left: `${percentage1}%`,
+              width: "16px",
+              height: "16px",
+              backgroundColor: "var(--bg-primary)",
+              border: `2px solid var(--accent)`,
+              borderRadius: "50%",
+              cursor: disabled ? "not-allowed" : "default",
+              position: "absolute",
+              transform: "translateX(-50%)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+            },
+            onMouseDown: handleThumb1MouseDown
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-slider-thumb",
+            style: {
+              left: `${percentage2}%`,
+              width: "16px",
+              height: "16px",
+              backgroundColor: "var(--bg-primary)",
+              border: `2px solid var(--accent)`,
+              borderRadius: "50%",
+              cursor: disabled ? "not-allowed" : "default",
+              position: "absolute",
+              transform: "translateX(-50%)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+            },
+            onMouseDown: handleThumb2MouseDown
+          }
+        )
+      ]
+    }
+  );
+};
+
+const Switch = ({ checked, onChange, disabled = false, className = "" }) => {
+  return /* @__PURE__ */ jsx(
+    "button",
+    {
+      className: `ui-switch ${checked ? "active" : ""} ${disabled ? "disabled" : ""} ${className}`,
+      onClick: () => !disabled && onChange(!checked),
+      role: "switch",
+      "aria-checked": checked,
+      disabled,
+      children: /* @__PURE__ */ jsx("div", { className: "ui-switch-thumb" })
+    }
+  );
+};
+
+const SegmentedControl$1 = ({
+  options,
+  value,
+  onChange,
+  className = ""
+}) => /* @__PURE__ */ jsx("div", { className: `ui-segmented ${className}`, children: options.map((option) => /* @__PURE__ */ jsxs(
+  "button",
+  {
+    className: `ui-segmented-item ${value === option.value ? "active" : ""}`,
+    onClick: () => onChange(option.value),
+    children: [
+      option.icon && /* @__PURE__ */ jsx("span", { children: option.icon }),
+      /* @__PURE__ */ jsx("span", { children: option.label })
+    ]
+  },
+  option.value
+)) });
+
+const SettingSlider = ({
+  min,
+  max,
+  step,
+  value,
+  onChange,
+  showValue = true,
+  style
+}) => {
+  const percentage = (value - min) / (max - min) * 100;
+  const sliderRef = useRef(null);
+  const calcValueFromX = useCallback((clientX) => {
+    if (!sliderRef.current) return value;
+    const rect = sliderRef.current.getBoundingClientRect();
+    const deltaX = clientX - rect.left;
+    const percent = Math.max(0, Math.min(1, deltaX / rect.width));
+    const newValue = min + percent * (max - min);
+    return Math.round(newValue / step) * step;
+  }, [min, max, step, value]);
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    const targetValue = calcValueFromX(e.clientX);
+    onChange(Math.max(min, Math.min(max, targetValue)));
+    const handleMouseMove2 = (moveEvent) => {
+      const newValue = calcValueFromX(moveEvent.clientX);
+      onChange(Math.max(min, Math.min(max, newValue)));
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove2);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove2);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [calcValueFromX, onChange, min, max]);
+  useCallback((e) => {
+    if (!sliderRef.current) return;
+    const rect = sliderRef.current.getBoundingClientRect();
+    (e.clientX - rect.left) / rect.width;
+  }, []);
+  return /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", style: { flex: 1, minWidth: 0, width: "100%", ...style }, children: [
+    /* @__PURE__ */ jsxs(
+      "div",
       {
-        type: "range",
-        min,
-        max,
-        step,
-        value,
-        disabled,
-        onChange: (e) => onChange(parseFloat(e.target.value)),
+        ref: sliderRef,
+        className: "ui-slider",
         style: {
           flex: 1,
-          cursor: disabled ? "not-allowed" : "pointer",
-          height: SLIDER_TRACK_HEIGHT,
-          appearance: "none",
-          WebkitAppearance: "none",
-          background: theme.border,
-          borderRadius: SLIDER_TRACK_HEIGHT / 2,
-          outline: "none"
-        }
+          minWidth: 0,
+          height: "24px",
+          position: "relative",
+          width: "100%",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center"
+        },
+        onMouseDown: handleMouseDown,
+        children: [
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              className: "ui-slider-track",
+              style: {
+                position: "absolute",
+                width: "100%",
+                height: "6px",
+                backgroundColor: "var(--border-color)",
+                borderRadius: "3px"
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              className: "ui-slider-progress",
+              style: {
+                position: "absolute",
+                width: `${percentage}%`,
+                height: "6px",
+                backgroundColor: "var(--accent)",
+                borderRadius: "3px",
+                transition: "width 0.05s"
+              }
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              className: "ui-slider-thumb",
+              style: {
+                left: `${percentage}%`,
+                width: "16px",
+                height: "16px",
+                backgroundColor: "var(--bg-primary)",
+                border: `2px solid var(--accent)`,
+                borderRadius: "50%",
+                cursor: "default",
+                position: "absolute",
+                transform: "translateX(-50%)",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
+              }
+            }
+          )
+        ]
       }
     ),
-    /* @__PURE__ */ jsx("style", { dangerouslySetInnerHTML: { __html: `
-                input[type=range]::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    height: ${SLIDER_THUMB_SIZE}px;
-                    width: ${SLIDER_THUMB_SIZE}px;
-                    border-radius: 50%;
-                    background: #fff;
-                    cursor: pointer;
-                    border: 2px solid ${theme.accent};
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                    margin-top: 0;
-                }
-                input[type=range]::-moz-range-thumb {
-                    height: ${SLIDER_THUMB_SIZE}px;
-                    width: ${SLIDER_THUMB_SIZE}px;
-                    border-radius: 50%;
-                    background: #fff;
-                    cursor: pointer;
-                    border: 2px solid ${theme.accent};
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                }
-            ` } })
+    showValue && /* @__PURE__ */ jsx(
+      "span",
+      {
+        style: {
+          fontFamily: "'Consolas', 'Monaco', monospace",
+          fontSize: "12px",
+          color: "var(--text-primary)",
+          minWidth: "40px",
+          textAlign: "right",
+          flexShrink: 0
+        },
+        children: step < 1 ? value.toFixed(1) : value
+      }
+    )
   ] });
+};
+
+const Select = ({ value, options, onChange, className = "", style }) => /* @__PURE__ */ jsx(
+  "select",
+  {
+    value,
+    onChange: (e) => onChange(e.target.value),
+    className: `ui-input ${className}`,
+    style: {
+      padding: "4px 28px 4px 8px",
+      appearance: "none",
+      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A0A0A0' d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`,
+      backgroundRepeat: "no-repeat",
+      backgroundPosition: "right 8px center",
+      ...style
+    },
+    children: options.map((option) => /* @__PURE__ */ jsx("option", { value: option.value, children: option.label }, option.value))
+  }
+);
+
+const Checkbox = ({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+  style,
+  labelStyle
+}) => {
+  return /* @__PURE__ */ jsxs(
+    "label",
+    {
+      style: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        userSelect: "none",
+        opacity: disabled ? 0.5 : 1,
+        ...style
+      },
+      onClick: (e) => {
+        if (disabled) return;
+        e.preventDefault();
+        onChange(!checked);
+      },
+      children: [
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: {
+              width: "16px",
+              height: "16px",
+              minWidth: "16px",
+              minHeight: "16px",
+              border: "2px solid var(--border-color)",
+              borderRadius: "3px",
+              backgroundColor: checked ? "var(--accent)" : "var(--bg-primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 120ms ease",
+              flexShrink: 0
+            },
+            children: checked && /* @__PURE__ */ jsx(
+              "svg",
+              {
+                viewBox: "0 0 24 24",
+                fill: "none",
+                stroke: "white",
+                strokeWidth: "3",
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                style: { width: "12px", height: "12px" },
+                children: /* @__PURE__ */ jsx("polyline", { points: "20 6 9 17 4 12" })
+              }
+            )
+          }
+        ),
+        label && /* @__PURE__ */ jsx("span", { style: { fontSize: "12px", color: "var(--text-primary)", ...labelStyle }, children: label })
+      ]
+    }
+  );
 };
 
 const iconSize = 24;
@@ -5406,26 +5796,6 @@ const Toolbar = (props) => {
   ] });
 };
 
-const Checkbox = ({ label, checked, onChange, styles, style }) => {
-  return /* @__PURE__ */ jsxs(
-    "label",
-    {
-      style: {
-        ...styles.checkboxContainer,
-        ...style
-      },
-      onClick: (e) => {
-        e.preventDefault();
-        onChange(!checked);
-      },
-      children: [
-        /* @__PURE__ */ jsx("div", { style: styles.checkboxCustom(checked), children: checked && /* @__PURE__ */ jsx("div", { style: styles.checkboxCheckmark, children: /* @__PURE__ */ jsx("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round", style: { width: "100%", height: "100%" }, children: /* @__PURE__ */ jsx("polyline", { points: "20 6 9 17 4 12" }) }) }) }),
-        label && /* @__PURE__ */ jsx("span", { style: { marginLeft: 4 }, children: label })
-      ]
-    }
-  );
-};
-
 const flattenTree = (nodes, result = [], parentIsLast = []) => {
   if (!nodes) return result;
   for (let i = 0; i < nodes.length; i++) {
@@ -5533,7 +5903,7 @@ const SceneTree = ({
   const endIndex = Math.min(flatData.length, startIndex + visibleCount + 1);
   const visibleItems = flatData.slice(startIndex, endIndex);
   return /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }, children: [
-    /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: `1px solid ${theme.border}` }, children: /* @__PURE__ */ jsxs("div", { style: { position: "relative", display: "flex", alignItems: "center" }, children: [
+    /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: "1px solid var(--border-color)" }, children: /* @__PURE__ */ jsxs("div", { style: { position: "relative", display: "flex", alignItems: "center" }, children: [
       /* @__PURE__ */ jsx(
         "input",
         {
@@ -5541,15 +5911,11 @@ const SceneTree = ({
           placeholder: t("search_nodes"),
           value: searchQuery,
           onChange: (e) => setSearchQuery(e.target.value),
+          className: "ui-input",
           style: {
             width: "100%",
             padding: "4px 28px 4px 8px",
-            fontSize: "12px",
-            backgroundColor: theme.bg,
-            color: theme.text,
-            border: `1px solid ${theme.border}`,
             borderRadius: "0px",
-            outline: "none",
             boxSizing: "border-box"
           }
         }
@@ -5623,8 +5989,6 @@ const SceneTree = ({
             {
               checked: node.visible,
               onChange: (val) => onToggleVisibility(node.uuid, val),
-              styles,
-              theme,
               style: { marginRight: 6, padding: 0, flexShrink: 0 }
             }
           ),
@@ -5747,9 +6111,7 @@ const FloatingPanel = ({
   const minHeight = storageId === "tool_measure" ? 400 : 120;
   const [pos, setPos] = useState(() => {
     if (modal) {
-      const centerX = (window.innerWidth - width) / 2;
-      const centerY = (window.innerHeight - height) / 2;
-      return { x: Math.max(0, centerX), y: Math.max(0, centerY) };
+      return { x: (window.innerWidth - width) / 2, y: (window.innerHeight - height) / 2 };
     }
     if (storageId) {
       try {
@@ -5791,6 +6153,19 @@ const FloatingPanel = ({
     }
     return { w: width, h: height };
   });
+  useEffect(() => {
+    if (!modal) return;
+    const centerPanel = () => {
+      const centerX = (window.innerWidth - size.w) / 2;
+      const centerY = (window.innerHeight - size.h) / 2;
+      setPos({ x: Math.max(0, centerX), y: Math.max(0, centerY) });
+    };
+    window.addEventListener("resize", centerPanel);
+    centerPanel();
+    return () => {
+      window.removeEventListener("resize", centerPanel);
+    };
+  }, [modal, size.w, size.h]);
   const isDragging = useRef(false);
   const isResizing = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
@@ -5898,9 +6273,9 @@ const FloatingPanel = ({
       "div",
       {
         ref: panelRef,
-        className: "cad-panel",
+        className: "ui-panel",
         style: {
-          position: "absolute",
+          position: modal ? "fixed" : "absolute",
           left: pos.x,
           top: pos.y,
           width: size.w,
@@ -5911,14 +6286,14 @@ const FloatingPanel = ({
           /* @__PURE__ */ jsxs(
             "div",
             {
-              className: "cad-panel-header",
+              className: "ui-panel-header",
               onMouseDown: onHeaderDown,
               children: [
-                /* @__PURE__ */ jsx("span", { className: "cad-panel-title", children: title }),
+                /* @__PURE__ */ jsx("span", { className: "ui-panel-title", children: title }),
                 onClose && /* @__PURE__ */ jsx(
                   "button",
                   {
-                    className: "cad-panel-close",
+                    className: "ui-panel-close",
                     onClick: onCloseClick,
                     title: "Close",
                     children: /* @__PURE__ */ jsx(IconClose, { width: 14, height: 14 })
@@ -5927,11 +6302,11 @@ const FloatingPanel = ({
               ]
             }
           ),
-          /* @__PURE__ */ jsx("div", { className: "cad-panel-content", children }),
+          /* @__PURE__ */ jsx("div", { className: "ui-panel-content", children }),
           resizable && !modal && /* @__PURE__ */ jsx(
             "div",
             {
-              className: "cad-panel-resize cursor-se-resize",
+              className: "ui-panel-resize cursor-se-resize",
               onMouseDown: onResizeDown
             }
           )
@@ -5939,6 +6314,173 @@ const FloatingPanel = ({
       }
     )
   ] });
+};
+
+const Section = ({ title, children }) => /* @__PURE__ */ jsxs("div", { className: "mb-4", children: [
+  /* @__PURE__ */ jsx(
+    "div",
+    {
+      className: "text-xs font-semibold uppercase",
+      style: {
+        marginBottom: "10px",
+        paddingBottom: "6px",
+        color: "var(--accent)",
+        borderBottom: "1px solid var(--border-color)",
+        letterSpacing: "0.5px"
+      },
+      children: title
+    }
+  ),
+  children
+] });
+const Row = ({ label, children, labelWidth = "80px", stretch = false }) => /* @__PURE__ */ jsxs(
+  "div",
+  {
+    className: "flex items-center justify-between",
+    style: { marginBottom: "10px", minHeight: "28px", gap: "16px" },
+    children: [
+      /* @__PURE__ */ jsx(
+        "span",
+        {
+          className: "text-sm text-secondary flex-shrink-0",
+          style: {
+            minWidth: labelWidth
+          },
+          children: label
+        }
+      ),
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          className: "flex items-center",
+          style: {
+            flex: stretch ? 1 : "0 1 auto",
+            // stretch时flex:1，否则不伸缩
+            justifyContent: stretch ? "flex-start" : "flex-end",
+            minWidth: stretch ? 0 : void 0
+            // stretch时允许缩小
+          },
+          children
+        }
+      )
+    ]
+  }
+);
+const SettingsPanel = ({
+  t,
+  // 翻译函数
+  onClose,
+  // 关闭回调
+  settings,
+  // 场景设置
+  onUpdate,
+  // 设置更新回调
+  currentLang,
+  // 当前语言
+  setLang,
+  // 设置语言回调
+  themeMode,
+  // 主题模式
+  setThemeMode,
+  // 设置主题回调
+  showStats,
+  // 是否显示统计
+  setShowStats,
+  // 设置统计显示回调
+  styles,
+  // 样式配置
+  theme
+  // 主题配置
+}) => {
+  return /* @__PURE__ */ jsx(
+    FloatingPanel,
+    {
+      title: t("settings"),
+      onClose,
+      width: 360,
+      height: 500,
+      modal: true,
+      styles,
+      theme,
+      children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", gap: "8px", height: "100%", overflowY: "auto" }, children: [
+        /* @__PURE__ */ jsxs(Section, { title: t("setting_general"), children: [
+          /* @__PURE__ */ jsx(Row, { label: t("st_theme"), labelWidth: "70px", children: /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" }, children: /* @__PURE__ */ jsx(
+            SegmentedControl$1,
+            {
+              options: [
+                { value: "light", label: t("theme_light") || "Light" },
+                { value: "dark", label: t("theme_dark") || "Dark" }
+              ],
+              value: themeMode,
+              onChange: (v) => setThemeMode(v)
+            }
+          ) }) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_lang"), labelWidth: "70px", stretch: true, children: /* @__PURE__ */ jsx(
+            Select,
+            {
+              value: currentLang,
+              options: [
+                { value: "zh", label: "简体中文" },
+                { value: "en", label: "English" }
+              ],
+              onChange: (v) => setLang(v)
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_monitor"), labelWidth: "70px", children: /* @__PURE__ */ jsx(
+            Switch,
+            {
+              checked: showStats,
+              onChange: (v) => setShowStats(v)
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_font_size"), labelWidth: "70px", children: /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" }, children: /* @__PURE__ */ jsx(
+            SegmentedControl$1,
+            {
+              options: [
+                { value: "compact", label: t("st_font_compact") || "紧凑" },
+                { value: "medium", label: t("st_font_medium") || "中等" },
+                { value: "loose", label: t("st_font_loose") || "宽松" }
+              ],
+              value: settings.fontSize || "medium",
+              onChange: (v) => onUpdate({ fontSize: v })
+            }
+          ) }) })
+        ] }),
+        /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), children: /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+          SettingSlider,
+          {
+            min: 100,
+            max: 300,
+            step: 10,
+            value: settings.viewCubeSize || 100,
+            onChange: (v) => onUpdate({ viewCubeSize: v })
+          }
+        ) }) }),
+        /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), children: [
+          /* @__PURE__ */ jsx(Row, { label: t("st_ambient"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            SettingSlider,
+            {
+              min: 0,
+              max: 5,
+              step: 0.1,
+              value: settings.ambientInt,
+              onChange: (v) => onUpdate({ ambientInt: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_dir"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            SettingSlider,
+            {
+              min: 0,
+              max: 5,
+              step: 0.1,
+              value: settings.dirInt,
+              onChange: (v) => onUpdate({ dirInt: v })
+            }
+          ) })
+        ] })
+      ] })
+    }
+  );
 };
 
 const Icons = {
@@ -5955,11 +6497,11 @@ const Icons = {
   ] }),
   Close: () => /* @__PURE__ */ jsx("svg", { width: "12", height: "12", viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M2 2L12 12M12 2L2 12", strokeLinecap: "round" }) })
 };
-const SegmentedControl$1 = ({ options, value, onChange }) => {
-  return /* @__PURE__ */ jsx("div", { className: "cad-segmented", children: options.map((option) => /* @__PURE__ */ jsx(
+const SegmentedControl = ({ options, value, onChange }) => {
+  return /* @__PURE__ */ jsx("div", { className: "ui-segmented", children: options.map((option) => /* @__PURE__ */ jsx(
     "button",
     {
-      className: `cad-segmented-item ${value === option.value ? "active" : ""}`,
+      className: `ui-segmented-item ${value === option.value ? "active" : ""}`,
       onClick: () => onChange(option.value),
       children: /* @__PURE__ */ jsx("span", { children: option.label })
     },
@@ -5972,21 +6514,21 @@ const ClearButton = ({ onClick, disabled }) => {
     {
       onClick,
       disabled,
-      className: `cad-btn cad-btn-icon cad-btn-ghost ${disabled ? "disabled" : ""}`,
+      className: `ui-btn ui-btn-icon ui-btn-ghost ${disabled ? "disabled" : ""}`,
       title: "Clear All",
       children: /* @__PURE__ */ jsx(Icons.Trash, {})
     }
   );
 };
 const DataPanel = ({ children, empty, emptyText }) => {
-  return /* @__PURE__ */ jsx("div", { className: "cad-data-panel flex flex-col", children: empty ? /* @__PURE__ */ jsx("div", { className: "flex flex-col items-center justify-center", style: { flex: 1, minHeight: "100px" }, children: /* @__PURE__ */ jsx("span", { className: "text-secondary text-sm", children: emptyText }) }) : children });
+  return /* @__PURE__ */ jsx("div", { className: "ui-data-panel flex flex-col", children: empty ? /* @__PURE__ */ jsx("div", { className: "flex flex-col items-center justify-center", style: { flex: 1, minHeight: "100px" }, children: /* @__PURE__ */ jsx("span", { className: "text-secondary text-sm", children: emptyText }) }) : children });
 };
 const MeasureItem = ({ item, isHighlighted, onHighlight, onDelete }) => {
   return /* @__PURE__ */ jsxs(
     "div",
     {
       onClick: onHighlight,
-      className: `cad-list-item ${isHighlighted ? "selected" : ""}`,
+      className: `ui-list-item ${isHighlighted ? "selected" : ""}`,
       style: {
         padding: "6px 10px",
         minHeight: "30px"
@@ -6013,7 +6555,7 @@ const MeasureItem = ({ item, isHighlighted, onHighlight, onDelete }) => {
               e.stopPropagation();
               onDelete();
             },
-            className: "cad-btn cad-btn-icon-sm cad-btn-ghost",
+            className: "ui-btn ui-btn-icon-sm ui-btn-ghost",
             style: { opacity: 0.6, marginLeft: "8px" },
             onMouseEnter: (e) => e.currentTarget.style.opacity = "1",
             onMouseLeave: (e) => e.currentTarget.style.opacity = "0.6",
@@ -6028,7 +6570,7 @@ const TypeHeader = ({ label }) => {
   return /* @__PURE__ */ jsx(
     "div",
     {
-      className: "cad-group-title",
+      className: "ui-group-title",
       style: {
         padding: "4px 10px",
         fontSize: "10px"
@@ -6106,7 +6648,7 @@ const MeasurePanel = ({
       children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col p-3", style: { height: "100%", gap: "10px" }, children: [
         /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between", children: [
           /* @__PURE__ */ jsx(
-            SegmentedControl$1,
+            SegmentedControl,
             {
               options: measureOptions,
               value: measureType,
@@ -6140,108 +6682,6 @@ const MeasurePanel = ({
   );
 };
 
-const Switch$1 = ({ checked, onChange, disabled = false }) => {
-  return /* @__PURE__ */ jsx(
-    "button",
-    {
-      className: `cad-switch ${checked ? "active" : ""} ${disabled ? "disabled" : ""}`,
-      onClick: () => !disabled && onChange(!checked),
-      role: "switch",
-      "aria-checked": checked,
-      disabled,
-      children: /* @__PURE__ */ jsx("div", { className: "cad-switch-thumb" })
-    }
-  );
-};
-const DualSlider = ({ min, max, value, onChange, disabled = false }) => {
-  const percentage1 = (value[0] - min) / (max - min) * 100;
-  const percentage2 = (value[1] - min) / (max - min) * 100;
-  const handleThumb1MouseDown = (e) => {
-    if (disabled) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const startX = e.clientX;
-    const startValue = value[0];
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaValue = deltaX / 200 * (max - min);
-      const newValue = Math.max(min, Math.min(value[1] - 1, startValue + deltaValue));
-      onChange([Math.round(newValue), value[1]]);
-    };
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-  const handleThumb2MouseDown = (e) => {
-    if (disabled) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const startX = e.clientX;
-    const startValue = value[1];
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaValue = deltaX / 200 * (max - min);
-      const newValue = Math.min(max, Math.max(value[0] + 1, startValue + deltaValue));
-      onChange([value[0], Math.round(newValue)]);
-    };
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-  return /* @__PURE__ */ jsxs("div", { className: `cad-slider ${disabled ? "disabled" : ""}`, style: { height: "20px" }, children: [
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        className: "cad-slider-track",
-        style: {
-          position: "absolute",
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: "100%",
-          height: "4px",
-          borderRadius: "2px"
-        }
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        className: "cad-slider-progress",
-        style: {
-          position: "absolute",
-          top: "50%",
-          transform: "translateY(-50%)",
-          height: "4px",
-          borderRadius: "2px",
-          left: `${percentage1}%`,
-          width: `${percentage2 - percentage1}%`
-        }
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        className: "cad-slider-thumb",
-        style: { left: `calc(${percentage1}% - 6px)` },
-        onMouseDown: handleThumb1MouseDown
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        className: "cad-slider-thumb",
-        style: { left: `calc(${percentage2}% - 6px)` },
-        onMouseDown: handleThumb2MouseDown
-      }
-    )
-  ] });
-};
 const AxisSliderRow = ({ axis, label, active, value, onToggle, onChange, disabled = false }) => {
   return /* @__PURE__ */ jsxs(
     "div",
@@ -6333,7 +6773,7 @@ const ClipPanel = ({
         /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between p-2", style: { borderBottom: "1px solid var(--border-color)" }, children: [
           /* @__PURE__ */ jsx("span", { className: "text-sm font-semibold", children: t("clip_enable") }),
           /* @__PURE__ */ jsx(
-            Switch$1,
+            Switch,
             {
               checked: clipEnabled,
               onChange: (v) => setClipEnabled(v)
@@ -6600,22 +7040,20 @@ const timeToSlider = (time) => {
 const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
   const timeValue = timeToSlider(settings.sunTime !== void 0 ? settings.sunTime : 12);
   return /* @__PURE__ */ jsx(FloatingPanel, { title: t("st_sun_simulation") || "光照模拟", onClose, width: 320, height: 350, resizable: false, styles, theme, storageId: "tool_sun", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-color)" }, children: [
       /* @__PURE__ */ jsx(
         Checkbox,
         {
           label: t("st_sun_enabled") || "启用太阳光",
           checked: settings.sunEnabled || false,
           onChange: (val) => onUpdate({ sunEnabled: val }),
-          styles,
-          theme,
           style: { fontWeight: "bold", fontSize: 13 }
         }
       ),
-      /* @__PURE__ */ jsx("div", { style: { fontSize: 11, color: theme.textMuted, marginTop: 8, fontStyle: "italic" }, children: t("st_sun_info") })
+      /* @__PURE__ */ jsx("div", { style: { fontSize: 11, color: "var(--text-muted)", marginTop: 8, fontStyle: "italic" }, children: t("st_sun_info") })
     ] }),
     settings.sunEnabled && /* @__PURE__ */ jsxs(Fragment, { children: [
-      /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: theme.textMuted }, children: [
+      /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }, children: [
         /* @__PURE__ */ jsx("span", { children: t("st_sun_latitude") || "纬度" }),
         /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 4 }, children: [
           /* @__PURE__ */ jsx(
@@ -6630,23 +7068,18 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
                 val = Math.max(-90, Math.min(90, val));
                 onUpdate({ sunLatitude: val });
               },
+              className: "ui-input",
               style: {
                 width: 70,
-                padding: "4px 8px",
-                fontSize: 12,
-                backgroundColor: theme.bg,
-                color: theme.text,
-                border: `1px solid ${theme.border}`,
-                borderRadius: 3,
                 textAlign: "right",
-                fontFamily: "monospace"
+                fontFamily: "'Consolas', 'Monaco', monospace"
               }
             }
           ),
-          /* @__PURE__ */ jsx("span", { style: { color: theme.accent }, children: "°" })
+          /* @__PURE__ */ jsx("span", { style: { color: "var(--accent)" }, children: "°" })
         ] })
       ] }) }),
-      /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: theme.textMuted }, children: [
+      /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }, children: [
         /* @__PURE__ */ jsx("span", { children: t("st_sun_longitude") || "经度" }),
         /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 4 }, children: [
           /* @__PURE__ */ jsx(
@@ -6661,26 +7094,21 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
                 val = Math.max(-180, Math.min(180, val));
                 onUpdate({ sunLongitude: val });
               },
+              className: "ui-input",
               style: {
                 width: 70,
-                padding: "4px 8px",
-                fontSize: 12,
-                backgroundColor: theme.bg,
-                color: theme.text,
-                border: `1px solid ${theme.border}`,
-                borderRadius: 3,
                 textAlign: "right",
-                fontFamily: "monospace"
+                fontFamily: "'Consolas', 'Monaco', monospace"
               }
             }
           ),
-          /* @__PURE__ */ jsx("span", { style: { color: theme.accent }, children: "°" })
+          /* @__PURE__ */ jsx("span", { style: { color: "var(--accent)" }, children: "°" })
         ] })
       ] }) }),
       /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16 }, children: [
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: theme.textMuted }, children: [
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }, children: [
           /* @__PURE__ */ jsx("span", { children: t("st_sun_time") || "时间" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, fontFamily: "monospace", color: theme.accent }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: "var(--accent)" }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
         ] }),
         /* @__PURE__ */ jsx(
           Slider,
@@ -6691,11 +7119,10 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
             value: timeValue,
             onChange: (val) => {
               onUpdate({ sunTime: val / 2 });
-            },
-            theme
+            }
           }
         ),
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: theme.textMuted, padding: "0 4px", marginTop: 2 }, children: [
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", padding: "0 4px", marginTop: 2 }, children: [
           /* @__PURE__ */ jsx("span", { children: "0:00" }),
           /* @__PURE__ */ jsx("span", { children: "6:00" }),
           /* @__PURE__ */ jsx("span", { children: "12:00" }),
@@ -6709,244 +7136,11 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
           label: t("st_sun_shadow") || "显示阴影",
           checked: settings.sunShadow || false,
           onChange: (val) => onUpdate({ sunShadow: val }),
-          styles,
-          theme,
           style: { fontSize: 12 }
         }
       ) })
     ] })
   ] }) });
-};
-
-const Section = ({ title, children }) => /* @__PURE__ */ jsxs("div", { className: "mb-4", children: [
-  /* @__PURE__ */ jsx(
-    "div",
-    {
-      className: "text-xs font-semibold uppercase",
-      style: {
-        marginBottom: "10px",
-        paddingBottom: "6px",
-        color: "var(--accent)",
-        borderBottom: "1px solid var(--border-color)",
-        letterSpacing: "0.5px"
-      },
-      children: title
-    }
-  ),
-  children
-] });
-const Row = ({ label, children, labelWidth = "80px" }) => /* @__PURE__ */ jsxs(
-  "div",
-  {
-    className: "flex items-center justify-between",
-    style: { marginBottom: "10px", minHeight: "28px", gap: "16px" },
-    children: [
-      /* @__PURE__ */ jsx(
-        "span",
-        {
-          className: "text-sm text-secondary flex-shrink-0",
-          style: {
-            minWidth: labelWidth
-          },
-          children: label
-        }
-      ),
-      /* @__PURE__ */ jsx("div", { className: "flex items-center", style: { flex: 1, justifyContent: "flex-end" }, children })
-    ]
-  }
-);
-const Switch = ({ checked, onChange }) => /* @__PURE__ */ jsx(
-  "button",
-  {
-    className: `cad-switch ${checked ? "active" : ""}`,
-    onClick: () => onChange(!checked),
-    role: "switch",
-    "aria-checked": checked,
-    children: /* @__PURE__ */ jsx("div", { className: "cad-switch-thumb" })
-  }
-);
-const SegmentedControl = ({ options, value, onChange }) => /* @__PURE__ */ jsx("div", { className: "cad-segmented", children: options.map((option) => /* @__PURE__ */ jsx(
-  "button",
-  {
-    className: `cad-segmented-item ${value === option.value ? "active" : ""}`,
-    onClick: () => onChange(option.value),
-    children: option.label
-  },
-  option.value
-)) });
-const SettingSlider = ({ min, max, step, value, onChange, showValue = true }) => {
-  const percentage = (value - min) / (max - min) * 100;
-  const handleMouseDown = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const sliderEl = e.currentTarget.parentElement;
-    const rect = sliderEl.getBoundingClientRect();
-    const startX = e.clientX;
-    const startValue = value;
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaValue = deltaX / rect.width * (max - min);
-      const newValue = Math.round((startValue + deltaValue) / step) * step;
-      onChange(Math.max(min, Math.min(max, newValue)));
-    };
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-  return /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", style: { flex: 1 }, children: [
-    /* @__PURE__ */ jsxs("div", { className: "cad-slider", style: { position: "relative", height: "20px", flex: 1 }, children: [
-      /* @__PURE__ */ jsx("div", { className: "cad-slider-track", style: { position: "absolute", top: "50%", transform: "translateY(-50%)", width: "100%" } }),
-      /* @__PURE__ */ jsx("div", { className: "cad-slider-progress", style: { position: "absolute", top: "50%", transform: "translateY(-50%)", width: `${percentage}%` } }),
-      /* @__PURE__ */ jsx(
-        "div",
-        {
-          className: "cad-slider-thumb",
-          style: { left: `calc(${percentage}% - 6px)` },
-          onMouseDown: handleMouseDown
-        }
-      )
-    ] }),
-    showValue && /* @__PURE__ */ jsx(
-      "span",
-      {
-        style: {
-          fontFamily: "'Consolas', 'Monaco', monospace",
-          fontSize: "12px",
-          color: "var(--accent)",
-          minWidth: "36px",
-          textAlign: "right"
-        },
-        children: step < 1 ? value.toFixed(1) : value
-      }
-    )
-  ] });
-};
-const Select = ({ value, options, onChange }) => /* @__PURE__ */ jsx(
-  "select",
-  {
-    value,
-    onChange: (e) => onChange(e.target.value),
-    className: "cad-input",
-    style: {
-      padding: "4px 28px 4px 8px",
-      fontSize: "12px",
-      appearance: "none",
-      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A0A0A0' d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`,
-      backgroundRepeat: "no-repeat",
-      backgroundPosition: "right 8px center",
-      flex: 1,
-      minWidth: 0,
-      cursor: "pointer"
-    },
-    children: options.map((option) => /* @__PURE__ */ jsx("option", { value: option.value, children: option.label }, option.value))
-  }
-);
-const SettingsPanel = ({
-  t,
-  onClose,
-  settings,
-  onUpdate,
-  currentLang,
-  setLang,
-  themeMode,
-  setThemeMode,
-  showStats,
-  setShowStats,
-  styles,
-  theme
-}) => {
-  return /* @__PURE__ */ jsx(
-    FloatingPanel,
-    {
-      title: t("settings"),
-      onClose,
-      width: 360,
-      height: 500,
-      modal: true,
-      styles,
-      theme,
-      children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", gap: "8px", height: "100%", overflowY: "auto" }, children: [
-        /* @__PURE__ */ jsxs(Section, { title: t("setting_general"), children: [
-          /* @__PURE__ */ jsx(Row, { label: t("st_theme"), labelWidth: "70px", children: /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" }, children: /* @__PURE__ */ jsx(
-            SegmentedControl,
-            {
-              options: [
-                { value: "light", label: t("theme_light") || "Light" },
-                { value: "dark", label: t("theme_dark") || "Dark" }
-              ],
-              value: themeMode,
-              onChange: (v) => setThemeMode(v)
-            }
-          ) }) }),
-          /* @__PURE__ */ jsx(Row, { label: t("st_lang"), labelWidth: "70px", children: /* @__PURE__ */ jsx(
-            Select,
-            {
-              value: currentLang,
-              options: [
-                { value: "zh", label: "简体中文" },
-                { value: "en", label: "English" }
-              ],
-              onChange: (v) => setLang(v)
-            }
-          ) }),
-          /* @__PURE__ */ jsx(Row, { label: t("st_monitor"), labelWidth: "70px", children: /* @__PURE__ */ jsx(
-            Switch,
-            {
-              checked: showStats,
-              onChange: (v) => setShowStats(v)
-            }
-          ) }),
-          /* @__PURE__ */ jsx(Row, { label: t("st_font_size"), labelWidth: "70px", children: /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" }, children: /* @__PURE__ */ jsx(
-            SegmentedControl,
-            {
-              options: [
-                { value: "compact", label: t("st_font_compact") || "紧凑" },
-                { value: "medium", label: t("st_font_medium") || "中等" },
-                { value: "loose", label: t("st_font_loose") || "宽松" }
-              ],
-              value: settings.fontSize || "medium",
-              onChange: (v) => onUpdate({ fontSize: v })
-            }
-          ) }) })
-        ] }),
-        /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), children: /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", children: /* @__PURE__ */ jsx(
-          SettingSlider,
-          {
-            min: 80,
-            max: 300,
-            step: 10,
-            value: settings.viewCubeSize || 100,
-            onChange: (v) => onUpdate({ viewCubeSize: v })
-          }
-        ) }) }),
-        /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), children: [
-          /* @__PURE__ */ jsx(Row, { label: t("st_ambient"), labelWidth: "90px", children: /* @__PURE__ */ jsx(
-            SettingSlider,
-            {
-              min: 0,
-              max: 5,
-              step: 0.1,
-              value: settings.ambientInt,
-              onChange: (v) => onUpdate({ ambientInt: v })
-            }
-          ) }),
-          /* @__PURE__ */ jsx(Row, { label: t("st_dir"), labelWidth: "90px", children: /* @__PURE__ */ jsx(
-            SettingSlider,
-            {
-              min: 0,
-              max: 5,
-              step: 0.1,
-              value: settings.dirInt,
-              onChange: (v) => onUpdate({ dirInt: v })
-            }
-          ) })
-        ] })
-      ] })
-    }
-  );
 };
 
 const LoadingOverlay = ({ t, loading, status, progress, styles, theme }) => {
@@ -7013,22 +7207,17 @@ const PropertiesPanel = ({ t, selectedProps, styles, theme }) => {
     return result;
   }, [selectedProps, searchQuery]);
   return /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }, children: [
-    selectedProps && /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: `1px solid ${theme.border}` }, children: /* @__PURE__ */ jsx(
+    selectedProps && /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: "1px solid var(--border-color)" }, children: /* @__PURE__ */ jsx(
       "input",
       {
         type: "text",
         placeholder: t("search_props"),
         value: searchQuery,
         onChange: (e) => setSearchQuery(e.target.value),
+        className: "ui-input",
         style: {
           width: "100%",
-          padding: "4px 8px",
-          fontSize: "12px",
-          backgroundColor: theme.bg,
-          color: theme.text,
-          border: `1px solid ${theme.border}`,
           borderRadius: "0px",
-          outline: "none",
           boxSizing: "border-box"
         }
       }
@@ -7675,7 +7864,6 @@ const ThreeViewer = ({
       dirInt: 1,
       bgColor: theme.canvasBg,
       viewCubeSize: 100,
-      renderMode: "standard",
       sunEnabled: false,
       sunLatitude: 0,
       sunLongitude: 0,
@@ -7693,7 +7881,6 @@ const ThreeViewer = ({
           viewCubeSize: typeof parsed.viewCubeSize === "number" ? parsed.viewCubeSize : 100,
           frustumCulling: parsed.frustumCulling,
           maxRenderDistance: parsed.maxRenderDistance,
-          renderMode: parsed.renderMode || "standard",
           sunEnabled: parsed.sunEnabled || false,
           sunLatitude: parsed.sunLatitude || 0,
           sunLongitude: parsed.sunLongitude || 0,

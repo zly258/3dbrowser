@@ -16,7 +16,6 @@ export interface SceneSettings {
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
-    renderMode?: 'standard' | 'mayo' | 'blender';
     sunLatitude?: number;
     sunLongitude?: number;
     sunTime?: number;
@@ -117,8 +116,6 @@ export declare class SceneManager {
     updateSettings(newSettings: Partial<SceneSettings>): void;
     private updateSunPosition;
     private updateSunShadow;
-    private applyRenderMode;
-    private applyMaterialMode;
     createCircleTexture(): any;
     animate(): void;
     updateCameraClipping(): void;
