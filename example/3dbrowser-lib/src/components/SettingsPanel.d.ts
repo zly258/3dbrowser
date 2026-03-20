@@ -1,6 +1,7 @@
 import React from "react";
 import { TFunc, Lang } from "../theme/Locales";
 import { SceneSettings } from "../utils/SceneManager";
+export declare const SettingsPanel: React.FC<SettingsModalProps>;
 interface SettingsModalProps {
     t: TFunc;
     onClose: () => void;
@@ -12,8 +13,7 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
-    styles: any;
-    theme: any;
+    styles?: any;
+    theme?: any;
 }
-export declare const SettingsPanel: React.FC<SettingsModalProps>;
 export {};

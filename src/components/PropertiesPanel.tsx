@@ -44,21 +44,16 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
     return (
         <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden'}}>
             {selectedProps && (
-                <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
+                <div style={{ padding: '8px', borderBottom: '1px solid var(--border-color)' }}>
                     <input
                         type="text"
                         placeholder={t("search_props")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        className="ui-input"
                         style={{
                             width: '100%',
-                            padding: '4px 8px',
-                            fontSize: '12px',
-                            backgroundColor: theme.bg,
-                            color: theme.text,
-                            border: `1px solid ${theme.border}`,
                             borderRadius: '0px',
-                            outline: 'none',
                             boxSizing: 'border-box'
                         }}
                     />

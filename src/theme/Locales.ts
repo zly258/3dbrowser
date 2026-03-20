@@ -138,6 +138,10 @@ const resources: Record<Lang, Record<string, string>> = {
         st_lang: "Language",
         st_import_settings: "Import Settings",
         st_theme: "Theme",
+        st_font_size: "Font Size",
+        st_font_compact: "Compact",
+        st_font_medium: "Medium",
+        st_font_loose: "Loose",
         st_menu_mode: "Menu Mode",
         menu_mode_menu: "Menu",
         menu_mode_toolbar: "Toolbar",
@@ -192,6 +196,7 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_save: "Save Current Viewpoint",
         viewpoint_empty: "No saved viewpoints",
         viewpoint_loading: "Restoring viewpoint",
+        chunk_loading: "Chunks",
     },
     zh: {
         home: "首页",
@@ -324,6 +329,10 @@ const resources: Record<Lang, Record<string, string>> = {
         st_lang: "界面语言",
         st_import_settings: "导入设置",
         st_theme: "界面主题",
+        st_font_size: "界面字号",
+        st_font_compact: "紧凑",
+        st_font_medium: "中等",
+        st_font_loose: "宽松",
         st_menu_mode: "菜单模式",
         menu_mode_menu: "菜单",
         menu_mode_toolbar: "工具栏",
@@ -378,6 +387,7 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_save: "保存当前视点",
         viewpoint_empty: "暂无保存的视点",
         viewpoint_loading: "正在恢复视点",
+        chunk_loading: "分片加载",
     }
 };
 

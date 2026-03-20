@@ -174,7 +174,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 </div>
             )}
 
-                    {!isHidden('view') && (
+                {!isHidden('view') && (
                 <div style={styles.toolbarGroup}>
                     <ImageButton
                         icon={<IconMaximize />}
@@ -189,7 +189,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_view')}
                             active={openMenu === 'views'}
                             onClick={() => toggleMenu('views')}
-                            disabled={!props.hasModels}
                             styles={styles}
                             theme={theme}
                         />
@@ -325,7 +324,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_measure')}
                             active={props.activeTool === 'measure'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'measure' ? 'none' : 'measure')}
-                            disabled={!props.hasModels}
                             styles={styles}
                             theme={theme}
                         />
@@ -336,7 +334,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_clip')}
                             active={props.activeTool === 'clip'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'clip' ? 'none' : 'clip')}
-                            disabled={!props.hasModels}
                             styles={styles}
                             theme={theme}
                         />
@@ -347,7 +344,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_view')}
                             active={props.activeTool === 'viewpoint'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'viewpoint' ? 'none' : 'viewpoint')}
-                            disabled={!props.hasModels}
                             styles={styles}
                             theme={theme}
                         />
@@ -358,7 +354,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_sun')}
                             active={props.activeTool === 'sun'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'sun' ? 'none' : 'sun')}
-                            disabled={!props.hasModels}
                             styles={styles}
                             theme={theme}
                         />

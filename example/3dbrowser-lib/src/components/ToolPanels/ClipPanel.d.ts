@@ -9,8 +9,8 @@ interface ClipPanelProps {
     setClipValues: any;
     clipActive: any;
     setClipActive: any;
-    styles: any;
-    theme: any;
+    styles?: any;
+    theme?: any;
 }
 export declare const ClipPanel: React.FC<ClipPanelProps>;
 export {};

@@ -1,0 +1,1177 @@
+/* ============================================
+   CAD风格设计系统 - 全局样式
+   深色/浅色模式统一管理
+============================================ */
+
+/* ==================== 深色模式 (默认) ==================== */
+:root,
+.dark {
+  /* 主背景 */
+  --bg-primary: #1E1E1E;
+  --bg-panel: #2A2A2A;
+  --bg-canvas: #1E1E1E;
+  --bg-header: #333333;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-selected: rgba(59, 130, 246, 0.15);
+
+  /* 边框 */
+  --border-color: #3A3A3A;
+  --border-hover: #4A4A4A;
+  --border-light: #505050;
+
+  /* 文本 */
+  --text-primary: #F1F1F1;
+  --text-secondary: #A0A0A0;
+  --text-muted: #666666;
+  --text-disabled: #555555;
+
+  /* 强调色 */
+  --accent: #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-active: #2563EB;
+  --accent-focus: rgba(59, 130, 246, 0.4);
+
+  /* 语义色 */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #06B6D4;
+
+  /* 阴影 */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* 滚动条 */
+  --scrollbar-track: #2A2A2A;
+  --scrollbar-thumb: #555555;
+  --scrollbar-thumb-hover: #666666;
+
+  /* 字号 */
+  --font-size-base: 12px;
+}
+
+/* ==================== 浅色模式 ==================== */
+.light {
+  /* 主背景 */
+  --bg-primary: #F3F3F3;
+  --bg-panel: #FFFFFF;
+  --bg-canvas: #FFFFFF;
+  --bg-header: #F5F5F5;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.08);
+  --bg-selected: rgba(59, 130, 246, 0.1);
+
+  /* 边框 */
+  --border-color: #E0E0E0;
+  --border-hover: #C0C0C0;
+  --border-light: #EBEBEB;
+
+  /* 文本 */
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --text-disabled: #BBBBBB;
+
+  /* 强调色 */
+  --accent: #2563EB;
+  --accent-hover: #3B82F6;
+  --accent-active: #1D4ED8;
+  --accent-focus: rgba(37, 99, 235, 0.3);
+
+  /* 语义色 */
+  --success: #059669;
+  --warning: #D97706;
+  --error: #DC2626;
+  --info: #0891B2;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16);
+
+  /* 滚动条 */
+  --scrollbar-track: #F0F0F0;
+  --scrollbar-thumb: #CCCCCC;
+  --scrollbar-thumb-hover: #AAAAAA;
+
+  /* 字号 */
+  --font-size-base: 12px;
+}
+
+/* ==================== 基础样式重置 ==================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Segoe UI', 'Inter', 'Microsoft YaHei', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==================== 滚动条样式 ==================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ==================== 浮动面板 ==================== */
+.ui-panel {
+  position: absolute;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  min-width: 220px;
+  min-height: 120px;
+  overflow: hidden;
+  color: var(--text-primary);
+}
+
+.ui-panel-header {
+  height: 32px;
+  padding: 0 8px;
+  background-color: var(--bg-header);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  cursor: move;
+}
+
+.ui-panel-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  transition: all 120ms ease;
+}
+
+.ui-panel-close:hover {
+  background-color: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.ui-panel-close:active {
+  background-color: var(--error);
+  color: white;
+}
+
+.ui-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+.ui-panel-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: se-resize;
+  z-index: 10;
+}
+
+/* ==================== 按钮基础 ==================== */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  user-select: none;
+  min-height: 28px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ui-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ui-btn:focus {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 1px;
+}
+
+/* 按钮变体 */
+.ui-btn-default {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.ui-btn-default:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.ui-btn-default:active {
+  background-color: var(--bg-active);
+}
+
+.ui-btn-primary {
+  background-color: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.ui-btn-primary:hover {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.ui-btn-primary:active {
+  background-color: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+.ui-btn-ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+
+.ui-btn-ghost:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ui-btn-ghost:active {
+  background-color: var(--bg-active);
+}
+
+/* 图标按钮 */
+.ui-btn-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.ui-btn-icon-sm {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  min-width: 22px;
+  min-height: 22px;
+}
+
+/* 按钮激活状态 */
+.ui-btn.active {
+  background-color: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* ==================== 输入框 ==================== */
+.ui-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  transition: all 120ms ease;
+  min-height: 28px;
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+
+.ui-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* 数字输入框特殊样式 */
+input[type="number"].ui-input {
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+input[type="number"].ui-input::-webkit-inner-spin-button,
+input[type="number"].ui-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+/* ==================== 分段选择器 ==================== */
+.ui-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  background-color: var(--bg-primary);
+  border-radius: 4px;
+  gap: 2px;
+}
+
+.ui-segmented-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.ui-segmented-item:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.ui-segmented-item.active {
+  background-color: var(--accent);
+  color: white;
+  font-weight: 500;
+}
+
+.ui-segmented-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==================== 开关 ==================== */
+.ui-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 18px;
+  border-radius: 9px;
+  background-color: var(--border-color);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.ui-switch.active {
+  background-color: var(--accent);
+}
+
+.ui-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-switch-thumb {
+  position: absolute;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 120ms ease;
+}
+
+.ui-switch.active .ui-switch-thumb {
+  transform: translateX(18px);
+}
+
+/* ==================== 滑块 ==================== */
+.ui-slider {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.ui-slider-track {
+  position: absolute;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--border-color);
+}
+
+.ui-slider-progress {
+  position: absolute;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--accent);
+  pointer-events: none;
+}
+
+.ui-slider-thumb {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: white;
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.ui-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.ui-slider-thumb:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-focus);
+}
+
+.ui-slider.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ==================== 数据面板 ==================== */
+.ui-data-panel {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  flex: 1;
+  min-height: 100px;
+}
+
+.ui-data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 32px;
+}
+
+.ui-data-row:last-child {
+  border-bottom: none;
+}
+
+.ui-data-row:hover {
+  background-color: var(--bg-hover);
+}
+
+.ui-data-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.ui-data-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* ==================== 列表项 ==================== */
+.ui-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 80ms ease;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.ui-list-item:last-child {
+  border-bottom: none;
+}
+
+.ui-list-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.ui-list-item.selected {
+  background-color: var(--bg-selected);
+  border-left: 2px solid var(--accent);
+}
+
+/* ==================== 分组标题 ==================== */
+.ui-group-title {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-header);
+}
+
+/* ==================== 分割线 ==================== */
+.ui-divider {
+  width: 100%;
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 8px 0;
+}
+
+.ui-divider-vertical {
+  width: 1px;
+  height: 100%;
+  background-color: var(--border-color);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ==================== 工具栏 ==================== */
+.ui-toolbar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 8px;
+  gap: 2px;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+.ui-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-right: 1px solid var(--border-color);
+  height: 100%;
+}
+
+.ui-toolbar-group:last-child {
+  border-right: none;
+}
+
+.ui-toolbar-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  height: 40px;
+  min-width: 48px;
+  gap: 2px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.ui-toolbar-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ui-toolbar-btn:active {
+  background-color: var(--bg-active);
+}
+
+.ui-toolbar-btn.active {
+  background-color: var(--accent);
+  color: white;
+}
+
+.ui-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ui-toolbar-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ==================== 状态栏 ==================== */
+.ui-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 12px;
+  background-color: var(--bg-header);
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ui-statusbar-left,
+.ui-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ui-statusbar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ui-statusbar-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+}
+
+/* ==================== 模态框 ==================== */
+.ui-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.ui-modal {
+  background-color: var(--bg-panel);
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  z-index: 600;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+}
+
+.ui-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-header);
+}
+
+.ui-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ui-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  transition: all 120ms ease;
+}
+
+.ui-modal-close:hover {
+  background-color: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.ui-modal-close:active {
+  background-color: var(--error);
+  color: white;
+}
+
+.ui-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ui-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-header);
+}
+
+/* ==================== 工具提示 ==================== */
+.ui-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.ui-tooltip {
+  position: absolute;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: white;
+  background-color: #374151;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.ui-tooltip-wrapper:hover .ui-tooltip {
+  opacity: 1;
+}
+
+.ui-tooltip-top {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+}
+
+.ui-tooltip-bottom {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+}
+
+/* ==================== Flex 工具 ==================== */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1; }
+.flex-shrink-0 { flex-shrink: 0; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+.justify-start { justify-content: flex-start; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+/* ==================== 文本工具 ==================== */
+.text-xs { font-size: 11px; }
+.text-sm { font-size: 12px; }
+.text-base { font-size: 13px; }
+.text-lg { font-size: 14px; }
+.text-xl { font-size: 16px; }
+.font-normal { font-weight: 400; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+.uppercase { text-transform: uppercase; }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 文本颜色 */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+.text-disabled { color: var(--text-disabled); }
+.text-accent { color: var(--accent); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-error { color: var(--error); }
+
+/* ==================== 间距工具 ==================== */
+.p-0 { padding: 0; }
+.p-1 { padding: 4px; }
+.p-2 { padding: 8px; }
+.p-3 { padding: 12px; }
+.p-4 { padding: 16px; }
+.px-1 { padding-left: 4px; padding-right: 4px; }
+.px-2 { padding-left: 8px; padding-right: 8px; }
+.px-3 { padding-left: 12px; padding-right: 12px; }
+.px-4 { padding-left: 16px; padding-right: 16px; }
+.py-1 { padding-top: 4px; padding-bottom: 4px; }
+.py-2 { padding-top: 8px; padding-bottom: 8px; }
+.py-3 { padding-top: 12px; padding-bottom: 12px; }
+.py-4 { padding-top: 16px; padding-bottom: 16px; }
+.m-0 { margin: 0; }
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: 4px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.ml-auto { margin-left: auto; }
+.mr-1 { margin-right: 4px; }
+.mr-2 { margin-right: 8px; }
+
+/* ==================== 尺寸工具 ==================== */
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.min-h-0 { min-height: 0; }
+.min-h-screen { min-height: 100vh; }
+.max-h-full { max-height: 100%; }
+.max-h-screen { max-height: 100vh; }
+
+/* ==================== 圆角 ==================== */
+.rounded-none { border-radius: 0; }
+.rounded-sm { border-radius: 4px; }
+.rounded-md { border-radius: 6px; }
+.rounded-lg { border-radius: 8px; }
+.rounded-full { border-radius: 9999px; }
+
+/* ==================== 边框 ==================== */
+.border { border: 1px solid var(--border-color); }
+.border-b { border-bottom: 1px solid var(--border-color); }
+.border-t { border-top: 1px solid var(--border-color); }
+.border-l { border-left: 1px solid var(--border-color); }
+.border-r { border-right: 1px solid var(--border-color); }
+.border-l-2 { border-left: 2px solid var(--accent); }
+.border-transparent { border-color: transparent; }
+
+/* ==================== 定位 ==================== */
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.top-0 { top: 0; }
+.bottom-0 { bottom: 0; }
+.left-0 { left: 0; }
+.right-0 { right: 0; }
+
+/* ==================== 溢出 ==================== */
+.overflow-hidden { overflow: hidden; }
+.overflow-auto { overflow: auto; }
+.overflow-y-auto { overflow-y: auto; }
+.overflow-x-auto { overflow-x: auto; }
+
+/* ==================== 透明度 ==================== */
+.opacity-0 { opacity: 0; }
+.opacity-50 { opacity: 0.5; }
+.opacity-75 { opacity: 0.75; }
+.opacity-100 { opacity: 1; }
+
+/* ==================== 指针事件 ==================== */
+.pointer-events-none { pointer-events: none; }
+.pointer-events-auto { pointer-events: auto; }
+
+/* ==================== 光标 ==================== */
+.cursor-pointer { cursor: pointer; }
+.cursor-grab { cursor: grab; }
+.cursor-grabbing { cursor: grabbing; }
+.cursor-text { cursor: text; }
+.cursor-not-allowed { cursor: not-allowed; }
+.cursor-move { cursor: move; }
+.cursor-se-resize { cursor: se-resize; }
+
+/* ==================== 用户选择 ==================== */
+.select-none { user-select: none; }
+.select-text { user-select: text; }
+.select-all { user-select: all; }
+
+/* ==================== 其他 ==================== */
+.whitespace-nowrap { white-space: nowrap; }
+.whitespace-pre { white-space: pre; }
+.break-word { word-wrap: break-word; }
+.overflow-ellipsis { text-overflow: ellipsis; }
+
+/* ==================== 动画 ==================== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInDown {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 200ms ease-out;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 200ms ease-out;
+}
+
+.animate-slideInDown {
+  animation: slideInDown 200ms ease-out;
+}
+
+/* ==================== 背景 ==================== */
+.bg-primary { background-color: var(--bg-primary); }
+.bg-panel { background-color: var(--bg-panel); }
+.bg-header { background-color: var(--bg-header); }
+.bg-transparent { background-color: transparent; }
+.bg-accent { background-color: var(--accent); }
+.bg-hover { background-color: var(--bg-hover); }
+.bg-active { background-color: var(--bg-active); }
+.bg-selected { background-color: var(--bg-selected); }
+
+/* ==================== 层级 ==================== */
+.z-0 { z-index: 0; }
+.z-10 { z-index: 10; }
+.z-20 { z-index: 20; }
+.z-50 { z-index: 50; }
+.z-100 { z-index: 100; }
+.z-200 { z-index: 200; }
+.z-500 { z-index: 500; }
+.z-1000 { z-index: 1000; }
+
+/* ==================== 禁用状态 ==================== */
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* ==================== 选择状态 ==================== */
+.selected {
+  background-color: var(--bg-selected);
+  color: var(--accent);
+}
+
+/* ==================== 焦点环 ==================== */
+.focus-ring:focus {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 2px;
+}
+
+/* ==================== 单行布局容器 ==================== */
+.row-layout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.row-layout-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 60px;
+}
+
+.row-layout-control {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.row-layout-control > * {
+  flex-shrink: 0;
+}
+
+/* ==================== 字号等级 ==================== */
+/* 字号等级 - 通过 CSS 变量控制全站字体大小 */
+:root.font-compact {
+  --font-size-base: 11px;
+}
+
+:root.font-medium {
+  --font-size-base: 12px;
+}
+
+:root.font-loose {
+  --font-size-base: 14px;
+}
+
+/* 深色/浅色模式下的字号 */
+:root.dark.font-compact,
+.dark.font-compact {
+  --font-size-base: 11px;
+}
+
+:root.dark.font-medium,
+.dark.font-medium {
+  --font-size-base: 12px;
+}
+
+:root.dark.font-loose,
+.dark.font-loose {
+  --font-size-base: 14px;
+}
+
+:root.light.font-compact,
+.light.font-compact {
+  --font-size-base: 11px;
+}
+
+:root.light.font-medium,
+.light.font-medium {
+  --font-size-base: 12px;
+}
+
+:root.light.font-loose,
+.light.font-loose {
+  --font-size-base: 14px;
+}
+
+/* 全站字号应用 - 使用 !important 确保覆盖内联样式 */
+body.font-compact,
+body.font-medium,
+body.font-loose,
+#root.font-compact,
+#root.font-medium,
+#root.font-loose,
+.font-compact body,
+.font-medium body,
+.font-loose body,
+.font-compact #root,
+.font-medium #root,
+.font-loose #root {
+  font-size: var(--font-size-base) !important;
+}
+
+/* 所有面板和UI组件的字号 */
+.font-compact,
+.font-medium,
+.font-loose {
+  font-size: var(--font-size-base) !important;
+}
+
+.font-compact *,
+.font-medium *,
+.font-loose * {
+  font-size: inherit !important;
+}
+
+/* 具体组件的字号 */
+.ui-panel,
+.ui-modal,
+.ui-toolbar,
+.ui-statusbar,
+.ui-btn,
+.ui-input,
+.ui-segmented-item,
+.ui-list-item,
+.ui-data-panel {
+  font-size: var(--font-size-base) !important;
+}
+
+/* 标题和标签的字号 */
+.ui-panel-title,
+.ui-modal-title,
+.ui-group-title {
+  font-size: calc(var(--font-size-base) + 1px) !important;
+}
+
+/* 紧凑模式额外处理 */
+.font-compact .ui-panel-header {
+  height: 28px;
+  font-size: 11px;
+}
+
+.font-compact .ui-toolbar {
+  height: 36px;
+}
+
+.font-compact .ui-statusbar {
+  height: 22px;
+}
+
+/* 宽松模式额外处理 */
+.font-loose .ui-panel-header {
+  height: 36px;
+  font-size: 14px;
+}
+
+.font-loose .ui-toolbar {
+  height: 48px;
+}
+
+.font-loose .ui-statusbar {
+  height: 28px;
+}

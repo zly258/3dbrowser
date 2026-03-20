@@ -26,14 +26,14 @@ export interface SceneSettings {
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
-    // 渲染模式: 'standard' | 'mayo' | 'blender'
-    renderMode?: 'standard' | 'mayo' | 'blender';
     // 光照模拟参数
     sunLatitude?: number;   // 纬度 (-90 ~ 90)
     sunLongitude?: number;  // 经度 (-180 ~ 180)
     sunTime?: number;       // 时间 (0-24，12为正午)
     sunEnabled?: boolean;   // 是否启用太阳光模拟
     sunShadow?: boolean;    // 是否显示阴影
+    // 界面字号: 'compact' | 'medium' | 'loose'
+    fontSize?: 'compact' | 'medium' | 'loose';
 }
 
 export interface StructureTreeNode {
@@ -328,11 +328,6 @@ export class SceneManager {
         this.ambientLight.intensity = this.settings.ambientInt;
         this.dirLight.intensity = this.settings.dirInt;
 
-        // 应用渲染模式
-        if (newSettings.renderMode !== undefined) {
-            this.applyRenderMode(this.settings.renderMode);
-        }
-
         // 应用光照模拟（太阳光）
         if (newSettings.sunEnabled !== undefined || newSettings.sunLatitude !== undefined ||
             newSettings.sunLongitude !== undefined || newSettings.sunTime !== undefined ||
@@ -451,61 +446,6 @@ export class SceneManager {
             this.sunLight.castShadow = true;
         } else {
             this.sunLight.castShadow = false;
-        }
-    }
-
-    // 应用渲染模式
-    private applyRenderMode(mode: 'standard' | 'mayo' | 'blender') {
-        // 遍历所有材质并应用渲染模式
-        this.contentGroup.traverse((obj) => {
-            if ((obj as THREE.Mesh).isMesh) {
-                const mesh = obj as THREE.Mesh;
-                const material = mesh.material as THREE.Material;
-                
-                if (material) {
-                    this.applyMaterialMode(material, mode);
-                }
-                
-                // 处理多材质
-                if (Array.isArray(material)) {
-                    material.forEach(mat => this.applyMaterialMode(mat, mode));
-                }
-            }
-        });
-    }
-
-    private applyMaterialMode(material: THREE.Material, mode: 'standard' | 'mayo' | 'blender') {
-        if (material instanceof THREE.MeshStandardMaterial || 
-            material instanceof THREE.MeshPhongMaterial ||
-            material instanceof THREE.MeshLambertMaterial) {
-            
-            switch (mode) {
-                case 'mayo':
-                    // Mayo 模式：更鲜艳的颜色，更高的对比度
-                    material.envMapIntensity = 1.2;
-                    material.roughness = Math.max(0.3, material.roughness * 0.8);
-                    material.metalness = Math.min(0.8, material.metalness * 1.2);
-                    break;
-                    
-                case 'blender':
-                    // Blender 模式：类似 Blender 的渲染效果
-                    material.envMapIntensity = 0.8;
-                    material.roughness = Math.min(0.9, material.roughness * 1.1);
-                    material.metalness = Math.min(0.5, material.metalness * 0.8);
-                    // 增加漫反射
-                    if (material instanceof THREE.MeshStandardMaterial) {
-                        material.ambientLight = new THREE.Color(0x404040);
-                    }
-                    break;
-                    
-                case 'standard':
-                default:
-                    // 标准模式：恢复默认
-                    material.envMapIntensity = 1.0;
-                    material.roughness = 0.5;
-                    material.metalness = 0.0;
-                    break;
-            }
         }
     }
     
@@ -3187,7 +3127,7 @@ export class SceneManager {
             const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ 
                 color: colors[i], 
                 transparent: true, 
-                opacity: 0.8, // 边框也调亮一点
+                opacity: 0.3, // 边框也更透明
                 depthWrite: false
             }));
             line.renderOrder = 10000;

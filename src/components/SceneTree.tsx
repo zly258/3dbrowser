@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
-import { Checkbox } from "./ToolPanels/Checkbox";
+import { Checkbox } from "./common";
 
 interface TreeNode {
     uuid: string;
@@ -185,22 +185,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}` }}>
+            <div style={{ padding: '8px', borderBottom: '1px solid var(--border-color)' }}>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                         type="text"
                         placeholder={t("search_nodes")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        className="ui-input"
                         style={{
                             width: '100%',
                             padding: '4px 28px 4px 8px',
-                            fontSize: '12px',
-                            backgroundColor: theme.bg,
-                            color: theme.text,
-                            border: `1px solid ${theme.border}`,
                             borderRadius: '0px',
-                            outline: 'none',
                             boxSizing: 'border-box'
                         }}
                     />
@@ -281,11 +277,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 ) : null}
                             </div>
                             
-                            <Checkbox 
-                                checked={node.visible} 
-                                onChange={(val: boolean) => onToggleVisibility(node.uuid, val)} 
-                                styles={styles} 
-                                theme={theme}
+                            <Checkbox
+                                checked={node.visible}
+                                onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
                                 style={{ marginRight: 6, padding: 0, flexShrink: 0 }}
                             />
                             

@@ -10,8 +10,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { Toolbar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel, SunPanel } from "./src/components/ToolPanels";
-import { SettingsPanel } from "./src/components/SettingsPanel";
+import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel, SunPanel, SettingsPanel } from "./src/components/ToolPanels";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
@@ -168,7 +167,6 @@ export const ThreeViewer = ({
             dirInt: 1.0,
             bgColor: theme.canvasBg,
             viewCubeSize: 100,
-            renderMode: 'standard',
             sunEnabled: false,
             sunLatitude: 0,
             sunLongitude: 0,
@@ -186,7 +184,6 @@ export const ThreeViewer = ({
                     viewCubeSize: typeof parsed.viewCubeSize === 'number' ? parsed.viewCubeSize : 100,
                     frustumCulling: parsed.frustumCulling,
                     maxRenderDistance: parsed.maxRenderDistance,
-                    renderMode: parsed.renderMode || 'standard',
                     sunEnabled: parsed.sunEnabled || false,
                     sunLatitude: parsed.sunLatitude || 0,
                     sunLongitude: parsed.sunLongitude || 0,
@@ -1538,6 +1535,7 @@ export const ThreeViewer = ({
     return (
         <ErrorBoundary t={t} styles={styles} theme={theme}>
             <div 
+                className={`${themeMode} font-${sceneSettings.fontSize || 'medium'}`}
                 style={styles.container}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
@@ -1856,6 +1854,27 @@ export const ThreeViewer = ({
                         <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: `1px solid ${theme.border}` }}>
                             {t("selected_count") || "已选择"}: {selectedUuids.length}
                         </span>
+                    )}
+                    {chunkProgress.total > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: theme.accent }}>
+                                {t("chunk_loading") || "分片加载"}: {chunkProgress.loaded}/{chunkProgress.total}
+                            </span>
+                            <div style={{
+                                width: '80px',
+                                height: '4px',
+                                backgroundColor: theme.border,
+                                borderRadius: '2px',
+                                overflow: 'hidden'
+                            }}>
+                                <div style={{
+                                    width: `${(chunkProgress.loaded / chunkProgress.total) * 100}%`,
+                                    height: '100%',
+                                    backgroundColor: theme.accent,
+                                    transition: 'width 0.2s ease'
+                                }} />
+                            </div>
+                        </div>
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>

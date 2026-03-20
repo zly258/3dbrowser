@@ -111,26 +111,38 @@ export declare const createStyles: (theme: ThemeColors) => {
         minWidth: string;
         gap: string;
         fontSize: string;
+        fontWeight: 500;
         color: string;
         cursor: string;
         backgroundColor: string;
         border: string;
         borderRadius: string;
         transition: string;
+        overflow: string;
+        boxSizing: "border-box";
     };
     toolbarBtnActive: {
         backgroundColor: string;
         outline: string;
+        overflow: string;
     };
     toolbarIcon: {
         display: string;
         alignItems: string;
         justifyContent: string;
+        width: string;
+        height: string;
+        overflow: string;
     };
     toolbarLabel: {
         fontSize: string;
+        fontWeight: 500;
         color: string;
         whiteSpace: "nowrap";
+        letterSpacing: string;
+        lineHeight: string;
+        overflow: string;
+        textOverflow: string;
     };
     statusBar: {
         height: string;

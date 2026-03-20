@@ -22,6 +22,7 @@ export interface SceneSettings {
     sunTime?: number;
     sunEnabled?: boolean;
     sunShadow?: boolean;
+    fontSize?: 'compact' | 'medium' | 'loose';
 }
 export interface StructureTreeNode {
     id: string;

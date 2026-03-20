@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { IconClose } from "../../theme/Icons";
 
-// --- 通用浮动面板 ---
 interface FloatingPanelProps {
     title: string;
     onClose?: () => void;
@@ -12,9 +11,10 @@ interface FloatingPanelProps {
     y?: number;
     resizable?: boolean;
     movable?: boolean;
-    styles: any;
-    theme: any;
+    styles?: any;
+    theme?: any;
     storageId?: string;
+    modal?: boolean;  // 模态对话框模式
 }
 
 export const FloatingPanel: React.FC<FloatingPanelProps> = ({
@@ -27,15 +27,21 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     y = 100,
     resizable = false,
     movable = true,
-    styles,
-    theme,
-    storageId
+    storageId,
+    modal = false  // 默认非模态模式
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
     const minWidth = storageId === 'tool_measure' ? 320 : 220;
     const minHeight = storageId === 'tool_measure' ? 400 : 120;
 
     const [pos, setPos] = useState(() => {
+        // 模态模式默认居中 - 模态模式会通过useEffect重新计算
+        if (modal) {
+            // 初始值，会被useEffect覆盖
+            return { x: (window.innerWidth - width) / 2, y: (window.innerHeight - height) / 2 };
+        }
+
+        // 如果有 storageId，尝试从 localStorage 加载
         if (storageId) {
             try {
                 const saved = localStorage.getItem(`panel_${storageId}`);
@@ -48,6 +54,13 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                     }
                 }
             } catch (e) { console.error("Failed to load panel state", e); }
+        }
+
+        // 如果没有指定位置且没有 storageId，默认居中
+        if (x === 100 && y === 100 && !storageId) {
+            const centerX = (window.innerWidth - width) / 2;
+            const centerY = (window.innerHeight - height) / 2;
+            return { x: Math.max(0, centerX), y: Math.max(0, centerY) };
         }
         return { x, y };
     });
@@ -70,6 +83,24 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         return { w: width, h: height };
     });
 
+    // 模态模式下窗口resize时重新居中
+    useEffect(() => {
+        if (!modal) return;
+
+        const centerPanel = () => {
+            const centerX = (window.innerWidth - size.w) / 2;
+            const centerY = (window.innerHeight - size.h) / 2;
+            setPos({ x: Math.max(0, centerX), y: Math.max(0, centerY) });
+        };
+
+        window.addEventListener('resize', centerPanel);
+        centerPanel(); // 立即执行一次以确保居中
+
+        return () => {
+            window.removeEventListener('resize', centerPanel);
+        };
+    }, [modal, size.w, size.h]);
+
     const isDragging = useRef(false);
     const isResizing = useRef(false);
     const dragStart = useRef({ x: 0, y: 0 });
@@ -82,74 +113,75 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     useEffect(() => { currentPosRef.current = pos; }, [pos]);
     useEffect(() => { currentSizeRef.current = size; }, [size]);
 
-    useEffect(() => {
-        const handleMove = (e: MouseEvent) => {
-            if (!isDragging.current && !isResizing.current) return;
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (!isDragging.current && !isResizing.current) return;
 
-            e.preventDefault();
+        e.preventDefault();
 
-            if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+        if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
 
-            animationFrame.current = requestAnimationFrame(() => {
-                const dx = e.clientX - dragStart.current.x;
-                const dy = e.clientY - dragStart.current.y;
+        animationFrame.current = requestAnimationFrame(() => {
+            const dx = e.clientX - dragStart.current.x;
+            const dy = e.clientY - dragStart.current.y;
 
-                if (isDragging.current) {
-                    let newX = startPos.current.x + dx;
-                    let newY = startPos.current.y + dy;
+            if (isDragging.current) {
+                let newX = startPos.current.x + dx;
+                let newY = startPos.current.y + dy;
 
-                    let limitW = window.innerWidth;
-                    let limitH = window.innerHeight;
+                let limitW = window.innerWidth;
+                let limitH = window.innerHeight;
 
-                    if (panelRef.current?.parentElement) {
-                        limitW = panelRef.current.parentElement.clientWidth;
-                        limitH = panelRef.current.parentElement.clientHeight;
-                    }
-
-                    const maxX = limitW - size.w;
-                    const maxY = limitH - size.h;
-
-                    newX = Math.max(0, Math.min(newX, maxX));
-                    newY = Math.max(0, Math.min(newY, maxY));
-
-                    setPos({ x: newX, y: newY });
-                } else if (isResizing.current) {
-                    setSize({
-                        w: Math.max(minWidth, startSize.current.w + dx),
-                        h: Math.max(minHeight, startSize.current.h + dy)
-                    });
+                if (panelRef.current?.parentElement) {
+                    limitW = panelRef.current.parentElement.clientWidth;
+                    limitH = panelRef.current.parentElement.clientHeight;
                 }
-            });
-        };
 
-        const handleUp = () => {
-            if ((isDragging.current || isResizing.current) && storageId) {
-                try {
-                    const stateToSave = {
-                        pos: currentPosRef.current,
-                        size: currentSizeRef.current
-                    };
-                    localStorage.setItem(`panel_${storageId}`, JSON.stringify(stateToSave));
-                } catch(e) { console.error("Failed to save panel state", e); }
+                const maxX = limitW - size.w;
+                const maxY = limitH - size.h;
+
+                newX = Math.max(0, Math.min(newX, maxX));
+                newY = Math.max(0, Math.min(newY, maxY));
+
+                setPos({ x: newX, y: newY });
+            } else if (isResizing.current) {
+                setSize({
+                    w: Math.max(minWidth, startSize.current.w + dx),
+                    h: Math.max(minHeight, startSize.current.h + dy)
+                });
             }
+        });
+    }, [size, minWidth, minHeight]);
 
-            isDragging.current = false;
-            isResizing.current = false;
-            if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-        };
+    const handleMouseUp = useCallback(() => {
+        if ((isDragging.current || isResizing.current) && storageId) {
+            try {
+                const stateToSave = {
+                    pos: currentPosRef.current,
+                    size: currentSizeRef.current
+                };
+                localStorage.setItem(`panel_${storageId}`, JSON.stringify(stateToSave));
+            } catch(e) { console.error("Failed to save panel state", e); }
+        }
 
-        document.addEventListener('mousemove', handleMove);
-        document.addEventListener('mouseup', handleUp);
+        isDragging.current = false;
+        isResizing.current = false;
+        if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    }, [storageId]);
+
+    useEffect(() => {
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
 
         return () => {
-            document.removeEventListener('mousemove', handleMove);
-            document.removeEventListener('mouseup', handleUp);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
             if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
         };
-    }, [size, storageId]);
+    }, [handleMouseMove, handleMouseUp]);
 
     const onHeaderDown = (e: React.MouseEvent) => {
-        if (e.button !== 0 || !movable) return;
+        // 模态模式下不可拖拽
+        if (modal || e.button !== 0 || !movable) return;
         e.preventDefault();
         e.stopPropagation();
         isDragging.current = true;
@@ -158,7 +190,8 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     };
 
     const onResizeDown = (e: React.MouseEvent) => {
-        if (e.button !== 0) return;
+        // 模态模式下不可调整大小
+        if (modal || e.button !== 0 || !resizable) return;
         e.preventDefault();
         e.stopPropagation();
         isResizing.current = true;
@@ -166,33 +199,64 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         startSize.current = { ...size };
     };
 
+    const onCloseClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onClose?.();
+    };
+
     return (
-        <div ref={panelRef} style={{ ...styles.floatingPanel, left: pos.x, top: pos.y, width: size.w, height: size.h }}>
-            <div style={{ ...styles.floatingHeader, cursor: movable ? 'move' : 'default' }} onMouseDown={onHeaderDown}>
-                <span>{title}</span>
-                {onClose && (
+        <>
+            {/* 模态对话框遮罩层 */}
+            {modal && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        zIndex: 1999,
+                    }}
+                />
+            )}
+            <div
+                ref={panelRef}
+                className="ui-panel"
+                style={{
+                    position: modal ? 'fixed' : 'absolute',
+                    left: pos.x,
+                    top: pos.y,
+                    width: size.w,
+                    height: size.h,
+                    zIndex: modal ? 2000 : 200,
+                }}
+            >
+                <div
+                    className="ui-panel-header"
+                    onMouseDown={onHeaderDown}
+                >
+                    <span className="ui-panel-title">{title}</span>
+                    {onClose && (
+                        <button
+                            className="ui-panel-close"
+                            onClick={onCloseClick}
+                            title="Close"
+                        >
+                            <IconClose width={14} height={14} />
+                        </button>
+                    )}
+                </div>
+                <div className="ui-panel-content">
+                    {children}
+                </div>
+                {resizable && !modal && (
                     <div
-                        onClick={(e) => { e.stopPropagation(); onClose(); }}
-                        style={{ cursor: 'pointer', opacity: 0.8, display: 'flex', padding: 4 }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#e81123';
-                            e.currentTarget.style.color = 'white';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.color = 'inherit';
-                        }}
-                    >
-                        <IconClose width={16} height={16} />
-                    </div>
+                        className="ui-panel-resize cursor-se-resize"
+                        onMouseDown={onResizeDown}
+                    />
                 )}
             </div>
-            <div style={styles.floatingContent}>
-                {children}
-            </div>
-            {resizable && (
-                <div style={styles.resizeHandle} onMouseDown={onResizeDown} />
-            )}
-        </div>
+        </>
     );
 };

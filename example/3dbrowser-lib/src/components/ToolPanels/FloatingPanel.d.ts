@@ -9,9 +9,10 @@ interface FloatingPanelProps {
     y?: number;
     resizable?: boolean;
     movable?: boolean;
-    styles: any;
-    theme: any;
+    styles?: any;
+    theme?: any;
     storageId?: string;
+    modal?: boolean;
 }
 export declare const FloatingPanel: React.FC<FloatingPanelProps>;
 export {};

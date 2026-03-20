@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from 'react/jsx-runtime';
-import React, { useState, useEffect, useMemo, useRef, Component, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Component } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
@@ -2548,8 +2548,8 @@ class SceneManager {
       const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
         color: colors[i],
         transparent: true,
-        opacity: 0.8,
-        // 边框也调亮一点
+        opacity: 0.3,
+        // 边框也更透明
         depthWrite: false
       }));
       line.renderOrder = 1e4;
@@ -3904,8 +3904,8 @@ const createStyles = (theme) => ({
     justifyContent: "flex-start",
     backgroundColor: theme.panelBg,
     borderBottom: `1px solid ${theme.border}`,
-    padding: "6px 8px",
-    height: "52px",
+    padding: "4px 8px",
+    height: "44px",
     gap: "2px",
     zIndex: 1e3,
     WebkitAppRegion: "no-drag"
@@ -3930,31 +3930,43 @@ const createStyles = (theme) => ({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    padding: "6px 12px",
-    height: "44px",
-    minWidth: "48px",
-    gap: "2px",
-    fontSize: "11px",
+    padding: "4px 12px",
+    height: "40px",
+    minWidth: "52px",
+    gap: "3px",
+    fontSize: "12px",
+    fontWeight: 500,
     color: theme.text,
     cursor: "pointer",
     backgroundColor: "transparent",
     border: "none",
     borderRadius: "4px",
-    transition: "background-color 0.1s"
+    transition: "background-color 0.15s",
+    overflow: "hidden",
+    boxSizing: "border-box"
   },
   toolbarBtnActive: {
     backgroundColor: theme.highlight,
-    outline: "none"
+    outline: "none",
+    overflow: "hidden"
   },
   toolbarIcon: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    width: "18px",
+    height: "18px",
+    overflow: "hidden"
   },
   toolbarLabel: {
-    fontSize: "11px",
+    fontSize: "10px",
+    fontWeight: 500,
     color: theme.text,
-    whiteSpace: "nowrap"
+    whiteSpace: "nowrap",
+    letterSpacing: "0.01em",
+    lineHeight: "1",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
   },
   statusBar: {
     height: "24px",
@@ -4420,6 +4432,10 @@ const resources = {
     st_lang: "Language",
     st_import_settings: "Import Settings",
     st_theme: "Theme",
+    st_font_size: "Font Size",
+    st_font_compact: "Compact",
+    st_font_medium: "Medium",
+    st_font_loose: "Loose",
     st_menu_mode: "Menu Mode",
     menu_mode_menu: "Menu",
     menu_mode_toolbar: "Toolbar",
@@ -4473,7 +4489,8 @@ const resources = {
     viewpoint_title: "Viewpoint Management",
     viewpoint_save: "Save Current Viewpoint",
     viewpoint_empty: "No saved viewpoints",
-    viewpoint_loading: "Restoring viewpoint"
+    viewpoint_loading: "Restoring viewpoint",
+    chunk_loading: "Chunks"
   },
   zh: {
     home: "首页",
@@ -4605,6 +4622,10 @@ const resources = {
     st_lang: "界面语言",
     st_import_settings: "导入设置",
     st_theme: "界面主题",
+    st_font_size: "界面字号",
+    st_font_compact: "紧凑",
+    st_font_medium: "中等",
+    st_font_loose: "宽松",
     st_menu_mode: "菜单模式",
     menu_mode_menu: "菜单",
     menu_mode_toolbar: "工具栏",
@@ -4658,7 +4679,8 @@ const resources = {
     viewpoint_title: "视点管理",
     viewpoint_save: "保存当前视点",
     viewpoint_empty: "暂无保存的视点",
-    viewpoint_loading: "正在恢复视点"
+    viewpoint_loading: "正在恢复视点",
+    chunk_loading: "分片加载"
   }
 };
 const getTranslation = (lang, key) => {
@@ -4695,7 +4717,6 @@ const Button = ({
     transition: "all 0.2s",
     border: variant === "ghost" ? "none" : active ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
     boxShadow: variant === "ghost" ? "none" : "none",
-    // 不使用默认的黑色描边/阴影
     opacity: props.disabled ? 0.4 : 1,
     cursor: props.disabled ? "not-allowed" : "pointer",
     pointerEvents: props.disabled ? "none" : "auto",
@@ -4718,31 +4739,39 @@ const ImageButton = ({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    padding: "4px 12px",
-    height: "44px",
+    padding: "3px 8px",
+    height: "40px",
     minWidth: "48px",
     gap: "2px",
-    fontSize: "11px",
+    fontSize: "12px",
     color: theme?.text || "#333",
-    cursor: props.disabled ? "not-allowed" : "pointer",
-    backgroundColor: active ? styles?.toolbarBtnActive?.backgroundColor || "#e0e0e0" : hover ? theme?.itemHover || "#f0f0f0" : "transparent",
+    cursor: "pointer",
+    backgroundColor: active ? styles?.toolbarBtnActive?.backgroundColor || theme?.accent || "#007acc" : hover ? theme?.itemHover || "#f0f0f0" : "transparent",
     border: "none",
     borderRadius: "4px",
     transition: "background-color 0.1s",
-    opacity: props.disabled ? 0.4 : 1,
-    pointerEvents: props.disabled ? "none" : "auto",
     outline: "none",
+    overflow: "hidden",
+    boxSizing: "border-box",
     ...style
   };
   const iconStyle = {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    width: "18px",
+    height: "18px",
+    overflow: "hidden"
   };
   const labelStyle = {
     fontSize: "10px",
-    color: theme?.text || "#333",
-    whiteSpace: "nowrap"
+    lineHeight: "1",
+    color: active ? theme?.textLight || "#fff" : theme?.text || "#333",
+    whiteSpace: "nowrap",
+    fontWeight: 500,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: "100%"
   };
   return /* @__PURE__ */ jsxs(
     "button",
@@ -4758,23 +4787,6 @@ const ImageButton = ({
     }
   );
 };
-const PanelSection = ({ title, children, theme, style }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 12, ...style }, children: [
-  title && /* @__PURE__ */ jsxs("div", { style: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: theme.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    marginBottom: 6,
-    display: "flex",
-    alignItems: "center",
-    gap: 8
-  }, children: [
-    title,
-    /* @__PURE__ */ jsx("div", { style: { flex: 1, height: 1, background: theme.border, opacity: 0.5 } })
-  ] }),
-  children
-] });
 const SLIDER_TRACK_HEIGHT = 4;
 const SLIDER_THUMB_SIZE = 14;
 const Slider = ({ min, max, step = 1, value, onChange, theme, disabled, style }) => {
@@ -4833,103 +4845,8 @@ const Slider = ({ min, max, step = 1, value, onChange, theme, disabled, style })
             ` } })
   ] });
 };
-const DualSlider = ({ min, max, value, onChange, theme, disabled, style }) => {
-  const trackRef = React.useRef(null);
-  const getPercentage = (val) => (val - min) / (max - min) * 100;
-  const handleMouseDown = (index) => (e) => {
-    if (disabled || e.button !== 0) return;
-    e.preventDefault();
-    const startX = e.clientX;
-    const startVal = value[index];
-    const trackWidth = trackRef.current?.getBoundingClientRect().width || 1;
-    const onMove = (moveEvent) => {
-      moveEvent.preventDefault();
-      const dx = moveEvent.clientX - startX;
-      const diff = dx / trackWidth * (max - min);
-      let newVal = startVal + diff;
-      newVal = Math.max(min, Math.min(max, newVal));
-      const nextValue = [value[0], value[1]];
-      if (index === 0) {
-        nextValue[0] = Math.min(newVal, value[1]);
-      } else {
-        nextValue[1] = Math.max(newVal, value[0]);
-      }
-      onChange(nextValue);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
-  return /* @__PURE__ */ jsxs("div", { ref: trackRef, style: {
-    position: "relative",
-    width: "100%",
-    height: 32,
-    display: "flex",
-    alignItems: "center",
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-    padding: "0 4px",
-    ...style
-  }, children: [
-    /* @__PURE__ */ jsx("div", { style: {
-      position: "absolute",
-      left: 4,
-      right: 4,
-      height: SLIDER_TRACK_HEIGHT,
-      background: theme.border,
-      borderRadius: SLIDER_TRACK_HEIGHT / 2
-    } }),
-    /* @__PURE__ */ jsx("div", { style: {
-      position: "absolute",
-      left: `calc(4px + ${getPercentage(value[0])}%)`,
-      width: `calc(${getPercentage(value[1]) - getPercentage(value[0])}%)`,
-      height: SLIDER_TRACK_HEIGHT,
-      background: theme.accent,
-      borderRadius: SLIDER_TRACK_HEIGHT / 2
-    } }),
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        onMouseDown: handleMouseDown(0),
-        style: {
-          position: "absolute",
-          left: `calc(4px + ${getPercentage(value[0])}% - ${SLIDER_THUMB_SIZE / 2}px)`,
-          width: SLIDER_THUMB_SIZE,
-          height: SLIDER_THUMB_SIZE,
-          background: "white",
-          borderRadius: "50%",
-          cursor: disabled ? "not-allowed" : "pointer",
-          boxShadow: `0 1px 3px rgba(0,0,0,0.2)`,
-          zIndex: 2,
-          border: `2px solid ${theme.accent}`
-        }
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      "div",
-      {
-        onMouseDown: handleMouseDown(1),
-        style: {
-          position: "absolute",
-          left: `calc(4px + ${getPercentage(value[1])}% - ${SLIDER_THUMB_SIZE / 2}px)`,
-          width: SLIDER_THUMB_SIZE,
-          height: SLIDER_THUMB_SIZE,
-          background: "white",
-          borderRadius: "50%",
-          cursor: disabled ? "not-allowed" : "pointer",
-          boxShadow: `0 1px 3px rgba(0,0,0,0.2)`,
-          zIndex: 2,
-          border: `2px solid ${theme.accent}`
-        }
-      }
-    )
-  ] });
-};
 
-const iconSize = 18;
+const iconSize = 24;
 const iconStrokeWidth = 1.5;
 const createIcon = (paths, props = {}) => {
   const { size, color, ...rest } = props;
@@ -5161,7 +5078,7 @@ const Toolbar = (props) => {
       /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconFile, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconFile, {}),
           label: t("tb_file"),
           active: openMenu === "file",
           onClick: () => toggleMenu("file"),
@@ -5228,7 +5145,7 @@ const Toolbar = (props) => {
       /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconMaximize, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconMaximize, {}),
           label: t("tb_fit"),
           onClick: () => props.sceneMgr?.fitView(),
           styles,
@@ -5239,11 +5156,10 @@ const Toolbar = (props) => {
         /* @__PURE__ */ jsx(
           ImageButton,
           {
-            icon: /* @__PURE__ */ jsx(IconEye, { width: 20, height: 20 }),
+            icon: /* @__PURE__ */ jsx(IconEye, {}),
             label: t("tb_view"),
             active: openMenu === "views",
             onClick: () => toggleMenu("views"),
-            disabled: !props.hasModels,
             styles,
             theme
           }
@@ -5387,7 +5303,7 @@ const Toolbar = (props) => {
       !isHidden("outline") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconBox, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconBox, {}),
           label: t("tb_model"),
           active: props.showOutline,
           onClick: () => props.setShowOutline?.(!props.showOutline),
@@ -5398,7 +5314,7 @@ const Toolbar = (props) => {
       !isHidden("props") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconList, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconList, {}),
           label: t("tb_props"),
           active: props.showProps,
           onClick: () => props.setShowProps?.(!props.showProps),
@@ -5409,7 +5325,7 @@ const Toolbar = (props) => {
       !isHidden("pick") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconMousePointer, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconMousePointer, {}),
           label: t("tb_pick"),
           active: props.pickEnabled,
           onClick: () => props.setPickEnabled?.(!props.pickEnabled),
@@ -5422,11 +5338,10 @@ const Toolbar = (props) => {
       !isHidden("measure") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconRuler, { width: 24, height: 24, strokeWidth: 2 }),
+          icon: /* @__PURE__ */ jsx(IconRuler, {}),
           label: t("tb_measure"),
           active: props.activeTool === "measure",
           onClick: () => props.setActiveTool?.(props.activeTool === "measure" ? "none" : "measure"),
-          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5434,11 +5349,10 @@ const Toolbar = (props) => {
       !isHidden("clip") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconScissors, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconScissors, {}),
           label: t("tb_clip"),
           active: props.activeTool === "clip",
           onClick: () => props.setActiveTool?.(props.activeTool === "clip" ? "none" : "clip"),
-          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5446,11 +5360,10 @@ const Toolbar = (props) => {
       !isHidden("viewpoint") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconCamera, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconCamera, {}),
           label: t("tb_view"),
           active: props.activeTool === "viewpoint",
           onClick: () => props.setActiveTool?.(props.activeTool === "viewpoint" ? "none" : "viewpoint"),
-          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5458,11 +5371,10 @@ const Toolbar = (props) => {
       !isHidden("sun") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconSun, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconSun, {}),
           label: t("tb_sun"),
           active: props.activeTool === "sun",
           onClick: () => props.setActiveTool?.(props.activeTool === "sun" ? "none" : "sun"),
-          disabled: !props.hasModels,
           styles,
           theme
         }
@@ -5472,7 +5384,7 @@ const Toolbar = (props) => {
       !isHidden("settings") && /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconSettings, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconSettings, {}),
           label: t("tb_settings"),
           active: props.activeTool === "settings",
           onClick: () => props.setActiveTool?.(props.activeTool === "settings" ? "none" : "settings"),
@@ -5483,7 +5395,7 @@ const Toolbar = (props) => {
       /* @__PURE__ */ jsx(
         ImageButton,
         {
-          icon: /* @__PURE__ */ jsx(IconInfo, { width: 20, height: 20 }),
+          icon: /* @__PURE__ */ jsx(IconInfo, {}),
           label: t("tb_about"),
           onClick: () => props.onOpenAbout?.(),
           styles,
@@ -5826,14 +5738,19 @@ const FloatingPanel = ({
   y = 100,
   resizable = false,
   movable = true,
-  styles,
-  theme,
-  storageId
+  storageId,
+  modal = false
+  // 默认非模态模式
 }) => {
   const panelRef = useRef(null);
   const minWidth = storageId === "tool_measure" ? 320 : 220;
   const minHeight = storageId === "tool_measure" ? 400 : 120;
   const [pos, setPos] = useState(() => {
+    if (modal) {
+      const centerX = (window.innerWidth - width) / 2;
+      const centerY = (window.innerHeight - height) / 2;
+      return { x: Math.max(0, centerX), y: Math.max(0, centerY) };
+    }
     if (storageId) {
       try {
         const saved = localStorage.getItem(`panel_${storageId}`);
@@ -5848,6 +5765,11 @@ const FloatingPanel = ({
       } catch (e) {
         console.error("Failed to load panel state", e);
       }
+    }
+    if (x === 100 && y === 100 && !storageId) {
+      const centerX = (window.innerWidth - width) / 2;
+      const centerY = (window.innerHeight - height) / 2;
+      return { x: Math.max(0, centerX), y: Math.max(0, centerY) };
     }
     return { x, y };
   });
@@ -5883,62 +5805,62 @@ const FloatingPanel = ({
   useEffect(() => {
     currentSizeRef.current = size;
   }, [size]);
-  useEffect(() => {
-    const handleMove = (e) => {
-      if (!isDragging.current && !isResizing.current) return;
-      e.preventDefault();
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-      animationFrame.current = requestAnimationFrame(() => {
-        const dx = e.clientX - dragStart.current.x;
-        const dy = e.clientY - dragStart.current.y;
-        if (isDragging.current) {
-          let newX = startPos.current.x + dx;
-          let newY = startPos.current.y + dy;
-          let limitW = window.innerWidth;
-          let limitH = window.innerHeight;
-          if (panelRef.current?.parentElement) {
-            limitW = panelRef.current.parentElement.clientWidth;
-            limitH = panelRef.current.parentElement.clientHeight;
-          }
-          const maxX = limitW - size.w;
-          const maxY = limitH - size.h;
-          newX = Math.max(0, Math.min(newX, maxX));
-          newY = Math.max(0, Math.min(newY, maxY));
-          setPos({ x: newX, y: newY });
-        } else if (isResizing.current) {
-          setSize({
-            w: Math.max(minWidth, startSize.current.w + dx),
-            h: Math.max(minHeight, startSize.current.h + dy)
-          });
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging.current && !isResizing.current) return;
+    e.preventDefault();
+    if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+    animationFrame.current = requestAnimationFrame(() => {
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      if (isDragging.current) {
+        let newX = startPos.current.x + dx;
+        let newY = startPos.current.y + dy;
+        let limitW = window.innerWidth;
+        let limitH = window.innerHeight;
+        if (panelRef.current?.parentElement) {
+          limitW = panelRef.current.parentElement.clientWidth;
+          limitH = panelRef.current.parentElement.clientHeight;
         }
-      });
-    };
-    const handleUp = () => {
-      if ((isDragging.current || isResizing.current) && storageId) {
-        try {
-          const stateToSave = {
-            pos: currentPosRef.current,
-            size: currentSizeRef.current
-          };
-          localStorage.setItem(`panel_${storageId}`, JSON.stringify(stateToSave));
-        } catch (e) {
-          console.error("Failed to save panel state", e);
-        }
+        const maxX = limitW - size.w;
+        const maxY = limitH - size.h;
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+        setPos({ x: newX, y: newY });
+      } else if (isResizing.current) {
+        setSize({
+          w: Math.max(minWidth, startSize.current.w + dx),
+          h: Math.max(minHeight, startSize.current.h + dy)
+        });
       }
-      isDragging.current = false;
-      isResizing.current = false;
-      if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
-    };
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
+    });
+  }, [size, minWidth, minHeight]);
+  const handleMouseUp = useCallback(() => {
+    if ((isDragging.current || isResizing.current) && storageId) {
+      try {
+        const stateToSave = {
+          pos: currentPosRef.current,
+          size: currentSizeRef.current
+        };
+        localStorage.setItem(`panel_${storageId}`, JSON.stringify(stateToSave));
+      } catch (e) {
+        console.error("Failed to save panel state", e);
+      }
+    }
+    isDragging.current = false;
+    isResizing.current = false;
+    if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
+  }, [storageId]);
+  useEffect(() => {
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
     return () => {
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
       if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
     };
-  }, [size, storageId]);
+  }, [handleMouseMove, handleMouseUp]);
   const onHeaderDown = (e) => {
-    if (e.button !== 0 || !movable) return;
+    if (modal || e.button !== 0 || !movable) return;
     e.preventDefault();
     e.stopPropagation();
     isDragging.current = true;
@@ -5946,41 +5868,175 @@ const FloatingPanel = ({
     startPos.current = { ...pos };
   };
   const onResizeDown = (e) => {
-    if (e.button !== 0) return;
+    if (modal || e.button !== 0 || !resizable) return;
     e.preventDefault();
     e.stopPropagation();
     isResizing.current = true;
     dragStart.current = { x: e.clientX, y: e.clientY };
     startSize.current = { ...size };
   };
-  return /* @__PURE__ */ jsxs("div", { ref: panelRef, style: { ...styles.floatingPanel, left: pos.x, top: pos.y, width: size.w, height: size.h }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { ...styles.floatingHeader, cursor: movable ? "move" : "default" }, onMouseDown: onHeaderDown, children: [
-      /* @__PURE__ */ jsx("span", { children: title }),
-      onClose && /* @__PURE__ */ jsx(
-        "div",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onClose();
-          },
-          style: { cursor: "pointer", opacity: 0.8, display: "flex", padding: 4 },
-          onMouseEnter: (e) => {
-            e.currentTarget.style.backgroundColor = "#e81123";
-            e.currentTarget.style.color = "white";
-          },
-          onMouseLeave: (e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "inherit";
-          },
-          children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
+  const onCloseClick = (e) => {
+    e.stopPropagation();
+    onClose?.();
+  };
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    modal && /* @__PURE__ */ jsx(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          zIndex: 1999
         }
-      )
-    ] }),
-    /* @__PURE__ */ jsx("div", { style: styles.floatingContent, children }),
-    resizable && /* @__PURE__ */ jsx("div", { style: styles.resizeHandle, onMouseDown: onResizeDown })
+      }
+    ),
+    /* @__PURE__ */ jsxs(
+      "div",
+      {
+        ref: panelRef,
+        className: "cad-panel",
+        style: {
+          position: "absolute",
+          left: pos.x,
+          top: pos.y,
+          width: size.w,
+          height: size.h,
+          zIndex: modal ? 2e3 : 200
+        },
+        children: [
+          /* @__PURE__ */ jsxs(
+            "div",
+            {
+              className: "cad-panel-header",
+              onMouseDown: onHeaderDown,
+              children: [
+                /* @__PURE__ */ jsx("span", { className: "cad-panel-title", children: title }),
+                onClose && /* @__PURE__ */ jsx(
+                  "button",
+                  {
+                    className: "cad-panel-close",
+                    onClick: onCloseClick,
+                    title: "Close",
+                    children: /* @__PURE__ */ jsx(IconClose, { width: 14, height: 14 })
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsx("div", { className: "cad-panel-content", children }),
+          resizable && !modal && /* @__PURE__ */ jsx(
+            "div",
+            {
+              className: "cad-panel-resize cursor-se-resize",
+              onMouseDown: onResizeDown
+            }
+          )
+        ]
+      }
+    )
   ] });
 };
 
+const Icons = {
+  Trash: () => /* @__PURE__ */ jsx("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+  Distance: () => /* @__PURE__ */ jsx("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M2 8h12M8 4l4 4-4 4", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+  Angle: () => /* @__PURE__ */ jsx("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M2 14L14 14M2 14l3.5-12 6 8", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+  Coordinate: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
+    /* @__PURE__ */ jsx("circle", { cx: "8", cy: "8", r: "6" }),
+    /* @__PURE__ */ jsx("path", { d: "M8 2v12M2 8h12", strokeLinecap: "round" })
+  ] }),
+  None: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
+    /* @__PURE__ */ jsx("circle", { cx: "8", cy: "8", r: "6" }),
+    /* @__PURE__ */ jsx("path", { d: "M5 5l6 6M11 5l-6 6", strokeLinecap: "round" })
+  ] }),
+  Close: () => /* @__PURE__ */ jsx("svg", { width: "12", height: "12", viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M2 2L12 12M12 2L2 12", strokeLinecap: "round" }) })
+};
+const SegmentedControl$1 = ({ options, value, onChange }) => {
+  return /* @__PURE__ */ jsx("div", { className: "cad-segmented", children: options.map((option) => /* @__PURE__ */ jsx(
+    "button",
+    {
+      className: `cad-segmented-item ${value === option.value ? "active" : ""}`,
+      onClick: () => onChange(option.value),
+      children: /* @__PURE__ */ jsx("span", { children: option.label })
+    },
+    option.value
+  )) });
+};
+const ClearButton = ({ onClick, disabled }) => {
+  return /* @__PURE__ */ jsx(
+    "button",
+    {
+      onClick,
+      disabled,
+      className: `cad-btn cad-btn-icon cad-btn-ghost ${disabled ? "disabled" : ""}`,
+      title: "Clear All",
+      children: /* @__PURE__ */ jsx(Icons.Trash, {})
+    }
+  );
+};
+const DataPanel = ({ children, empty, emptyText }) => {
+  return /* @__PURE__ */ jsx("div", { className: "cad-data-panel flex flex-col", children: empty ? /* @__PURE__ */ jsx("div", { className: "flex flex-col items-center justify-center", style: { flex: 1, minHeight: "100px" }, children: /* @__PURE__ */ jsx("span", { className: "text-secondary text-sm", children: emptyText }) }) : children });
+};
+const MeasureItem = ({ item, isHighlighted, onHighlight, onDelete }) => {
+  return /* @__PURE__ */ jsxs(
+    "div",
+    {
+      onClick: onHighlight,
+      className: `cad-list-item ${isHighlighted ? "selected" : ""}`,
+      style: {
+        padding: "6px 10px",
+        minHeight: "30px"
+      },
+      children: [
+        /* @__PURE__ */ jsx(
+          "span",
+          {
+            style: {
+              fontFamily: "'Consolas', 'Monaco', monospace",
+              fontSize: "12px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              flex: 1
+            },
+            children: item.val
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onDelete();
+            },
+            className: "cad-btn cad-btn-icon-sm cad-btn-ghost",
+            style: { opacity: 0.6, marginLeft: "8px" },
+            onMouseEnter: (e) => e.currentTarget.style.opacity = "1",
+            onMouseLeave: (e) => e.currentTarget.style.opacity = "0.6",
+            children: /* @__PURE__ */ jsx(Icons.Close, {})
+          }
+        )
+      ]
+    }
+  );
+};
+const TypeHeader = ({ label }) => {
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      className: "cad-group-title",
+      style: {
+        padding: "4px 10px",
+        fontSize: "10px"
+      },
+      children: label
+    }
+  );
+};
 const MeasurePanel = ({
   t,
   sceneMgr,
@@ -5990,8 +6046,6 @@ const MeasurePanel = ({
   onDelete,
   onClear,
   onClose,
-  styles,
-  theme,
   highlightedId,
   onHighlight
 }) => {
@@ -6006,100 +6060,256 @@ const MeasurePanel = ({
     });
     return groups;
   }, [measureHistory]);
-  const renderMeasureItem = (item) => /* @__PURE__ */ jsxs(
-    "div",
-    {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "8px 12px",
-        borderBottom: `1px solid ${theme.border}`,
-        fontSize: 12,
-        backgroundColor: highlightedId === item.id ? `${theme.accent}15` : "transparent",
-        borderLeft: highlightedId === item.id ? `4px solid ${theme.accent}` : "4px solid transparent",
-        cursor: "pointer",
-        transition: "all 0.2s"
-      },
-      onClick: () => onHighlight && onHighlight(item.id),
-      children: [
-        /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", flex: 1, marginRight: 8, overflow: "hidden" }, children: /* @__PURE__ */ jsx("span", { style: {
-          color: highlightedId === item.id ? theme.accent : theme.text,
-          fontFamily: "monospace",
-          fontWeight: highlightedId === item.id ? "bold" : "normal",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis"
-        }, children: item.val }) }),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            style: { cursor: "pointer", opacity: 0.7, color: theme.danger, padding: 4, borderRadius: 4 },
-            onClick: (e) => {
-              e.stopPropagation();
-              onDelete(item.id);
-            },
-            children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
-          }
-        )
-      ]
-    },
-    item.id
-  );
   const handleTypeChange = (type) => {
     setMeasureType(type);
     sceneMgr?.startMeasurement(type);
   };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("measure_title"), onClose, width: 340, height: 580, resizable: true, styles, theme, storageId: "tool_measure", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px 12px 0 12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
-    /* @__PURE__ */ jsx(PanelSection, { title: t("measure_type"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, justifyContent: "flex-start" }, children: [
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "none", onClick: () => handleTypeChange("none"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_none") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "dist", onClick: () => handleTypeChange("dist"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_dist") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "angle", onClick: () => handleTypeChange("angle"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_angle") }),
-      /* @__PURE__ */ jsx(Button, { styles, theme, active: measureType === "coord", onClick: () => handleTypeChange("coord"), style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" }, children: t("measure_coord") })
-    ] }) }),
-    /* @__PURE__ */ jsxs("div", { style: { fontSize: 12, color: theme.textMuted, marginBottom: 8, minHeight: 24, padding: "0 4px", fontStyle: "italic", display: "flex", alignItems: "center" }, children: [
-      measureType === "dist" && t("measure_instruct_dist"),
-      measureType === "angle" && t("measure_instruct_angle"),
-      measureType === "coord" && t("measure_instruct_coord"),
-      measureType !== "none" && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", color: theme.accent, fontWeight: "bold", fontSize: 12 }, children: "[ESC]退出" })
-    ] }),
-    /* @__PURE__ */ jsx("div", { style: {
-      border: `1px solid ${theme.border}`,
-      borderRadius: 4,
-      backgroundColor: theme.bg,
-      flex: 1,
-      overflowY: "auto",
-      marginBottom: 12
-    }, children: measureHistory.length === 0 ? /* @__PURE__ */ jsx("div", { style: { padding: 40, textAlign: "center", color: theme.textMuted, fontSize: 12 }, children: t("no_measurements") }) : Object.entries(groupedHistory).map(([type, items]) => {
-      if (items.length === 0) return null;
-      return /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("div", { style: {
-          padding: "4px 10px",
-          backgroundColor: theme.highlight,
-          fontSize: 12,
-          fontWeight: "bold",
-          color: theme.accent,
-          textTransform: "uppercase",
-          borderBottom: `1px solid ${theme.border}`
-        }, children: type === "dist" ? t("measure_dist") : type === "angle" ? t("measure_angle") : t("measure_coord") }),
-        items.map(renderMeasureItem)
-      ] }, type);
-    }) }),
-    /* @__PURE__ */ jsx("div", { style: { padding: "8px 0", borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "flex-end", backgroundColor: theme.bg }, children: /* @__PURE__ */ jsx(
-      Button,
-      {
-        variant: "danger",
-        styles,
-        theme,
-        onClick: onClear,
-        disabled: measureHistory.length === 0,
-        style: { width: 70, flex: "0 0 auto", height: 28, fontSize: 11, padding: "4px 0" },
-        children: t("measure_clear")
-      }
-    ) })
-  ] }) });
+  const measureOptions = [
+    { value: "none", label: t("measure_none") || "None", icon: /* @__PURE__ */ jsx(Icons.None, {}) },
+    { value: "dist", label: t("measure_dist") || "Distance", icon: /* @__PURE__ */ jsx(Icons.Distance, {}) },
+    { value: "angle", label: t("measure_angle") || "Angle", icon: /* @__PURE__ */ jsx(Icons.Angle, {}) },
+    { value: "coord", label: t("measure_coord") || "Coord", icon: /* @__PURE__ */ jsx(Icons.Coordinate, {}) }
+  ];
+  const getInstructionText = () => {
+    switch (measureType) {
+      case "dist":
+        return t("measure_instruct_dist");
+      case "angle":
+        return t("measure_instruct_angle");
+      case "coord":
+        return t("measure_instruct_coord");
+      default:
+        return "";
+    }
+  };
+  const getTypeLabel = (type) => {
+    switch (type) {
+      case "dist":
+        return t("measure_dist") || "Distance";
+      case "angle":
+        return t("measure_angle") || "Angle";
+      case "coord":
+        return t("measure_coord") || "Coordinate";
+      default:
+        return type;
+    }
+  };
+  return /* @__PURE__ */ jsx(
+    FloatingPanel,
+    {
+      title: t("measure_title"),
+      onClose,
+      width: 300,
+      height: 400,
+      resizable: true,
+      storageId: "tool_measure",
+      children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col p-3", style: { height: "100%", gap: "10px" }, children: [
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between", children: [
+          /* @__PURE__ */ jsx(
+            SegmentedControl$1,
+            {
+              options: measureOptions,
+              value: measureType,
+              onChange: handleTypeChange
+            }
+          ),
+          /* @__PURE__ */ jsx(ClearButton, { onClick: onClear, disabled: measureHistory.length === 0 })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2 text-sm text-secondary", children: [
+          /* @__PURE__ */ jsx("span", { children: getInstructionText() }),
+          measureType !== "none" && /* @__PURE__ */ jsx("span", { className: "ml-auto text-accent font-medium", children: "[ESC] Exit" })
+        ] }),
+        /* @__PURE__ */ jsx(DataPanel, { empty: measureHistory.length === 0, emptyText: t("no_measurements") || "No measurements", children: measureHistory.length > 0 && /* @__PURE__ */ jsx("div", { className: "flex flex-col", style: { overflow: "auto" }, children: Object.entries(groupedHistory).map(([type, items]) => {
+          if (items.length === 0) return null;
+          return /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsx(TypeHeader, { label: getTypeLabel(type) }),
+            items.map((item) => /* @__PURE__ */ jsx(
+              MeasureItem,
+              {
+                item,
+                isHighlighted: highlightedId === item.id,
+                onHighlight: () => onHighlight?.(item.id),
+                onDelete: () => onDelete(item.id)
+              },
+              item.id
+            ))
+          ] }, type);
+        }) }) })
+      ] })
+    }
+  );
 };
 
+const Switch$1 = ({ checked, onChange, disabled = false }) => {
+  return /* @__PURE__ */ jsx(
+    "button",
+    {
+      className: `cad-switch ${checked ? "active" : ""} ${disabled ? "disabled" : ""}`,
+      onClick: () => !disabled && onChange(!checked),
+      role: "switch",
+      "aria-checked": checked,
+      disabled,
+      children: /* @__PURE__ */ jsx("div", { className: "cad-switch-thumb" })
+    }
+  );
+};
+const DualSlider = ({ min, max, value, onChange, disabled = false }) => {
+  const percentage1 = (value[0] - min) / (max - min) * 100;
+  const percentage2 = (value[1] - min) / (max - min) * 100;
+  const handleThumb1MouseDown = (e) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startValue = value[0];
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaValue = deltaX / 200 * (max - min);
+      const newValue = Math.max(min, Math.min(value[1] - 1, startValue + deltaValue));
+      onChange([Math.round(newValue), value[1]]);
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+  const handleThumb2MouseDown = (e) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startValue = value[1];
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaValue = deltaX / 200 * (max - min);
+      const newValue = Math.min(max, Math.max(value[0] + 1, startValue + deltaValue));
+      onChange([value[0], Math.round(newValue)]);
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+  return /* @__PURE__ */ jsxs("div", { className: `cad-slider ${disabled ? "disabled" : ""}`, style: { height: "20px" }, children: [
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        className: "cad-slider-track",
+        style: {
+          position: "absolute",
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: "100%",
+          height: "4px",
+          borderRadius: "2px"
+        }
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        className: "cad-slider-progress",
+        style: {
+          position: "absolute",
+          top: "50%",
+          transform: "translateY(-50%)",
+          height: "4px",
+          borderRadius: "2px",
+          left: `${percentage1}%`,
+          width: `${percentage2 - percentage1}%`
+        }
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        className: "cad-slider-thumb",
+        style: { left: `calc(${percentage1}% - 6px)` },
+        onMouseDown: handleThumb1MouseDown
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        className: "cad-slider-thumb",
+        style: { left: `calc(${percentage2}% - 6px)` },
+        onMouseDown: handleThumb2MouseDown
+      }
+    )
+  ] });
+};
+const AxisSliderRow = ({ axis, label, active, value, onToggle, onChange, disabled = false }) => {
+  return /* @__PURE__ */ jsxs(
+    "div",
+    {
+      className: "flex items-center",
+      style: {
+        gap: "8px",
+        padding: "6px 0",
+        borderBottom: "1px solid var(--border-color)",
+        opacity: disabled ? 0.5 : 1,
+        pointerEvents: disabled ? "none" : "auto"
+      },
+      children: [
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            type: "checkbox",
+            checked: active,
+            onChange: (e) => onToggle(e.target.checked),
+            style: { width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "span",
+          {
+            style: {
+              fontSize: "12px",
+              fontWeight: "600",
+              minWidth: "16px",
+              color: active ? "var(--accent)" : "var(--text-secondary)",
+              flexShrink: 0
+            },
+            children: axis.toUpperCase()
+          }
+        ),
+        /* @__PURE__ */ jsx("div", { style: { flex: 1 }, children: /* @__PURE__ */ jsx(
+          DualSlider,
+          {
+            min: 0,
+            max: 100,
+            value,
+            onChange,
+            disabled: disabled || !active
+          }
+        ) }),
+        /* @__PURE__ */ jsxs(
+          "span",
+          {
+            style: {
+              fontFamily: "'Consolas', 'Monaco', monospace",
+              fontSize: "11px",
+              color: "var(--accent)",
+              minWidth: "45px",
+              textAlign: "right",
+              flexShrink: 0
+            },
+            children: [
+              Math.round(value[0]),
+              "-",
+              Math.round(value[1]),
+              "%"
+            ]
+          }
+        )
+      ]
+    }
+  );
+};
 const ClipPanel = ({
   t,
   onClose,
@@ -6108,66 +6318,80 @@ const ClipPanel = ({
   clipValues,
   setClipValues,
   clipActive,
-  setClipActive,
-  styles,
-  theme
+  setClipActive
 }) => {
-  const SliderRow = ({ axis }) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }, children: [
-    /* @__PURE__ */ jsx(
-      Checkbox,
-      {
-        checked: clipActive[axis],
-        onChange: (v) => setClipActive({ ...clipActive, [axis]: v }),
-        styles,
-        style: { flexShrink: 0 }
-      }
-    ),
-    /* @__PURE__ */ jsx("div", { style: { flex: 1, padding: "0 4px" }, children: /* @__PURE__ */ jsx(
-      DualSlider,
-      {
-        min: 0,
-        max: 100,
-        value: clipValues[axis],
-        onChange: (val) => setClipValues({ ...clipValues, [axis]: val }),
-        theme,
-        disabled: !clipActive[axis]
-      }
-    ) }),
-    /* @__PURE__ */ jsxs("span", { style: {
-      fontSize: 10,
-      color: theme.accent,
-      opacity: clipActive[axis] ? 1 : 0.5,
-      fontFamily: "monospace",
-      minWidth: "40px",
-      textAlign: "right"
-    }, children: [
-      Math.round(clipValues[axis][0]),
-      "-",
-      Math.round(clipValues[axis][1]),
-      "%"
-    ] })
-  ] });
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("clip_title"), onClose, width: 260, height: 220, resizable: false, styles, theme, storageId: "tool_clip", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px" }, children: [
-    /* @__PURE__ */ jsx("div", { style: { marginBottom: 12, borderBottom: `1px solid ${theme.border}`, paddingBottom: 8 }, children: /* @__PURE__ */ jsx(
-      Checkbox,
-      {
-        label: t("clip_enable"),
-        checked: clipEnabled,
-        onChange: (v) => setClipEnabled(v),
-        styles,
-        style: { fontWeight: "bold", fontSize: 12 }
-      }
-    ) }),
-    /* @__PURE__ */ jsxs("div", { style: {
-      opacity: clipEnabled ? 1 : 0.4,
-      pointerEvents: clipEnabled ? "auto" : "none",
-      transition: "all 0.3s ease"
-    }, children: [
-      /* @__PURE__ */ jsx(SliderRow, { axis: "x" }),
-      /* @__PURE__ */ jsx(SliderRow, { axis: "y" }),
-      /* @__PURE__ */ jsx(SliderRow, { axis: "z" })
-    ] })
-  ] }) });
+  return /* @__PURE__ */ jsx(
+    FloatingPanel,
+    {
+      title: t("clip_title"),
+      onClose,
+      width: 280,
+      height: 260,
+      resizable: false,
+      storageId: "tool_clip",
+      children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col p-3", style: { height: "100%", gap: "12px" }, children: [
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between p-2", style: { borderBottom: "1px solid var(--border-color)" }, children: [
+          /* @__PURE__ */ jsx("span", { className: "text-sm font-semibold", children: t("clip_enable") }),
+          /* @__PURE__ */ jsx(
+            Switch$1,
+            {
+              checked: clipEnabled,
+              onChange: (v) => setClipEnabled(v)
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxs(
+          "div",
+          {
+            className: "flex flex-col",
+            style: {
+              flex: 1,
+              opacity: clipEnabled ? 1 : 0.4,
+              pointerEvents: clipEnabled ? "auto" : "none"
+            },
+            children: [
+              /* @__PURE__ */ jsx(
+                AxisSliderRow,
+                {
+                  axis: "x",
+                  label: t("clip_x"),
+                  active: clipActive.x,
+                  value: clipValues.x,
+                  onToggle: (v) => setClipActive({ ...clipActive, x: v }),
+                  onChange: (val) => setClipValues({ ...clipValues, x: val }),
+                  disabled: !clipEnabled
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                AxisSliderRow,
+                {
+                  axis: "y",
+                  label: t("clip_y"),
+                  active: clipActive.y,
+                  value: clipValues.y,
+                  onToggle: (v) => setClipActive({ ...clipActive, y: v }),
+                  onChange: (val) => setClipValues({ ...clipValues, y: val }),
+                  disabled: !clipEnabled
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                AxisSliderRow,
+                {
+                  axis: "z",
+                  label: t("clip_z"),
+                  active: clipActive.z,
+                  value: clipValues.z,
+                  onToggle: (v) => setClipActive({ ...clipActive, z: v }),
+                  onChange: (val) => setClipValues({ ...clipValues, z: val }),
+                  disabled: !clipEnabled
+                }
+              )
+            ]
+          }
+        )
+      ] })
+    }
+  );
 };
 
 const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
@@ -6494,14 +6718,132 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
   ] }) });
 };
 
-const Section = ({ title, children, theme }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 20 }, children: [
-  /* @__PURE__ */ jsx("div", { style: { fontSize: 11, fontWeight: "600", color: theme.accent, marginBottom: 10, borderBottom: `1px solid ${theme.border}`, paddingBottom: 6, opacity: 0.9, textTransform: "uppercase", letterSpacing: "0.5px" }, children: title }),
+const Section = ({ title, children }) => /* @__PURE__ */ jsxs("div", { className: "mb-4", children: [
+  /* @__PURE__ */ jsx(
+    "div",
+    {
+      className: "text-xs font-semibold uppercase",
+      style: {
+        marginBottom: "10px",
+        paddingBottom: "6px",
+        color: "var(--accent)",
+        borderBottom: "1px solid var(--border-color)",
+        letterSpacing: "0.5px"
+      },
+      children: title
+    }
+  ),
   children
 ] });
-const Row = ({ label, children, theme }) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, fontSize: 12, padding: "0 4px" }, children: [
-  /* @__PURE__ */ jsx("span", { style: { color: theme.textMuted, fontWeight: "400" }, children: label }),
-  /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end", marginLeft: 12 }, children })
-] });
+const Row = ({ label, children, labelWidth = "80px" }) => /* @__PURE__ */ jsxs(
+  "div",
+  {
+    className: "flex items-center justify-between",
+    style: { marginBottom: "10px", minHeight: "28px", gap: "16px" },
+    children: [
+      /* @__PURE__ */ jsx(
+        "span",
+        {
+          className: "text-sm text-secondary flex-shrink-0",
+          style: {
+            minWidth: labelWidth
+          },
+          children: label
+        }
+      ),
+      /* @__PURE__ */ jsx("div", { className: "flex items-center", style: { flex: 1, justifyContent: "flex-end" }, children })
+    ]
+  }
+);
+const Switch = ({ checked, onChange }) => /* @__PURE__ */ jsx(
+  "button",
+  {
+    className: `cad-switch ${checked ? "active" : ""}`,
+    onClick: () => onChange(!checked),
+    role: "switch",
+    "aria-checked": checked,
+    children: /* @__PURE__ */ jsx("div", { className: "cad-switch-thumb" })
+  }
+);
+const SegmentedControl = ({ options, value, onChange }) => /* @__PURE__ */ jsx("div", { className: "cad-segmented", children: options.map((option) => /* @__PURE__ */ jsx(
+  "button",
+  {
+    className: `cad-segmented-item ${value === option.value ? "active" : ""}`,
+    onClick: () => onChange(option.value),
+    children: option.label
+  },
+  option.value
+)) });
+const SettingSlider = ({ min, max, step, value, onChange, showValue = true }) => {
+  const percentage = (value - min) / (max - min) * 100;
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sliderEl = e.currentTarget.parentElement;
+    const rect = sliderEl.getBoundingClientRect();
+    const startX = e.clientX;
+    const startValue = value;
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaValue = deltaX / rect.width * (max - min);
+      const newValue = Math.round((startValue + deltaValue) / step) * step;
+      onChange(Math.max(min, Math.min(max, newValue)));
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+  return /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", style: { flex: 1 }, children: [
+    /* @__PURE__ */ jsxs("div", { className: "cad-slider", style: { position: "relative", height: "20px", flex: 1 }, children: [
+      /* @__PURE__ */ jsx("div", { className: "cad-slider-track", style: { position: "absolute", top: "50%", transform: "translateY(-50%)", width: "100%" } }),
+      /* @__PURE__ */ jsx("div", { className: "cad-slider-progress", style: { position: "absolute", top: "50%", transform: "translateY(-50%)", width: `${percentage}%` } }),
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          className: "cad-slider-thumb",
+          style: { left: `calc(${percentage}% - 6px)` },
+          onMouseDown: handleMouseDown
+        }
+      )
+    ] }),
+    showValue && /* @__PURE__ */ jsx(
+      "span",
+      {
+        style: {
+          fontFamily: "'Consolas', 'Monaco', monospace",
+          fontSize: "12px",
+          color: "var(--accent)",
+          minWidth: "36px",
+          textAlign: "right"
+        },
+        children: step < 1 ? value.toFixed(1) : value
+      }
+    )
+  ] });
+};
+const Select = ({ value, options, onChange }) => /* @__PURE__ */ jsx(
+  "select",
+  {
+    value,
+    onChange: (e) => onChange(e.target.value),
+    className: "cad-input",
+    style: {
+      padding: "4px 28px 4px 8px",
+      fontSize: "12px",
+      appearance: "none",
+      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A0A0A0' d='M2 4l4 4 4-4'/%3E%3C/svg%3E")`,
+      backgroundRepeat: "no-repeat",
+      backgroundPosition: "right 8px center",
+      flex: 1,
+      minWidth: 0,
+      cursor: "pointer"
+    },
+    children: options.map((option) => /* @__PURE__ */ jsx("option", { value: option.value, children: option.label }, option.value))
+  }
+);
 const SettingsPanel = ({
   t,
   onClose,
@@ -6516,116 +6858,95 @@ const SettingsPanel = ({
   styles,
   theme
 }) => {
-  return /* @__PURE__ */ jsx("div", { style: styles.modalOverlay, children: /* @__PURE__ */ jsxs("div", { style: styles.modalContent, children: [
-    /* @__PURE__ */ jsxs("div", { style: styles.floatingHeader, children: [
-      /* @__PURE__ */ jsx("span", { children: t("settings") }),
-      /* @__PURE__ */ jsx(
-        "div",
-        {
-          onClick: onClose,
-          style: { cursor: "pointer", opacity: 0.6, display: "flex", padding: 2, borderRadius: 0 },
-          onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
-          onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
-          children: /* @__PURE__ */ jsx(IconClose, { width: 20, height: 20 })
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: { padding: 20, overflowY: "auto", flex: 1 }, children: [
-      /* @__PURE__ */ jsxs(Section, { title: t("setting_general"), theme, children: [
-        /* @__PURE__ */ jsx(Row, { label: t("st_theme"), theme, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, background: theme.bg, padding: 2, borderRadius: 0, border: `1px solid ${theme.border}` }, children: [
-          /* @__PURE__ */ jsx(
-            "button",
+  return /* @__PURE__ */ jsx(
+    FloatingPanel,
+    {
+      title: t("settings"),
+      onClose,
+      width: 360,
+      height: 500,
+      modal: true,
+      styles,
+      theme,
+      children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", gap: "8px", height: "100%", overflowY: "auto" }, children: [
+        /* @__PURE__ */ jsxs(Section, { title: t("setting_general"), children: [
+          /* @__PURE__ */ jsx(Row, { label: t("st_theme"), labelWidth: "70px", children: /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" }, children: /* @__PURE__ */ jsx(
+            SegmentedControl,
             {
-              onClick: () => setThemeMode("light"),
-              style: {
-                padding: "4px 12px",
-                borderRadius: 0,
-                border: "none",
-                fontSize: 11,
-                cursor: "pointer",
-                background: themeMode === "light" ? theme.accent : "transparent",
-                color: themeMode === "light" ? "white" : theme.text
-              },
-              children: t("theme_light")
+              options: [
+                { value: "light", label: t("theme_light") || "Light" },
+                { value: "dark", label: t("theme_dark") || "Dark" }
+              ],
+              value: themeMode,
+              onChange: (v) => setThemeMode(v)
             }
-          ),
-          /* @__PURE__ */ jsx(
-            "button",
+          ) }) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_lang"), labelWidth: "70px", children: /* @__PURE__ */ jsx(
+            Select,
             {
-              onClick: () => setThemeMode("dark"),
-              style: {
-                padding: "4px 12px",
-                borderRadius: 0,
-                border: "none",
-                fontSize: 11,
-                cursor: "pointer",
-                background: themeMode === "dark" ? theme.accent : "transparent",
-                color: themeMode === "dark" ? "white" : theme.text
-              },
-              children: t("theme_dark")
+              value: currentLang,
+              options: [
+                { value: "zh", label: "简体中文" },
+                { value: "en", label: "English" }
+              ],
+              onChange: (v) => setLang(v)
             }
-          )
-        ] }) }),
-        /* @__PURE__ */ jsx(Row, { label: t("st_lang"), theme, children: /* @__PURE__ */ jsxs(
-          "select",
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_monitor"), labelWidth: "70px", children: /* @__PURE__ */ jsx(
+            Switch,
+            {
+              checked: showStats,
+              onChange: (v) => setShowStats(v)
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_font_size"), labelWidth: "70px", children: /* @__PURE__ */ jsx("div", { style: { flex: 1, display: "flex", justifyContent: "flex-end" }, children: /* @__PURE__ */ jsx(
+            SegmentedControl,
+            {
+              options: [
+                { value: "compact", label: t("st_font_compact") || "紧凑" },
+                { value: "medium", label: t("st_font_medium") || "中等" },
+                { value: "loose", label: t("st_font_loose") || "宽松" }
+              ],
+              value: settings.fontSize || "medium",
+              onChange: (v) => onUpdate({ fontSize: v })
+            }
+          ) }) })
+        ] }),
+        /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), children: /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", children: /* @__PURE__ */ jsx(
+          SettingSlider,
           {
-            style: { background: theme.bg, color: theme.text, border: `1px solid ${theme.border}`, padding: 2, borderRadius: 0 },
-            value: currentLang,
-            onChange: (e) => setLang(e.target.value),
-            children: [
-              /* @__PURE__ */ jsx("option", { value: "zh", children: "简体中文" }),
-              /* @__PURE__ */ jsx("option", { value: "en", children: "English" })
-            ]
+            min: 80,
+            max: 300,
+            step: 10,
+            value: settings.viewCubeSize || 100,
+            onChange: (v) => onUpdate({ viewCubeSize: v })
           }
-        ) }),
-        /* @__PURE__ */ jsx(Row, { label: t("st_bg"), theme, children: /* @__PURE__ */ jsx("input", { type: "color", value: settings.bgColor, onChange: (e) => onUpdate({ bgColor: e.target.value }) }) }),
-        /* @__PURE__ */ jsx(Row, { label: t("st_monitor"), theme, children: /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            checked: showStats,
-            onChange: (val) => setShowStats(val),
-            styles,
-            theme
-          }
-        ) })
-      ] }),
-      /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), theme, children: /* @__PURE__ */ jsx(Row, { label: `${t("st_viewcube_size")} (${settings.viewCubeSize || 100})`, theme, children: /* @__PURE__ */ jsx(
-        Slider,
-        {
-          min: 80,
-          max: 300,
-          step: 10,
-          value: settings.viewCubeSize || 100,
-          onChange: (val) => onUpdate({ viewCubeSize: val }),
-          theme
-        }
-      ) }) }),
-      /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), theme, children: [
-        /* @__PURE__ */ jsx(Row, { label: `${t("st_ambient")} (${settings.ambientInt.toFixed(1)})`, theme, children: /* @__PURE__ */ jsx(
-          Slider,
-          {
-            min: 0,
-            max: 5,
-            step: 0.1,
-            value: settings.ambientInt,
-            onChange: (val) => onUpdate({ ambientInt: val }),
-            theme
-          }
-        ) }),
-        /* @__PURE__ */ jsx(Row, { label: `${t("st_dir")} (${settings.dirInt.toFixed(1)})`, theme, children: /* @__PURE__ */ jsx(
-          Slider,
-          {
-            min: 0,
-            max: 5,
-            step: 0.1,
-            value: settings.dirInt,
-            onChange: (val) => onUpdate({ dirInt: val }),
-            theme
-          }
-        ) })
+        ) }) }),
+        /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), children: [
+          /* @__PURE__ */ jsx(Row, { label: t("st_ambient"), labelWidth: "90px", children: /* @__PURE__ */ jsx(
+            SettingSlider,
+            {
+              min: 0,
+              max: 5,
+              step: 0.1,
+              value: settings.ambientInt,
+              onChange: (v) => onUpdate({ ambientInt: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_dir"), labelWidth: "90px", children: /* @__PURE__ */ jsx(
+            SettingSlider,
+            {
+              min: 0,
+              max: 5,
+              step: 0.1,
+              value: settings.dirInt,
+              onChange: (v) => onUpdate({ dirInt: v })
+            }
+          ) })
+        ] })
       ] })
-    ] })
-  ] }) });
+    }
+  );
 };
 
 const LoadingOverlay = ({ t, loading, status, progress, styles, theme }) => {
@@ -6775,109 +7096,100 @@ const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
     { name: "web-ifc", version: "^0.0.74", description: "IFC file parser" },
     { name: "occt-import-js", version: "^0.0.23", description: "CAD file import" }
   ];
-  return /* @__PURE__ */ jsx("div", { style: styles.modalOverlay, onClick: onClose, children: /* @__PURE__ */ jsxs(
-    "div",
+  return /* @__PURE__ */ jsx(
+    FloatingPanel,
     {
-      style: { ...styles.modalContent, width: "400px", maxHeight: "80vh" },
-      onClick: (e) => e.stopPropagation(),
-      children: [
-        /* @__PURE__ */ jsxs("div", { style: styles.floatingHeader, children: [
-          /* @__PURE__ */ jsx("span", { children: t("about_title") }),
-          /* @__PURE__ */ jsx("div", { onClick: onClose, style: { cursor: "pointer", opacity: 0.6, display: "flex", padding: 2, borderRadius: 0 }, children: /* @__PURE__ */ jsx(IconClose, { width: 20, height: 20 }) })
+      title: t("about_title"),
+      onClose,
+      width: 400,
+      height: 520,
+      modal: true,
+      styles,
+      theme,
+      children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", gap: "10px", height: "100%", overflowY: "auto" }, children: [
+        /* @__PURE__ */ jsxs("div", { style: { textAlign: "center" }, children: [
+          /* @__PURE__ */ jsx("div", { style: { fontSize: "20px", fontWeight: "bold", marginBottom: "6px", color: "var(--accent)" }, children: "3D Browser" }),
+          /* @__PURE__ */ jsx("div", { style: { fontSize: "11px", opacity: 0.7 }, children: "Professional 3D Model Viewer" })
         ] }),
-        /* @__PURE__ */ jsxs("div", { style: { padding: "25px 20px", color: theme.text, display: "flex", flexDirection: "column", gap: "18px" }, children: [
-          /* @__PURE__ */ jsxs("div", { style: { textAlign: "center" }, children: [
-            /* @__PURE__ */ jsx("div", { style: { fontSize: "24px", fontWeight: "bold", marginBottom: "8px", color: theme.accent }, children: "3D Browser" }),
-            /* @__PURE__ */ jsx("div", { style: { fontSize: "12px", opacity: 0.7 }, children: "Professional 3D Model Viewer" })
+        /* @__PURE__ */ jsxs("div", { style: { width: "100%", display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }, children: [
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "6px" }, children: [
+            /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("about_author") }),
+            /* @__PURE__ */ jsx("span", { style: { fontWeight: "500" }, children: "zhangly1403@163.com" })
           ] }),
-          /* @__PURE__ */ jsxs("div", { style: { width: "100%", display: "flex", flexDirection: "column", gap: "12px", fontSize: "13px" }, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: `1px solid ${theme.border}`, paddingBottom: "8px" }, children: [
-              /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("about_author") }),
-              /* @__PURE__ */ jsx("span", { style: { fontWeight: "500" }, children: "zhangly1403@163.com" })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: `1px solid ${theme.border}`, paddingBottom: "8px" }, children: [
-              /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("project_url") }),
-              /* @__PURE__ */ jsx("a", { href: "https://github.com/zly258/3dbrowser", target: "_blank", rel: "noopener noreferrer", style: { fontWeight: "500", color: theme.accent, textDecoration: "none" }, children: "github.com/zly258/3dbrowser" })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: `1px solid ${theme.border}`, paddingBottom: "8px" }, children: [
-              /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("about_license") }),
-              /* @__PURE__ */ jsx("span", { style: { fontWeight: "500", color: theme.danger }, children: t("about_license_nc") })
-            ] })
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "6px" }, children: [
+            /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("project_url") }),
+            /* @__PURE__ */ jsx("a", { href: "https://github.com/zly258/3dbrowser", target: "_blank", rel: "noopener noreferrer", style: { fontWeight: "500", color: "var(--accent)", textDecoration: "none" }, children: "github.com/zly258/3dbrowser" })
           ] }),
-          /* @__PURE__ */ jsxs("div", { style: { border: `1px solid ${theme.border}`, borderRadius: "6px", overflow: "hidden" }, children: [
-            /* @__PURE__ */ jsxs(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "12px 15px",
-                  backgroundColor: theme.panel,
-                  cursor: "pointer",
-                  userSelect: "none"
-                },
-                onClick: () => setShowLicenseDetails(!showLicenseDetails),
-                children: [
-                  /* @__PURE__ */ jsx("span", { style: { fontWeight: "500", fontSize: "14px" }, children: t("license_details") }),
-                  showLicenseDetails ? /* @__PURE__ */ jsx(IconChevronUp, { width: 16, height: 16 }) : /* @__PURE__ */ jsx(IconChevronDown, { width: 16, height: 16 })
-                ]
-              }
-            ),
-            showLicenseDetails && /* @__PURE__ */ jsxs("div", { style: { padding: "15px", fontSize: "12px", lineHeight: "1.5", backgroundColor: theme.background, maxHeight: "200px", overflowY: "auto" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { whiteSpace: "pre-wrap", marginBottom: "10px" }, children: t("license_summary") }),
-              /* @__PURE__ */ jsxs("div", { style: { fontSize: "11px", opacity: 0.7, marginTop: "10px" }, children: [
-                t("full_license"),
-                " ",
-                /* @__PURE__ */ jsx("a", { href: "https://creativecommons.org/licenses/by-nc/4.0/", target: "_blank", rel: "noopener noreferrer", style: { color: theme.accent, textDecoration: "none" }, children: "CC BY-NC 4.0" })
-              ] })
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxs("div", { style: { border: `1px solid ${theme.border}`, borderRadius: "6px", overflow: "hidden" }, children: [
-            /* @__PURE__ */ jsxs(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "12px 15px",
-                  backgroundColor: theme.panel,
-                  cursor: "pointer",
-                  userSelect: "none"
-                },
-                onClick: () => setShowThirdParty(!showThirdParty),
-                children: [
-                  /* @__PURE__ */ jsx("span", { style: { fontWeight: "500", fontSize: "14px" }, children: t("third_party_libs") }),
-                  showThirdParty ? /* @__PURE__ */ jsx(IconChevronUp, { width: 16, height: 16 }) : /* @__PURE__ */ jsx(IconChevronDown, { width: 16, height: 16 })
-                ]
-              }
-            ),
-            showThirdParty && /* @__PURE__ */ jsxs("div", { style: { padding: "15px", fontSize: "12px", lineHeight: "1.5", backgroundColor: theme.background, maxHeight: "200px", overflowY: "auto" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { marginBottom: "10px", opacity: 0.8 }, children: t("third_party_desc") }),
-              /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "8px" }, children: thirdPartyLibraries.map((lib, index) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" }, children: [
-                /* @__PURE__ */ jsxs("div", { style: { flex: 1 }, children: [
-                  /* @__PURE__ */ jsx("div", { style: { fontWeight: "500" }, children: lib.name }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: "11px", opacity: 0.7 }, children: lib.description })
-                ] }),
-                /* @__PURE__ */ jsx("div", { style: { fontSize: "11px", opacity: 0.7, minWidth: "60px", textAlign: "right" }, children: lib.version })
-              ] }, index)) }),
-              /* @__PURE__ */ jsx("div", { style: { fontSize: "11px", opacity: 0.7, marginTop: "10px", borderTop: `1px solid ${theme.border}`, paddingTop: "10px" }, children: t("view_package_json") })
-            ] })
-          ] }),
-          /* @__PURE__ */ jsx("div", { style: { fontSize: "12px", opacity: 0.5, textAlign: "center", marginTop: "5px" }, children: "Copyright © 2026. All rights reserved." })
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "6px" }, children: [
+            /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("about_license") }),
+            /* @__PURE__ */ jsx("span", { style: { fontWeight: "500", color: "var(--error)" }, children: t("about_license_nc") })
+          ] })
         ] }),
-        /* @__PURE__ */ jsx("div", { style: { padding: "15px 20px", borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "center" }, children: /* @__PURE__ */ jsx(
-          "button",
-          {
-            style: { ...styles.btn, backgroundColor: theme.accent, borderColor: theme.accent, color: "white", width: "100px" },
-            onClick: onClose,
-            children: t("btn_confirm")
-          }
-        ) })
-      ]
+        /* @__PURE__ */ jsxs("div", { style: { border: "1px solid var(--border-color)", borderRadius: "4px", overflow: "hidden" }, children: [
+          /* @__PURE__ */ jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 12px",
+                backgroundColor: "var(--bg-header)",
+                cursor: "pointer",
+                userSelect: "none"
+              },
+              onClick: () => setShowLicenseDetails(!showLicenseDetails),
+              children: [
+                /* @__PURE__ */ jsx("span", { style: { fontWeight: "500", fontSize: "12px" }, children: t("license_details") }),
+                showLicenseDetails ? /* @__PURE__ */ jsx(IconChevronUp, { width: 14, height: 14 }) : /* @__PURE__ */ jsx(IconChevronDown, { width: 14, height: 14 })
+              ]
+            }
+          ),
+          showLicenseDetails && /* @__PURE__ */ jsxs("div", { style: { padding: "12px", fontSize: "11px", lineHeight: "1.5", backgroundColor: "var(--bg-primary)", maxHeight: "180px", overflowY: "auto" }, children: [
+            /* @__PURE__ */ jsx("div", { style: { whiteSpace: "pre-wrap", marginBottom: "8px" }, children: t("license_summary") }),
+            /* @__PURE__ */ jsxs("div", { style: { fontSize: "10px", opacity: 0.7, marginTop: "8px" }, children: [
+              t("full_license"),
+              " ",
+              /* @__PURE__ */ jsx("a", { href: "https://creativecommons.org/licenses/by-nc/4.0/", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--accent)", textDecoration: "none" }, children: "CC BY-NC 4.0" })
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { style: { border: "1px solid var(--border-color)", borderRadius: "4px", overflow: "hidden" }, children: [
+          /* @__PURE__ */ jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 12px",
+                backgroundColor: "var(--bg-header)",
+                cursor: "pointer",
+                userSelect: "none"
+              },
+              onClick: () => setShowThirdParty(!showThirdParty),
+              children: [
+                /* @__PURE__ */ jsx("span", { style: { fontWeight: "500", fontSize: "12px" }, children: t("third_party_libs") }),
+                showThirdParty ? /* @__PURE__ */ jsx(IconChevronUp, { width: 14, height: 14 }) : /* @__PURE__ */ jsx(IconChevronDown, { width: 14, height: 14 })
+              ]
+            }
+          ),
+          showThirdParty && /* @__PURE__ */ jsxs("div", { style: { padding: "12px", fontSize: "11px", lineHeight: "1.5", backgroundColor: "var(--bg-primary)", maxHeight: "180px", overflowY: "auto" }, children: [
+            /* @__PURE__ */ jsx("div", { style: { marginBottom: "8px", opacity: 0.8 }, children: t("third_party_desc") }),
+            /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "6px" }, children: thirdPartyLibraries.map((lib, index) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { flex: 1 }, children: [
+                /* @__PURE__ */ jsx("div", { style: { fontWeight: "500" }, children: lib.name }),
+                /* @__PURE__ */ jsx("div", { style: { fontSize: "10px", opacity: 0.7 }, children: lib.description })
+              ] }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "10px", opacity: 0.7, minWidth: "50px", textAlign: "right" }, children: lib.version })
+            ] }, index)) }),
+            /* @__PURE__ */ jsx("div", { style: { fontSize: "10px", opacity: 0.7, marginTop: "8px", borderTop: "1px solid var(--border-color)", paddingTop: "8px" }, children: t("view_package_json") })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx("div", { style: { fontSize: "11px", opacity: 0.5, textAlign: "center", marginTop: "auto" }, children: "Copyright © 2026. All rights reserved." })
+      ] })
     }
-  ) });
+  );
 };
 
 const ViewCube = ({ sceneMgr, lang = "zh", theme }) => {
@@ -8459,6 +8771,7 @@ const ThreeViewer = ({
   return /* @__PURE__ */ jsx(ErrorBoundary, { t, styles, theme, children: /* @__PURE__ */ jsxs(
     "div",
     {
+      className: `${themeMode} font-${sceneSettings.fontSize || "medium"}`,
       style: styles.container,
       onDragOver: handleDragOver,
       onDrop: handleDrop,
@@ -8789,6 +9102,27 @@ const ThreeViewer = ({
               t("selected_count") || "已选择",
               ": ",
               selectedUuids.length
+            ] }),
+            chunkProgress.total > 0 && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
+              /* @__PURE__ */ jsxs("span", { style: { color: theme.accent }, children: [
+                t("chunk_loading") || "分片加载",
+                ": ",
+                chunkProgress.loaded,
+                "/",
+                chunkProgress.total
+              ] }),
+              /* @__PURE__ */ jsx("div", { style: {
+                width: "80px",
+                height: "4px",
+                backgroundColor: theme.border,
+                borderRadius: "2px",
+                overflow: "hidden"
+              }, children: /* @__PURE__ */ jsx("div", { style: {
+                width: `${chunkProgress.loaded / chunkProgress.total * 100}%`,
+                height: "100%",
+                backgroundColor: theme.accent,
+                transition: "width 0.2s ease"
+              } }) })
             ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "12px", alignItems: "center" }, children: [

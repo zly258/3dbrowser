@@ -1,7 +1,7 @@
 import React from "react";
-import { Slider } from "../CommonUI";
+import { Slider } from "../common";
 import { FloatingPanel } from "./FloatingPanel";
-import { Checkbox } from "./Checkbox";
+import { Checkbox } from "../common";
 
 interface SunPanelProps {
     t: any;
@@ -39,16 +39,14 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
                 {/* 启用开关 */}
-                <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
+                <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border-color)' }}>
                     <Checkbox
                         label={t("st_sun_enabled") || "启用太阳光"}
                         checked={settings.sunEnabled || false}
                         onChange={(val: boolean) => onUpdate({ sunEnabled: val })}
-                        styles={styles}
-                        theme={theme}
                         style={{ fontWeight: 'bold', fontSize: 13 }}
                     />
-                    <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, fontStyle: 'italic' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, fontStyle: 'italic' }}>
                         {t("st_sun_info")}
                     </div>
                 </div>
@@ -57,7 +55,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                     <>
                         {/* 纬度 */}
                         <div style={{ marginBottom: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: theme.textMuted }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_latitude") || "纬度"}</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <input
@@ -70,26 +68,21 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                             val = Math.max(-90, Math.min(90, val));
                                             onUpdate({ sunLatitude: val });
                                         }}
+                                        className="ui-input"
                                         style={{
                                             width: 70,
-                                            padding: '4px 8px',
-                                            fontSize: 12,
-                                            backgroundColor: theme.bg,
-                                            color: theme.text,
-                                            border: `1px solid ${theme.border}`,
-                                            borderRadius: 3,
                                             textAlign: 'right',
-                                            fontFamily: 'monospace'
+                                            fontFamily: "'Consolas', 'Monaco', monospace"
                                         }}
                                     />
-                                    <span style={{ color: theme.accent }}>°</span>
+                                    <span style={{ color: 'var(--accent)' }}>°</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* 经度 */}
                         <div style={{ marginBottom: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: theme.textMuted }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_longitude") || "经度"}</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <input
@@ -102,28 +95,23 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                             val = Math.max(-180, Math.min(180, val));
                                             onUpdate({ sunLongitude: val });
                                         }}
+                                        className="ui-input"
                                         style={{
                                             width: 70,
-                                            padding: '4px 8px',
-                                            fontSize: 12,
-                                            backgroundColor: theme.bg,
-                                            color: theme.text,
-                                            border: `1px solid ${theme.border}`,
-                                            borderRadius: 3,
                                             textAlign: 'right',
-                                            fontFamily: 'monospace'
+                                            fontFamily: "'Consolas', 'Monaco', monospace"
                                         }}
                                     />
-                                    <span style={{ color: theme.accent }}>°</span>
+                                    <span style={{ color: 'var(--accent)' }}>°</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* 时间 - 滑动条 */}
                         <div style={{ marginBottom: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: theme.textMuted }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_time") || "时间"}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', color: theme.accent }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: 'var(--accent)' }}>
                                     <span>{formatTime(timeValue)}</span>
                                 </div>
                             </div>
@@ -135,10 +123,9 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                 onChange={(val: number) => {
                                     onUpdate({ sunTime: val / 2 });
                                 }}
-                                theme={theme}
                             />
                             {/* 刻度标记 */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: theme.textMuted, padding: '0 4px', marginTop: 2 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', padding: '0 4px', marginTop: 2 }}>
                                 <span>0:00</span>
                                 <span>6:00</span>
                                 <span>12:00</span>
@@ -153,8 +140,6 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                 label={t("st_sun_shadow") || "显示阴影"}
                                 checked={settings.sunShadow || false}
                                 onChange={(val: boolean) => onUpdate({ sunShadow: val })}
-                                styles={styles}
-                                theme={theme}
                                 style={{ fontSize: 12 }}
                             />
                         </div>
