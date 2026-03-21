@@ -1,0 +1,12 @@
+# Assets Directory
+
+This directory contains asset files used by the skill for output generation.
+
+Examples of assets that may be placed here:
+- Component templates
+- Icon files
+- Font files
+- Sample configuration files
+- Boilerplate code snippets
+
+Currently, no assets are required for this skill.
