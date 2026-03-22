@@ -112,6 +112,13 @@ const resources: Record<Lang, Record<string, string>> = {
         tb_boxSelect: "Box Select",
         tb_boxSelect_hint: "Drag to select objects",
         tb_wireframe: "Wireframe",
+        op_screenshot: "Screenshot",
+        // 渲染样式
+        display_mode: "Display Mode",
+        dm_wireframe: "Wireframe",
+        dm_solid: "Solid",
+        dm_solidwire: "Solid with Outline",
+        dm_hidden: "Hidden Line",
         // 剖切
         clip_title: "Sectioning Tool",
         clip_enable: "Enable Clipping",
@@ -314,6 +321,13 @@ const resources: Record<Lang, Record<string, string>> = {
         tb_boxSelect: "框选",
         tb_boxSelect_hint: "拖拽选择对象",
         tb_wireframe: "线框",
+        op_screenshot: "场景截图",
+        // 渲染样式
+        display_mode: "显示样式",
+        dm_wireframe: "线框",
+        dm_solid: "着色",
+        dm_solidwire: "着色带轮廓线",
+        dm_hidden: "消隐",
         // 剖切
         clip_title: "剖切面板",
         clip_enable: "开启剖切",

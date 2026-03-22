@@ -2282,7 +2282,9 @@ export class SceneManager {
             if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-                    m.mesh.instanceColor!.needsUpdate = true;
+                    if (m.mesh.instanceColor) {
+                        m.mesh.instanceColor.needsUpdate = true;
+                    }
                 });
             }
         };
@@ -2292,7 +2294,9 @@ export class SceneManager {
             if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
-                    m.mesh.instanceColor!.needsUpdate = true;
+                    if (m.mesh.instanceColor) {
+                        m.mesh.instanceColor.needsUpdate = true;
+                    }
                 });
             }
         };
