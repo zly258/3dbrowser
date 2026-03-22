@@ -1098,6 +1098,7 @@ export const ThreeViewer = ({
 
         const onPointerDown = (e: PointerEvent) => {
             if (e.button !== 0) return; // 仅左键
+            console.log('[BoxSelect] start', e.clientX, e.clientY);
             mgr.startBoxSelect(e.clientX, e.clientY);
         };
 
@@ -1108,6 +1109,7 @@ export const ThreeViewer = ({
         const onPointerUp = (e: PointerEvent) => {
             if (e.button !== 0) return;
             const uuids = mgr.endBoxSelect();
+            console.log('[BoxSelect] end, selected:', uuids.length, 'uuids:', uuids);
             if (uuids.length > 0) {
                 setSelectedUuids(uuids);
                 mgr.highlightObjects(uuids);
@@ -2046,7 +2048,7 @@ export const ThreeViewer = ({
                             {t("selected_count") || "已选择"}: {selectedUuids.length}
                         </span>
                     )}
-                    {chunkProgress.total > 0 && (
+                    {chunkProgress.total > 0 && chunkProgress.loaded < chunkProgress.total && (
                         <div className="ui-chunk-progress">
                             <span>
                                 {t("chunk_loading") || "分片加载"}: {chunkProgress.loaded}/{chunkProgress.total}
@@ -2062,7 +2064,7 @@ export const ThreeViewer = ({
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     {mousePos && (
-                        <div style={{ opacity: 0.85, fontFamily: 'monospace' }}>
+                        <div style={{ opacity: 0.85 }}>
                             {mousePos.x.toFixed(2)}, {mousePos.y.toFixed(2)}, {mousePos.z.toFixed(2)}
                         </div>
                     )}

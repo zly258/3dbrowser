@@ -3343,6 +3343,9 @@ export class SceneManager {
         if (!this.interactableListValid) {
             this.getRayIntersects(0, 0); // 触发 rebuild
         }
+        
+        console.log('[BoxSelect] interactableList length:', this.interactableList.length);
+        console.log('[BoxSelect] frustum bounds:', x1, y1, x2, y2);
 
         const frustum = new THREE.Frustum();
         const projScreenMatrix = new THREE.Matrix4();
@@ -3379,6 +3382,12 @@ export class SceneManager {
 
         frustum.planes = planes;
 
+        console.log('[BoxSelect] Frustum planes:', planes.map((p, i) => ({
+            index: i,
+            normal: p.normal.toArray().map(n => n.toFixed(3)),
+            constant: p.constant.toFixed(3)
+        })));
+
         const selected: string[] = [];
         const box = new THREE.Box3();
         const tmpMat = new THREE.Matrix4();
@@ -3388,21 +3397,61 @@ export class SceneManager {
             if ((obj as any).isBatchedMesh) {
                 const bm = obj as THREE.BatchedMesh;
                 const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string> | undefined;
-                if (!batchIdToUuid) continue;
-                const geoBox = new THREE.Box3();
-                if (!bm.geometry.boundingBox) bm.geometry.computeBoundingBox();
+                const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
+                
+                console.log('[BoxSelect] BatchedMesh userData:', {
+                    hasBatchIdToUuid: !!batchIdToUuid,
+                    hasBatchIdToGeometry: !!batchIdToGeometry,
+                    batchIdToUuidSize: batchIdToUuid?.size,
+                    batchIdToGeometrySize: batchIdToGeometry?.size
+                });
+                
+                if (!batchIdToUuid) {
+                    console.log('[BoxSelect] BatchedMesh has no batchIdToUuid');
+                    continue;
+                }
+                
+                console.log('[BoxSelect] Processing BatchedMesh with', batchIdToUuid.size, 'instances');
+                
+                if (!batchIdToGeometry) {
+                    console.warn('[BoxSelect] batchIdToGeometry is missing, cannot select instances');
+                    continue;
+                }
+                
+                let checkedCount = 0;
                 for (const [batchId, uuid] of batchIdToUuid) {
                     try {
+                        // 获取实例的几何体
+                        const geometry = batchIdToGeometry?.get(batchId);
+                        if (!geometry) {
+                            console.warn('[BoxSelect] No geometry for batchId', batchId);
+                            continue;
+                        }
+                        
+                        checkedCount++;
+                        
+                        // 计算实例的世界边界框
                         bm.getMatrixAt(batchId, tmpMat);
                         tmpMat.premultiply(bm.matrixWorld);
-                        geoBox.copy(bm.geometry.boundingBox!).applyMatrix4(tmpMat);
-                        if (frustum.intersectsBox(geoBox)) {
+                        
+                        const geoBox = new THREE.Box3();
+                        if (!geometry.boundingBox) geometry.computeBoundingBox();
+                        geoBox.copy(geometry.boundingBox).applyMatrix4(tmpMat);
+                        
+                        const intersects = frustum.intersectsBox(geoBox);
+                        if (checkedCount <= 3) { // 只打印前3个实例的详细信息
+                            console.log('[BoxSelect] Instance', batchId, 'box:', geoBox, 'intersects:', intersects);
+                        }
+                        
+                        if (intersects) {
                             selected.push(uuid);
                         }
-                    } catch {
+                    } catch (e) {
+                        console.warn('[BoxSelect] Failed to check instance', batchId, uuid, e);
                         // skip invalid instances
                     }
                 }
+                console.log('[BoxSelect] Checked', checkedCount, 'instances, found', selected.length, 'intersections');
                 continue;
             }
 

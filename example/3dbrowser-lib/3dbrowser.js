@@ -2690,6 +2690,8 @@ class SceneManager {
     if (!this.interactableListValid) {
       this.getRayIntersects(0, 0);
     }
+    console.log("[BoxSelect] interactableList length:", this.interactableList.length);
+    console.log("[BoxSelect] frustum bounds:", x1, y1, x2, y2);
     const frustum = new THREE.Frustum();
     const projScreenMatrix = new THREE.Matrix4();
     projScreenMatrix.multiplyMatrices(
@@ -2718,6 +2720,11 @@ class SceneManager {
     planes.push(new THREE.Plane().setFromCoplanarPoints(corners[0], corners[1], corners[2]));
     planes.push(new THREE.Plane().setFromCoplanarPoints(farCorners[0], farCorners[1], farCorners[2]));
     frustum.planes = planes;
+    console.log("[BoxSelect] Frustum planes:", planes.map((p, i) => ({
+      index: i,
+      normal: p.normal.toArray().map((n) => n.toFixed(3)),
+      constant: p.constant.toFixed(3)
+    })));
     const selected = [];
     const box = new THREE.Box3();
     const tmpMat = new THREE.Matrix4();
@@ -2725,20 +2732,48 @@ class SceneManager {
       if (obj.isBatchedMesh) {
         const bm = obj;
         const batchIdToUuid = bm.userData.batchIdToUuid;
-        if (!batchIdToUuid) continue;
-        const geoBox = new THREE.Box3();
-        if (!bm.geometry.boundingBox) bm.geometry.computeBoundingBox();
+        const batchIdToGeometry = bm.userData.batchIdToGeometry;
+        console.log("[BoxSelect] BatchedMesh userData:", {
+          hasBatchIdToUuid: !!batchIdToUuid,
+          hasBatchIdToGeometry: !!batchIdToGeometry,
+          batchIdToUuidSize: batchIdToUuid?.size,
+          batchIdToGeometrySize: batchIdToGeometry?.size
+        });
+        if (!batchIdToUuid) {
+          console.log("[BoxSelect] BatchedMesh has no batchIdToUuid");
+          continue;
+        }
+        console.log("[BoxSelect] Processing BatchedMesh with", batchIdToUuid.size, "instances");
+        if (!batchIdToGeometry) {
+          console.warn("[BoxSelect] batchIdToGeometry is missing, cannot select instances");
+          continue;
+        }
+        let checkedCount = 0;
         for (const [batchId, uuid] of batchIdToUuid) {
           try {
+            const geometry = batchIdToGeometry?.get(batchId);
+            if (!geometry) {
+              console.warn("[BoxSelect] No geometry for batchId", batchId);
+              continue;
+            }
+            checkedCount++;
             bm.getMatrixAt(batchId, tmpMat);
             tmpMat.premultiply(bm.matrixWorld);
-            geoBox.copy(bm.geometry.boundingBox).applyMatrix4(tmpMat);
-            if (frustum.intersectsBox(geoBox)) {
+            const geoBox = new THREE.Box3();
+            if (!geometry.boundingBox) geometry.computeBoundingBox();
+            geoBox.copy(geometry.boundingBox).applyMatrix4(tmpMat);
+            const intersects = frustum.intersectsBox(geoBox);
+            if (checkedCount <= 3) {
+              console.log("[BoxSelect] Instance", batchId, "box:", geoBox, "intersects:", intersects);
+            }
+            if (intersects) {
               selected.push(uuid);
             }
-          } catch {
+          } catch (e) {
+            console.warn("[BoxSelect] Failed to check instance", batchId, uuid, e);
           }
         }
+        console.log("[BoxSelect] Checked", checkedCount, "instances, found", selected.length, "intersections");
         continue;
       }
       box.setFromObject(obj);
@@ -4518,7 +4553,7 @@ const resources = {
     viewpoint_title: "视点管理",
     viewpoint_save: "保存当前视点",
     viewpoint_empty: "暂无保存的视点",
-    viewpoint_loading: "正在恢复视点",
+    viewpoint_loading: "恢复视点",
     chunk_loading: "分片加载",
     select_all: "全选",
     invert_selection: "反选",
@@ -4963,7 +4998,6 @@ const SettingSlider = ({
       "span",
       {
         style: {
-          fontFamily: "'Consolas', 'Monaco', monospace",
           fontSize: "12px",
           color: "var(--text-primary)",
           minWidth: "40px",
@@ -6361,7 +6395,6 @@ const MeasureItem = ({ item, isHighlighted, onHighlight, onDelete }) => {
           "span",
           {
             style: {
-              fontFamily: "'Consolas', 'Monaco', monospace",
               fontSize: "12px",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -6566,7 +6599,6 @@ const AxisSliderRow = ({ axis, label, active, value, onToggle, onChange, disable
           "span",
           {
             style: {
-              fontFamily: "'Consolas', 'Monaco', monospace",
               fontSize: "11px",
               color: "var(--text-primary)",
               minWidth: "45px",
@@ -6904,8 +6936,7 @@ const SunPanel = ({ t, onClose, settings, onUpdate, theme }) => {
               className: "ui-input",
               style: {
                 width: 70,
-                textAlign: "right",
-                fontFamily: "'Consolas', 'Monaco', monospace"
+                textAlign: "right"
               }
             }
           ),
@@ -6930,8 +6961,7 @@ const SunPanel = ({ t, onClose, settings, onUpdate, theme }) => {
               className: "ui-input",
               style: {
                 width: 70,
-                textAlign: "right",
-                fontFamily: "'Consolas', 'Monaco', monospace"
+                textAlign: "right"
               }
             }
           ),
@@ -6941,7 +6971,7 @@ const SunPanel = ({ t, onClose, settings, onUpdate, theme }) => {
       /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16 }, children: [
         /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }, children: [
           /* @__PURE__ */ jsx("span", { children: t("st_sun_time") || "时间" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: "var(--text-primary)" }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, color: "var(--text-primary)" }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
         ] }),
         /* @__PURE__ */ jsx(
           Slider,
@@ -6981,7 +7011,7 @@ const LoadingOverlay = ({ t, loading, status, progress, theme }) => {
   return /* @__PURE__ */ jsx("div", { className: "ui-loading-overlay", children: /* @__PURE__ */ jsxs("div", { className: "ui-loading-box", children: [
     /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }, children: [
       /* @__PURE__ */ jsx("div", { style: { fontWeight: "600", color: "var(--text-primary)", fontSize: "14px" }, children: status }),
-      /* @__PURE__ */ jsxs("div", { style: { color: "var(--text-primary)", fontSize: "14px", fontWeight: "bold", fontFamily: "monospace" }, children: [
+      /* @__PURE__ */ jsxs("div", { style: { color: "var(--text-primary)", fontSize: "14px", fontWeight: "bold" }, children: [
         Math.round(progress),
         "%"
       ] })
@@ -7409,7 +7439,7 @@ const ViewCube = ({ sceneMgr, lang = "zh", theme }) => {
         }
         hoveredPart.current = mesh;
         const mat = mesh.material;
-        mat.opacity = 0.3;
+        mat.opacity = 1;
         mat.color.set(30932);
       }
       containerRef.current.style.cursor = "pointer";
@@ -8431,6 +8461,7 @@ const ThreeViewer = ({
     mgr.controls.mouseButtons.LEFT = void 0;
     const onPointerDown = (e) => {
       if (e.button !== 0) return;
+      console.log("[BoxSelect] start", e.clientX, e.clientY);
       mgr.startBoxSelect(e.clientX, e.clientY);
     };
     const onPointerMove = (e) => {
@@ -8439,6 +8470,7 @@ const ThreeViewer = ({
     const onPointerUp = (e) => {
       if (e.button !== 0) return;
       const uuids = mgr.endBoxSelect();
+      console.log("[BoxSelect] end, selected:", uuids.length, "uuids:", uuids);
       if (uuids.length > 0) {
         setSelectedUuids(uuids);
         mgr.highlightObjects(uuids);
@@ -9286,7 +9318,7 @@ const ThreeViewer = ({
               ": ",
               selectedUuids.length
             ] }),
-            chunkProgress.total > 0 && /* @__PURE__ */ jsxs("div", { className: "ui-chunk-progress", children: [
+            chunkProgress.total > 0 && chunkProgress.loaded < chunkProgress.total && /* @__PURE__ */ jsxs("div", { className: "ui-chunk-progress", children: [
               /* @__PURE__ */ jsxs("span", { children: [
                 t("chunk_loading") || "分片加载",
                 ": ",
@@ -9304,7 +9336,7 @@ const ThreeViewer = ({
             ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "12px", alignItems: "center" }, children: [
-            mousePos && /* @__PURE__ */ jsxs("div", { style: { opacity: 0.85, fontFamily: "monospace" }, children: [
+            mousePos && /* @__PURE__ */ jsxs("div", { style: { opacity: 0.85 }, children: [
               mousePos.x.toFixed(2),
               ", ",
               mousePos.y.toFixed(2),

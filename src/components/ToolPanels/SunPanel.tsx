@@ -70,8 +70,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                         className="ui-input"
                                         style={{
                                             width: 70,
-                                            textAlign: 'right',
-                                            fontFamily: "'Consolas', 'Monaco', monospace"
+                                            textAlign: 'right'
                                         }}
                                     />
                                     <span style={{ color: 'var(--text-secondary)' }}>°</span>
@@ -97,8 +96,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                         className="ui-input"
                                         style={{
                                             width: 70,
-                                            textAlign: 'right',
-                                            fontFamily: "'Consolas', 'Monaco', monospace"
+                                            textAlign: 'right'
                                         }}
                                     />
                                     <span style={{ color: 'var(--text-secondary)' }}>°</span>
@@ -110,7 +108,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                         <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_time") || "时间"}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: 'var(--text-primary)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)' }}>
                                     <span>{formatTime(timeValue)}</span>
                                 </div>
                             </div>

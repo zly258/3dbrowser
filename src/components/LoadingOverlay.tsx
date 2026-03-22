@@ -16,7 +16,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ t, loading, stat
             <div className="ui-loading-box">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '14px' }}>{status}</div>
-                    <div style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold', fontFamily: 'monospace' }}>{Math.round(progress)}%</div>
+                    <div style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 'bold' }}>{Math.round(progress)}%</div>
                 </div>
                 
                 <div className="ui-progress-bar" style={{ marginTop: '12px' }}>

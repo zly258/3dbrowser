@@ -134,7 +134,6 @@ const MeasureItem: React.FC<{
     >
       <span
         style={{
-          fontFamily: "'Consolas', 'Monaco', monospace",
           fontSize: '12px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',

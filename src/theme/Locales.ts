@@ -418,7 +418,7 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_title: "视点管理",
         viewpoint_save: "保存当前视点",
         viewpoint_empty: "暂无保存的视点",
-        viewpoint_loading: "正在恢复视点",
+        viewpoint_loading: "恢复视点",
         chunk_loading: "分片加载",
         select_all: "全选",
         invert_selection: "反选",
