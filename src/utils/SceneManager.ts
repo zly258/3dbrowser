@@ -2647,35 +2647,90 @@ export class SceneManager {
         const h = this.canvas.clientHeight;
         const aspect = w / h;
         let fH, fW;
-        if (aspect >= 1) { fH = extent * padding; fW = fH * aspect; } 
+        if (aspect >= 1) { fH = extent * padding; fW = fH * aspect; }
         else { fW = extent * padding; fH = fW / aspect; }
 
-        this.camera.zoom = 1;
-        this.camera.left = -fW / 2;
-        this.camera.right = fW / 2;
-        this.camera.top = fH / 2;
-        this.camera.bottom = -fH / 2;
-        
-        const zBuffer = Math.max(extent * 5, 2000); 
+        const zBuffer = Math.max(extent * 5, 2000);
         this.camera.near = -zBuffer;
         this.camera.far = zBuffer;
 
+        let targetZoom = 1;
+        let targetLeft = -fW / 2;
+        let targetRight = fW / 2;
+        let targetTop = fH / 2;
+        let targetBottom = -fH / 2;
+
         if (updateCameraPosition) {
-            const offset = new THREE.Vector3(1, -1, 1).normalize(); 
-            const dist = Math.max(extent * 2, 2000); 
-            this.camera.position.copy(center.clone().add(offset.multiplyScalar(dist)));
-            this.camera.lookAt(center);
+            const offset = new THREE.Vector3(1, -1, 1).normalize();
+            const dist = Math.max(extent * 2, 2000);
+            const targetPosition = center.clone().add(offset.multiplyScalar(dist));
+            const targetLookAt = center.clone();
+
+            // 动画过渡
+            const startPosition = this.camera.position.clone();
+            const startTarget = this.controls.target.clone();
+            const startTime = performance.now();
+            const duration = 600; // 600ms 动画
+
+            const animate = () => {
+                const elapsed = performance.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+
+                // 插值位置
+                this.camera.position.lerpVectors(startPosition, targetPosition, eased);
+                this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
+                this.camera.lookAt(this.controls.target);
+
+                // 插值 zoom 和边界
+                this.camera.zoom = 1 + (targetZoom - 1) * eased;
+                this.camera.left = this.camera.left + (targetLeft - this.camera.left) * eased;
+                this.camera.right = this.camera.right + (targetRight - this.camera.right) * eased;
+                this.camera.top = this.camera.top + (targetTop - this.camera.top) * eased;
+                this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
+                this.camera.updateProjectionMatrix();
+                this.controls.update();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            animate();
         } else {
             const direction = new THREE.Vector3();
-            this.camera.getWorldDirection(direction); 
+            this.camera.getWorldDirection(direction);
             const dist = this.camera.position.distanceTo(this.controls.target);
-            this.camera.position.copy(center).add(direction.multiplyScalar(-dist));
-            this.camera.lookAt(center);
+            const targetPosition = center.clone().add(direction.multiplyScalar(-dist));
+            const targetLookAt = center.clone();
+
+            // 动画过渡
+            const startPosition = this.camera.position.clone();
+            const startTarget = this.controls.target.clone();
+            const startTime = performance.now();
+            const duration = 600;
+
+            const animate = () => {
+                const elapsed = performance.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+
+                this.camera.position.lerpVectors(startPosition, targetPosition, eased);
+                this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
+                this.camera.lookAt(this.controls.target);
+
+                this.camera.left = this.camera.left + (targetLeft - this.camera.left) * eased;
+                this.camera.right = this.camera.right + (targetRight - this.camera.right) * eased;
+                this.camera.top = this.camera.top + (targetTop - this.camera.top) * eased;
+                this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
+                this.camera.updateProjectionMatrix();
+                this.controls.update();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            animate();
         }
-        
-        this.camera.updateProjectionMatrix();
-        this.controls.target.copy(center);
-        this.controls.update();
     }
 
     setView(view: string) {
@@ -3343,50 +3398,59 @@ export class SceneManager {
         if (!this.interactableListValid) {
             this.getRayIntersects(0, 0); // 触发 rebuild
         }
-        
-        console.log('[BoxSelect] interactableList length:', this.interactableList.length);
-        console.log('[BoxSelect] frustum bounds:', x1, y1, x2, y2);
 
+        // 规范化坐标：x1,y1 是左下角，x2,y2 是右上角
+        const minX = Math.min(x1, x2);
+        const maxX = Math.max(x1, x2);
+        const minY = Math.min(y1, y2);
+        const maxY = Math.max(y1, y2);
+
+        // 从相机获取原始投影矩阵
+        const originalMatrix = this.camera.projectionMatrix.clone();
+
+        // 创建新的投影矩阵，限制到指定的屏幕矩形
+        const newMatrix = new THREE.Matrix4();
+
+        // PerspectiveCamera 的原始投影矩阵参数：
+        // f = 1 / tan(fov/2), aspect = width/height
+        // 矩阵结构：
+        // [f/aspect, 0, 0, 0]
+        // [0, f, 0, 0]
+        // [0, 0, (far+near)/(near-far), (2*far*near)/(near-far)]
+        // [0, 0, -1, 0]
+
+        // 我们需要缩放 NDC 坐标以匹配选择框
+        // NDC 范围：[-1, 1]，宽=2，高=2
+        // 选择框范围：[minX, maxX], [minY, maxY]
+        // 缩放因子：selectWidth/2, selectHeight/2
+
+        const selectWidth = maxX - minX;
+        const selectHeight = maxY - minY;
+        const scaleX = selectWidth / 2;
+        const scaleY = selectHeight / 2;
+
+        const centerX = (maxX + minX) / 2;
+        const centerY = (maxY + minY) / 2;
+
+        // 创建变换矩阵：先平移，再缩放
+        // 平移：将中心点移到原点
+        const translateMatrix = new THREE.Matrix4().makeTranslation(-centerX, -centerY, 0);
+        // 缩放：缩放到 [-1, 1] 范围
+        const scaleMatrix = new THREE.Matrix4().makeScale(1 / scaleX, 1 / scaleY, 1);
+
+        // 组合：先缩放，后平移（因为我们缩放的是 NDC 空间）
+        // 修正：我们需要先将 NDC 坐标映射到选择框，然后再映射回 [-1,1]
+        // 正确的顺序是：平移（去掉偏移）-> 缩放（归一化到 [-1,1]）
+
+        // 变换矩阵用于修改投影矩阵
+        newMatrix.multiplyMatrices(scaleMatrix, translateMatrix);
+
+        // 将变换应用到原始投影矩阵
+        const modifiedProjectionMatrix = newMatrix.multiply(originalMatrix);
+
+        // 创建 Frustum
         const frustum = new THREE.Frustum();
-        const projScreenMatrix = new THREE.Matrix4();
-        projScreenMatrix.multiplyMatrices(
-            this.camera.projectionMatrix,
-            this.camera.matrixWorldInverse
-        );
-
-        // 从 NDC 角点构建截锥体平面
-        const corners = [
-            new THREE.Vector3(x1, y1, -1).unproject(this.camera),
-            new THREE.Vector3(x2, y1, -1).unproject(this.camera),
-            new THREE.Vector3(x2, y2, -1).unproject(this.camera),
-            new THREE.Vector3(x1, y2, -1).unproject(this.camera),
-        ];
-        const farCorners = [
-            new THREE.Vector3(x1, y1, 1).unproject(this.camera),
-            new THREE.Vector3(x2, y1, 1).unproject(this.camera),
-            new THREE.Vector3(x2, y2, 1).unproject(this.camera),
-            new THREE.Vector3(x1, y2, 1).unproject(this.camera),
-        ];
-
-        // 构建6个平面
-        const planes: THREE.Plane[] = [];
-        for (let i = 0; i < 4; i++) {
-            const a = corners[i];
-            const b = corners[(i + 1) % 4];
-            const c = farCorners[i];
-            planes.push(new THREE.Plane().setFromCoplanarPoints(a, b, c));
-        }
-        // 近平面和远平面
-        planes.push(new THREE.Plane().setFromCoplanarPoints(corners[0], corners[1], corners[2]));
-        planes.push(new THREE.Plane().setFromCoplanarPoints(farCorners[0], farCorners[1], farCorners[2]));
-
-        frustum.planes = planes;
-
-        console.log('[BoxSelect] Frustum planes:', planes.map((p, i) => ({
-            index: i,
-            normal: p.normal.toArray().map(n => n.toFixed(3)),
-            constant: p.constant.toFixed(3)
-        })));
+        frustum.setFromProjectionMatrix(modifiedProjectionMatrix);
 
         const selected: string[] = [];
         const box = new THREE.Box3();
@@ -3398,60 +3462,29 @@ export class SceneManager {
                 const bm = obj as THREE.BatchedMesh;
                 const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string> | undefined;
                 const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
-                
-                console.log('[BoxSelect] BatchedMesh userData:', {
-                    hasBatchIdToUuid: !!batchIdToUuid,
-                    hasBatchIdToGeometry: !!batchIdToGeometry,
-                    batchIdToUuidSize: batchIdToUuid?.size,
-                    batchIdToGeometrySize: batchIdToGeometry?.size
-                });
-                
-                if (!batchIdToUuid) {
-                    console.log('[BoxSelect] BatchedMesh has no batchIdToUuid');
-                    continue;
-                }
-                
-                console.log('[BoxSelect] Processing BatchedMesh with', batchIdToUuid.size, 'instances');
-                
-                if (!batchIdToGeometry) {
-                    console.warn('[BoxSelect] batchIdToGeometry is missing, cannot select instances');
-                    continue;
-                }
-                
-                let checkedCount = 0;
+
+                if (!batchIdToUuid || !batchIdToGeometry) continue;
+
                 for (const [batchId, uuid] of batchIdToUuid) {
                     try {
-                        // 获取实例的几何体
-                        const geometry = batchIdToGeometry?.get(batchId);
-                        if (!geometry) {
-                            console.warn('[BoxSelect] No geometry for batchId', batchId);
-                            continue;
-                        }
-                        
-                        checkedCount++;
-                        
+                        const geometry = batchIdToGeometry.get(batchId);
+                        if (!geometry) continue;
+
                         // 计算实例的世界边界框
                         bm.getMatrixAt(batchId, tmpMat);
                         tmpMat.premultiply(bm.matrixWorld);
-                        
+
                         const geoBox = new THREE.Box3();
                         if (!geometry.boundingBox) geometry.computeBoundingBox();
                         geoBox.copy(geometry.boundingBox).applyMatrix4(tmpMat);
-                        
-                        const intersects = frustum.intersectsBox(geoBox);
-                        if (checkedCount <= 3) { // 只打印前3个实例的详细信息
-                            console.log('[BoxSelect] Instance', batchId, 'box:', geoBox, 'intersects:', intersects);
-                        }
-                        
-                        if (intersects) {
+
+                        if (frustum.intersectsBox(geoBox)) {
                             selected.push(uuid);
                         }
                     } catch (e) {
-                        console.warn('[BoxSelect] Failed to check instance', batchId, uuid, e);
                         // skip invalid instances
                     }
                 }
-                console.log('[BoxSelect] Checked', checkedCount, 'instances, found', selected.length, 'intersections');
                 continue;
             }
 
@@ -3522,7 +3555,7 @@ export class SceneManager {
         ];
         this.renderer.clippingPlanes = [];
 
-        // 创建剖切面辅助可视化
+        // 创建剖切面辅助可视化（隐藏）
         const colors = [0xff0000, 0xff0000, 0x00ff00, 0x00ff00, 0x0000ff, 0x0000ff];
         this.clipPlaneHelpers = [];
         this.clipHelpersGroup.clear();
@@ -3532,29 +3565,30 @@ export class SceneManager {
             const mat = new THREE.MeshBasicMaterial({
                 color: colors[i],
                 transparent: true,
-                opacity: 0.3, // 提高不透明度，使半透明效果更明显
+                opacity: 0.3,
                 side: THREE.DoubleSide,
                 depthWrite: false,
                 polygonOffset: true,
-                polygonOffsetFactor: -4, 
+                polygonOffsetFactor: -4,
                 polygonOffsetUnits: -4,
-                clippingPlanes: [] 
+                clippingPlanes: []
             });
             const mesh = new THREE.Mesh(geom, mat);
-            mesh.visible = false;
-            mesh.renderOrder = 9999; // 提高渲染顺序，减少与模型的闪烁冲突
-            
-            // 添加边框
+            mesh.visible = false; // 始终隐藏剖切指示面
+            mesh.renderOrder = 9999;
+
+            // 添加边框（也隐藏）
             const edges = new THREE.EdgesGeometry(geom);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ 
-                color: colors[i], 
-                transparent: true, 
-                opacity: 0.3, // 边框也更透明
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+                color: colors[i],
+                transparent: true,
+                opacity: 0.3,
                 depthWrite: false
             }));
+            line.visible = false; // 隐藏边框
             line.renderOrder = 10000;
             mesh.add(line);
-            
+
             this.clipPlaneHelpers.push(mesh);
             this.clipHelpersGroup.add(mesh);
         }

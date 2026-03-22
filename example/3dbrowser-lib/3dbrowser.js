@@ -2060,29 +2060,71 @@ class SceneManager {
       fW = extent * padding;
       fH = fW / aspect;
     }
-    this.camera.zoom = 1;
-    this.camera.left = -fW / 2;
-    this.camera.right = fW / 2;
-    this.camera.top = fH / 2;
-    this.camera.bottom = -fH / 2;
     const zBuffer = Math.max(extent * 5, 2e3);
     this.camera.near = -zBuffer;
     this.camera.far = zBuffer;
+    let targetZoom = 1;
+    let targetLeft = -fW / 2;
+    let targetRight = fW / 2;
+    let targetTop = fH / 2;
+    let targetBottom = -fH / 2;
     if (updateCameraPosition) {
       const offset = new THREE.Vector3(1, -1, 1).normalize();
       const dist = Math.max(extent * 2, 2e3);
-      this.camera.position.copy(center.clone().add(offset.multiplyScalar(dist)));
-      this.camera.lookAt(center);
+      const targetPosition = center.clone().add(offset.multiplyScalar(dist));
+      const targetLookAt = center.clone();
+      const startPosition = this.camera.position.clone();
+      const startTarget = this.controls.target.clone();
+      const startTime = performance.now();
+      const duration = 600;
+      const animate = () => {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        this.camera.position.lerpVectors(startPosition, targetPosition, eased);
+        this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
+        this.camera.lookAt(this.controls.target);
+        this.camera.zoom = 1 + (targetZoom - 1) * eased;
+        this.camera.left = this.camera.left + (targetLeft - this.camera.left) * eased;
+        this.camera.right = this.camera.right + (targetRight - this.camera.right) * eased;
+        this.camera.top = this.camera.top + (targetTop - this.camera.top) * eased;
+        this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        }
+      };
+      animate();
     } else {
       const direction = new THREE.Vector3();
       this.camera.getWorldDirection(direction);
       const dist = this.camera.position.distanceTo(this.controls.target);
-      this.camera.position.copy(center).add(direction.multiplyScalar(-dist));
-      this.camera.lookAt(center);
+      const targetPosition = center.clone().add(direction.multiplyScalar(-dist));
+      const targetLookAt = center.clone();
+      const startPosition = this.camera.position.clone();
+      const startTarget = this.controls.target.clone();
+      const startTime = performance.now();
+      const duration = 600;
+      const animate = () => {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        this.camera.position.lerpVectors(startPosition, targetPosition, eased);
+        this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
+        this.camera.lookAt(this.controls.target);
+        this.camera.left = this.camera.left + (targetLeft - this.camera.left) * eased;
+        this.camera.right = this.camera.right + (targetRight - this.camera.right) * eased;
+        this.camera.top = this.camera.top + (targetTop - this.camera.top) * eased;
+        this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        }
+      };
+      animate();
     }
-    this.camera.updateProjectionMatrix();
-    this.controls.target.copy(center);
-    this.controls.update();
   }
   setView(view) {
     let box = this.computeTotalBounds(true);
@@ -2690,41 +2732,24 @@ class SceneManager {
     if (!this.interactableListValid) {
       this.getRayIntersects(0, 0);
     }
-    console.log("[BoxSelect] interactableList length:", this.interactableList.length);
-    console.log("[BoxSelect] frustum bounds:", x1, y1, x2, y2);
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+    const originalMatrix = this.camera.projectionMatrix.clone();
+    const newMatrix = new THREE.Matrix4();
+    const selectWidth = maxX - minX;
+    const selectHeight = maxY - minY;
+    const scaleX = selectWidth / 2;
+    const scaleY = selectHeight / 2;
+    const centerX = (maxX + minX) / 2;
+    const centerY = (maxY + minY) / 2;
+    const translateMatrix = new THREE.Matrix4().makeTranslation(-centerX, -centerY, 0);
+    const scaleMatrix = new THREE.Matrix4().makeScale(1 / scaleX, 1 / scaleY, 1);
+    newMatrix.multiplyMatrices(scaleMatrix, translateMatrix);
+    const modifiedProjectionMatrix = newMatrix.multiply(originalMatrix);
     const frustum = new THREE.Frustum();
-    const projScreenMatrix = new THREE.Matrix4();
-    projScreenMatrix.multiplyMatrices(
-      this.camera.projectionMatrix,
-      this.camera.matrixWorldInverse
-    );
-    const corners = [
-      new THREE.Vector3(x1, y1, -1).unproject(this.camera),
-      new THREE.Vector3(x2, y1, -1).unproject(this.camera),
-      new THREE.Vector3(x2, y2, -1).unproject(this.camera),
-      new THREE.Vector3(x1, y2, -1).unproject(this.camera)
-    ];
-    const farCorners = [
-      new THREE.Vector3(x1, y1, 1).unproject(this.camera),
-      new THREE.Vector3(x2, y1, 1).unproject(this.camera),
-      new THREE.Vector3(x2, y2, 1).unproject(this.camera),
-      new THREE.Vector3(x1, y2, 1).unproject(this.camera)
-    ];
-    const planes = [];
-    for (let i = 0; i < 4; i++) {
-      const a = corners[i];
-      const b = corners[(i + 1) % 4];
-      const c = farCorners[i];
-      planes.push(new THREE.Plane().setFromCoplanarPoints(a, b, c));
-    }
-    planes.push(new THREE.Plane().setFromCoplanarPoints(corners[0], corners[1], corners[2]));
-    planes.push(new THREE.Plane().setFromCoplanarPoints(farCorners[0], farCorners[1], farCorners[2]));
-    frustum.planes = planes;
-    console.log("[BoxSelect] Frustum planes:", planes.map((p, i) => ({
-      index: i,
-      normal: p.normal.toArray().map((n) => n.toFixed(3)),
-      constant: p.constant.toFixed(3)
-    })));
+    frustum.setFromProjectionMatrix(modifiedProjectionMatrix);
     const selected = [];
     const box = new THREE.Box3();
     const tmpMat = new THREE.Matrix4();
@@ -2733,47 +2758,22 @@ class SceneManager {
         const bm = obj;
         const batchIdToUuid = bm.userData.batchIdToUuid;
         const batchIdToGeometry = bm.userData.batchIdToGeometry;
-        console.log("[BoxSelect] BatchedMesh userData:", {
-          hasBatchIdToUuid: !!batchIdToUuid,
-          hasBatchIdToGeometry: !!batchIdToGeometry,
-          batchIdToUuidSize: batchIdToUuid?.size,
-          batchIdToGeometrySize: batchIdToGeometry?.size
-        });
-        if (!batchIdToUuid) {
-          console.log("[BoxSelect] BatchedMesh has no batchIdToUuid");
-          continue;
-        }
-        console.log("[BoxSelect] Processing BatchedMesh with", batchIdToUuid.size, "instances");
-        if (!batchIdToGeometry) {
-          console.warn("[BoxSelect] batchIdToGeometry is missing, cannot select instances");
-          continue;
-        }
-        let checkedCount = 0;
+        if (!batchIdToUuid || !batchIdToGeometry) continue;
         for (const [batchId, uuid] of batchIdToUuid) {
           try {
-            const geometry = batchIdToGeometry?.get(batchId);
-            if (!geometry) {
-              console.warn("[BoxSelect] No geometry for batchId", batchId);
-              continue;
-            }
-            checkedCount++;
+            const geometry = batchIdToGeometry.get(batchId);
+            if (!geometry) continue;
             bm.getMatrixAt(batchId, tmpMat);
             tmpMat.premultiply(bm.matrixWorld);
             const geoBox = new THREE.Box3();
             if (!geometry.boundingBox) geometry.computeBoundingBox();
             geoBox.copy(geometry.boundingBox).applyMatrix4(tmpMat);
-            const intersects = frustum.intersectsBox(geoBox);
-            if (checkedCount <= 3) {
-              console.log("[BoxSelect] Instance", batchId, "box:", geoBox, "intersects:", intersects);
-            }
-            if (intersects) {
+            if (frustum.intersectsBox(geoBox)) {
               selected.push(uuid);
             }
           } catch (e) {
-            console.warn("[BoxSelect] Failed to check instance", batchId, uuid, e);
           }
         }
-        console.log("[BoxSelect] Checked", checkedCount, "instances, found", selected.length, "intersections");
         continue;
       }
       box.setFromObject(obj);
@@ -2843,7 +2843,6 @@ class SceneManager {
         color: colors[i],
         transparent: true,
         opacity: 0.3,
-        // 提高不透明度，使半透明效果更明显
         side: THREE.DoubleSide,
         depthWrite: false,
         polygonOffset: true,
@@ -2859,9 +2858,9 @@ class SceneManager {
         color: colors[i],
         transparent: true,
         opacity: 0.3,
-        // 边框也更透明
         depthWrite: false
       }));
+      line.visible = false;
       line.renderOrder = 1e4;
       mesh.add(line);
       this.clipPlaneHelpers.push(mesh);
@@ -5713,6 +5712,7 @@ const SceneTree = ({
   onDelete,
   onFocus,
   onIsolate,
+  onClearSelection,
   onSelectAll,
   onInvertSelection,
   onHideSelected,
@@ -5870,7 +5870,7 @@ const SceneTree = ({
               /* @__PURE__ */ jsx("div", { style: {
                 position: "absolute",
                 left: 0,
-                width: 6,
+                width: 10,
                 borderTop: `1px solid var(--border-color)`
               } })
             ] })
@@ -5941,7 +5941,19 @@ const SceneTree = ({
             children: t("delete_item")
           }
         )
-      ] })
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "ui-context-menu-divider" }),
+      /* @__PURE__ */ jsx(
+        "div",
+        {
+          className: "ui-context-menu-item",
+          onClick: () => {
+            onClearSelection?.();
+            setContextMenu(null);
+          },
+          children: "清空选择"
+        }
+      )
     ] })
   ] });
 };
@@ -8284,6 +8296,10 @@ const ThreeViewer = ({
     sceneMgr.current.highlightObjects([uuid]);
     setSelectedUuids([uuid]);
   };
+  const handleClearSelection = () => {
+    setSelectedUuids([]);
+    sceneMgr.current?.highlightObjects([]);
+  };
   useEffect(() => {
     if (!canvasRef.current) return;
     const manager = new SceneManager(canvasRef.current);
@@ -8461,7 +8477,6 @@ const ThreeViewer = ({
     mgr.controls.mouseButtons.LEFT = void 0;
     const onPointerDown = (e) => {
       if (e.button !== 0) return;
-      console.log("[BoxSelect] start", e.clientX, e.clientY);
       mgr.startBoxSelect(e.clientX, e.clientY);
     };
     const onPointerMove = (e) => {
@@ -8470,7 +8485,6 @@ const ThreeViewer = ({
     const onPointerUp = (e) => {
       if (e.button !== 0) return;
       const uuids = mgr.endBoxSelect();
-      console.log("[BoxSelect] end, selected:", uuids.length, "uuids:", uuids);
       if (uuids.length > 0) {
         setSelectedUuids(uuids);
         mgr.highlightObjects(uuids);
@@ -9066,6 +9080,7 @@ const ThreeViewer = ({
                   if (uuid) handleDeleteObject(uuid);
                 },
                 onFocus: (obj) => handleFocusObject(obj),
+                onClearSelection: handleClearSelection,
                 onSelectAll: handleSelectAll,
                 onInvertSelection: handleInvertSelection,
                 onHideSelected: handleHideSelected,
@@ -9116,36 +9131,6 @@ const ThreeViewer = ({
                   },
                   {
                     divider: true
-                  },
-                  {
-                    label: t("set_opacity") || "设置透明度",
-                    slider: true,
-                    value: contextMenuOpacity,
-                    onChange: (val) => {
-                      setContextMenuOpacity(val);
-                      if (sceneMgr.current && selectedUuids.length > 0) {
-                        selectedUuids.forEach((uuid) => {
-                          const obj = sceneMgr.current?.contentGroup.getObjectByProperty("uuid", uuid);
-                          if (obj) {
-                            obj.traverse((child) => {
-                              if (child.isMesh && child.material) {
-                                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                                materials.forEach((m) => {
-                                  if (val < 1) {
-                                    m.transparent = true;
-                                    m.opacity = val;
-                                  } else {
-                                    m.transparent = false;
-                                    m.opacity = 1;
-                                  }
-                                  m.needsUpdate = true;
-                                });
-                              }
-                            });
-                          }
-                        });
-                      }
-                    }
                   }
                 ],
                 onClose: () => setContextMenu((prev) => ({ ...prev, visible: false })),

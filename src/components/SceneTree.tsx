@@ -82,6 +82,7 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
+    onClearSelection?: () => void;
     onSelectAll?: () => void;
     onInvertSelection?: () => void;
     onHideSelected?: () => void;
@@ -89,10 +90,10 @@ interface SceneTreeProps {
         theme: any;
 }
 
-export const SceneTree: React.FC<SceneTreeProps> = ({ 
-    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus, onIsolate,
+export const SceneTree: React.FC<SceneTreeProps> = ({
+    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus, onIsolate, onClearSelection,
     onSelectAll, onInvertSelection, onHideSelected, onShowAll,
-    theme 
+    theme
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
@@ -266,7 +267,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                         <div style={{
                                             position: 'absolute',
                                             left: 0,
-                                            width: 6,
+                                            width: 10,
                                             borderTop: `1px solid var(--border-color)`
                                         }} />
                                     </div>
@@ -305,13 +306,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             </div>
             {contextMenu && (
                 <div className="ui-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
-                    <div 
+                    <div
                         className="ui-context-menu-item"
                         onClick={() => { expandAll(); setContextMenu(null); }}
                     >
                         {t("expand_all")}
                     </div>
-                    <div 
+                    <div
                         className="ui-context-menu-item"
                         onClick={() => { collapseAll(); setContextMenu(null); }}
                     >
@@ -320,13 +321,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     {contextMenu.node.isFileNode && (
                         <>
                             <div className="ui-context-menu-divider" />
-                            <div 
+                            <div
                                 className="ui-context-menu-item"
                                 onClick={() => { onIsolate?.(contextMenu.node.uuid); setContextMenu(null); }}
                             >
                                 {t("isolate_selection")}
                             </div>
-                            <div 
+                            <div
                                 className="ui-context-menu-item"
                                 onClick={() => { onDelete?.(contextMenu.node.object); setContextMenu(null); }}
                             >
@@ -334,6 +335,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             </div>
                         </>
                     )}
+                    <div className="ui-context-menu-divider" />
+                    <div
+                        className="ui-context-menu-item"
+                        onClick={() => { onClearSelection?.(); setContextMenu(null); }}
+                    >
+                        清空选择
+                    </div>
                 </div>
             )}
         </div>
