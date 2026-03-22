@@ -9,7 +9,6 @@ interface FloatingPanelProps {
     y?: number;
     resizable?: boolean;
     movable?: boolean;
-    styles?: any;
     theme?: any;
     storageId?: string;
     modal?: boolean;

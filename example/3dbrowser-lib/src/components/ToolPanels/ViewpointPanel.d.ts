@@ -7,7 +7,6 @@ interface ViewpointPanelProps {
     onUpdateName: (id: string, name: string) => void;
     onLoad: (viewpoint: any) => void;
     onDelete: (id: string) => void;
-    styles: any;
     theme: any;
 }
 export declare const ViewpointPanel: React.FC<ViewpointPanelProps>;

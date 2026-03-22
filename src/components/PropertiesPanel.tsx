@@ -4,11 +4,10 @@ import { IconChevronRight, IconChevronDown } from "../theme/Icons";
 interface PropertiesPanelProps {
     t: (key: string) => string;
     selectedProps: Record<string, Record<string, string>> | null;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
-export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps, styles, theme }) => {
+export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps, theme }) => {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -59,14 +58,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                     />
                 </div>
             )}
-            <div style={{ ...styles.list, flex: 1, overflowY: 'auto' }}>
+            <div className="flex-1 overflow-y-auto">
                 {filteredProps ? Object.entries(filteredProps).map(([group, props]) => (
                     <div key={group}>
                         <div 
-                            style={styles.propGroupTitle} 
+                            className="ui-prop-group" 
                             onClick={() => toggleGroup(group)}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.bg}
                         >
                             <span>{group}</span>
                             <span style={{opacity: 0.6, display:'flex', alignItems:'center'}}>
@@ -77,13 +74,13 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                             </span>
                         </div>
                         {!collapsed.has(group) && Object.entries(props).map(([k, v]) => (
-                            <div key={k} style={styles.propRow}>
-                                <div style={styles.propKey} title={k}>{k}</div>
-                                <div style={styles.propValue} title={String(v)}>{String(v)}</div>
+                            <div key={k} className="ui-prop-row">
+                                <div className="ui-prop-key" title={k}>{k}</div>
+                                <div className="ui-prop-value" title={String(v)}>{String(v)}</div>
                             </div>
                         ))}
                     </div>
-                )) : <div style={{padding:20, color: theme.textMuted, textAlign:'center', marginTop: 20}}>{t("no_selection")}</div>}
+                )) : <div style={{padding:20, color: 'var(--text-muted)', textAlign:'center', marginTop: 20}}>{t("no_selection")}</div>}
              </div>
         </div>
     );

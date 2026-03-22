@@ -23,7 +23,6 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
-    styles: any;
     theme: any;
 }
 export declare const SceneTree: React.FC<SceneTreeProps>;

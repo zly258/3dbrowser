@@ -2,7 +2,6 @@ import React from "react";
 import { ThemeColors } from "../../theme/Styles";
 interface MenuBarProps {
     t: (key: string) => string;
-    styles: any;
     theme: ThemeColors;
     themeType?: 'dark' | 'light';
     setThemeType?: (type: 'dark' | 'light') => void;
@@ -14,8 +13,8 @@ interface MenuBarProps {
     handleClear?: () => void;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;

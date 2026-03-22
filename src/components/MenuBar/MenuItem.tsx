@@ -3,11 +3,10 @@ import React, { useState, useRef, useEffect } from "react";
 interface MenuItemProps {
     label: string;
     children: (close: () => void) => React.ReactNode;
-    styles: any;
-    enabled?: boolean;
+        enabled?: boolean;
 }
 
-export const ClassicMenuItem = ({ label, children, styles, enabled = true }: MenuItemProps) => {
+export const ClassicMenuItem = ({ label, children, enabled = true }: MenuItemProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -31,26 +30,20 @@ export const ClassicMenuItem = ({ label, children, styles, enabled = true }: Men
         }
     };
 
-    const itemStyle = {
-        ...styles.classicMenuItem(isOpen, false),
-        opacity: enabled ? 1 : 0.5,
-        cursor: enabled ? 'pointer' : 'not-allowed',
-        pointerEvents: enabled ? 'auto' : 'none' as any,
-    };
-
     return (
         <div
             ref={menuRef}
             style={{ position: 'relative', height: '100%' }}
         >
             <div
-                style={itemStyle}
+                className={`ui-toolbar-btn ${isOpen ? 'active' : ''}`}
+                style={{ padding: '0 10px', opacity: enabled ? 1 : 0.5, pointerEvents: enabled ? 'auto' : 'none' }}
                 onClick={toggleMenu}
             >
                 {label}
             </div>
             {isOpen && enabled && (
-                <div style={styles.classicMenuDropdown}>
+                <div className="ui-context-menu" style={{ position: 'absolute', top: '100%', left: 0, marginTop: '2px', padding: '4px 0', minWidth: '160px' }}>
                     {children(closeMenu)}
                 </div>
             )}
@@ -61,40 +54,38 @@ export const ClassicMenuItem = ({ label, children, styles, enabled = true }: Men
 interface SubItemProps {
     label: string;
     onClick: () => void;
-    styles: any;
-    enabled?: boolean;
+        enabled?: boolean;
     checked?: boolean;
 }
 
-export const ClassicSubItem = ({ label, onClick, styles, enabled = true, checked }: SubItemProps) => {
-    const [hover, setHover] = useState(false);
-
-    const itemStyle = {
-        ...styles.classicMenuSubItem(hover),
-        opacity: enabled ? 1 : 0.5,
-        cursor: enabled ? 'pointer' : 'not-allowed',
-        pointerEvents: enabled ? 'auto' : 'none' as any,
-        outline: 'none',
-    };
-
+export const ClassicSubItem = ({ label, onClick, enabled = true, checked }: SubItemProps) => {
     return (
         <div
-            style={itemStyle}
+            className={`ui-context-menu-item flex items-center justify-between ${!enabled ? 'disabled' : ''}`}
             onClick={() => {
                 if (enabled) {
-                    setHover(false);
                     onClick();
                 }
             }}
-            onMouseEnter={() => enabled && setHover(true)}
-            onMouseLeave={() => setHover(false)}
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {checked !== undefined && (
-                    <div style={styles.checkboxCustom(checked)}>
-                        {checked && <div style={styles.checkboxCheckmark}>✓</div>}
+                    <div style={{
+                        width: "16px",
+                        height: "16px",
+                        borderRadius: "2px",
+                        border: `1px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`,
+                        backgroundColor: checked ? 'var(--accent)' : "transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "all 0.2s ease",
+                        position: "relative",
+                        cursor: 'pointer'
+                    }}>
+                        {checked && <div style={{ color: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>✓</div>}
                     </div>
                 )}
                 {label}

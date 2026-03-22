@@ -20,7 +20,6 @@ interface SettingsModalProps {
     setThemeMode: (m: 'dark' | 'light') => void;
     showStats: boolean;
     setShowStats: (v: boolean) => void;
-    styles?: any;
     theme?: any;
 }
 export {};

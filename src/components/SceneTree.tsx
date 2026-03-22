@@ -82,13 +82,12 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({ 
     t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus, onIsolate,
-    styles, theme 
+    theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
@@ -219,15 +218,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     )}
                 </div>
             </div>
-            <div ref={containerRef} style={{ ...styles.treeContainer, flex: 1 }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
+            <div ref={containerRef} className="ui-tree-container flex-1 overflow-y-auto overflow-x-hidden py-[2px]" onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
                 <div style={{ height: totalHeight, position: "relative" }}>
                 <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
                     {visibleItems.map((node) => (
                         <div key={node.uuid} 
-                                style={{
-                                    ...styles.treeNode(node.uuid === selectedUuid, node.uuid === hoveredUuid),
-                                    paddingLeft: 8,
-                                }}
+                                className={`ui-tree-node ${node.uuid === selectedUuid ? 'selected' : ''}`}
+                                style={{ paddingLeft: 8 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
                                 onDoubleClick={() => onFocus?.(node.object)}
                                 onMouseEnter={() => setHoveredUuid(node.uuid)}
@@ -242,7 +239,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                             width: 16, 
                                             height: '100%', 
                                             position: 'relative',
-                                            borderLeft: isLast ? 'none' : `1px solid ${theme.border}60` 
+                                            borderLeft: isLast ? 'none' : `1px solid var(--border-color)` 
                                         }} />
                                     ))}
                                     <div style={{ 
@@ -258,20 +255,20 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                             left: 0,
                                             top: 0,
                                             bottom: node.isLastChild ? '50%' : 0,
-                                            borderLeft: `1px solid ${theme.border}60`
+                                            borderLeft: `1px solid var(--border-color)`
                                         }} />
                                         {/* Horizontal line segment */}
                                         <div style={{
                                             position: 'absolute',
                                             left: 0,
                                             width: 8,
-                                            borderTop: `1px solid ${theme.border}60`
+                                            borderTop: `1px solid var(--border-color)`
                                         }} />
                                     </div>
                                 </div>
                             )}
 
-                            <div style={styles.expander} onClick={(e) => { e.stopPropagation(); toggleNode(node.uuid); }}>
+                            <div className="ui-tree-expander" onClick={(e) => { e.stopPropagation(); toggleNode(node.uuid); }}>
                                 {node.children.length > 0 ? (
                                     node.expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />
                                 ) : null}
@@ -283,80 +280,37 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 style={{ marginRight: 6, padding: 0, flexShrink: 0 }}
                             />
                             
-                            <div style={{ ...styles.nodeLabel, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
+                            <div className="ui-tree-label">{node.name}</div>
                         </div>
                     ))}
                 </div>
                 </div>
             </div>
             {contextMenu && (
-                <div style={{
-                    position: 'fixed',
-                    left: contextMenu.x,
-                    top: contextMenu.y,
-                    backgroundColor: theme.panelBg,
-                    border: `1px solid ${theme.border}`,
-                    boxShadow: theme.bg === '#ffffff' ? '0 2px 8px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.4)',
-                    zIndex: 1000,
-                    minWidth: '120px',
-                    padding: '4px 0',
-                    borderRadius: '4px',
-                }}>
+                <div className="ui-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
                     <div 
-                        style={{ 
-                            padding: '6px 16px', 
-                            fontSize: '12px', 
-                            color: theme.text, 
-                            cursor: 'pointer', 
-                            backgroundColor: menuHover === 'expand' ? theme.itemHover : 'transparent' 
-                        }}
-                        onMouseEnter={() => setMenuHover('expand')}
-                        onMouseLeave={() => setMenuHover(null)}
+                        className="ui-context-menu-item"
                         onClick={() => { expandAll(); setContextMenu(null); }}
                     >
                         {t("expand_all")}
                     </div>
                     <div 
-                        style={{ 
-                            padding: '6px 16px', 
-                            fontSize: '12px', 
-                            color: theme.text, 
-                            cursor: 'pointer', 
-                            backgroundColor: menuHover === 'collapse' ? theme.itemHover : 'transparent' 
-                        }}
-                        onMouseEnter={() => setMenuHover('collapse')}
-                        onMouseLeave={() => setMenuHover(null)}
+                        className="ui-context-menu-item"
                         onClick={() => { collapseAll(); setContextMenu(null); }}
                     >
                         {t("collapse_all")}
                     </div>
                     {contextMenu.node.isFileNode && (
                         <>
-                            <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
+                            <div className="ui-context-menu-divider" />
                             <div 
-                                style={{ 
-                                    padding: '6px 16px', 
-                                    fontSize: '12px', 
-                                    color: theme.text, 
-                                    cursor: 'pointer', 
-                                    backgroundColor: menuHover === 'isolate' ? theme.itemHover : 'transparent' 
-                                }}
-                                onMouseEnter={() => setMenuHover('isolate')}
-                                onMouseLeave={() => setMenuHover(null)}
+                                className="ui-context-menu-item"
                                 onClick={() => { onIsolate?.(contextMenu.node.uuid); setContextMenu(null); }}
                             >
                                 {t("isolate_selection")}
                             </div>
                             <div 
-                                style={{ 
-                                    padding: '6px 16px', 
-                                    fontSize: '12px', 
-                                    color: theme.text, 
-                                    cursor: 'pointer', 
-                                    backgroundColor: menuHover === 'delete' ? theme.itemHover : 'transparent' 
-                                }}
-                                onMouseEnter={() => setMenuHover('delete')}
-                                onMouseLeave={() => setMenuHover(null)}
+                                className="ui-context-menu-item"
                                 onClick={() => { onDelete?.(contextMenu.node.object); setContextMenu(null); }}
                             >
                                 {t("delete_item")}

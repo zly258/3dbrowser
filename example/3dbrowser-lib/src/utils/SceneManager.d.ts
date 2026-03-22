@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TilesRenderer } from "3d-tiles-renderer";
-export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
+export type MeasureType = 'dist' | 'angle' | 'coord' | 'area' | 'volume' | 'none';
 export interface MeasurementRecord {
     id: string;
     type: string;
@@ -63,8 +63,10 @@ export declare class SceneManager {
     currentMeasurePoints: THREE.Vector3[];
     currentMeasureModelUuid: string | null;
     previewLine: THREE.Line | null;
+    previewPolygon: THREE.LineLoop | null;
     tempMarker: THREE.Points;
     measureRecords: Map<string, MeasurementRecord>;
+    private boxSelectState;
     clippingPlanes: THREE.Plane[];
     clipPlaneHelpers: THREE.Mesh[];
     sceneCenter: THREE.Vector3;
@@ -195,6 +197,31 @@ export declare class SceneManager {
     pickMeasurement(clientX: number, clientY: number): string | null;
     addMarker(point: THREE.Vector3, parent: THREE.Object3D): void;
     addLine(points: THREE.Vector3[], parent: THREE.Object3D): void;
+    private addLineLoop;
+    private addPolygonFill;
+    private computeGeometryVolume;
+    /**
+     * 开始框选
+     */
+    startBoxSelect(clientX: number, clientY: number): void;
+    /**
+     * 更新框选范围
+     */
+    updateBoxSelect(clientX: number, clientY: number): void;
+    /**
+     * 完成框选，返回选中的对象 UUID 列表
+     */
+    endBoxSelect(): string[];
+    /**
+     * 取消框选
+     */
+    cancelBoxSelect(): void;
+    private updateBoxSelectRect;
+    private removeBoxSelectRect;
+    /**
+     * 通过屏幕矩形选择对象
+     */
+    private selectByScreenRect;
     removeMeasurement(id: string): void;
     clearAllMeasurements(): void;
     clearMeasurementPreview(): void;

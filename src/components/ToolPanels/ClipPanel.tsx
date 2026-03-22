@@ -12,8 +12,7 @@ interface ClipPanelProps {
   setClipValues: any;
   clipActive: any;
   setClipActive: any;
-  styles?: any;
-  theme?: any;
+    theme?: any;
 }
 
 // Axis Slider Row
@@ -51,7 +50,7 @@ const AxisSliderRow: React.FC<{
           fontSize: '12px',
           fontWeight: '600',
           minWidth: '16px',
-          color: active ? 'var(--accent)' : 'var(--text-secondary)',
+          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
           flexShrink: 0,
         }}
       >
@@ -74,7 +73,7 @@ const AxisSliderRow: React.FC<{
         style={{
           fontFamily: "'Consolas', 'Monaco', monospace",
           fontSize: '11px',
-          color: 'var(--accent)',
+          color: 'var(--text-primary)',
           minWidth: '45px',
           textAlign: 'right',
           flexShrink: 0,

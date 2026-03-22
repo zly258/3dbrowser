@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
 import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
-import { createStyles, createGlobalStyle, themes, ThemeColors, DEFAULT_FONT } from "./src/theme/Styles";
+import { themes, ThemeColors, DEFAULT_FONT } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
@@ -19,11 +19,6 @@ import { ViewCube } from "./src/components/ViewCube";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { ContextMenu } from "./src/components/ContextMenu";
 import { IconClose, IconSun, IconMoon, IconBox, IconActivity, IconGrid } from "./src/theme/Icons";
-
-// --- 全局样式注入 ---
-const GlobalStyle = ({ theme }: { theme: ThemeColors }) => (
-    <style dangerouslySetInnerHTML={{ __html: createGlobalStyle(theme) }} />
-);
 
 // --- 全局样式注入 ---
 
@@ -76,7 +71,7 @@ export const ThreeViewer = ({
         return themes[themeMode];
     }, [themeMode]);
 
-    const styles = useMemo(() => createStyles(theme), [theme]);
+    
 
     // 语言状态 - 从localStorage恢复
     const [lang, setLang] = useState<Lang>(() => {
@@ -1585,14 +1580,19 @@ export const ThreeViewer = ({
     };
 
     return (
-        <ErrorBoundary t={t} styles={styles} theme={theme}>
-            <div 
-                className={`${themeMode} font-${sceneSettings.fontSize || 'medium'}`}
-                style={styles.container}
+        <ErrorBoundary t={t} theme={theme}>
+            <div
+                className={`ui-container ${themeMode} font-${sceneSettings.fontSize || 'medium'}`}
+                style={{
+                    display: "flex", flexDirection: "column", height: "100%", width: "100%", 
+                    backgroundColor: "var(--bg-primary)", color: "var(--text-primary)", 
+                    fontSize: "var(--font-size-base)", fontFamily: "inherit", 
+                    userSelect: "none", overflow: "hidden", position: "relative"
+                }}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
-             <GlobalStyle theme={theme} />
+             
 
              {/* Top Toolbar */}
              <Toolbar 
@@ -1619,7 +1619,6 @@ export const ThreeViewer = ({
                      localStorage.setItem('3dbrowser_showStats', String(v));
                  }}
                  sceneMgr={sceneMgr.current}
-                 styles={styles}
                  theme={theme}
                  hiddenMenus={hiddenMenus}
                  onOpenAbout={() => setIsAboutOpen(true)}
@@ -1631,25 +1630,18 @@ export const ThreeViewer = ({
                 
                  {/* Left Sidebar: Outline */}
                 {showOutline && (
-                    <div style={{ 
+                    <div className="ui-sidebar" style={{ 
                         width: `${leftWidth}px`, 
-                        backgroundColor: theme.panelBg, 
-                        borderRight: `1px solid ${theme.border}`,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        zIndex: 10,
-                        position: 'relative'
+                        borderRight: '1px solid var(--border-color)',
                     }}>
-                        <div style={styles.floatingHeader}>
+                        <div className="ui-sidebar-header">
                             <span>{t("interface_outline")}</span>
-                            <div 
+                            <button 
+                                className="ui-sidebar-close"
                                 onClick={() => setShowOutline(false)} 
-                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: '50%' }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
                                 <IconClose width={16} height={16} />
-                            </div>
+                            </button>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
                             <SceneTree 
@@ -1665,17 +1657,14 @@ export const ThreeViewer = ({
                                 }}
                                 onFocus={(obj) => handleFocusObject(obj)}
 
-                                styles={styles}
                                 theme={theme}
                             />
                         </div>
                         {/* Resize handle */}
                         <div 
+                            className="ui-sidebar-resize"
+                            style={{ right: -2 }}
                             onMouseDown={() => resizingLeft.current = true}
-                            style={{ 
-                                position: 'absolute', right: -2, top: 0, bottom: 0, width: 4, 
-                                cursor: 'col-resize', zIndex: 20 
-                            }} 
                         />
                     </div>
                 )}
@@ -1725,49 +1714,21 @@ export const ThreeViewer = ({
 
                     {/* Toast Notification */}
                     {toast && (
-                        <div style={{
-                            position: 'fixed',
-                            top: '40px', 
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            backgroundColor: theme.bg,
-                            color: theme.text,
-                            padding: '6px 16px',
-                            borderRadius: '4px',
-                            boxShadow: `0 4px 12px rgba(0,0,0,0.15)`,
-                            zIndex: 10000,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            fontSize: '13px',
-                            border: `1px solid ${theme.border}`,
-                            animation: 'fadeInDown 0.3s ease-out'
-                        }}>
-                            <div style={{
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                backgroundColor: toast.type === 'error' ? theme.danger : (toast.type === 'success' ? theme.success : theme.accent)
+                        <div className="ui-toast">
+                            <div className="ui-toast-dot" style={{
+                                backgroundColor: toast.type === 'error' ? 'var(--error)' : (toast.type === 'success' ? 'var(--success)' : 'var(--info)')
                             }} />
                             <span style={{ fontWeight: 500 }}>{toast.message}</span>
-                            <div 
+                            <button
+                                className="ui-toast-close"
                                 onClick={() => setToast(null)}
-                                style={{ 
-                                    cursor: 'pointer', 
-                                    padding: '2px', 
-                                    display: 'flex', 
-                                    opacity: 0.5,
-                                    marginLeft: '4px'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
                             >
                                 <IconClose size={12} />
-                            </div>
+                            </button>
                         </div>
                     )}
 
-                    <LoadingOverlay t={t} loading={loading} status={status} progress={progress} styles={styles} theme={theme} />
+                    <LoadingOverlay t={t} loading={loading} status={status} progress={progress} theme={theme} />
 
                     {/* Overlay Panels for Tools */}
                     {activeTool === 'measure' && (
@@ -1796,7 +1757,7 @@ export const ThreeViewer = ({
                                 setMeasureType('none');
                             }}
                             onClose={() => setActiveTool('none')}
-                            styles={styles} theme={theme}
+                            theme={theme}
                         />
                     )}
 
@@ -1806,12 +1767,12 @@ export const ThreeViewer = ({
                             clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
                             clipValues={clipValues} setClipValues={setClipValues}
                             clipActive={clipActive} setClipActive={setClipActive}
-                            styles={styles} theme={theme}
+                            theme={theme}
                         />
                     )}
 
                     {activeTool === 'export' && (
-                        <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} styles={styles} theme={theme} />
+                        <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} theme={theme} />
                     )}
 
                     {activeTool === 'settings' && (
@@ -1819,7 +1780,7 @@ export const ThreeViewer = ({
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                             currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
                             showStats={showStats} setShowStats={setShowStats}
-                            styles={styles} theme={theme}
+                            theme={theme}
                         />
                     )}
 
@@ -1832,7 +1793,6 @@ export const ThreeViewer = ({
                             onLoad={handleLoadViewpoint}
                             onDelete={handleDeleteViewpoint}
                             onClose={() => setActiveTool('none')}
-                            styles={styles} 
                             theme={theme} 
                         />
                     )}
@@ -1843,7 +1803,6 @@ export const ThreeViewer = ({
                             settings={sceneSettings}
                             onUpdate={handleSettingsUpdate}
                             onClose={() => setActiveTool('none')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -1860,7 +1819,7 @@ export const ThreeViewer = ({
                         zIndex: 10,
                         position: 'relative'
                     }}>
-                        <div style={styles.floatingHeader}>
+                        <div className="ui-sidebar-header">
                             <span>{t("interface_props")}</span>
                             <div 
                                 onClick={() => setShowProps(false)} 
@@ -1872,7 +1831,7 @@ export const ThreeViewer = ({
                             </div>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
-                            <PropertiesPanel t={t} selectedProps={selectedProps} styles={styles} theme={theme} />
+                            <PropertiesPanel t={t} selectedProps={selectedProps} theme={theme} />
                         </div>
                         {/* Resize handle */}
                         <div 
@@ -1908,23 +1867,15 @@ export const ThreeViewer = ({
                         </span>
                     )}
                     {chunkProgress.total > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: theme.accent }}>
+                        <div className="ui-chunk-progress">
+                            <span>
                                 {t("chunk_loading") || "分片加载"}: {chunkProgress.loaded}/{chunkProgress.total}
                             </span>
-                            <div style={{
-                                width: '80px',
-                                height: '4px',
-                                backgroundColor: theme.border,
-                                borderRadius: '2px',
-                                overflow: 'hidden'
-                            }}>
-                                <div style={{
-                                    width: `${(chunkProgress.loaded / chunkProgress.total) * 100}%`,
-                                    height: '100%',
-                                    backgroundColor: theme.accent,
-                                    transition: 'width 0.2s ease'
-                                }} />
+                            <div className="ui-progress-bar" style={{ width: '80px' }}>
+                                <div
+                                    className="ui-progress-fill"
+                                    style={{ width: `${(chunkProgress.loaded / chunkProgress.total) * 100}%` }}
+                                />
                             </div>
                         </div>
                     )}
@@ -2003,20 +1954,20 @@ export const ThreeViewer = ({
                 isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message}
                 onConfirm={() => { confirmState.action(); setConfirmState({...confirmState, isOpen: false}); }}
                 onCancel={() => setConfirmState({...confirmState, isOpen: false})}
-                t={t} styles={styles} theme={theme}
+                t={t} theme={theme}
              />
 
              <AboutModal 
                 isOpen={isAboutOpen} 
                 onClose={() => setIsAboutOpen(false)} 
-                t={t} styles={styles} theme={theme} 
+                t={t} theme={theme} 
              />
 
              {/* Error Modal */}
              {errorState.isOpen && (
-                <div style={styles.modalOverlay}>
-                    <div style={{ ...styles.modalContent, width: '450px' }}>
-                        <div style={{ ...styles.floatingHeader, backgroundColor: theme.danger, color: 'white' }}>
+                <div className="ui-error-overlay">
+                    <div className="ui-error-content" style={{ width: '450px' }}>
+                        <div className="ui-error-header" style={{ backgroundColor: 'var(--error)', color: 'white' }}>
                             <span>{errorState.title}</span>
                             <div 
                                 onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))} 
@@ -2031,7 +1982,8 @@ export const ThreeViewer = ({
                             <div style={{ fontWeight: '600', fontSize: '15px', color: theme.text }}>{errorState.message}</div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
                                 <button 
-                                    style={{ ...styles.btn, backgroundColor: theme.accent, color: 'white', borderColor: theme.accent, padding: '8px 24px' }}
+                                    className="ui-btn ui-btn-primary"
+                                    style={{ padding: '8px 24px' }}
                                     onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))}
                                 >
                                     {t("confirm") || "确定"}

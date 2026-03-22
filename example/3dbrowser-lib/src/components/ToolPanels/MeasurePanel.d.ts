@@ -8,7 +8,6 @@ interface MeasurePanelProps {
     onDelete: (id: string) => void;
     onClear: () => void;
     onClose?: () => void;
-    styles?: any;
     theme?: any;
     highlightedId?: string;
     onHighlight?: (id: string) => void;

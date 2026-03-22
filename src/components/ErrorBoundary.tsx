@@ -4,8 +4,7 @@ import { DEFAULT_FONT } from "../theme/Styles";
 interface ErrorBoundaryProps {
     children: React.ReactNode;
     t: any;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
 interface ErrorBoundaryState {

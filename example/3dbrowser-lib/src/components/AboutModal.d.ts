@@ -4,7 +4,6 @@ interface AboutModalProps {
     isOpen: boolean;
     onClose: () => void;
     t: TFunc;
-    styles: any;
     theme: any;
 }
 export declare const AboutModal: React.FC<AboutModalProps>;

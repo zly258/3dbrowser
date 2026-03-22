@@ -11,7 +11,7 @@ interface ContextMenuProps {
     y: number;
     items: ContextMenuItem[];
     onClose: () => void;
-    theme: ThemeColors;
+    theme?: ThemeColors;
 }
 export declare const ContextMenu: React.FC<ContextMenuProps>;
 export {};

@@ -22,3 +22,4 @@ export declare const IconEye: (props: any) => import("react/jsx-runtime").JSX.El
 export declare const IconSun: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconMoon: (props: any) => import("react/jsx-runtime").JSX.Element;
 export declare const IconGrid: (props: any) => import("react/jsx-runtime").JSX.Element;
+export declare const IconSelectAll: (props: any) => import("react/jsx-runtime").JSX.Element;

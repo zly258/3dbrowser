@@ -9,36 +9,36 @@ interface ConfirmModalProps {
     onConfirm: () => void;
     onCancel: () => void;
     t: TFunc;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
-export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onConfirm, onCancel, t, styles, theme }) => {
+export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onConfirm, onCancel, t, theme }) => {
     if (!isOpen) return null;
 
     return (
-        <div style={styles.modalOverlay}>
-            <div style={{...styles.modalContent, width: '320px', height: 'auto'}}>
-                <div style={styles.floatingHeader}>
-                    <span>{title}</span>
-                    <div onClick={onCancel} style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: 0 }}>
+        <div className="ui-modal-overlay">
+            <div className="ui-modal" style={{ width: '320px', height: 'auto' }}>
+                <div className="ui-modal-header">
+                    <span className="ui-modal-title">{title}</span>
+                    <button className="ui-modal-close" onClick={onCancel}>
                         <IconClose width={20} height={20} />
-                    </div>
+                    </button>
                 </div>
                 
-                <div style={{padding: '20px', color: theme.text, fontSize: '13px', lineHeight: '1.5'}}>
+                <div className="ui-modal-body text-base">
                     {message}
                 </div>
 
-                <div style={{padding: '15px 20px', borderTop: `1px solid ${theme.border}`, display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
+                <div className="ui-modal-footer">
                      <button 
-                        style={{...styles.btn, backgroundColor: 'transparent', flex: '0 0 auto', width: '80px'}} 
+                        className="ui-btn ui-btn-ghost w-[80px]"
                         onClick={onCancel}
                     >
                         {t("btn_cancel")}
                     </button>
                     <button 
-                        style={{...styles.btn, backgroundColor: theme.danger, borderColor: theme.danger, color: 'white', flex: '0 0 auto', width: '80px'}} 
+                        className="ui-btn ui-btn-danger w-[80px]"
+                        style={{ backgroundColor: 'var(--error)', borderColor: 'var(--error)', color: 'white' }}
                         onClick={onConfirm}
                     >
                         {t("btn_confirm")}

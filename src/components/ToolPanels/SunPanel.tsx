@@ -14,8 +14,7 @@ interface SunPanelProps {
         sunShadow?: boolean;
     };
     onUpdate: (settings: any) => void;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
 // 将0-48的滑动条值转换为时间显示
@@ -30,12 +29,12 @@ const timeToSlider = (time: number): number => {
     return Math.round(time * 2);
 };
 
-export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpdate, styles, theme }) => {
+export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpdate, theme }) => {
     // 时间滑动值：0-48，每格0.5小时
     const timeValue = timeToSlider(settings.sunTime !== undefined ? settings.sunTime : 12);
 
     return (
-        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} height={350} resizable={false} styles={styles} theme={theme} storageId="tool_sun">
+        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} height={350} resizable={false} theme={theme} storageId="tool_sun">
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
                 {/* 启用开关 */}
@@ -75,7 +74,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                             fontFamily: "'Consolas', 'Monaco', monospace"
                                         }}
                                     />
-                                    <span style={{ color: 'var(--accent)' }}>°</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>°</span>
                                 </div>
                             </div>
                         </div>
@@ -102,7 +101,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                                             fontFamily: "'Consolas', 'Monaco', monospace"
                                         }}
                                     />
-                                    <span style={{ color: 'var(--accent)' }}>°</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>°</span>
                                 </div>
                             </div>
                         </div>
@@ -111,7 +110,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                         <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_time") || "时间"}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: 'var(--accent)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: 'var(--text-primary)' }}>
                                     <span>{formatTime(timeValue)}</span>
                                 </div>
                             </div>

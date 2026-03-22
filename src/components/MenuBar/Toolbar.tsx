@@ -10,8 +10,7 @@ import {
 
 interface MenuBarProps {
     t: (key: string) => string;
-    styles: any;
-    theme: ThemeColors;
+        theme: ThemeColors;
     themeType?: 'dark' | 'light';
     setThemeType?: (type: 'dark' | 'light') => void;
     handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -38,7 +37,7 @@ interface MenuBarProps {
 
 export const Toolbar: React.FC<MenuBarProps> = (props) => {
     const {
-        t, styles, theme,
+        t, theme,
         hiddenMenus = []
     } = props;
 
@@ -89,7 +88,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
     };
 
     return (
-        <div style={styles.toolbarBar}>
+        <div className="ui-toolbar">
             <input
                 type="file"
                 ref={fileInputRef}
@@ -116,14 +115,13 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             />
 
             {!isHidden('file') && (
-                <div style={styles.toolbarGroup}>
+                <div className="ui-toolbar-group">
                     <div style={{ position: 'relative' }}>
                         <ImageButton
                         icon={<IconFile />}
                         label={t('tb_file')}
                             active={openMenu === 'file'}
                             onClick={() => toggleMenu('file')}
-                            styles={styles}
                             theme={theme}
                         />
                         {renderDropdown('file', (
@@ -175,12 +173,11 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             )}
 
                 {!isHidden('view') && (
-                <div style={styles.toolbarGroup}>
+                <div className="ui-toolbar-group">
                     <ImageButton
                         icon={<IconMaximize />}
                         label={t('tb_fit')}
                         onClick={() => props.sceneMgr?.fitView()}
-                        styles={styles}
                         theme={theme}
                     />
                     <div style={{ position: 'relative' }}>
@@ -189,7 +186,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_view')}
                             active={openMenu === 'views'}
                             onClick={() => toggleMenu('views')}
-                            styles={styles}
                             theme={theme}
                         />
                         {renderDropdown('views', (
@@ -282,14 +278,13 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             )}
 
             {!isHidden('interface') && (
-                <div style={styles.toolbarGroup}>
+                <div className="ui-toolbar-group">
                     {!isHidden('outline') && (
                         <ImageButton
                             icon={<IconBox />}
                             label={t('tb_model')}
                             active={props.showOutline}
                             onClick={() => props.setShowOutline?.(!props.showOutline)}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -299,7 +294,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_props')}
                             active={props.showProps}
                             onClick={() => props.setShowProps?.(!props.showProps)}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -309,7 +303,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_pick')}
                             active={props.pickEnabled}
                             onClick={() => props.setPickEnabled?.(!props.pickEnabled)}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -317,14 +310,13 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             )}
 
             {!isHidden('tool') && (
-                <div style={styles.toolbarGroup}>
+                <div className="ui-toolbar-group">
                     {!isHidden('measure') && (
                         <ImageButton
                             icon={<IconRuler />}
                             label={t('tb_measure')}
                             active={props.activeTool === 'measure'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'measure' ? 'none' : 'measure')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -334,7 +326,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_boxSelect')}
                             active={props.activeTool === 'boxSelect'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'boxSelect' ? 'none' : 'boxSelect')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -344,7 +335,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_clip')}
                             active={props.activeTool === 'clip'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'clip' ? 'none' : 'clip')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -354,7 +344,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_view')}
                             active={props.activeTool === 'viewpoint'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'viewpoint' ? 'none' : 'viewpoint')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -364,7 +353,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_sun')}
                             active={props.activeTool === 'sun'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'sun' ? 'none' : 'sun')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -372,14 +360,13 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             )}
 
             {!isHidden('about') && (
-                <div style={styles.toolbarGroupLast}>
+                <div className="ui-toolbar-group">
                     {!isHidden('settings') && (
                         <ImageButton
                             icon={<IconSettings />}
                             label={t('tb_settings')}
                             active={props.activeTool === 'settings'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'settings' ? 'none' : 'settings')}
-                            styles={styles}
                             theme={theme}
                         />
                     )}
@@ -387,7 +374,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                         icon={<IconInfo />}
                         label={t('tb_about')}
                         onClick={() => props.onOpenAbout?.()}
-                        styles={styles}
                         theme={theme}
                     />
                 </div>

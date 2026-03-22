@@ -10,7 +10,6 @@ interface SunPanelProps {
         sunShadow?: boolean;
     };
     onUpdate: (settings: any) => void;
-    styles: any;
     theme: any;
 }
 export declare const SunPanel: React.FC<SunPanelProps>;

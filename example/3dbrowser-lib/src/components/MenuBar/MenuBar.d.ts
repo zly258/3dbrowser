@@ -2,7 +2,6 @@ import React from "react";
 import { ThemeColors } from "../../theme/Styles";
 interface MenuBarProps {
     t: (key: string) => string;
-    styles: any;
     theme: ThemeColors;
     themeType?: 'dark' | 'light';
     setThemeType?: (type: 'dark' | 'light') => void;

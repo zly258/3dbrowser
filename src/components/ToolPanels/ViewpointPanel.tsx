@@ -11,13 +11,12 @@ interface ViewpointPanelProps {
     onUpdateName: (id: string, name: string) => void;
     onLoad: (viewpoint: any) => void;
     onDelete: (id: string) => void;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
 export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
     t, onClose, viewpoints, onSave, onUpdateName, onLoad, onDelete,
-    styles, theme
+    theme
 }) => {
     const [newName, setNewName] = useState("");
 
@@ -39,7 +38,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
     };
 
     return (
-        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={360} height={450} resizable={true} styles={styles} theme={theme} storageId="tool_viewpoint">
+        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={360} height={450} resizable={true} theme={theme} storageId="tool_viewpoint">
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <div style={{ marginBottom: 12 }}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -57,7 +56,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                             }}
                             placeholder={t("viewpoint_title") || "视点名称"}
                         />
-                        <Button styles={styles} theme={theme} onClick={handleSave} style={{ height: 28, padding: '0 12px', minWidth: '60px', whiteSpace: 'nowrap', fontSize: 12 }}>
+                        <Button theme={theme} onClick={handleSave} style={{ height: 28, padding: '0 12px', minWidth: '60px', whiteSpace: 'nowrap', fontSize: 12 }}>
                             {t("btn_confirm") || "保存"}
                         </Button>
                     </div>

@@ -23,7 +23,7 @@ const Section: React.FC<{
       style={{
         marginBottom: '10px',
         paddingBottom: '6px',
-        color: 'var(--accent)',
+        color: 'var(--text-secondary)',
         borderBottom: '1px solid var(--border-color)',
         letterSpacing: '0.5px',
       }}
@@ -84,7 +84,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   setThemeMode,   // 设置主题回调
   showStats,      // 是否显示统计
   setShowStats,   // 设置统计显示回调
-  styles,         // 样式配置
+  // 样式配置
   theme           // 主题配置
 }) => {
   return (
@@ -94,7 +94,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       width={360}
       height={500}
       modal={true}
-      styles={styles}
       theme={theme}
     >
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflowY: 'auto' }}>
@@ -205,6 +204,6 @@ interface SettingsModalProps {
   setThemeMode: (m: 'dark' | 'light') => void;  // 设置主题回调
   showStats: boolean;          // 是否显示统计信息
   setShowStats: (v: boolean) => void;  // 设置统计显示回调
-  styles?: any;                // 自定义样式
+                  // 自定义样式
   theme?: any;                 // 主题配置
 }

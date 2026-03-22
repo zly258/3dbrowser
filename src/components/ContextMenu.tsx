@@ -13,7 +13,7 @@ interface ContextMenuProps {
     y: number;
     items: ContextMenuItem[];
     onClose: () => void;
-    theme: ThemeColors;
+    theme?: ThemeColors;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, theme }) => {
@@ -43,29 +43,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
     return (
         <div
             ref={menuRef}
-            style={{
-                position: 'fixed',
-                left: x,
-                top: y,
-                backgroundColor: theme.panelBg,
-                border: `1px solid ${theme.border}`,
-                borderRadius: '4px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                zIndex: 10000,
-                minWidth: '160px',
-                padding: '4px 0',
-            }}
+            className="ui-context-menu"
+            style={{ left: x, top: y }}
         >
             {items.map((item, index) => {
                 if (item.divider) {
                     return (
                         <div
                             key={index}
-                            style={{
-                                height: '1px',
-                                backgroundColor: theme.border,
-                                margin: '4px 0',
-                            }}
+                            className="ui-context-menu-divider"
                         />
                     );
                 }
@@ -78,23 +64,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
                                 onClose();
                             }
                         }}
-                        style={{
-                            padding: '8px 16px',
-                            fontSize: '12px',
-                            color: item.disabled ? theme.textMuted : theme.text,
-                            cursor: item.disabled ? 'not-allowed' : 'pointer',
-                            backgroundColor: 'transparent',
-                            transition: 'background-color 0.1s',
-                            opacity: item.disabled ? 0.5 : 1,
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!item.disabled) {
-                                e.currentTarget.style.backgroundColor = theme.itemHover;
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
+                        className={`ui-context-menu-item ${item.disabled ? 'disabled' : ''}`}
                     >
                         {item.label}
                     </div>
@@ -103,3 +73,4 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
         </div>
     );
 };
+

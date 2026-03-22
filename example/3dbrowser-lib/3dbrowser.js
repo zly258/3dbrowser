@@ -20,7 +20,16 @@ class SceneManager {
     this.currentMeasurePoints = [];
     this.currentMeasureModelUuid = null;
     this.previewLine = null;
+    this.previewPolygon = null;
     this.measureRecords = /* @__PURE__ */ new Map();
+    this.boxSelectState = {
+      active: false,
+      startX: 0,
+      startY: 0,
+      endX: 0,
+      endY: 0,
+      rectElement: null
+    };
     this.clippingPlanes = [];
     this.clipPlaneHelpers = [];
     this.sceneCenter = new THREE.Vector3();
@@ -2232,6 +2241,13 @@ class SceneManager {
     if (modelUuid) {
       this.currentMeasureModelUuid = modelUuid;
     }
+    if (this.measureType === "area" && this.currentMeasurePoints.length >= 3) {
+      const first = this.currentMeasurePoints[0];
+      if (point.distanceTo(first) < 5) {
+        this.currentMeasurePoints.push(first.clone());
+        return this.finalizeMeasurement();
+      }
+    }
     this.currentMeasurePoints.push(point);
     this.addMarker(point, this.measureGroup);
     if (this.measureType === "dist" && this.currentMeasurePoints.length === 2) {
@@ -2249,9 +2265,28 @@ class SceneManager {
       this.measureGroup.remove(this.previewLine);
       this.previewLine = null;
     }
+    if (this.previewPolygon) {
+      this.measureGroup.remove(this.previewPolygon);
+      this.previewPolygon = null;
+    }
     const points = [...this.currentMeasurePoints];
     if (hoverPoint) points.push(hoverPoint);
     if (points.length < 2) return;
+    if (this.measureType === "area" && points.length >= 3) {
+      const polygonPoints = [...this.currentMeasurePoints];
+      if (hoverPoint) polygonPoints.push(hoverPoint);
+      if (polygonPoints.length >= 3) {
+        const geometry2 = new THREE.BufferGeometry().setFromPoints(polygonPoints);
+        const material2 = new THREE.LineBasicMaterial({
+          color: 16711680,
+          depthTest: false
+        });
+        this.previewPolygon = new THREE.LineLoop(geometry2, material2);
+        this.previewPolygon.renderOrder = 998;
+        this.measureGroup.add(this.previewPolygon);
+      }
+      return;
+    }
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineDashedMaterial({
       color: 16711680,
@@ -2315,6 +2350,60 @@ class SceneManager {
       valStr = displayVal;
       this.addLine(this.currentMeasurePoints, group);
       labelPos.copy(center);
+    } else if (this.measureType === "area") {
+      const pts = this.currentMeasurePoints;
+      if (pts.length >= 3) {
+        const v1 = new THREE.Vector3().subVectors(pts[1], pts[0]);
+        const v2 = new THREE.Vector3().subVectors(pts[2], pts[0]);
+        new THREE.Vector3().crossVectors(v1, v2).normalize();
+        let area = 0;
+        const n = pts.length;
+        for (let i = 0; i < n; i++) {
+          const curr = pts[i];
+          const next = pts[(i + 1) % n];
+          new THREE.Vector3().subVectors(next, curr);
+          area += new THREE.Vector3().crossVectors(curr, next).length();
+        }
+        area = area / 2;
+        displayVal = area.toFixed(3);
+        valStr = `${displayVal} m²`;
+        this.addLineLoop(pts, group);
+        this.addPolygonFill(pts, group);
+        const center = new THREE.Vector3();
+        pts.forEach((p) => center.add(p));
+        center.divideScalar(pts.length);
+        labelPos.copy(center);
+      }
+    } else if (this.measureType === "volume") {
+      const uuid = this.currentMeasureModelUuid;
+      let vol = 0;
+      if (uuid) {
+        const mappings = this.optimizedMapping.get(uuid);
+        if (mappings && mappings.length > 0) {
+          const m = mappings[0];
+          if (m.geometry) {
+            vol = this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
+          }
+        } else {
+          const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+          if (obj && obj.isMesh) {
+            const mesh = obj;
+            vol = this.computeGeometryVolume(mesh.geometry, mesh, void 0);
+          }
+        }
+      }
+      displayVal = vol.toFixed(3);
+      valStr = `${displayVal} m³`;
+      if (uuid) {
+        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+        if (obj) {
+          const box = new THREE.Box3().setFromObject(obj);
+          labelPos.copy(box.getCenter(new THREE.Vector3()));
+          const boxHelper = new THREE.Box3Helper(box, new THREE.Color(16711680));
+          boxHelper.renderOrder = 998;
+          group.add(boxHelper);
+        }
+      }
     } else {
       const p = this.currentMeasurePoints[0];
       displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
@@ -2390,12 +2479,16 @@ class SceneManager {
       const isHighlighted = rid === id;
       const color = isHighlighted ? 65280 : 16711680;
       record.group.traverse((child) => {
-        if (child instanceof THREE.Line) {
+        if (child instanceof THREE.Line || child instanceof THREE.LineLoop) {
           child.material.color.set(color);
         } else if (child instanceof THREE.Points) {
           child.material.color.set(color);
         } else if (child instanceof THREE.Sprite) {
           child.material.color.set(isHighlighted ? 65280 : 16777215);
+        } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+          child.material.color.set(color);
+        } else if (child instanceof THREE.Box3Helper) {
+          child.material.color.set(color);
         }
       });
     });
@@ -2434,6 +2527,221 @@ class SceneManager {
     line.renderOrder = 998;
     parent.add(line);
   }
+  addLineLoop(points, parent) {
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 16711680, depthTest: false, linewidth: 2 });
+    const line = new THREE.LineLoop(geometry, material);
+    line.renderOrder = 998;
+    parent.add(line);
+  }
+  addPolygonFill(points, parent) {
+    if (points.length < 3) return;
+    const shape = new THREE.Shape();
+    const v1 = new THREE.Vector3().subVectors(points[1], points[0]);
+    const v2 = new THREE.Vector3().subVectors(points[2], points[0]);
+    const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+    const tangent = v1.normalize();
+    const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+    const origin = points[0];
+    const toLocal = (p) => {
+      const d = new THREE.Vector3().subVectors(p, origin);
+      return [d.dot(tangent), d.dot(bitangent)];
+    };
+    shape.moveTo(...toLocal(points[0]));
+    for (let i = 1; i < points.length; i++) {
+      shape.lineTo(...toLocal(points[i]));
+    }
+    shape.closePath();
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: 16711680,
+      transparent: true,
+      opacity: 0.15,
+      depthTest: false,
+      side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 997;
+    const matrix = new THREE.Matrix4();
+    matrix.makeBasis(tangent, bitangent, normal);
+    matrix.setPosition(origin);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(matrix);
+    mesh.applyMatrix4(matrix);
+    parent.add(mesh);
+  }
+  computeGeometryVolume(geometry, mesh, instanceId) {
+    const pos = geometry.attributes.position;
+    const index = geometry.index;
+    let volume = 0;
+    const vA = new THREE.Vector3();
+    const vB = new THREE.Vector3();
+    const vC = new THREE.Vector3();
+    const tmpMat = new THREE.Matrix4();
+    if (instanceId !== void 0 && mesh.isInstancedMesh) {
+      mesh.getMatrixAt(instanceId, tmpMat);
+    } else {
+      tmpMat.copy(mesh.matrixWorld);
+    }
+    const applyMatrix = (v) => {
+      v.applyMatrix4(tmpMat);
+    };
+    if (index) {
+      for (let i = 0; i < index.count; i += 3) {
+        vA.fromBufferAttribute(pos, index.getX(i));
+        vB.fromBufferAttribute(pos, index.getX(i + 1));
+        vC.fromBufferAttribute(pos, index.getX(i + 2));
+        applyMatrix(vA);
+        applyMatrix(vB);
+        applyMatrix(vC);
+        volume += vA.dot(new THREE.Vector3().crossVectors(vB, vC)) / 6;
+      }
+    } else {
+      for (let i = 0; i < pos.count; i += 3) {
+        vA.fromBufferAttribute(pos, i);
+        vB.fromBufferAttribute(pos, i + 1);
+        vC.fromBufferAttribute(pos, i + 2);
+        applyMatrix(vA);
+        applyMatrix(vB);
+        applyMatrix(vC);
+        volume += vA.dot(new THREE.Vector3().crossVectors(vB, vC)) / 6;
+      }
+    }
+    return Math.abs(volume);
+  }
+  // ========== 框选方法 ==========
+  /**
+   * 开始框选
+   */
+  startBoxSelect(clientX, clientY) {
+    this.boxSelectState.active = true;
+    this.boxSelectState.startX = clientX;
+    this.boxSelectState.startY = clientY;
+    this.boxSelectState.endX = clientX;
+    this.boxSelectState.endY = clientY;
+    this.updateBoxSelectRect();
+  }
+  /**
+   * 更新框选范围
+   */
+  updateBoxSelect(clientX, clientY) {
+    if (!this.boxSelectState.active) return;
+    this.boxSelectState.endX = clientX;
+    this.boxSelectState.endY = clientY;
+    this.updateBoxSelectRect();
+  }
+  /**
+   * 完成框选，返回选中的对象 UUID 列表
+   */
+  endBoxSelect() {
+    if (!this.boxSelectState.active) return [];
+    this.boxSelectState.active = false;
+    this.removeBoxSelectRect();
+    const { startX, startY, endX, endY } = this.boxSelectState;
+    const dx = Math.abs(endX - startX);
+    const dy = Math.abs(endY - startY);
+    if (dx < 5 || dy < 5) return [];
+    const rect = this.canvas.getBoundingClientRect();
+    const x1 = (Math.min(startX, endX) - rect.left) / rect.width * 2 - 1;
+    const y1 = -(Math.max(startY, endY) - rect.top) / rect.height * 2 + 1;
+    const x2 = (Math.max(startX, endX) - rect.left) / rect.width * 2 - 1;
+    const y2 = -(Math.min(startY, endY) - rect.top) / rect.height * 2 + 1;
+    return this.selectByScreenRect(x1, y1, x2, y2);
+  }
+  /**
+   * 取消框选
+   */
+  cancelBoxSelect() {
+    this.boxSelectState.active = false;
+    this.removeBoxSelectRect();
+  }
+  updateBoxSelectRect() {
+    const state = this.boxSelectState;
+    if (!state.rectElement) {
+      state.rectElement = document.createElement("div");
+      state.rectElement.style.cssText = `
+                position: fixed; border: 1px dashed #00aaff;
+                background: rgba(0, 170, 255, 0.08); pointer-events: none; z-index: 1000;
+            `;
+      document.body.appendChild(state.rectElement);
+    }
+    const { startX, startY, endX, endY } = state;
+    state.rectElement.style.left = Math.min(startX, endX) + "px";
+    state.rectElement.style.top = Math.min(startY, endY) + "px";
+    state.rectElement.style.width = Math.abs(endX - startX) + "px";
+    state.rectElement.style.height = Math.abs(endY - startY) + "px";
+  }
+  removeBoxSelectRect() {
+    if (this.boxSelectState.rectElement) {
+      this.boxSelectState.rectElement.remove();
+      this.boxSelectState.rectElement = null;
+    }
+  }
+  /**
+   * 通过屏幕矩形选择对象
+   */
+  selectByScreenRect(x1, y1, x2, y2) {
+    if (!this.interactableListValid) {
+      this.getRayIntersects(0, 0);
+    }
+    const frustum = new THREE.Frustum();
+    const projScreenMatrix = new THREE.Matrix4();
+    projScreenMatrix.multiplyMatrices(
+      this.camera.projectionMatrix,
+      this.camera.matrixWorldInverse
+    );
+    const corners = [
+      new THREE.Vector3(x1, y1, -1).unproject(this.camera),
+      new THREE.Vector3(x2, y1, -1).unproject(this.camera),
+      new THREE.Vector3(x2, y2, -1).unproject(this.camera),
+      new THREE.Vector3(x1, y2, -1).unproject(this.camera)
+    ];
+    const farCorners = [
+      new THREE.Vector3(x1, y1, 1).unproject(this.camera),
+      new THREE.Vector3(x2, y1, 1).unproject(this.camera),
+      new THREE.Vector3(x2, y2, 1).unproject(this.camera),
+      new THREE.Vector3(x1, y2, 1).unproject(this.camera)
+    ];
+    const planes = [];
+    for (let i = 0; i < 4; i++) {
+      const a = corners[i];
+      const b = corners[(i + 1) % 4];
+      const c = farCorners[i];
+      planes.push(new THREE.Plane().setFromCoplanarPoints(a, b, c));
+    }
+    planes.push(new THREE.Plane().setFromCoplanarPoints(corners[0], corners[1], corners[2]));
+    planes.push(new THREE.Plane().setFromCoplanarPoints(farCorners[0], farCorners[1], farCorners[2]));
+    frustum.planes = planes;
+    const selected = [];
+    const box = new THREE.Box3();
+    const tmpMat = new THREE.Matrix4();
+    for (const obj of this.interactableList) {
+      if (obj.isBatchedMesh) {
+        const bm = obj;
+        const batchIdToUuid = bm.userData.batchIdToUuid;
+        if (!batchIdToUuid) continue;
+        const geoBox = new THREE.Box3();
+        if (!bm.geometry.boundingBox) bm.geometry.computeBoundingBox();
+        for (const [batchId, uuid] of batchIdToUuid) {
+          try {
+            bm.getMatrixAt(batchId, tmpMat);
+            tmpMat.premultiply(bm.matrixWorld);
+            geoBox.copy(bm.geometry.boundingBox).applyMatrix4(tmpMat);
+            if (frustum.intersectsBox(geoBox)) {
+              selected.push(uuid);
+            }
+          } catch {
+          }
+        }
+        continue;
+      }
+      box.setFromObject(obj);
+      if (frustum.intersectsBox(box)) {
+        selected.push(obj.uuid);
+      }
+    }
+    return selected;
+  }
   removeMeasurement(id) {
     if (this.measureRecords.has(id)) {
       const record = this.measureRecords.get(id);
@@ -2462,10 +2770,14 @@ class SceneManager {
       this.measureGroup.remove(this.previewLine);
       this.previewLine = null;
     }
+    if (this.previewPolygon) {
+      this.measureGroup.remove(this.previewPolygon);
+      this.previewPolygon = null;
+    }
     this.tempMarker.visible = false;
     for (let i = this.measureGroup.children.length - 1; i >= 0; i--) {
       const child = this.measureGroup.children[i];
-      if (!child.name.startsWith("measure_") && child !== this.previewLine) {
+      if (!child.name.startsWith("measure_") && child !== this.previewLine && child !== this.previewPolygon) {
         this.measureGroup.remove(child);
       }
     }
@@ -3789,474 +4101,6 @@ const themes = {
   }
 };
 const DEFAULT_FONT = "'Segoe UI', 'Microsoft YaHei', sans-serif";
-const createGlobalStyle = (theme) => `
-    @keyframes fadeInDown {
-        from { opacity: 0; transform: translate(-50%, -20px); }
-        to { opacity: 1; transform: translate(-50%, 0); }
-    }
-    @keyframes slideInRight {
-        from { opacity: 0; transform: translateX(100%); }
-        to { opacity: 1; transform: translateX(0); }
-    }
-    ::-webkit-scrollbar { width: 12px; height: 12px; }
-    ::-webkit-scrollbar-track { background: ${theme.bg}; }
-    ::-webkit-scrollbar-thumb { background: #c2c2c2; border: 3px solid ${theme.bg}; border-radius: 0px; }
-    ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
-    ::-webkit-scrollbar-corner { background: ${theme.bg}; }
-    * { scrollbar-width: thin; scrollbar-color: #c2c2c2 ${theme.bg}; }
-    body { background-color: ${theme.bg}; color: ${theme.text}; margin: 0; padding: 0; overflow: hidden; font-family: ${DEFAULT_FONT}; -webkit-font-smoothing: antialiased; }
-    * { box-sizing: border-box; }
-    button { outline: none; }
-    button:focus { outline: none; }
-`;
-const createStyles = (theme) => ({
-  // 桌面端 / 通用
-  container: { display: "flex", flexDirection: "column", height: "100%", width: "100%", backgroundColor: theme.bg, color: theme.text, fontSize: "11px", fontFamily: DEFAULT_FONT, userSelect: "none", overflow: "hidden", position: "relative" },
-  // 传统菜单样式
-  classicMenuBar: {
-    display: "flex",
-    alignItems: "center",
-    backgroundColor: theme.bg,
-    borderBottom: `1px solid ${theme.border}`,
-    padding: "0 8px",
-    height: "26px",
-    gap: "4px",
-    WebkitAppRegion: "no-drag"
-  },
-  classicMenuItem: (active, hover) => ({
-    padding: "0 10px",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    fontSize: "12px",
-    color: theme.text,
-    cursor: "pointer",
-    backgroundColor: active ? theme.highlight : hover ? theme.itemHover : "transparent",
-    transition: "background-color 0.1s"
-  }),
-  classicMenuDropdown: {
-    position: "absolute",
-    top: "100%",
-    left: 0,
-    backgroundColor: theme.panelBg,
-    border: `1px solid ${theme.border}`,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-    zIndex: 2e3,
-    minWidth: "160px",
-    padding: "4px 0"
-  },
-  classicMenuSubItem: (hover) => ({
-    padding: "6px 16px",
-    fontSize: "12px",
-    color: theme.text,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: hover ? theme.itemHover : "transparent"
-  }),
-  toolbarBar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    backgroundColor: theme.panelBg,
-    borderBottom: `1px solid ${theme.border}`,
-    padding: "4px 8px",
-    height: "44px",
-    gap: "2px",
-    zIndex: 1e3,
-    WebkitAppRegion: "no-drag"
-  },
-  toolbarGroup: {
-    display: "flex",
-    alignItems: "center",
-    gap: "2px",
-    padding: "0 4px",
-    borderRight: `1px solid ${theme.border}`,
-    height: "100%"
-  },
-  toolbarGroupLast: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1px",
-    padding: "0 4px",
-    height: "100%"
-  },
-  toolbarBtn: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "4px 12px",
-    height: "40px",
-    minWidth: "52px",
-    gap: "3px",
-    fontSize: "12px",
-    fontWeight: 500,
-    color: theme.text,
-    cursor: "pointer",
-    backgroundColor: "transparent",
-    border: "none",
-    borderRadius: "4px",
-    transition: "background-color 0.15s",
-    overflow: "hidden",
-    boxSizing: "border-box"
-  },
-  toolbarBtnActive: {
-    backgroundColor: theme.highlight,
-    outline: "none",
-    overflow: "hidden"
-  },
-  toolbarIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "18px",
-    height: "18px",
-    overflow: "hidden"
-  },
-  toolbarLabel: {
-    fontSize: "10px",
-    fontWeight: 500,
-    color: theme.text,
-    whiteSpace: "nowrap",
-    letterSpacing: "0.01em",
-    lineHeight: "1",
-    overflow: "hidden",
-    textOverflow: "ellipsis"
-  },
-  statusBar: {
-    height: "24px",
-    backgroundColor: "#ffffff",
-    color: "#444444",
-    display: "flex",
-    alignItems: "center",
-    padding: "0 12px",
-    fontSize: "12px",
-    justifyContent: "space-between",
-    borderTop: `1px solid ${theme.border}`
-  },
-  statusBarRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px"
-  },
-  statusMonitorItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    fontFamily: "'Segoe UI', monospace",
-    opacity: 0.9
-  },
-  toolbarBtnHover: {
-    backgroundColor: theme.itemHover,
-    color: theme.text
-  },
-  // 复选框样式
-  checkboxContainer: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    cursor: "pointer",
-    userSelect: "none",
-    fontSize: "12px",
-    color: theme.text,
-    padding: "2px 0"
-  },
-  checkboxCustom: (checked) => ({
-    width: "16px",
-    height: "16px",
-    borderRadius: "2px",
-    border: `1px solid ${checked ? theme.accent : theme.border}`,
-    backgroundColor: checked ? theme.accent : "transparent",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    transition: "all 0.2s ease",
-    position: "relative",
-    cursor: "pointer"
-  }),
-  checkboxCheckmark: {
-    width: "10px",
-    height: "10px",
-    color: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  floatingPanel: {
-    position: "absolute",
-    backgroundColor: theme.panelBg,
-    border: `1px solid ${theme.border}`,
-    boxShadow: theme.bg === "#ffffff" ? "0 10px 30px rgba(0,0,0,0.1)" : "0 10px 30px rgba(0,0,0,0.4)",
-    borderRadius: "4px",
-    display: "flex",
-    flexDirection: "column",
-    zIndex: 200,
-    minWidth: "220px",
-    minHeight: "120px",
-    overflow: "hidden",
-    color: theme.text
-  },
-  floatingHeader: {
-    height: "29px",
-    padding: "0 8px",
-    backgroundColor: theme.headerBg,
-    borderBottom: `1px solid ${theme.border}`,
-    cursor: "default",
-    fontWeight: "600",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    userSelect: "none",
-    fontSize: "12px",
-    color: theme.text
-  },
-  floatingContent: {
-    padding: "0",
-    overflowY: "auto",
-    flex: 1,
-    position: "relative",
-    display: "flex",
-    flexDirection: "column"
-  },
-  resizeHandle: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: "12px",
-    height: "12px",
-    cursor: "se-resize",
-    zIndex: 10,
-    background: "transparent"
-  },
-  // 树形结构样式
-  treeContainer: {
-    flex: 1,
-    height: "100%",
-    overflowY: "auto",
-    overflowX: "hidden",
-    padding: "2px 0"
-  },
-  treeNode: (selected, hover) => ({
-    display: "flex",
-    alignItems: "center",
-    height: "24px",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    fontSize: "12px",
-    color: selected ? theme.accent : theme.text,
-    backgroundColor: selected ? theme.highlight : hover ? theme.itemHover : "transparent",
-    transition: "background-color 0.1s ease",
-    paddingRight: "8px",
-    fontWeight: selected ? "600" : "400"
-  }),
-  expander: {
-    width: "20px",
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    color: theme.textMuted
-  },
-  nodeLabel: {
-    flex: 1,
-    overflow: "hidden",
-    textOverflow: "ellipsis"
-  },
-  // 属性面板
-  list: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "0",
-    userSelect: "text"
-  },
-  propGroupTitle: {
-    backgroundColor: theme.headerBg,
-    padding: "4px 12px",
-    fontWeight: "600",
-    fontSize: "11px",
-    color: theme.text,
-    borderBottom: `1px solid ${theme.border}`,
-    borderTop: `1px solid ${theme.border}`,
-    marginTop: "-1px",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    userSelect: "none"
-  },
-  propRow: {
-    display: "flex",
-    padding: "4px 12px",
-    borderBottom: `1px solid ${theme.border}40`,
-    alignItems: "center",
-    fontSize: "11px",
-    gap: "8px"
-  },
-  propKey: {
-    width: "40%",
-    color: theme.textMuted,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap"
-  },
-  propValue: {
-    width: "60%",
-    color: theme.text,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    cursor: "text"
-  },
-  // 通用 UI 元素
-  btn: {
-    backgroundColor: theme.bg,
-    color: theme.text,
-    border: `1px solid ${theme.border}`,
-    padding: "4px 12px",
-    cursor: "pointer",
-    borderRadius: "0px",
-    fontSize: "12px",
-    fontWeight: "400",
-    transition: "all 0.1s",
-    outline: "none",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  btnActive: {
-    backgroundColor: theme.accent,
-    color: "#ffffff",
-    borderColor: theme.accent
-  },
-  // 视图宫格按钮
-  viewGridBtn: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.bg,
-    border: `1px solid ${theme.border}`,
-    borderRadius: "0px",
-    padding: "4px",
-    cursor: "pointer",
-    transition: "all 0.1s",
-    color: theme.text,
-    fontSize: "11px",
-    height: "56px",
-    gap: "4px"
-  },
-  // 弹窗遮罩
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: theme.bg === "#ffffff" ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2e3
-  },
-  modalContent: {
-    backgroundColor: theme.panelBg,
-    border: `1px solid ${theme.accent}`,
-    boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-    borderRadius: "0px",
-    display: "flex",
-    flexDirection: "column",
-    width: "400px",
-    maxHeight: "80vh",
-    overflow: "hidden",
-    color: theme.text
-  },
-  // 加载遮罩
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: theme.bg === "#ffffff" ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 3e3
-  },
-  progressBox: {
-    width: "320px",
-    backgroundColor: theme.panelBg,
-    padding: "20px",
-    borderRadius: "0px",
-    border: `1px solid ${theme.accent}`,
-    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-    color: theme.text
-  },
-  progressBarContainer: {
-    height: "4px",
-    backgroundColor: theme.bg,
-    borderRadius: "0px",
-    overflow: "hidden",
-    marginTop: "12px"
-  },
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: theme.accent,
-    transition: "width 0.2s ease-out"
-  },
-  // 滑块
-  sliderRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "8px"
-  },
-  sliderLabel: {
-    fontSize: "11px",
-    color: theme.textMuted,
-    width: "60px"
-  },
-  rangeSlider: {
-    flex: 1,
-    cursor: "pointer",
-    height: "4px",
-    outline: "none"
-  },
-  // 统计 HUD（顶部居中）
-  statsOverlay: {
-    position: "absolute",
-    top: "8px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    backgroundColor: theme.panelBg,
-    color: theme.text,
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: "10px",
-    padding: "4px 12px",
-    fontSize: "11px",
-    zIndex: 100,
-    pointerEvents: "none",
-    borderRadius: "0px",
-    border: `1px solid ${theme.border}`,
-    boxShadow: `0 2px 8px ${theme.shadow}`
-  },
-  statsRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    whiteSpace: "nowrap"
-  },
-  statsDivider: {
-    width: "1px",
-    height: "10px",
-    backgroundColor: theme.border
-  }
-});
 
 const resources = {
   en: {
@@ -4350,12 +4194,18 @@ const resources = {
     measure_dist: "Distance",
     measure_angle: "Angle",
     measure_coord: "Coordinate",
+    measure_area: "Area",
+    measure_volume: "Volume",
     measure_instruct_dist: "Click 2 points to measure distance.",
     measure_instruct_angle: "Click 3 points (Start-Vertex-End).",
     measure_instruct_coord: "Click any point to get coordinates.",
+    measure_instruct_area: "Click 3+ points to measure area. Click near first point to close.",
+    measure_instruct_volume: "Click on an object to measure its volume.",
     measure_clear: "Clear All",
     measure_start: "Start",
     measure_stop: "Stop",
+    tb_boxSelect: "Box Select",
+    tb_boxSelect_hint: "Drag to select objects",
     // 剖切
     clip_title: "Sectioning Tool",
     clip_enable: "Enable Clipping",
@@ -4537,15 +4387,21 @@ const resources = {
     measure_title: "测量面板",
     measure_type: "测量类型",
     measure_none: "无",
-    measure_dist: "长度测量",
-    measure_angle: "角度测量",
-    measure_coord: "坐标测量",
+    measure_dist: "长度",
+    measure_angle: "角度",
+    measure_coord: "坐标",
+    measure_area: "面积",
+    measure_volume: "体积",
     measure_instruct_dist: "请在场景中点击两个点以测量距离。",
     measure_instruct_angle: "请点击三个点测量角度 (起点-顶点-终点)。",
     measure_instruct_coord: "点击任意位置获取世界坐标。",
+    measure_instruct_area: "点击 3 个及以上点测量面积，靠近起点点击以闭合。",
+    measure_instruct_volume: "点击对象以测量其体积。",
     measure_clear: "清空测量",
     measure_start: "开始测量",
     measure_stop: "停止测量",
+    tb_boxSelect: "框选",
+    tb_boxSelect_hint: "拖拽选择对象",
     // 剖切
     clip_title: "剖切面板",
     clip_enable: "开启剖切",
@@ -4646,104 +4502,40 @@ const getTranslation = (lang, key) => {
 
 const Button = ({
   children,
-  variant = "primary",
+  variant = "default",
   active,
-  styles,
   theme,
   style,
   className = "",
   ...props
 }) => {
-  const getVariantStyles = () => {
-    switch (variant) {
-      case "primary":
-        return active ? styles?.btnActive : styles?.btn;
-      case "danger":
-        return { ...styles?.btn, backgroundColor: theme?.danger, borderColor: theme?.danger, color: "white" };
-      case "ghost":
-        return { ...styles?.btn, backgroundColor: "transparent", borderColor: "transparent", boxShadow: "none" };
-      default:
-        return styles?.btn;
-    }
-  };
-  const baseStyle = {
-    ...getVariantStyles(),
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "6px",
-    transition: "all 0.2s",
-    border: variant === "ghost" ? "none" : active ? `1px solid ${theme?.accent}` : `1px solid ${theme?.border}`,
-    boxShadow: variant === "ghost" ? "none" : "none",
-    opacity: props.disabled ? 0.4 : 1,
-    cursor: props.disabled ? "not-allowed" : "pointer",
-    pointerEvents: props.disabled ? "none" : "auto",
-    ...style
-  };
-  return /* @__PURE__ */ jsx("button", { style: baseStyle, className: `ui-btn ${className}`, ...props, children });
+  let btnClass = "ui-btn";
+  if (variant === "primary") btnClass += " ui-btn-primary";
+  else if (variant === "danger") btnClass += " bg-error text-white border-error";
+  else if (variant === "ghost") btnClass += " ui-btn-ghost";
+  else btnClass += " ui-btn-default";
+  if (active) btnClass += " active";
+  return /* @__PURE__ */ jsx("button", { className: `${btnClass} ${className}`, style, ...props, children });
 };
 
 const ImageButton = ({
   icon,
   label,
   active,
-  styles,
   theme,
   style,
   className = "",
   ...props
 }) => {
-  const [hover, setHover] = React.useState(false);
-  const baseStyle = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "3px 8px",
-    height: "40px",
-    minWidth: "48px",
-    gap: "2px",
-    fontSize: "12px",
-    color: theme?.text || "#333",
-    cursor: "pointer",
-    backgroundColor: active ? styles?.toolbarBtnActive?.backgroundColor || theme?.accent || "#007acc" : hover ? theme?.itemHover || "#f0f0f0" : "transparent",
-    border: "none",
-    borderRadius: "4px",
-    transition: "background-color 0.1s",
-    outline: "none",
-    overflow: "hidden",
-    boxSizing: "border-box",
-    ...style
-  };
-  const iconStyle = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "18px",
-    height: "18px",
-    overflow: "hidden"
-  };
-  const labelStyle = {
-    fontSize: "10px",
-    lineHeight: "1",
-    color: active ? theme?.textLight || "#fff" : theme?.text || "#333",
-    whiteSpace: "nowrap",
-    fontWeight: 500,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    maxWidth: "100%"
-  };
   return /* @__PURE__ */ jsxs(
     "button",
     {
-      style: baseStyle,
+      style,
       className: `ui-toolbar-btn ${active ? "active" : ""} ${className}`,
       ...props,
-      onMouseEnter: () => setHover(true),
-      onMouseLeave: () => setHover(false),
       children: [
-        /* @__PURE__ */ jsx("div", { style: iconStyle, children: icon }),
-        label && /* @__PURE__ */ jsx("div", { style: labelStyle, children: label })
+        /* @__PURE__ */ jsx("div", { className: "flex items-center justify-center w-[18px] h-[18px] overflow-hidden", children: icon }),
+        label && /* @__PURE__ */ jsx("div", { className: "text-[10px] leading-none font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-full mt-[2px]", children: label })
       ]
     }
   );
@@ -5382,11 +5174,20 @@ const IconGrid = (props) => createIcon(
   ] }),
   props
 );
+const IconSelectAll = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("path", { d: "M3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4z", fill: "none" }),
+    /* @__PURE__ */ jsx("line", { x1: "7", y1: "5", x2: "17", y2: "5" }),
+    /* @__PURE__ */ jsx("line", { x1: "5", y1: "7", x2: "5", y2: "17" }),
+    /* @__PURE__ */ jsx("line", { x1: "17", y1: "19", x2: "7", y2: "19" }),
+    /* @__PURE__ */ jsx("line", { x1: "19", y1: "17", x2: "19", y2: "7" })
+  ] }),
+  props
+);
 
 const Toolbar = (props) => {
   const {
     t,
-    styles,
     theme,
     hiddenMenus = []
   } = props;
@@ -5430,7 +5231,7 @@ const Toolbar = (props) => {
       }
     );
   };
-  return /* @__PURE__ */ jsxs("div", { style: styles.toolbarBar, children: [
+  return /* @__PURE__ */ jsxs("div", { className: "ui-toolbar", children: [
     /* @__PURE__ */ jsx(
       "input",
       {
@@ -5464,7 +5265,7 @@ const Toolbar = (props) => {
         onChange: props.handleOpenFolder
       }
     ),
-    !isHidden("file") && /* @__PURE__ */ jsx("div", { style: styles.toolbarGroup, children: /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
+    !isHidden("file") && /* @__PURE__ */ jsx("div", { className: "ui-toolbar-group", children: /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
       /* @__PURE__ */ jsx(
         ImageButton,
         {
@@ -5472,7 +5273,6 @@ const Toolbar = (props) => {
           label: t("tb_file"),
           active: openMenu === "file",
           onClick: () => toggleMenu("file"),
-          styles,
           theme
         }
       ),
@@ -5531,14 +5331,13 @@ const Toolbar = (props) => {
         )
       ] }))
     ] }) }),
-    !isHidden("view") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroup, children: [
+    !isHidden("view") && /* @__PURE__ */ jsxs("div", { className: "ui-toolbar-group", children: [
       /* @__PURE__ */ jsx(
         ImageButton,
         {
           icon: /* @__PURE__ */ jsx(IconMaximize, {}),
           label: t("tb_fit"),
           onClick: () => props.sceneMgr?.fitView(),
-          styles,
           theme
         }
       ),
@@ -5550,7 +5349,6 @@ const Toolbar = (props) => {
             label: t("tb_view"),
             active: openMenu === "views",
             onClick: () => toggleMenu("views"),
-            styles,
             theme
           }
         ),
@@ -5689,7 +5487,7 @@ const Toolbar = (props) => {
         ] }))
       ] })
     ] }),
-    !isHidden("interface") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroup, children: [
+    !isHidden("interface") && /* @__PURE__ */ jsxs("div", { className: "ui-toolbar-group", children: [
       !isHidden("outline") && /* @__PURE__ */ jsx(
         ImageButton,
         {
@@ -5697,7 +5495,6 @@ const Toolbar = (props) => {
           label: t("tb_model"),
           active: props.showOutline,
           onClick: () => props.setShowOutline?.(!props.showOutline),
-          styles,
           theme
         }
       ),
@@ -5708,7 +5505,6 @@ const Toolbar = (props) => {
           label: t("tb_props"),
           active: props.showProps,
           onClick: () => props.setShowProps?.(!props.showProps),
-          styles,
           theme
         }
       ),
@@ -5719,12 +5515,11 @@ const Toolbar = (props) => {
           label: t("tb_pick"),
           active: props.pickEnabled,
           onClick: () => props.setPickEnabled?.(!props.pickEnabled),
-          styles,
           theme
         }
       )
     ] }),
-    !isHidden("tool") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroup, children: [
+    !isHidden("tool") && /* @__PURE__ */ jsxs("div", { className: "ui-toolbar-group", children: [
       !isHidden("measure") && /* @__PURE__ */ jsx(
         ImageButton,
         {
@@ -5732,7 +5527,16 @@ const Toolbar = (props) => {
           label: t("tb_measure"),
           active: props.activeTool === "measure",
           onClick: () => props.setActiveTool?.(props.activeTool === "measure" ? "none" : "measure"),
-          styles,
+          theme
+        }
+      ),
+      !isHidden("boxSelect") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconSelectAll, {}),
+          label: t("tb_boxSelect"),
+          active: props.activeTool === "boxSelect",
+          onClick: () => props.setActiveTool?.(props.activeTool === "boxSelect" ? "none" : "boxSelect"),
           theme
         }
       ),
@@ -5743,7 +5547,6 @@ const Toolbar = (props) => {
           label: t("tb_clip"),
           active: props.activeTool === "clip",
           onClick: () => props.setActiveTool?.(props.activeTool === "clip" ? "none" : "clip"),
-          styles,
           theme
         }
       ),
@@ -5754,7 +5557,6 @@ const Toolbar = (props) => {
           label: t("tb_view"),
           active: props.activeTool === "viewpoint",
           onClick: () => props.setActiveTool?.(props.activeTool === "viewpoint" ? "none" : "viewpoint"),
-          styles,
           theme
         }
       ),
@@ -5765,12 +5567,11 @@ const Toolbar = (props) => {
           label: t("tb_sun"),
           active: props.activeTool === "sun",
           onClick: () => props.setActiveTool?.(props.activeTool === "sun" ? "none" : "sun"),
-          styles,
           theme
         }
       )
     ] }),
-    !isHidden("about") && /* @__PURE__ */ jsxs("div", { style: styles.toolbarGroupLast, children: [
+    !isHidden("about") && /* @__PURE__ */ jsxs("div", { className: "ui-toolbar-group", children: [
       !isHidden("settings") && /* @__PURE__ */ jsx(
         ImageButton,
         {
@@ -5778,7 +5579,6 @@ const Toolbar = (props) => {
           label: t("tb_settings"),
           active: props.activeTool === "settings",
           onClick: () => props.setActiveTool?.(props.activeTool === "settings" ? "none" : "settings"),
-          styles,
           theme
         }
       ),
@@ -5788,7 +5588,6 @@ const Toolbar = (props) => {
           icon: /* @__PURE__ */ jsx(IconInfo, {}),
           label: t("tb_about"),
           onClick: () => props.onOpenAbout?.(),
-          styles,
           theme
         }
       )
@@ -5819,7 +5618,6 @@ const SceneTree = ({
   onDelete,
   onFocus,
   onIsolate,
-  styles,
   theme
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -5938,13 +5736,11 @@ const SceneTree = ({
         }
       )
     ] }) }),
-    /* @__PURE__ */ jsx("div", { ref: containerRef, style: { ...styles.treeContainer, flex: 1 }, onScroll: (e) => setScrollTop(e.currentTarget.scrollTop), children: /* @__PURE__ */ jsx("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }, children: visibleItems.map((node) => /* @__PURE__ */ jsxs(
+    /* @__PURE__ */ jsx("div", { ref: containerRef, className: "ui-tree-container flex-1 overflow-y-auto overflow-x-hidden py-[2px]", onScroll: (e) => setScrollTop(e.currentTarget.scrollTop), children: /* @__PURE__ */ jsx("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }, children: visibleItems.map((node) => /* @__PURE__ */ jsxs(
       "div",
       {
-        style: {
-          ...styles.treeNode(node.uuid === selectedUuid, node.uuid === hoveredUuid),
-          paddingLeft: 8
-        },
+        className: `ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""}`,
+        style: { paddingLeft: 8 },
         onClick: () => onSelect(node.uuid, node.object),
         onDoubleClick: () => onFocus?.(node.object),
         onMouseEnter: () => setHoveredUuid(node.uuid),
@@ -5956,7 +5752,7 @@ const SceneTree = ({
               width: 16,
               height: "100%",
               position: "relative",
-              borderLeft: isLast ? "none" : `1px solid ${theme.border}60`
+              borderLeft: isLast ? "none" : `1px solid var(--border-color)`
             } }, i)),
             /* @__PURE__ */ jsxs("div", { style: {
               width: 16,
@@ -5970,17 +5766,17 @@ const SceneTree = ({
                 left: 0,
                 top: 0,
                 bottom: node.isLastChild ? "50%" : 0,
-                borderLeft: `1px solid ${theme.border}60`
+                borderLeft: `1px solid var(--border-color)`
               } }),
               /* @__PURE__ */ jsx("div", { style: {
                 position: "absolute",
                 left: 0,
                 width: 8,
-                borderTop: `1px solid ${theme.border}60`
+                borderTop: `1px solid var(--border-color)`
               } })
             ] })
           ] }),
-          /* @__PURE__ */ jsx("div", { style: styles.expander, onClick: (e) => {
+          /* @__PURE__ */ jsx("div", { className: "ui-tree-expander", onClick: (e) => {
             e.stopPropagation();
             toggleNode(node.uuid);
           }, children: node.children.length > 0 ? node.expanded ? /* @__PURE__ */ jsx(IconChevronDown, { size: 14 }) : /* @__PURE__ */ jsx(IconChevronRight, { size: 14 }) : null }),
@@ -5992,35 +5788,16 @@ const SceneTree = ({
               style: { marginRight: 6, padding: 0, flexShrink: 0 }
             }
           ),
-          /* @__PURE__ */ jsx("div", { style: { ...styles.nodeLabel, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }, children: node.name })
+          /* @__PURE__ */ jsx("div", { className: "ui-tree-label", children: node.name })
         ]
       },
       node.uuid
     )) }) }) }),
-    contextMenu && /* @__PURE__ */ jsxs("div", { style: {
-      position: "fixed",
-      left: contextMenu.x,
-      top: contextMenu.y,
-      backgroundColor: theme.panelBg,
-      border: `1px solid ${theme.border}`,
-      boxShadow: theme.bg === "#ffffff" ? "0 2px 8px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.4)",
-      zIndex: 1e3,
-      minWidth: "120px",
-      padding: "4px 0",
-      borderRadius: "4px"
-    }, children: [
+    contextMenu && /* @__PURE__ */ jsxs("div", { className: "ui-context-menu", style: { left: contextMenu.x, top: contextMenu.y }, children: [
       /* @__PURE__ */ jsx(
         "div",
         {
-          style: {
-            padding: "6px 16px",
-            fontSize: "12px",
-            color: theme.text,
-            cursor: "pointer",
-            backgroundColor: menuHover === "expand" ? theme.itemHover : "transparent"
-          },
-          onMouseEnter: () => setMenuHover("expand"),
-          onMouseLeave: () => setMenuHover(null),
+          className: "ui-context-menu-item",
           onClick: () => {
             expandAll();
             setContextMenu(null);
@@ -6031,15 +5808,7 @@ const SceneTree = ({
       /* @__PURE__ */ jsx(
         "div",
         {
-          style: {
-            padding: "6px 16px",
-            fontSize: "12px",
-            color: theme.text,
-            cursor: "pointer",
-            backgroundColor: menuHover === "collapse" ? theme.itemHover : "transparent"
-          },
-          onMouseEnter: () => setMenuHover("collapse"),
-          onMouseLeave: () => setMenuHover(null),
+          className: "ui-context-menu-item",
           onClick: () => {
             collapseAll();
             setContextMenu(null);
@@ -6048,19 +5817,11 @@ const SceneTree = ({
         }
       ),
       contextMenu.node.isFileNode && /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("div", { style: { height: "1px", backgroundColor: theme.border, margin: "4px 0" } }),
+        /* @__PURE__ */ jsx("div", { className: "ui-context-menu-divider" }),
         /* @__PURE__ */ jsx(
           "div",
           {
-            style: {
-              padding: "6px 16px",
-              fontSize: "12px",
-              color: theme.text,
-              cursor: "pointer",
-              backgroundColor: menuHover === "isolate" ? theme.itemHover : "transparent"
-            },
-            onMouseEnter: () => setMenuHover("isolate"),
-            onMouseLeave: () => setMenuHover(null),
+            className: "ui-context-menu-item",
             onClick: () => {
               onIsolate?.(contextMenu.node.uuid);
               setContextMenu(null);
@@ -6071,15 +5832,7 @@ const SceneTree = ({
         /* @__PURE__ */ jsx(
           "div",
           {
-            style: {
-              padding: "6px 16px",
-              fontSize: "12px",
-              color: theme.text,
-              cursor: "pointer",
-              backgroundColor: menuHover === "delete" ? theme.itemHover : "transparent"
-            },
-            onMouseEnter: () => setMenuHover("delete"),
-            onMouseLeave: () => setMenuHover(null),
+            className: "ui-context-menu-item",
             onClick: () => {
               onDelete?.(contextMenu.node.object);
               setContextMenu(null);
@@ -6324,7 +6077,7 @@ const Section = ({ title, children }) => /* @__PURE__ */ jsxs("div", { className
       style: {
         marginBottom: "10px",
         paddingBottom: "6px",
-        color: "var(--accent)",
+        color: "var(--text-secondary)",
         borderBottom: "1px solid var(--border-color)",
         letterSpacing: "0.5px"
       },
@@ -6387,7 +6140,6 @@ const SettingsPanel = ({
   // 是否显示统计
   setShowStats,
   // 设置统计显示回调
-  styles,
   // 样式配置
   theme
   // 主题配置
@@ -6400,7 +6152,6 @@ const SettingsPanel = ({
       width: 360,
       height: 500,
       modal: true,
-      styles,
       theme,
       children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", gap: "8px", height: "100%", overflowY: "auto" }, children: [
         /* @__PURE__ */ jsxs(Section, { title: t("setting_general"), children: [
@@ -6490,6 +6241,11 @@ const Icons = {
   Coordinate: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
     /* @__PURE__ */ jsx("circle", { cx: "8", cy: "8", r: "6" }),
     /* @__PURE__ */ jsx("path", { d: "M8 2v12M2 8h12", strokeLinecap: "round" })
+  ] }),
+  Area: () => /* @__PURE__ */ jsx("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M3 12L6 4l5 6 2-4", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+  Volume: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
+    /* @__PURE__ */ jsx("path", { d: "M8 1l6 3.5v7L8 15l-6-3.5v-7z", strokeLinejoin: "round" }),
+    /* @__PURE__ */ jsx("path", { d: "M8 1v7M2 4.5L8 8l6-3.5", strokeLinejoin: "round" })
   ] }),
   None: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
     /* @__PURE__ */ jsx("circle", { cx: "8", cy: "8", r: "6" }),
@@ -6595,7 +6351,9 @@ const MeasurePanel = ({
     const groups = {
       "dist": [],
       "angle": [],
-      "coord": []
+      "coord": [],
+      "area": [],
+      "volume": []
     };
     measureHistory.forEach((item) => {
       if (groups[item.type]) groups[item.type].push(item);
@@ -6610,7 +6368,9 @@ const MeasurePanel = ({
     { value: "none", label: t("measure_none") || "None", icon: /* @__PURE__ */ jsx(Icons.None, {}) },
     { value: "dist", label: t("measure_dist") || "Distance", icon: /* @__PURE__ */ jsx(Icons.Distance, {}) },
     { value: "angle", label: t("measure_angle") || "Angle", icon: /* @__PURE__ */ jsx(Icons.Angle, {}) },
-    { value: "coord", label: t("measure_coord") || "Coord", icon: /* @__PURE__ */ jsx(Icons.Coordinate, {}) }
+    { value: "coord", label: t("measure_coord") || "Coord", icon: /* @__PURE__ */ jsx(Icons.Coordinate, {}) },
+    { value: "area", label: t("measure_area") || "Area", icon: /* @__PURE__ */ jsx(Icons.Area, {}) },
+    { value: "volume", label: t("measure_volume") || "Volume", icon: /* @__PURE__ */ jsx(Icons.Volume, {}) }
   ];
   const getInstructionText = () => {
     switch (measureType) {
@@ -6620,6 +6380,10 @@ const MeasurePanel = ({
         return t("measure_instruct_angle");
       case "coord":
         return t("measure_instruct_coord");
+      case "area":
+        return t("measure_instruct_area");
+      case "volume":
+        return t("measure_instruct_volume");
       default:
         return "";
     }
@@ -6632,6 +6396,10 @@ const MeasurePanel = ({
         return t("measure_angle") || "Angle";
       case "coord":
         return t("measure_coord") || "Coordinate";
+      case "area":
+        return t("measure_area") || "Area";
+      case "volume":
+        return t("measure_volume") || "Volume";
       default:
         return type;
     }
@@ -6659,7 +6427,7 @@ const MeasurePanel = ({
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2 text-sm text-secondary", children: [
           /* @__PURE__ */ jsx("span", { children: getInstructionText() }),
-          measureType !== "none" && /* @__PURE__ */ jsx("span", { className: "ml-auto text-accent font-medium", children: "[ESC] Exit" })
+          measureType !== "none" && /* @__PURE__ */ jsx("span", { className: "ml-auto font-medium text-secondary", children: "[ESC] Exit" })
         ] }),
         /* @__PURE__ */ jsx(DataPanel, { empty: measureHistory.length === 0, emptyText: t("no_measurements") || "No measurements", children: measureHistory.length > 0 && /* @__PURE__ */ jsx("div", { className: "flex flex-col", style: { overflow: "auto" }, children: Object.entries(groupedHistory).map(([type, items]) => {
           if (items.length === 0) return null;
@@ -6711,7 +6479,7 @@ const AxisSliderRow = ({ axis, label, active, value, onToggle, onChange, disable
               fontSize: "12px",
               fontWeight: "600",
               minWidth: "16px",
-              color: active ? "var(--accent)" : "var(--text-secondary)",
+              color: active ? "var(--text-primary)" : "var(--text-secondary)",
               flexShrink: 0
             },
             children: axis.toUpperCase()
@@ -6733,7 +6501,7 @@ const AxisSliderRow = ({ axis, label, active, value, onToggle, onChange, disable
             style: {
               fontFamily: "'Consolas', 'Monaco', monospace",
               fontSize: "11px",
-              color: "var(--accent)",
+              color: "var(--text-primary)",
               minWidth: "45px",
               textAlign: "right",
               flexShrink: 0
@@ -6834,9 +6602,9 @@ const ClipPanel = ({
   );
 };
 
-const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
+const ExportPanel = ({ t, onClose, onExport, theme }) => {
   const [format, setFormat] = useState("glb");
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, styles, theme, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("export_title"), onClose, width: 320, height: 400, resizable: false, theme, storageId: "tool_export", children: /* @__PURE__ */ jsxs("div", { style: { padding: 16 }, children: [
     /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10, fontSize: 12, color: theme.textMuted }, children: [
       t("export_format"),
       ":"
@@ -6866,7 +6634,6 @@ const ExportPanel = ({ t, onClose, onExport, styles, theme }) => {
     /* @__PURE__ */ jsx(
       Button,
       {
-        styles,
         theme,
         onClick: () => onExport(format),
         style: { width: "100%", marginTop: 10, height: 40 },
@@ -6884,7 +6651,6 @@ const ViewpointPanel = ({
   onUpdateName,
   onLoad,
   onDelete,
-  styles,
   theme
 }) => {
   const [newName, setNewName] = useState("");
@@ -6902,7 +6668,7 @@ const ViewpointPanel = ({
       handleSave();
     }
   };
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("viewpoint_title") || "视点管理", onClose, width: 360, height: 450, resizable: true, styles, theme, storageId: "tool_viewpoint", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("viewpoint_title") || "视点管理", onClose, width: 360, height: 450, resizable: true, theme, storageId: "tool_viewpoint", children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", height: "100%" }, children: [
     /* @__PURE__ */ jsx("div", { style: { marginBottom: 12 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4 }, children: [
       /* @__PURE__ */ jsx(
         "input",
@@ -6928,7 +6694,7 @@ const ViewpointPanel = ({
           placeholder: t("viewpoint_title") || "视点名称"
         }
       ),
-      /* @__PURE__ */ jsx(Button, { styles, theme, onClick: handleSave, style: { height: 28, padding: "0 12px", minWidth: "60px", whiteSpace: "nowrap", fontSize: 12 }, children: t("btn_confirm") || "保存" })
+      /* @__PURE__ */ jsx(Button, { theme, onClick: handleSave, style: { height: 28, padding: "0 12px", minWidth: "60px", whiteSpace: "nowrap", fontSize: 12 }, children: t("btn_confirm") || "保存" })
     ] }) }),
     /* @__PURE__ */ jsx("div", { style: {
       flex: 1,
@@ -7037,9 +6803,9 @@ const formatTime = (val) => {
 const timeToSlider = (time) => {
   return Math.round(time * 2);
 };
-const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
+const SunPanel = ({ t, onClose, settings, onUpdate, theme }) => {
   const timeValue = timeToSlider(settings.sunTime !== void 0 ? settings.sunTime : 12);
-  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("st_sun_simulation") || "光照模拟", onClose, width: 320, height: 350, resizable: false, styles, theme, storageId: "tool_sun", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }, children: [
+  return /* @__PURE__ */ jsx(FloatingPanel, { title: t("st_sun_simulation") || "光照模拟", onClose, width: 320, height: 350, resizable: false, theme, storageId: "tool_sun", children: /* @__PURE__ */ jsxs("div", { style: { padding: "16px", display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }, children: [
     /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-color)" }, children: [
       /* @__PURE__ */ jsx(
         Checkbox,
@@ -7076,7 +6842,7 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
               }
             }
           ),
-          /* @__PURE__ */ jsx("span", { style: { color: "var(--accent)" }, children: "°" })
+          /* @__PURE__ */ jsx("span", { style: { color: "var(--text-secondary)" }, children: "°" })
         ] })
       ] }) }),
       /* @__PURE__ */ jsx("div", { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }, children: [
@@ -7102,13 +6868,13 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
               }
             }
           ),
-          /* @__PURE__ */ jsx("span", { style: { color: "var(--accent)" }, children: "°" })
+          /* @__PURE__ */ jsx("span", { style: { color: "var(--text-secondary)" }, children: "°" })
         ] })
       ] }) }),
       /* @__PURE__ */ jsxs("div", { style: { marginBottom: 16 }, children: [
         /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 12, color: "var(--text-secondary)" }, children: [
           /* @__PURE__ */ jsx("span", { children: t("st_sun_time") || "时间" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: "var(--accent)" }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", gap: 4, fontFamily: "'Consolas', 'Monaco', monospace", color: "var(--text-primary)" }, children: /* @__PURE__ */ jsx("span", { children: formatTime(timeValue) }) })
         ] }),
         /* @__PURE__ */ jsx(
           Slider,
@@ -7143,28 +6909,27 @@ const SunPanel = ({ t, onClose, settings, onUpdate, styles, theme }) => {
   ] }) });
 };
 
-const LoadingOverlay = ({ t, loading, status, progress, styles, theme }) => {
+const LoadingOverlay = ({ t, loading, status, progress, theme }) => {
   if (!loading) return null;
-  return /* @__PURE__ */ jsx("div", { style: styles.overlay, children: /* @__PURE__ */ jsxs("div", { style: styles.progressBox, children: [
+  return /* @__PURE__ */ jsx("div", { className: "ui-loading-overlay", children: /* @__PURE__ */ jsxs("div", { className: "ui-loading-box", children: [
     /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }, children: [
-      /* @__PURE__ */ jsx("div", { style: { fontWeight: "600", color: theme.text, fontSize: "14px" }, children: status }),
-      /* @__PURE__ */ jsxs("div", { style: { color: theme.accent, fontSize: "14px", fontWeight: "bold", fontFamily: "monospace" }, children: [
+      /* @__PURE__ */ jsx("div", { style: { fontWeight: "600", color: "var(--text-primary)", fontSize: "14px" }, children: status }),
+      /* @__PURE__ */ jsxs("div", { style: { color: "var(--text-primary)", fontSize: "14px", fontWeight: "bold", fontFamily: "monospace" }, children: [
         Math.round(progress),
         "%"
       ] })
     ] }),
-    /* @__PURE__ */ jsx("div", { style: styles.progressBarContainer, children: /* @__PURE__ */ jsx(
+    /* @__PURE__ */ jsx("div", { className: "ui-progress-bar", style: { marginTop: "12px" }, children: /* @__PURE__ */ jsx(
       "div",
       {
+        className: "ui-progress-fill",
         style: {
-          ...styles.progressBarFill,
           width: `${progress}%`,
-          transition: "width 0.3s ease-out",
-          boxShadow: `0 0 10px ${theme.accent}40`
+          transition: "width 0.3s ease-out"
         }
       }
     ) }),
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginTop: "12px", fontSize: "12px", color: theme.textMuted }, children: [
+    /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginTop: "12px", fontSize: "12px", color: "var(--text-muted)" }, children: [
       /* @__PURE__ */ jsxs("svg", { style: { width: "14px", height: "14px", animation: "spin 1s linear infinite" }, viewBox: "0 0 24 24", children: [
         /* @__PURE__ */ jsx("circle", { style: { opacity: 0.25 }, cx: "12", cy: "12", r: "10", stroke: "currentColor", strokeWidth: "4", fill: "none" }),
         /* @__PURE__ */ jsx("path", { style: { opacity: 0.75 }, fill: "currentColor", d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" })
@@ -7180,7 +6945,7 @@ const LoadingOverlay = ({ t, loading, status, progress, styles, theme }) => {
   ] }) });
 };
 
-const PropertiesPanel = ({ t, selectedProps, styles, theme }) => {
+const PropertiesPanel = ({ t, selectedProps, theme }) => {
   const [collapsed, setCollapsed] = useState(/* @__PURE__ */ new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const toggleGroup = (group) => {
@@ -7222,41 +6987,39 @@ const PropertiesPanel = ({ t, selectedProps, styles, theme }) => {
         }
       }
     ) }),
-    /* @__PURE__ */ jsx("div", { style: { ...styles.list, flex: 1, overflowY: "auto" }, children: filteredProps ? Object.entries(filteredProps).map(([group, props]) => /* @__PURE__ */ jsxs("div", { children: [
+    /* @__PURE__ */ jsx("div", { className: "flex-1 overflow-y-auto", children: filteredProps ? Object.entries(filteredProps).map(([group, props]) => /* @__PURE__ */ jsxs("div", { children: [
       /* @__PURE__ */ jsxs(
         "div",
         {
-          style: styles.propGroupTitle,
+          className: "ui-prop-group",
           onClick: () => toggleGroup(group),
-          onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
-          onMouseLeave: (e) => e.currentTarget.style.backgroundColor = theme.bg,
           children: [
             /* @__PURE__ */ jsx("span", { children: group }),
             /* @__PURE__ */ jsx("span", { style: { opacity: 0.6, display: "flex", alignItems: "center" }, children: collapsed.has(group) ? /* @__PURE__ */ jsx(IconChevronRight, { width: 14, height: 14 }) : /* @__PURE__ */ jsx(IconChevronDown, { width: 14, height: 14 }) })
           ]
         }
       ),
-      !collapsed.has(group) && Object.entries(props).map(([k, v]) => /* @__PURE__ */ jsxs("div", { style: styles.propRow, children: [
-        /* @__PURE__ */ jsx("div", { style: styles.propKey, title: k, children: k }),
-        /* @__PURE__ */ jsx("div", { style: styles.propValue, title: String(v), children: String(v) })
+      !collapsed.has(group) && Object.entries(props).map(([k, v]) => /* @__PURE__ */ jsxs("div", { className: "ui-prop-row", children: [
+        /* @__PURE__ */ jsx("div", { className: "ui-prop-key", title: k, children: k }),
+        /* @__PURE__ */ jsx("div", { className: "ui-prop-value", title: String(v), children: String(v) })
       ] }, k))
-    ] }, group)) : /* @__PURE__ */ jsx("div", { style: { padding: 20, color: theme.textMuted, textAlign: "center", marginTop: 20 }, children: t("no_selection") }) })
+    ] }, group)) : /* @__PURE__ */ jsx("div", { style: { padding: 20, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }, children: t("no_selection") }) })
   ] });
 };
 
-const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, t, styles, theme }) => {
+const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, t, theme }) => {
   if (!isOpen) return null;
-  return /* @__PURE__ */ jsx("div", { style: styles.modalOverlay, children: /* @__PURE__ */ jsxs("div", { style: { ...styles.modalContent, width: "320px", height: "auto" }, children: [
-    /* @__PURE__ */ jsxs("div", { style: styles.floatingHeader, children: [
-      /* @__PURE__ */ jsx("span", { children: title }),
-      /* @__PURE__ */ jsx("div", { onClick: onCancel, style: { cursor: "pointer", opacity: 0.6, display: "flex", padding: 2, borderRadius: 0 }, children: /* @__PURE__ */ jsx(IconClose, { width: 20, height: 20 }) })
+  return /* @__PURE__ */ jsx("div", { className: "ui-modal-overlay", children: /* @__PURE__ */ jsxs("div", { className: "ui-modal", style: { width: "320px", height: "auto" }, children: [
+    /* @__PURE__ */ jsxs("div", { className: "ui-modal-header", children: [
+      /* @__PURE__ */ jsx("span", { className: "ui-modal-title", children: title }),
+      /* @__PURE__ */ jsx("button", { className: "ui-modal-close", onClick: onCancel, children: /* @__PURE__ */ jsx(IconClose, { width: 20, height: 20 }) })
     ] }),
-    /* @__PURE__ */ jsx("div", { style: { padding: "20px", color: theme.text, fontSize: "13px", lineHeight: "1.5" }, children: message }),
-    /* @__PURE__ */ jsxs("div", { style: { padding: "15px 20px", borderTop: `1px solid ${theme.border}`, display: "flex", gap: "10px", justifyContent: "flex-end" }, children: [
+    /* @__PURE__ */ jsx("div", { className: "ui-modal-body text-base", children: message }),
+    /* @__PURE__ */ jsxs("div", { className: "ui-modal-footer", children: [
       /* @__PURE__ */ jsx(
         "button",
         {
-          style: { ...styles.btn, backgroundColor: "transparent", flex: "0 0 auto", width: "80px" },
+          className: "ui-btn ui-btn-ghost w-[80px]",
           onClick: onCancel,
           children: t("btn_cancel")
         }
@@ -7264,7 +7027,8 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, t, styles, 
       /* @__PURE__ */ jsx(
         "button",
         {
-          style: { ...styles.btn, backgroundColor: theme.danger, borderColor: theme.danger, color: "white", flex: "0 0 auto", width: "80px" },
+          className: "ui-btn ui-btn-danger w-[80px]",
+          style: { backgroundColor: "var(--error)", borderColor: "var(--error)", color: "white" },
           onClick: onConfirm,
           children: t("btn_confirm")
         }
@@ -7273,7 +7037,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, t, styles, 
   ] }) });
 };
 
-const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
+const AboutModal = ({ isOpen, onClose, t, theme }) => {
   if (!isOpen) return null;
   const [showLicenseDetails, setShowLicenseDetails] = useState(false);
   const [showThirdParty, setShowThirdParty] = useState(false);
@@ -7293,11 +7057,10 @@ const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
       width: 400,
       height: 520,
       modal: true,
-      styles,
       theme,
       children: /* @__PURE__ */ jsxs("div", { style: { padding: "12px", display: "flex", flexDirection: "column", gap: "10px", height: "100%", overflowY: "auto" }, children: [
         /* @__PURE__ */ jsxs("div", { style: { textAlign: "center" }, children: [
-          /* @__PURE__ */ jsx("div", { style: { fontSize: "20px", fontWeight: "bold", marginBottom: "6px", color: "var(--accent)" }, children: "3D Browser" }),
+          /* @__PURE__ */ jsx("div", { style: { fontSize: "20px", fontWeight: "bold", marginBottom: "6px", color: "var(--text-primary)" }, children: "3D Browser" }),
           /* @__PURE__ */ jsx("div", { style: { fontSize: "11px", opacity: 0.7 }, children: "Professional 3D Model Viewer" })
         ] }),
         /* @__PURE__ */ jsxs("div", { style: { width: "100%", display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }, children: [
@@ -7307,7 +7070,7 @@ const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "6px" }, children: [
             /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("project_url") }),
-            /* @__PURE__ */ jsx("a", { href: "https://github.com/zly258/3dbrowser", target: "_blank", rel: "noopener noreferrer", style: { fontWeight: "500", color: "var(--accent)", textDecoration: "none" }, children: "github.com/zly258/3dbrowser" })
+            /* @__PURE__ */ jsx("a", { href: "https://github.com/zly258/3dbrowser", target: "_blank", rel: "noopener noreferrer", className: "ui-link", children: "github.com/zly258/3dbrowser" })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: "6px" }, children: [
             /* @__PURE__ */ jsx("span", { style: { opacity: 0.7 }, children: t("about_license") }),
@@ -7339,7 +7102,7 @@ const AboutModal = ({ isOpen, onClose, t, styles, theme }) => {
             /* @__PURE__ */ jsxs("div", { style: { fontSize: "10px", opacity: 0.7, marginTop: "8px" }, children: [
               t("full_license"),
               " ",
-              /* @__PURE__ */ jsx("a", { href: "https://creativecommons.org/licenses/by-nc/4.0/", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--accent)", textDecoration: "none" }, children: "CC BY-NC 4.0" })
+              /* @__PURE__ */ jsx("a", { href: "https://creativecommons.org/licenses/by-nc/4.0/", target: "_blank", rel: "noopener noreferrer", className: "ui-link", children: "CC BY-NC 4.0" })
             ] })
           ] })
         ] }),
@@ -7702,28 +7465,14 @@ const ContextMenu = ({ x, y, items, onClose, theme }) => {
     "div",
     {
       ref: menuRef,
-      style: {
-        position: "fixed",
-        left: x,
-        top: y,
-        backgroundColor: theme.panelBg,
-        border: `1px solid ${theme.border}`,
-        borderRadius: "4px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        zIndex: 1e4,
-        minWidth: "160px",
-        padding: "4px 0"
-      },
+      className: "ui-context-menu",
+      style: { left: x, top: y },
       children: items.map((item, index) => {
         if (item.divider) {
           return /* @__PURE__ */ jsx(
             "div",
             {
-              style: {
-                height: "1px",
-                backgroundColor: theme.border,
-                margin: "4px 0"
-              }
+              className: "ui-context-menu-divider"
             },
             index
           );
@@ -7737,23 +7486,7 @@ const ContextMenu = ({ x, y, items, onClose, theme }) => {
                 onClose();
               }
             },
-            style: {
-              padding: "8px 16px",
-              fontSize: "12px",
-              color: item.disabled ? theme.textMuted : theme.text,
-              cursor: item.disabled ? "not-allowed" : "pointer",
-              backgroundColor: "transparent",
-              transition: "background-color 0.1s",
-              opacity: item.disabled ? 0.5 : 1
-            },
-            onMouseEnter: (e) => {
-              if (!item.disabled) {
-                e.currentTarget.style.backgroundColor = theme.itemHover;
-              }
-            },
-            onMouseLeave: (e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
-            },
+            className: `ui-context-menu-item ${item.disabled ? "disabled" : ""}`,
             children: item.label
           },
           index
@@ -7763,7 +7496,6 @@ const ContextMenu = ({ x, y, items, onClose, theme }) => {
   );
 };
 
-const GlobalStyle = ({ theme }) => /* @__PURE__ */ jsx("style", { dangerouslySetInnerHTML: { __html: createGlobalStyle(theme) } });
 const ThreeViewer = ({
   allowDragOpen = true,
   hiddenMenus = [],
@@ -7791,7 +7523,6 @@ const ThreeViewer = ({
   const theme = useMemo(() => {
     return themes[themeMode];
   }, [themeMode]);
-  const styles = useMemo(() => createStyles(theme), [theme]);
   const [lang, setLang] = useState(() => {
     if (defaultLang) return defaultLang;
     try {
@@ -8431,6 +8162,7 @@ const ThreeViewer = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const handleClick = (e) => {
+      if (activeTool === "boxSelect") return;
       if (activeTool === "measure") {
         if (measureType !== "none") {
           const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
@@ -8476,6 +8208,10 @@ const ThreeViewer = ({
           setMeasureType("none");
           mgr.startMeasurement("none");
         }
+        if (activeTool === "boxSelect") {
+          mgr.cancelBoxSelect();
+          setActiveTool("none");
+        }
         setSelectedUuids([]);
         setSelectedProps(null);
         mgr.highlightObjects([]);
@@ -8492,6 +8228,40 @@ const ThreeViewer = ({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [pickEnabled, selectedUuids, activeTool, measureType]);
+  useEffect(() => {
+    const mgr = sceneMgr.current;
+    if (!mgr || activeTool !== "boxSelect") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    mgr.controls.mouseButtons.LEFT = void 0;
+    const onPointerDown = (e) => {
+      if (e.button !== 0) return;
+      mgr.startBoxSelect(e.clientX, e.clientY);
+    };
+    const onPointerMove = (e) => {
+      mgr.updateBoxSelect(e.clientX, e.clientY);
+    };
+    const onPointerUp = (e) => {
+      if (e.button !== 0) return;
+      const uuids = mgr.endBoxSelect();
+      if (uuids.length > 0) {
+        setSelectedUuids(uuids);
+        mgr.highlightObjects(uuids);
+      }
+    };
+    canvas.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      if (mgr.controls) {
+        mgr.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+      }
+      mgr.cancelBoxSelect();
+    };
+  }, [activeTool]);
   useEffect(() => {
     const mgr = sceneMgr.current;
     if (!mgr) return;
@@ -8955,15 +8725,26 @@ const ThreeViewer = ({
       }
     });
   };
-  return /* @__PURE__ */ jsx(ErrorBoundary, { t, styles, theme, children: /* @__PURE__ */ jsxs(
+  return /* @__PURE__ */ jsx(ErrorBoundary, { t, theme, children: /* @__PURE__ */ jsxs(
     "div",
     {
-      className: `${themeMode} font-${sceneSettings.fontSize || "medium"}`,
-      style: styles.container,
+      className: `ui-container ${themeMode} font-${sceneSettings.fontSize || "medium"}`,
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        width: "100%",
+        backgroundColor: "var(--bg-primary)",
+        color: "var(--text-primary)",
+        fontSize: "var(--font-size-base)",
+        fontFamily: "inherit",
+        userSelect: "none",
+        overflow: "hidden",
+        position: "relative"
+      },
       onDragOver: handleDragOver,
       onDrop: handleDrop,
       children: [
-        /* @__PURE__ */ jsx(GlobalStyle, { theme }),
         /* @__PURE__ */ jsx(
           Toolbar,
           {
@@ -8990,7 +8771,6 @@ const ThreeViewer = ({
               localStorage.setItem("3dbrowser_showStats", String(v));
             },
             sceneMgr: sceneMgr.current,
-            styles,
             theme,
             hiddenMenus,
             onOpenAbout: () => setIsAboutOpen(true),
@@ -8998,24 +8778,17 @@ const ThreeViewer = ({
           }
         ),
         /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", position: "relative", overflow: "hidden" }, children: [
-          showOutline && /* @__PURE__ */ jsxs("div", { style: {
+          showOutline && /* @__PURE__ */ jsxs("div", { className: "ui-sidebar", style: {
             width: `${leftWidth}px`,
-            backgroundColor: theme.panelBg,
-            borderRight: `1px solid ${theme.border}`,
-            display: "flex",
-            flexDirection: "column",
-            zIndex: 10,
-            position: "relative"
+            borderRight: "1px solid var(--border-color)"
           }, children: [
-            /* @__PURE__ */ jsxs("div", { style: styles.floatingHeader, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ui-sidebar-header", children: [
               /* @__PURE__ */ jsx("span", { children: t("interface_outline") }),
               /* @__PURE__ */ jsx(
-                "div",
+                "button",
                 {
+                  className: "ui-sidebar-close",
                   onClick: () => setShowOutline(false),
-                  style: { cursor: "pointer", opacity: 0.6, display: "flex", padding: 2, borderRadius: "50%" },
-                  onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
-                  onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
                   children: /* @__PURE__ */ jsx(IconClose, { width: 16, height: 16 })
                 }
               )
@@ -9034,23 +8807,15 @@ const ThreeViewer = ({
                   if (uuid) handleDeleteObject(uuid);
                 },
                 onFocus: (obj) => handleFocusObject(obj),
-                styles,
                 theme
               }
             ) }),
             /* @__PURE__ */ jsx(
               "div",
               {
-                onMouseDown: () => resizingLeft.current = true,
-                style: {
-                  position: "absolute",
-                  right: -2,
-                  top: 0,
-                  bottom: 0,
-                  width: 4,
-                  cursor: "col-resize",
-                  zIndex: 20
-                }
+                className: "ui-sidebar-resize",
+                style: { right: -2 },
+                onMouseDown: () => resizingLeft.current = true
               }
             )
           ] }),
@@ -9091,49 +8856,21 @@ const ThreeViewer = ({
                 theme
               }
             ),
-            toast && /* @__PURE__ */ jsxs("div", { style: {
-              position: "fixed",
-              top: "40px",
-              left: "50%",
-              transform: "translateX(-50%)",
-              backgroundColor: theme.bg,
-              color: theme.text,
-              padding: "6px 16px",
-              borderRadius: "4px",
-              boxShadow: `0 4px 12px rgba(0,0,0,0.15)`,
-              zIndex: 1e4,
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              fontSize: "13px",
-              border: `1px solid ${theme.border}`,
-              animation: "fadeInDown 0.3s ease-out"
-            }, children: [
-              /* @__PURE__ */ jsx("div", { style: {
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                backgroundColor: toast.type === "error" ? theme.danger : toast.type === "success" ? theme.success : theme.accent
+            toast && /* @__PURE__ */ jsxs("div", { className: "ui-toast", children: [
+              /* @__PURE__ */ jsx("div", { className: "ui-toast-dot", style: {
+                backgroundColor: toast.type === "error" ? "var(--error)" : toast.type === "success" ? "var(--success)" : "var(--info)"
               } }),
               /* @__PURE__ */ jsx("span", { style: { fontWeight: 500 }, children: toast.message }),
               /* @__PURE__ */ jsx(
-                "div",
+                "button",
                 {
+                  className: "ui-toast-close",
                   onClick: () => setToast(null),
-                  style: {
-                    cursor: "pointer",
-                    padding: "2px",
-                    display: "flex",
-                    opacity: 0.5,
-                    marginLeft: "4px"
-                  },
-                  onMouseEnter: (e) => e.currentTarget.style.opacity = "1",
-                  onMouseLeave: (e) => e.currentTarget.style.opacity = "0.5",
                   children: /* @__PURE__ */ jsx(IconClose, { size: 12 })
                 }
               )
             ] }),
-            /* @__PURE__ */ jsx(LoadingOverlay, { t, loading, status, progress, styles, theme }),
+            /* @__PURE__ */ jsx(LoadingOverlay, { t, loading, status, progress, theme }),
             activeTool === "measure" && /* @__PURE__ */ jsx(
               MeasurePanel,
               {
@@ -9163,7 +8900,6 @@ const ThreeViewer = ({
                   setMeasureType("none");
                 },
                 onClose: () => setActiveTool("none"),
-                styles,
                 theme
               }
             ),
@@ -9179,11 +8915,10 @@ const ThreeViewer = ({
                 setClipValues,
                 clipActive,
                 setClipActive,
-                styles,
                 theme
               }
             ),
-            activeTool === "export" && /* @__PURE__ */ jsx(ExportPanel, { t, onClose: () => setActiveTool("none"), onExport: handleExport, styles, theme }),
+            activeTool === "export" && /* @__PURE__ */ jsx(ExportPanel, { t, onClose: () => setActiveTool("none"), onExport: handleExport, theme }),
             activeTool === "settings" && /* @__PURE__ */ jsx(
               SettingsPanel,
               {
@@ -9197,7 +8932,6 @@ const ThreeViewer = ({
                 setThemeMode,
                 showStats,
                 setShowStats,
-                styles,
                 theme
               }
             ),
@@ -9211,7 +8945,6 @@ const ThreeViewer = ({
                 onLoad: handleLoadViewpoint,
                 onDelete: handleDeleteViewpoint,
                 onClose: () => setActiveTool("none"),
-                styles,
                 theme
               }
             ),
@@ -9222,7 +8955,6 @@ const ThreeViewer = ({
                 settings: sceneSettings,
                 onUpdate: handleSettingsUpdate,
                 onClose: () => setActiveTool("none"),
-                styles,
                 theme
               }
             )
@@ -9236,7 +8968,7 @@ const ThreeViewer = ({
             zIndex: 10,
             position: "relative"
           }, children: [
-            /* @__PURE__ */ jsxs("div", { style: styles.floatingHeader, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ui-sidebar-header", children: [
               /* @__PURE__ */ jsx("span", { children: t("interface_props") }),
               /* @__PURE__ */ jsx(
                 "div",
@@ -9249,7 +8981,7 @@ const ThreeViewer = ({
                 }
               )
             ] }),
-            /* @__PURE__ */ jsx("div", { style: { flex: 1, overflow: "hidden" }, children: /* @__PURE__ */ jsx(PropertiesPanel, { t, selectedProps, styles, theme }) }),
+            /* @__PURE__ */ jsx("div", { style: { flex: 1, overflow: "hidden" }, children: /* @__PURE__ */ jsx(PropertiesPanel, { t, selectedProps, theme }) }),
             /* @__PURE__ */ jsx(
               "div",
               {
@@ -9290,26 +9022,21 @@ const ThreeViewer = ({
               ": ",
               selectedUuids.length
             ] }),
-            chunkProgress.total > 0 && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
-              /* @__PURE__ */ jsxs("span", { style: { color: theme.accent }, children: [
+            chunkProgress.total > 0 && /* @__PURE__ */ jsxs("div", { className: "ui-chunk-progress", children: [
+              /* @__PURE__ */ jsxs("span", { children: [
                 t("chunk_loading") || "分片加载",
                 ": ",
                 chunkProgress.loaded,
                 "/",
                 chunkProgress.total
               ] }),
-              /* @__PURE__ */ jsx("div", { style: {
-                width: "80px",
-                height: "4px",
-                backgroundColor: theme.border,
-                borderRadius: "2px",
-                overflow: "hidden"
-              }, children: /* @__PURE__ */ jsx("div", { style: {
-                width: `${chunkProgress.loaded / chunkProgress.total * 100}%`,
-                height: "100%",
-                backgroundColor: theme.accent,
-                transition: "width 0.2s ease"
-              } }) })
+              /* @__PURE__ */ jsx("div", { className: "ui-progress-bar", style: { width: "80px" }, children: /* @__PURE__ */ jsx(
+                "div",
+                {
+                  className: "ui-progress-fill",
+                  style: { width: `${chunkProgress.loaded / chunkProgress.total * 100}%` }
+                }
+              ) })
             ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "12px", alignItems: "center" }, children: [
@@ -9393,7 +9120,6 @@ const ThreeViewer = ({
             },
             onCancel: () => setConfirmState({ ...confirmState, isOpen: false }),
             t,
-            styles,
             theme
           }
         ),
@@ -9403,12 +9129,11 @@ const ThreeViewer = ({
             isOpen: isAboutOpen,
             onClose: () => setIsAboutOpen(false),
             t,
-            styles,
             theme
           }
         ),
-        errorState.isOpen && /* @__PURE__ */ jsx("div", { style: styles.modalOverlay, children: /* @__PURE__ */ jsxs("div", { style: { ...styles.modalContent, width: "450px" }, children: [
-          /* @__PURE__ */ jsxs("div", { style: { ...styles.floatingHeader, backgroundColor: theme.danger, color: "white" }, children: [
+        errorState.isOpen && /* @__PURE__ */ jsx("div", { className: "ui-error-overlay", children: /* @__PURE__ */ jsxs("div", { className: "ui-error-content", style: { width: "450px" }, children: [
+          /* @__PURE__ */ jsxs("div", { className: "ui-error-header", style: { backgroundColor: "var(--error)", color: "white" }, children: [
             /* @__PURE__ */ jsx("span", { children: errorState.title }),
             /* @__PURE__ */ jsx(
               "div",
@@ -9426,7 +9151,8 @@ const ThreeViewer = ({
             /* @__PURE__ */ jsx("div", { style: { display: "flex", justifyContent: "flex-end", marginTop: "8px" }, children: /* @__PURE__ */ jsx(
               "button",
               {
-                style: { ...styles.btn, backgroundColor: theme.accent, color: "white", borderColor: theme.accent, padding: "8px 24px" },
+                className: "ui-btn ui-btn-primary",
+                style: { padding: "8px 24px" },
                 onClick: () => setErrorState((prev) => ({ ...prev, isOpen: false })),
                 children: t("confirm") || "确定"
               }

@@ -7,11 +7,10 @@ interface AboutModalProps {
     isOpen: boolean;
     onClose: () => void;
     t: TFunc;
-    styles: any;
-    theme: any;
+        theme: any;
 }
 
-export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, styles, theme }) => {
+export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, theme }) => {
     if (!isOpen) return null;
 
     const [showLicenseDetails, setShowLicenseDetails] = useState(false);
@@ -33,12 +32,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, styl
             width={400}
             height={520}
             modal={true}
-            styles={styles}
             theme={theme}
         >
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%', overflowY: 'auto' }}>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '6px', color: 'var(--accent)' }}>3D Browser</div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-primary)' }}>3D Browser</div>
                     <div style={{ fontSize: '11px', opacity: 0.7 }}>Professional 3D Model Viewer</div>
                 </div>
 
@@ -49,7 +47,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, styl
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                         <span style={{ opacity: 0.7 }}>{t("project_url")}</span>
-                        <a href="https://github.com/zly258/3dbrowser" target="_blank" rel="noopener noreferrer" style={{ fontWeight: '500', color: 'var(--accent)', textDecoration: 'none' }}>
+                        <a href="https://github.com/zly258/3dbrowser" target="_blank" rel="noopener noreferrer" className="ui-link">
                             github.com/zly258/3dbrowser
                         </a>
                     </div>
@@ -80,7 +78,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, styl
                         <div style={{ padding: '12px', fontSize: '11px', lineHeight: '1.5', backgroundColor: 'var(--bg-primary)', maxHeight: '180px', overflowY: 'auto' }}>
                             <div style={{ whiteSpace: 'pre-wrap', marginBottom: '8px' }}>{t("license_summary")}</div>
                             <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '8px' }}>
-                                {t("full_license")} <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>CC BY-NC 4.0</a>
+                                {t("full_license")} <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer" className="ui-link">CC BY-NC 4.0</a>
                             </div>
                         </div>
                     )}

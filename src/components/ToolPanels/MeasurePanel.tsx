@@ -57,8 +57,7 @@ interface MeasurePanelProps {
   onDelete: (id: string) => void;
   onClear: () => void;
   onClose?: () => void;
-  styles?: any;
-  theme?: any;
+    theme?: any;
   highlightedId?: string;
   onHighlight?: (id: string) => void;
 }
@@ -255,7 +254,7 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
         <div className="flex items-center gap-2 text-sm text-secondary">
           <span>{getInstructionText()}</span>
           {measureType !== 'none' && (
-            <span className="ml-auto text-accent font-medium">[ESC] Exit</span>
+            <span className="ml-auto font-medium text-secondary">[ESC] Exit</span>
           )}
         </div>
 

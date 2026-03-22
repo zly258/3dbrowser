@@ -7,7 +7,6 @@ interface ConfirmModalProps {
     onConfirm: () => void;
     onCancel: () => void;
     t: TFunc;
-    styles: any;
     theme: any;
 }
 export declare const ConfirmModal: React.FC<ConfirmModalProps>;
