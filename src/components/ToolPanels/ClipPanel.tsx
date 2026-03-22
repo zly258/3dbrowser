@@ -71,7 +71,6 @@ const AxisSliderRow: React.FC<{
       {/* Value display */}
       <span
         style={{
-          fontFamily: "'Consolas', 'Monaco', monospace",
           fontSize: '11px',
           color: 'var(--text-primary)',
           minWidth: '45px',

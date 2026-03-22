@@ -24,7 +24,6 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ value, onChange, style
         />
         <span
             style={{
-                fontFamily: "'Consolas', 'Monaco', monospace",
                 fontSize: '11px',
                 color: 'var(--text-secondary)',
             }}

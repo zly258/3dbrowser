@@ -132,7 +132,6 @@ export const SettingSlider: React.FC<SettingSliderProps> = ({
             {showValue && (
                 <span
                     style={{
-                        fontFamily: "'Consolas', 'Monaco', monospace",
                         fontSize: '12px',
                         color: 'var(--text-primary)',
                         minWidth: '40px',
