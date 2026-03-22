@@ -108,7 +108,7 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect'>('none');
     
     // Viewpoint State
     const [viewpoints, setViewpoints] = useState<any[]>([]);
@@ -897,13 +897,16 @@ export const ThreeViewer = ({
         if (!canvas) return;
 
         const handleClick = (e: MouseEvent) => {
+            // 框选模式下不处理 click（由 pointer 事件处理）
+            if (activeTool === 'boxSelect') return;
+
             // 测量点击
             if (activeTool === 'measure') {
                 if (measureType !== 'none') {
                     // 如果选择了测量类型，优先进行测量点拾取
                     const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
                     if (intersect) {
-                        // 获取被点击物体的 UUID，用于关联测量
+                        // 体积测量：记录模型 UUID
                         const modelUuid = (intersect.object as any).uuid;
                         const record = mgr.addMeasurePoint(intersect.point, modelUuid);
                         return; // 已经处理了测量点，不再尝试选中旧测量线
@@ -954,6 +957,10 @@ export const ThreeViewer = ({
                     setMeasureType('none');
                     mgr.startMeasurement('none');
                 }
+                if (activeTool === 'boxSelect') {
+                    mgr.cancelBoxSelect();
+                    setActiveTool('none');
+                }
                 setSelectedUuids([]);
                 setSelectedProps(null);
                 mgr.highlightObjects([]);
@@ -972,6 +979,51 @@ export const ThreeViewer = ({
             window.removeEventListener("keydown", handleKeyDown);
         };
     }, [pickEnabled, selectedUuids, activeTool, measureType]);
+
+    // 框选事件处理
+    useEffect(() => {
+        const mgr = sceneMgr.current;
+        if (!mgr || activeTool !== 'boxSelect') return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // 进入框选模式：禁用左键旋转
+        mgr.controls.mouseButtons.LEFT = undefined as any;
+
+        const onPointerDown = (e: PointerEvent) => {
+            if (e.button !== 0) return; // 仅左键
+            mgr.startBoxSelect(e.clientX, e.clientY);
+        };
+
+        const onPointerMove = (e: PointerEvent) => {
+            mgr.updateBoxSelect(e.clientX, e.clientY);
+        };
+
+        const onPointerUp = (e: PointerEvent) => {
+            if (e.button !== 0) return;
+            const uuids = mgr.endBoxSelect();
+            if (uuids.length > 0) {
+                setSelectedUuids(uuids);
+                mgr.highlightObjects(uuids);
+            }
+        };
+
+        canvas.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        return () => {
+            canvas.removeEventListener('pointerdown', onPointerDown);
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+            // 恢复左键旋转
+            if (mgr.controls) {
+                mgr.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+            }
+            mgr.cancelBoxSelect();
+        };
+    }, [activeTool]);
 
     // 工具状态同步
     useEffect(() => {

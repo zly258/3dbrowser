@@ -9,7 +9,7 @@ import {
     createBatchedMeshFromItems
 } from "./octree";
 
-export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
+export type MeasureType = 'dist' | 'angle' | 'coord' | 'area' | 'volume' | 'none';
 
 export interface MeasurementRecord {
     id: string;
@@ -87,8 +87,19 @@ export class SceneManager {
     currentMeasurePoints: THREE.Vector3[] = [];
     currentMeasureModelUuid: string | null = null;
     previewLine: THREE.Line | null = null;
+    previewPolygon: THREE.LineLoop | null = null;
     tempMarker: THREE.Points; 
     measureRecords: Map<string, MeasurementRecord> = new Map();
+    
+    // 框选状态
+    private boxSelectState = {
+        active: false,
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0,
+        rectElement: null as HTMLDivElement | null,
+    };
     
     // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
@@ -2789,6 +2800,15 @@ export class SceneManager {
             this.currentMeasureModelUuid = modelUuid;
         }
 
+        // 面积测量：双击结束（3个点以上），检测是否接近第一个点
+        if (this.measureType === 'area' && this.currentMeasurePoints.length >= 3) {
+            const first = this.currentMeasurePoints[0];
+            if (point.distanceTo(first) < 5) {
+                this.currentMeasurePoints.push(first.clone()); // 闭合
+                return this.finalizeMeasurement();
+            }
+        }
+
         this.currentMeasurePoints.push(point);
         // 临时点标记只在预览阶段显示，finalize 时会清除预览并重新生成正式点
         this.addMarker(point, this.measureGroup); 
@@ -2811,10 +2831,32 @@ export class SceneManager {
             this.measureGroup.remove(this.previewLine);
             this.previewLine = null;
         }
+        if (this.previewPolygon) {
+            this.measureGroup.remove(this.previewPolygon);
+            this.previewPolygon = null;
+        }
 
         const points = [...this.currentMeasurePoints];
         if (hoverPoint) points.push(hoverPoint);
         if (points.length < 2) return;
+
+        // 面积测量：用闭合多边形预览
+        if (this.measureType === 'area' && points.length >= 3) {
+            const polygonPoints = [...this.currentMeasurePoints];
+            if (hoverPoint) polygonPoints.push(hoverPoint);
+            // 闭合多边形
+            if (polygonPoints.length >= 3) {
+                const geometry = new THREE.BufferGeometry().setFromPoints(polygonPoints);
+                const material = new THREE.LineBasicMaterial({ 
+                    color: 0xff0000, 
+                    depthTest: false 
+                });
+                this.previewPolygon = new THREE.LineLoop(geometry, material);
+                this.previewPolygon.renderOrder = 998;
+                this.measureGroup.add(this.previewPolygon);
+            }
+            return;
+        }
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineDashedMaterial({ 
@@ -2889,6 +2931,73 @@ export class SceneManager {
             valStr = displayVal;
             this.addLine(this.currentMeasurePoints, group);
             labelPos.copy(center);
+        } else if (this.measureType === 'area') {
+            // 面积测量：使用向量叉积求多边形面积
+            const pts = this.currentMeasurePoints;
+            if (pts.length >= 3) {
+                // 计算法线方向 (使用前3个点)
+                const v1 = new THREE.Vector3().subVectors(pts[1], pts[0]);
+                const v2 = new THREE.Vector3().subVectors(pts[2], pts[0]);
+                const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+                
+                // 使用鞋带公式(Shoelace formula)的3D版本计算面积
+                let area = 0;
+                const n = pts.length;
+                for (let i = 0; i < n; i++) {
+                    const curr = pts[i];
+                    const next = pts[(i + 1) % n];
+                    const edge = new THREE.Vector3().subVectors(next, curr);
+                    area += new THREE.Vector3().crossVectors(curr, next).length();
+                }
+                area = area / 2;
+                
+                displayVal = area.toFixed(3);
+                valStr = `${displayVal} m²`;
+                // 绘制闭合多边形
+                this.addLineLoop(pts, group);
+                // 填充半透明面
+                this.addPolygonFill(pts, group);
+                // 标签放在多边形中心
+                const center = new THREE.Vector3();
+                pts.forEach(p => center.add(p));
+                center.divideScalar(pts.length);
+                labelPos.copy(center);
+            }
+        } else if (this.measureType === 'volume') {
+            // 体积测量：通过 pick 获取的对象
+            // 在点击处理中已经记录了 currentMeasureModelUuid
+            const uuid = this.currentMeasureModelUuid;
+            let vol = 0;
+            if (uuid) {
+                const mappings = this.optimizedMapping.get(uuid);
+                if (mappings && mappings.length > 0) {
+                    const m = mappings[0];
+                    if (m.geometry) {
+                        vol = this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
+                    }
+                } else {
+                    // 尝试从 contentGroup 中获取 mesh
+                    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+                    if (obj && (obj as THREE.Mesh).isMesh) {
+                        const mesh = obj as THREE.Mesh;
+                        vol = this.computeGeometryVolume(mesh.geometry, mesh, undefined);
+                    }
+                }
+            }
+            displayVal = vol.toFixed(3);
+            valStr = `${displayVal} m³`;
+            // 如果有模型 UUID，在对象位置显示标签
+            if (uuid) {
+                const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+                if (obj) {
+                    const box = new THREE.Box3().setFromObject(obj);
+                    labelPos.copy(box.getCenter(new THREE.Vector3()));
+                    // 绘制包围盒
+                    const boxHelper = new THREE.Box3Helper(box, new THREE.Color(0xff0000));
+                    boxHelper.renderOrder = 998;
+                    group.add(boxHelper);
+                }
+            }
         } else {
             const p = this.currentMeasurePoints[0];
             displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
@@ -2991,14 +3100,17 @@ export class SceneManager {
             const color = isHighlighted ? 0x00ff00 : 0xff0000; // 高亮绿色，普通红色
             
             record.group.traverse(child => {
-                if (child instanceof THREE.Line) {
+                if (child instanceof THREE.Line || child instanceof THREE.LineLoop) {
                     (child.material as THREE.LineBasicMaterial).color.set(color);
                 } else if (child instanceof THREE.Points) {
                     (child.material as THREE.PointsMaterial).color.set(color);
                 } else if (child instanceof THREE.Sprite) {
-                    // 对于 Sprite，由于是 Canvas 贴图，如果要变色可能需要重新生成贴图
-                    // 这里我们简单调整下材质的 color
                     (child.material as THREE.SpriteMaterial).color.set(isHighlighted ? 0x00ff00 : 0xffffff);
+                } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+                    // 半透明填充面
+                    (child.material as THREE.MeshBasicMaterial).color.set(color);
+                } else if (child instanceof THREE.Box3Helper) {
+                    (child as any).material.color.set(color);
                 }
             });
         });
@@ -3047,6 +3159,257 @@ export class SceneManager {
         parent.add(line);
     }
 
+    private addLineLoop(points: THREE.Vector3[], parent: THREE.Object3D) {
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0xff0000, depthTest: false, linewidth: 2 });
+        const line = new THREE.LineLoop(geometry, material);
+        line.renderOrder = 998;
+        parent.add(line);
+    }
+
+    private addPolygonFill(points: THREE.Vector3[], parent: THREE.Object3D) {
+        if (points.length < 3) return;
+        // 使用 ShapeGeometry 创建填充面
+        const shape = new THREE.Shape();
+        // 将3D点投影到拟合平面上
+        const v1 = new THREE.Vector3().subVectors(points[1], points[0]);
+        const v2 = new THREE.Vector3().subVectors(points[2], points[0]);
+        const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+        // 建立局部2D坐标系
+        const tangent = v1.normalize();
+        const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+        const origin = points[0];
+        // 将所有点投影到2D
+        const toLocal = (p: THREE.Vector3): [number, number] => {
+            const d = new THREE.Vector3().subVectors(p, origin);
+            return [d.dot(tangent), d.dot(bitangent)];
+        };
+        shape.moveTo(...toLocal(points[0]));
+        for (let i = 1; i < points.length; i++) {
+            shape.lineTo(...toLocal(points[i]));
+        }
+        shape.closePath();
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.15,
+            depthTest: false,
+            side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.renderOrder = 997;
+        // 将mesh放到拟合平面的世界空间位置
+        const matrix = new THREE.Matrix4();
+        matrix.makeBasis(tangent, bitangent, normal);
+        matrix.setPosition(origin);
+        mesh.matrixAutoUpdate = false;
+        mesh.matrix.copy(matrix);
+        mesh.applyMatrix4(matrix);
+        parent.add(mesh);
+    }
+
+    private computeGeometryVolume(geometry: THREE.BufferGeometry, mesh: THREE.Mesh, instanceId?: number): number {
+        const pos = geometry.attributes.position;
+        const index = geometry.index;
+        let volume = 0;
+        const vA = new THREE.Vector3();
+        const vB = new THREE.Vector3();
+        const vC = new THREE.Vector3();
+        const tmpMat = new THREE.Matrix4();
+        
+        if (instanceId !== undefined && mesh.isInstancedMesh) {
+            (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, tmpMat);
+        } else {
+            tmpMat.copy(mesh.matrixWorld);
+        }
+
+        const applyMatrix = (v: THREE.Vector3) => {
+            v.applyMatrix4(tmpMat);
+        };
+
+        if (index) {
+            for (let i = 0; i < index.count; i += 3) {
+                vA.fromBufferAttribute(pos, index.getX(i));
+                vB.fromBufferAttribute(pos, index.getX(i + 1));
+                vC.fromBufferAttribute(pos, index.getX(i + 2));
+                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
+                // 使用散度定理计算有符号体积
+                volume += vA.dot(new THREE.Vector3().crossVectors(vB, vC)) / 6;
+            }
+        } else {
+            for (let i = 0; i < pos.count; i += 3) {
+                vA.fromBufferAttribute(pos, i);
+                vB.fromBufferAttribute(pos, i + 1);
+                vC.fromBufferAttribute(pos, i + 2);
+                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
+                volume += vA.dot(new THREE.Vector3().crossVectors(vB, vC)) / 6;
+            }
+        }
+        return Math.abs(volume);
+    }
+
+    // ========== 框选方法 ==========
+
+    /**
+     * 开始框选
+     */
+    startBoxSelect(clientX: number, clientY: number) {
+        this.boxSelectState.active = true;
+        this.boxSelectState.startX = clientX;
+        this.boxSelectState.startY = clientY;
+        this.boxSelectState.endX = clientX;
+        this.boxSelectState.endY = clientY;
+        this.updateBoxSelectRect();
+    }
+
+    /**
+     * 更新框选范围
+     */
+    updateBoxSelect(clientX: number, clientY: number) {
+        if (!this.boxSelectState.active) return;
+        this.boxSelectState.endX = clientX;
+        this.boxSelectState.endY = clientY;
+        this.updateBoxSelectRect();
+    }
+
+    /**
+     * 完成框选，返回选中的对象 UUID 列表
+     */
+    endBoxSelect(): string[] {
+        if (!this.boxSelectState.active) return [];
+        this.boxSelectState.active = false;
+        this.removeBoxSelectRect();
+
+        const { startX, startY, endX, endY } = this.boxSelectState;
+        const dx = Math.abs(endX - startX);
+        const dy = Math.abs(endY - startY);
+        // 忽略太小的框（可能是误触）
+        if (dx < 5 || dy < 5) return [];
+
+        // 计算屏幕空间 NDC 坐标
+        const rect = this.canvas.getBoundingClientRect();
+        const x1 = (Math.min(startX, endX) - rect.left) / rect.width * 2 - 1;
+        const y1 = -(Math.max(startY, endY) - rect.top) / rect.height * 2 + 1;
+        const x2 = (Math.max(startX, endX) - rect.left) / rect.width * 2 - 1;
+        const y2 = -(Math.min(startY, endY) - rect.top) / rect.height * 2 + 1;
+
+        return this.selectByScreenRect(x1, y1, x2, y2);
+    }
+
+    /**
+     * 取消框选
+     */
+    cancelBoxSelect() {
+        this.boxSelectState.active = false;
+        this.removeBoxSelectRect();
+    }
+
+    private updateBoxSelectRect() {
+        const state = this.boxSelectState;
+        if (!state.rectElement) {
+            state.rectElement = document.createElement('div');
+            state.rectElement.style.cssText = `
+                position: fixed; border: 1px dashed #00aaff;
+                background: rgba(0, 170, 255, 0.08); pointer-events: none; z-index: 1000;
+            `;
+            document.body.appendChild(state.rectElement);
+        }
+        const { startX, startY, endX, endY } = state;
+        state.rectElement.style.left = Math.min(startX, endX) + 'px';
+        state.rectElement.style.top = Math.min(startY, endY) + 'px';
+        state.rectElement.style.width = Math.abs(endX - startX) + 'px';
+        state.rectElement.style.height = Math.abs(endY - startY) + 'px';
+    }
+
+    private removeBoxSelectRect() {
+        if (this.boxSelectState.rectElement) {
+            this.boxSelectState.rectElement.remove();
+            this.boxSelectState.rectElement = null;
+        }
+    }
+
+    /**
+     * 通过屏幕矩形选择对象
+     */
+    private selectByScreenRect(x1: number, y1: number, x2: number, y2: number): string[] {
+        // 确保 interactableList 已更新
+        if (!this.interactableListValid) {
+            this.getRayIntersects(0, 0); // 触发 rebuild
+        }
+
+        const frustum = new THREE.Frustum();
+        const projScreenMatrix = new THREE.Matrix4();
+        projScreenMatrix.multiplyMatrices(
+            this.camera.projectionMatrix,
+            this.camera.matrixWorldInverse
+        );
+
+        // 从 NDC 角点构建截锥体平面
+        const corners = [
+            new THREE.Vector3(x1, y1, -1).unproject(this.camera),
+            new THREE.Vector3(x2, y1, -1).unproject(this.camera),
+            new THREE.Vector3(x2, y2, -1).unproject(this.camera),
+            new THREE.Vector3(x1, y2, -1).unproject(this.camera),
+        ];
+        const farCorners = [
+            new THREE.Vector3(x1, y1, 1).unproject(this.camera),
+            new THREE.Vector3(x2, y1, 1).unproject(this.camera),
+            new THREE.Vector3(x2, y2, 1).unproject(this.camera),
+            new THREE.Vector3(x1, y2, 1).unproject(this.camera),
+        ];
+
+        // 构建6个平面
+        const planes: THREE.Plane[] = [];
+        for (let i = 0; i < 4; i++) {
+            const a = corners[i];
+            const b = corners[(i + 1) % 4];
+            const c = farCorners[i];
+            planes.push(new THREE.Plane().setFromCoplanarPoints(a, b, c));
+        }
+        // 近平面和远平面
+        planes.push(new THREE.Plane().setFromCoplanarPoints(corners[0], corners[1], corners[2]));
+        planes.push(new THREE.Plane().setFromCoplanarPoints(farCorners[0], farCorners[1], farCorners[2]));
+
+        frustum.planes = planes;
+
+        const selected: string[] = [];
+        const box = new THREE.Box3();
+        const tmpMat = new THREE.Matrix4();
+
+        for (const obj of this.interactableList) {
+            // 处理 BatchedMesh：检查每个 instance
+            if ((obj as any).isBatchedMesh) {
+                const bm = obj as THREE.BatchedMesh;
+                const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string> | undefined;
+                if (!batchIdToUuid) continue;
+                const geoBox = new THREE.Box3();
+                if (!bm.geometry.boundingBox) bm.geometry.computeBoundingBox();
+                for (const [batchId, uuid] of batchIdToUuid) {
+                    try {
+                        bm.getMatrixAt(batchId, tmpMat);
+                        tmpMat.premultiply(bm.matrixWorld);
+                        geoBox.copy(bm.geometry.boundingBox!).applyMatrix4(tmpMat);
+                        if (frustum.intersectsBox(geoBox)) {
+                            selected.push(uuid);
+                        }
+                    } catch {
+                        // skip invalid instances
+                    }
+                }
+                continue;
+            }
+
+            // 处理普通 Mesh
+            box.setFromObject(obj);
+            if (frustum.intersectsBox(box)) {
+                selected.push(obj.uuid);
+            }
+        }
+
+        return selected;
+    }
+
     removeMeasurement(id: string) {
         if (this.measureRecords.has(id)) {
             const record = this.measureRecords.get(id);
@@ -3077,11 +3440,15 @@ export class SceneManager {
             this.measureGroup.remove(this.previewLine);
             this.previewLine = null;
         }
+        if (this.previewPolygon) {
+            this.measureGroup.remove(this.previewPolygon);
+            this.previewPolygon = null;
+        }
         this.tempMarker.visible = false;
         // 清理
         for (let i = this.measureGroup.children.length - 1; i >= 0; i--) {
             const child = this.measureGroup.children[i];
-            if (!child.name.startsWith("measure_") && child !== this.previewLine) {
+            if (!child.name.startsWith("measure_") && child !== this.previewLine && child !== this.previewPolygon) {
                 this.measureGroup.remove(child);
             }
         }

@@ -5,7 +5,7 @@ import {
     IconFolderOpen, IconFile, IconDownload, IconMaximize,
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
-    IconActivity, IconCamera, IconEye, IconSun
+    IconActivity, IconCamera, IconEye, IconSun, IconSelectAll
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -22,8 +22,8 @@ interface MenuBarProps {
     handleClear?: () => void;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;
@@ -324,6 +324,16 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_measure')}
                             active={props.activeTool === 'measure'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'measure' ? 'none' : 'measure')}
+                            styles={styles}
+                            theme={theme}
+                        />
+                    )}
+                    {!isHidden('boxSelect') && (
+                        <ImageButton
+                            icon={<IconSelectAll />}
+                            label={t('tb_boxSelect')}
+                            active={props.activeTool === 'boxSelect'}
+                            onClick={() => props.setActiveTool?.(props.activeTool === 'boxSelect' ? 'none' : 'boxSelect')}
                             styles={styles}
                             theme={theme}
                         />

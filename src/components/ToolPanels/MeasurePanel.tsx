@@ -24,6 +24,17 @@ const Icons = {
       <path d="M8 2v12M2 8h12" strokeLinecap="round" />
     </svg>
   ),
+  Area: () => (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 12L6 4l5 6 2-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Volume: () => (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" strokeLinejoin="round" />
+      <path d="M8 1v7M2 4.5L8 8l6-3.5" strokeLinejoin="round" />
+    </svg>
+  ),
   None: () => (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <circle cx="8" cy="8" r="6" />
@@ -174,7 +185,9 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
     const groups: Record<string, any[]> = {
       'dist': [],
       'angle': [],
-      'coord': []
+      'coord': [],
+      'area': [],
+      'volume': []
     };
     measureHistory.forEach((item: any) => {
       if (groups[item.type]) groups[item.type].push(item);
@@ -192,6 +205,8 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
     { value: 'dist', label: t("measure_dist") || 'Distance', icon: <Icons.Distance /> },
     { value: 'angle', label: t("measure_angle") || 'Angle', icon: <Icons.Angle /> },
     { value: 'coord', label: t("measure_coord") || 'Coord', icon: <Icons.Coordinate /> },
+    { value: 'area', label: t("measure_area") || 'Area', icon: <Icons.Area /> },
+    { value: 'volume', label: t("measure_volume") || 'Volume', icon: <Icons.Volume /> },
   ];
 
   const getInstructionText = () => {
@@ -199,6 +214,8 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       case 'dist': return t("measure_instruct_dist");
       case 'angle': return t("measure_instruct_angle");
       case 'coord': return t("measure_instruct_coord");
+      case 'area': return t("measure_instruct_area");
+      case 'volume': return t("measure_instruct_volume");
       default: return '';
     }
   };
@@ -208,6 +225,8 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       case 'dist': return t("measure_dist") || 'Distance';
       case 'angle': return t("measure_angle") || 'Angle';
       case 'coord': return t("measure_coord") || 'Coordinate';
+      case 'area': return t("measure_area") || 'Area';
+      case 'volume': return t("measure_volume") || 'Volume';
       default: return type;
     }
   };
