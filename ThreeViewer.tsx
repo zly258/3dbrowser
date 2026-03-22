@@ -861,6 +861,11 @@ export const ThreeViewer = ({
         setSelectedUuids([uuid]);
     };
 
+    const handleClearSelection = () => {
+        setSelectedUuids([]);
+        sceneMgr.current?.highlightObjects([]);
+    };
+
     // --- Scene Initialization ---
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -1098,7 +1103,6 @@ export const ThreeViewer = ({
 
         const onPointerDown = (e: PointerEvent) => {
             if (e.button !== 0) return; // 仅左键
-            console.log('[BoxSelect] start', e.clientX, e.clientY);
             mgr.startBoxSelect(e.clientX, e.clientY);
         };
 
@@ -1109,7 +1113,6 @@ export const ThreeViewer = ({
         const onPointerUp = (e: PointerEvent) => {
             if (e.button !== 0) return;
             const uuids = mgr.endBoxSelect();
-            console.log('[BoxSelect] end, selected:', uuids.length, 'uuids:', uuids);
             if (uuids.length > 0) {
                 setSelectedUuids(uuids);
                 mgr.highlightObjects(uuids);
@@ -1790,10 +1793,10 @@ export const ThreeViewer = ({
                             </button>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
-                            <SceneTree 
+                            <SceneTree
                                 t={t}
-                                treeRoot={treeRoot} 
-                                setTreeRoot={setTreeRoot} 
+                                treeRoot={treeRoot}
+                                setTreeRoot={setTreeRoot}
                                 selectedUuid={selectedUuid}
                                 onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
@@ -1802,6 +1805,7 @@ export const ThreeViewer = ({
                                     if (uuid) handleDeleteObject(uuid);
                                 }}
                                 onFocus={(obj) => handleFocusObject(obj)}
+                                onClearSelection={handleClearSelection}
                                 onSelectAll={handleSelectAll}
                                 onInvertSelection={handleInvertSelection}
                                 onHideSelected={handleHideSelected}
@@ -1854,39 +1858,6 @@ export const ThreeViewer = ({
                                 {
                                     label: t("show_all") || "显示全部",
                                     onClick: handleShowAll
-                                },
-                                {
-                                    divider: true
-                                },
-                                {
-                                    label: t("set_opacity") || "设置透明度",
-                                    slider: true,
-                                    value: contextMenuOpacity,
-                                    onChange: (val: number) => {
-                                        setContextMenuOpacity(val);
-                                        if (sceneMgr.current && selectedUuids.length > 0) {
-                                            selectedUuids.forEach(uuid => {
-                                                const obj = sceneMgr.current?.contentGroup.getObjectByProperty('uuid', uuid);
-                                                if (obj) {
-                                                    obj.traverse((child: any) => {
-                                                        if (child.isMesh && child.material) {
-                                                            const materials = Array.isArray(child.material) ? child.material : [child.material];
-                                                            materials.forEach((m: any) => {
-                                                                if (val < 1.0) {
-                                                                    m.transparent = true;
-                                                                    m.opacity = val;
-                                                                } else {
-                                                                    m.transparent = false;
-                                                                    m.opacity = 1.0;
-                                                                }
-                                                                m.needsUpdate = true;
-                                                            });
-                                                        }
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    }
                                 }
                             ]}
                             onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
