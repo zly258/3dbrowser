@@ -889,12 +889,8 @@ export const ThreeViewer = ({
                     setToast({ message: t("all_chunks_loaded"), type: 'success' });
                     completedFileSetsRef.current.add(currentFileSetId);
                     
-                    // 加载完成后，延迟 3 秒清空进度信息
-                    if (clearProgressTimer) clearTimeout(clearProgressTimer);
-                    clearProgressTimer = setTimeout(() => {
-                        setChunkProgress({ loaded: 0, total: 0 });
-                        clearProgressTimer = null;
-                    }, 3000);
+                    // 加载完成后，立即清空进度信息，不再显示3秒
+                    setChunkProgress({ loaded: 0, total: 0 });
                 }
             } else {
                 if (clearProgressTimer) {

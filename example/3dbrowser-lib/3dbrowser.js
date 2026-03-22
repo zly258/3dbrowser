@@ -164,7 +164,7 @@ class SceneManager {
     const highlightMat = new THREE.MeshBasicMaterial({
       color: 16755200,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.3,
       depthTest: false,
       depthWrite: false,
       side: THREE.DoubleSide
@@ -1765,6 +1765,9 @@ class SceneManager {
       if (mappings) {
         mappings.forEach((m) => {
           m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
+          if (m.mesh.instanceColor) {
+            m.mesh.instanceColor.needsUpdate = true;
+          }
         });
       }
     };
@@ -1773,6 +1776,9 @@ class SceneManager {
       if (mappings) {
         mappings.forEach((m) => {
           m.mesh.setColorAt(m.instanceId, new THREE.Color(16755200));
+          if (m.mesh.instanceColor) {
+            m.mesh.instanceColor.needsUpdate = true;
+          }
         });
       }
     };
@@ -4206,6 +4212,14 @@ const resources = {
     measure_stop: "Stop",
     tb_boxSelect: "Box Select",
     tb_boxSelect_hint: "Drag to select objects",
+    tb_wireframe: "Wireframe",
+    op_screenshot: "Screenshot",
+    // 渲染样式
+    display_mode: "Display Mode",
+    dm_wireframe: "Wireframe",
+    dm_solid: "Solid",
+    dm_solidwire: "Solid with Outline",
+    dm_hidden: "Hidden Line",
     // 剖切
     clip_title: "Sectioning Tool",
     clip_enable: "Enable Clipping",
@@ -4297,7 +4311,11 @@ const resources = {
     viewpoint_save: "Save Current Viewpoint",
     viewpoint_empty: "No saved viewpoints",
     viewpoint_loading: "Restoring viewpoint",
-    chunk_loading: "Chunks"
+    chunk_loading: "Chunks",
+    select_all: "Select All",
+    invert_selection: "Invert Selection",
+    set_opacity: "Opacity",
+    copied: "Copied"
   },
   zh: {
     home: "首页",
@@ -4402,6 +4420,14 @@ const resources = {
     measure_stop: "停止测量",
     tb_boxSelect: "框选",
     tb_boxSelect_hint: "拖拽选择对象",
+    tb_wireframe: "线框",
+    op_screenshot: "场景截图",
+    // 渲染样式
+    display_mode: "显示样式",
+    dm_wireframe: "线框",
+    dm_solid: "着色",
+    dm_solidwire: "着色带轮廓线",
+    dm_hidden: "消隐",
     // 剖切
     clip_title: "剖切面板",
     clip_enable: "开启剖切",
@@ -4493,7 +4519,11 @@ const resources = {
     viewpoint_save: "保存当前视点",
     viewpoint_empty: "暂无保存的视点",
     viewpoint_loading: "正在恢复视点",
-    chunk_loading: "分片加载"
+    chunk_loading: "分片加载",
+    select_all: "全选",
+    invert_selection: "反选",
+    set_opacity: "透明度",
+    copied: "已复制"
   }
 };
 const getTranslation = (lang, key) => {
@@ -4994,17 +5024,17 @@ const Checkbox = ({
           "div",
           {
             style: {
-              width: "16px",
-              height: "16px",
-              minWidth: "16px",
-              minHeight: "16px",
-              border: "2px solid var(--border-color)",
-              borderRadius: "3px",
+              width: "14px",
+              height: "14px",
+              minWidth: "14px",
+              minHeight: "14px",
+              border: "1px solid var(--border-color)",
+              borderRadius: "2px",
               backgroundColor: checked ? "var(--accent)" : "var(--bg-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "all 120ms ease",
+              transition: "none",
               flexShrink: 0
             },
             children: checked && /* @__PURE__ */ jsx(
@@ -5013,10 +5043,10 @@ const Checkbox = ({
                 viewBox: "0 0 24 24",
                 fill: "none",
                 stroke: "white",
-                strokeWidth: "3",
+                strokeWidth: "2",
                 strokeLinecap: "round",
                 strokeLinejoin: "round",
-                style: { width: "12px", height: "12px" },
+                style: { width: "10px", height: "10px" },
                 children: /* @__PURE__ */ jsx("polyline", { points: "20 6 9 17 4 12" })
               }
             )
@@ -5174,6 +5204,14 @@ const IconGrid = (props) => createIcon(
   ] }),
   props
 );
+const IconLayers = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("polygon", { points: "12 2 2 7 12 12 22 7 12 2" }),
+    /* @__PURE__ */ jsx("polyline", { points: "2 12 12 17 22 12" }),
+    /* @__PURE__ */ jsx("polyline", { points: "2 17 12 22 22 17" })
+  ] }),
+  props
+);
 const IconSelectAll = (props) => createIcon(
   /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx("path", { d: "M3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4z", fill: "none" }),
@@ -5327,6 +5365,19 @@ const Toolbar = (props) => {
             onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
             onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
             children: t("op_clear")
+          }
+        ),
+        !isHidden("screenshot") && /* @__PURE__ */ jsx(
+          "div",
+          {
+            style: { padding: "6px 16px", fontSize: "12px", color: theme.text, cursor: "pointer", backgroundColor: "transparent" },
+            onClick: () => {
+              props.handleScreenshot?.();
+              setOpenMenu(null);
+            },
+            onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+            onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent",
+            children: t("op_screenshot") || "截图"
           }
         )
       ] }))
@@ -5488,6 +5539,16 @@ const Toolbar = (props) => {
       ] })
     ] }),
     !isHidden("interface") && /* @__PURE__ */ jsxs("div", { className: "ui-toolbar-group", children: [
+      !isHidden("wireframe") && /* @__PURE__ */ jsx(
+        ImageButton,
+        {
+          icon: /* @__PURE__ */ jsx(IconLayers, {}),
+          label: t("tb_wireframe") || "线框",
+          active: props.wireframe,
+          onClick: () => props.handleWireframe?.(),
+          theme
+        }
+      ),
       !isHidden("outline") && /* @__PURE__ */ jsx(
         ImageButton,
         {
@@ -5618,6 +5679,10 @@ const SceneTree = ({
   onDelete,
   onFocus,
   onIsolate,
+  onSelectAll,
+  onInvertSelection,
+  onHideSelected,
+  onShowAll,
   theme
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -5749,13 +5814,13 @@ const SceneTree = ({
         children: [
           node.depth > 0 && /* @__PURE__ */ jsxs("div", { style: { display: "flex", height: "100%", alignItems: "center", flexShrink: 0 }, children: [
             node.parentIsLast?.map((isLast, i) => /* @__PURE__ */ jsx("div", { style: {
-              width: 16,
+              width: 12,
               height: "100%",
               position: "relative",
               borderLeft: isLast ? "none" : `1px solid var(--border-color)`
             } }, i)),
             /* @__PURE__ */ jsxs("div", { style: {
-              width: 16,
+              width: 12,
               height: "100%",
               position: "relative",
               display: "flex",
@@ -5771,7 +5836,7 @@ const SceneTree = ({
               /* @__PURE__ */ jsx("div", { style: {
                 position: "absolute",
                 left: 0,
-                width: 8,
+                width: 6,
                 borderTop: `1px solid var(--border-color)`
               } })
             ] })
@@ -5779,16 +5844,18 @@ const SceneTree = ({
           /* @__PURE__ */ jsx("div", { className: "ui-tree-expander", onClick: (e) => {
             e.stopPropagation();
             toggleNode(node.uuid);
-          }, children: node.children.length > 0 ? node.expanded ? /* @__PURE__ */ jsx(IconChevronDown, { size: 14 }) : /* @__PURE__ */ jsx(IconChevronRight, { size: 14 }) : null }),
+          }, children: node.children.length > 0 ? node.expanded ? /* @__PURE__ */ jsx(IconChevronDown, { size: 12 }) : /* @__PURE__ */ jsx(IconChevronRight, { size: 12 }) : null }),
           /* @__PURE__ */ jsx(
             Checkbox,
             {
               checked: node.visible,
               onChange: (val) => onToggleVisibility(node.uuid, val),
-              style: { marginRight: 6, padding: 0, flexShrink: 0 }
+              style: { marginRight: 4, padding: 0, flexShrink: 0 }
             }
           ),
-          /* @__PURE__ */ jsx("div", { className: "ui-tree-label", children: node.name })
+          /* @__PURE__ */ jsx("div", { className: "ui-tree-label", children: searchQuery ? node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? /* @__PURE__ */ jsx("span", { children: node.name.split(new RegExp(`(${searchQuery})`, "gi")).map(
+            (part, i) => part.toLowerCase() === searchQuery.toLowerCase() ? /* @__PURE__ */ jsx("span", { style: { backgroundColor: "rgba(255, 255, 0, 0.4)", color: "inherit" }, children: part }, i) : part
+          ) }) : node.name : node.name })
         ]
       },
       node.uuid
@@ -6948,11 +7015,21 @@ const LoadingOverlay = ({ t, loading, status, progress, theme }) => {
 const PropertiesPanel = ({ t, selectedProps, theme }) => {
   const [collapsed, setCollapsed] = useState(/* @__PURE__ */ new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [copiedText, setCopiedText] = useState(null);
   const toggleGroup = (group) => {
     const next = new Set(collapsed);
     if (next.has(group)) next.delete(group);
     else next.add(group);
     setCollapsed(next);
+  };
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedText(text);
+      setTimeout(() => setCopiedText(null), 1500);
+    } catch (e) {
+      console.error("Failed to copy", e);
+    }
   };
   const filteredProps = React.useMemo(() => {
     if (!selectedProps || !searchQuery) return selectedProps;
@@ -6971,7 +7048,7 @@ const PropertiesPanel = ({ t, selectedProps, theme }) => {
     });
     return result;
   }, [selectedProps, searchQuery]);
-  return /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }, children: [
+  return /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }, children: [
     selectedProps && /* @__PURE__ */ jsx("div", { style: { padding: "8px", borderBottom: "1px solid var(--border-color)" }, children: /* @__PURE__ */ jsx(
       "input",
       {
@@ -7001,9 +7078,19 @@ const PropertiesPanel = ({ t, selectedProps, theme }) => {
       ),
       !collapsed.has(group) && Object.entries(props).map(([k, v]) => /* @__PURE__ */ jsxs("div", { className: "ui-prop-row", children: [
         /* @__PURE__ */ jsx("div", { className: "ui-prop-key", title: k, children: k }),
-        /* @__PURE__ */ jsx("div", { className: "ui-prop-value", title: String(v), children: String(v) })
+        /* @__PURE__ */ jsx(
+          "div",
+          {
+            className: "ui-prop-value",
+            title: String(v),
+            onClick: () => handleCopy(String(v)),
+            style: { cursor: "copy" },
+            children: String(v)
+          }
+        )
       ] }, k))
-    ] }, group)) : /* @__PURE__ */ jsx("div", { style: { padding: 20, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }, children: t("no_selection") }) })
+    ] }, group)) : /* @__PURE__ */ jsx("div", { style: { padding: 20, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }, children: t("no_selection") }) }),
+    copiedText && /* @__PURE__ */ jsx("div", { style: { position: "absolute", bottom: "20px", left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.7)", color: "white", padding: "6px 12px", borderRadius: "4px", fontSize: "12px", zIndex: 100, pointerEvents: "none" }, children: t("copied") || "已复制" })
   ] });
 };
 
@@ -7322,7 +7409,7 @@ const ViewCube = ({ sceneMgr, lang = "zh", theme }) => {
         }
         hoveredPart.current = mesh;
         const mat = mesh.material;
-        mat.opacity = 1;
+        mat.opacity = 0.3;
         mat.color.set(30932);
       }
       containerRef.current.style.cursor = "pointer";
@@ -7477,6 +7564,29 @@ const ContextMenu = ({ x, y, items, onClose, theme }) => {
             index
           );
         }
+        if (item.slider) {
+          return /* @__PURE__ */ jsxs("div", { className: "ui-context-menu-item", style: { display: "flex", flexDirection: "column", gap: "4px", cursor: "default" }, children: [
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "12px" }, children: [
+              /* @__PURE__ */ jsx("span", { children: item.label }),
+              /* @__PURE__ */ jsxs("span", { children: [
+                Math.round((item.value || 0) * 100),
+                "%"
+              ] })
+            ] }),
+            /* @__PURE__ */ jsx(
+              "input",
+              {
+                type: "range",
+                min: "0",
+                max: "1",
+                step: "0.01",
+                value: item.value || 0,
+                onChange: (e) => item.onChange?.(parseFloat(e.target.value)),
+                style: { width: "100%", cursor: "pointer" }
+              }
+            )
+          ] }, index);
+        }
         return /* @__PURE__ */ jsx(
           "div",
           {
@@ -7547,6 +7657,8 @@ const ThreeViewer = ({
   const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
   const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
   const [activeTool, setActiveTool] = useState("none");
+  const [mousePos, setMousePos] = useState(null);
+  const [wireframe, setWireframe] = useState(false);
   const [viewpoints, setViewpoints] = useState([]);
   const [currentFileSetId, setCurrentFileSetId] = useState("");
   const [measureType, setMeasureType] = useState("none");
@@ -7641,8 +7753,15 @@ const ThreeViewer = ({
   const [toast, setToast] = useState(null);
   const [contextMenu, setContextMenu] = useState({ x: 0, y: 0, visible: false });
   const [hiddenUuids, setHiddenUuids] = useState(/* @__PURE__ */ new Set());
+  const [contextMenuOpacity, setContextMenuOpacity] = useState(1);
+  const visibilityStackRef = useRef([]);
   const handleHideSelected = useCallback(() => {
     if (selectedUuids.length === 0 || !sceneMgr.current) return;
+    const stateToRestore = selectedUuids.map((uuid) => {
+      const obj = sceneMgr.current?.contentGroup.getObjectByProperty("uuid", uuid);
+      return { uuid, visible: obj ? obj.visible : true };
+    });
+    visibilityStackRef.current.push(stateToRestore);
     selectedUuids.forEach((uuid) => {
       sceneMgr.current?.setObjectVisibility(uuid, false);
       hiddenUuids.add(uuid);
@@ -7654,7 +7773,9 @@ const ThreeViewer = ({
     updateTree();
   }, [selectedUuids, hiddenUuids]);
   const handleShowAll = useCallback(() => {
-    if (!sceneMgr.current) return;
+    if (!sceneMgr.current || hiddenUuids.size === 0) return;
+    const stateToRestore = Array.from(hiddenUuids).map((uuid) => ({ uuid, visible: false }));
+    visibilityStackRef.current.push(stateToRestore);
     hiddenUuids.forEach((uuid) => {
       sceneMgr.current?.setObjectVisibility(uuid, true);
     });
@@ -7792,7 +7913,14 @@ const ThreeViewer = ({
     let image = "";
     try {
       sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
-      image = sceneMgr.current.canvas.toDataURL("image/jpeg", 0.7);
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = 64;
+      tempCanvas.height = 48;
+      const ctx = tempCanvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(sceneMgr.current.canvas, 0, 0, 64, 48);
+        image = tempCanvas.toDataURL("image/jpeg", 0.7);
+      }
     } catch (e) {
       console.error("Failed to capture thumbnail", e);
     }
@@ -8031,9 +8159,59 @@ const ThreeViewer = ({
   }, []);
   const handleToggleVisibility = (uuid, visible) => {
     if (!sceneMgr.current) return;
+    visibilityStackRef.current.push([{ uuid, visible: !visible }]);
     sceneMgr.current.setObjectVisibility(uuid, visible);
+    if (visible) {
+      const next = new Set(hiddenUuids);
+      next.delete(uuid);
+      setHiddenUuids(next);
+    } else {
+      const next = new Set(hiddenUuids);
+      next.add(uuid);
+      setHiddenUuids(next);
+    }
     updateTree();
   };
+  const handleSelectAll = useCallback(() => {
+    if (!sceneMgr.current) return;
+    const root = sceneMgr.current.structureRoot;
+    if (!root) return;
+    const allUuids = [];
+    const traverse = (node) => {
+      if (node.uuid) allUuids.push(node.uuid);
+      if (node.children) node.children.forEach(traverse);
+    };
+    traverse(root);
+    setSelectedUuids(allUuids);
+    sceneMgr.current.highlightObjects(allUuids);
+  }, []);
+  const handleInvertSelection = useCallback(() => {
+    if (!sceneMgr.current) return;
+    const root = sceneMgr.current.structureRoot;
+    if (!root) return;
+    const allUuids = [];
+    const traverse = (node) => {
+      if (node.uuid) allUuids.push(node.uuid);
+      if (node.children) node.children.forEach(traverse);
+    };
+    traverse(root);
+    const nextUuids = allUuids.filter((id) => !selectedUuids.includes(id));
+    setSelectedUuids(nextUuids);
+    sceneMgr.current.highlightObjects(nextUuids);
+  }, [selectedUuids]);
+  const handleUndoVisibility = useCallback(() => {
+    if (visibilityStackRef.current.length === 0 || !sceneMgr.current) return;
+    const lastAction = visibilityStackRef.current.pop();
+    if (!lastAction) return;
+    const nextHidden = new Set(hiddenUuids);
+    lastAction.forEach((change) => {
+      sceneMgr.current?.setObjectVisibility(change.uuid, change.visible);
+      if (change.visible) nextHidden.delete(change.uuid);
+      else nextHidden.add(change.uuid);
+    });
+    setHiddenUuids(nextHidden);
+    updateTree();
+  }, [hiddenUuids]);
   const handleDeleteObject = (uuid) => {
     if (!sceneMgr.current) return;
     const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
@@ -8086,23 +8264,13 @@ const ThreeViewer = ({
     requestAnimationFrame(() => {
       manager.resize();
     });
-    let clearProgressTimer = null;
     manager.onChunkProgress = (loaded, total) => {
       setChunkProgress({ loaded, total });
       if (loaded === total && total > 0 && currentFileSetId) {
         if (!completedFileSetsRef.current.has(currentFileSetId)) {
           setToast({ message: t("all_chunks_loaded"), type: "success" });
           completedFileSetsRef.current.add(currentFileSetId);
-          if (clearProgressTimer) clearTimeout(clearProgressTimer);
-          clearProgressTimer = setTimeout(() => {
-            setChunkProgress({ loaded: 0, total: 0 });
-            clearProgressTimer = null;
-          }, 3e3);
-        }
-      } else {
-        if (clearProgressTimer) {
-          clearTimeout(clearProgressTimer);
-          clearProgressTimer = null;
+          setChunkProgress({ loaded: 0, total: 0 });
         }
       }
     };
@@ -8120,7 +8288,6 @@ const ThreeViewer = ({
       if (manager) setStats(manager.getStats());
     }, 1e3);
     return () => {
-      if (clearProgressTimer) clearTimeout(clearProgressTimer);
       clearInterval(statsInterval);
       manager.dispose();
     };
@@ -8190,12 +8357,36 @@ const ThreeViewer = ({
     const handleMouseMove = (e) => {
       if (activeTool === "measure") {
         mgr.updateMeasureHover(e.clientX, e.clientY);
+        setMousePos(null);
         return;
+      }
+      const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
+      if (intersect) {
+        setMousePos(intersect.point);
+      } else {
+        setMousePos(null);
       }
     };
     const handleContextMenu = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      let initialOpacity = 1;
+      if (selectedUuids.length > 0 && mgr) {
+        const obj = mgr.contentGroup.getObjectByProperty("uuid", selectedUuids[0]);
+        if (obj) {
+          let found = false;
+          obj.traverse((child) => {
+            if (!found && child.isMesh && child.material) {
+              const m = Array.isArray(child.material) ? child.material[0] : child.material;
+              if (m.opacity !== void 0) {
+                initialOpacity = m.opacity;
+                found = true;
+              }
+            }
+          });
+        }
+      }
+      setContextMenuOpacity(initialOpacity);
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
@@ -8203,6 +8394,10 @@ const ThreeViewer = ({
       });
     };
     const handleKeyDown = (e) => {
+      if ((e.key === "z" || e.key === "Z") && (e.ctrlKey || e.metaKey)) {
+        handleUndoVisibility();
+        return;
+      }
       if (e.key === "Escape") {
         if (activeTool === "measure" && measureType !== "none") {
           setMeasureType("none");
@@ -8725,6 +8920,35 @@ const ThreeViewer = ({
       }
     });
   };
+  const handleScreenshot = () => {
+    if (!sceneMgr.current) return;
+    try {
+      sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
+      const dataUrl = sceneMgr.current.canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = "screenshot.png";
+      a.click();
+      setToast({ message: t("success"), type: "success" });
+    } catch (e) {
+      console.error(e);
+      setToast({ message: t("failed"), type: "error" });
+    }
+  };
+  const handleWireframe = () => {
+    if (!sceneMgr.current) return;
+    const newWireframe = !wireframe;
+    setWireframe(newWireframe);
+    sceneMgr.current.contentGroup.traverse((child) => {
+      if (child.isMesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m) => m.wireframe = newWireframe);
+        } else {
+          child.material.wireframe = newWireframe;
+        }
+      }
+    });
+  };
   return /* @__PURE__ */ jsx(ErrorBoundary, { t, theme, children: /* @__PURE__ */ jsxs(
     "div",
     {
@@ -8757,6 +8981,9 @@ const ThreeViewer = ({
             handleOpenUrl,
             handleView,
             handleClear,
+            handleScreenshot,
+            handleWireframe,
+            wireframe,
             pickEnabled,
             setPickEnabled,
             activeTool,
@@ -8807,6 +9034,10 @@ const ThreeViewer = ({
                   if (uuid) handleDeleteObject(uuid);
                 },
                 onFocus: (obj) => handleFocusObject(obj),
+                onSelectAll: handleSelectAll,
+                onInvertSelection: handleInvertSelection,
+                onHideSelected: handleHideSelected,
+                onShowAll: handleShowAll,
                 theme
               }
             ) }),
@@ -8834,12 +9065,12 @@ const ThreeViewer = ({
                 y: contextMenu.y,
                 items: [
                   {
-                    label: t("hide_selected"),
+                    label: t("hide_selected") || "隐藏选中",
                     onClick: handleHideSelected,
                     disabled: selectedUuids.length === 0
                   },
                   {
-                    label: t("isolate_selection"),
+                    label: t("isolate_selection") || "隔离选中",
                     onClick: () => {
                       if (selectedUuids.length > 0 && sceneMgr.current) {
                         sceneMgr.current.isolateObjects(selectedUuids);
@@ -8848,8 +9079,41 @@ const ThreeViewer = ({
                     disabled: selectedUuids.length === 0
                   },
                   {
-                    label: t("show_all"),
+                    label: t("show_all") || "显示全部",
                     onClick: handleShowAll
+                  },
+                  {
+                    divider: true
+                  },
+                  {
+                    label: t("set_opacity") || "设置透明度",
+                    slider: true,
+                    value: contextMenuOpacity,
+                    onChange: (val) => {
+                      setContextMenuOpacity(val);
+                      if (sceneMgr.current && selectedUuids.length > 0) {
+                        selectedUuids.forEach((uuid) => {
+                          const obj = sceneMgr.current?.contentGroup.getObjectByProperty("uuid", uuid);
+                          if (obj) {
+                            obj.traverse((child) => {
+                              if (child.isMesh && child.material) {
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach((m) => {
+                                  if (val < 1) {
+                                    m.transparent = true;
+                                    m.opacity = val;
+                                  } else {
+                                    m.transparent = false;
+                                    m.opacity = 1;
+                                  }
+                                  m.needsUpdate = true;
+                                });
+                              }
+                            });
+                          }
+                        });
+                      }
+                    }
                   }
                 ],
                 onClose: () => setContextMenu((prev) => ({ ...prev, visible: false })),
@@ -9040,6 +9304,13 @@ const ThreeViewer = ({
             ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "12px", alignItems: "center" }, children: [
+            mousePos && /* @__PURE__ */ jsxs("div", { style: { opacity: 0.85, fontFamily: "monospace" }, children: [
+              mousePos.x.toFixed(2),
+              ", ",
+              mousePos.y.toFixed(2),
+              ", ",
+              mousePos.z.toFixed(2)
+            ] }),
             /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: "10px", opacity: 0.85 }, children: [
               /* @__PURE__ */ jsx("span", { children: t("tips_rotate") }),
               /* @__PURE__ */ jsx("span", { children: t("tips_pan") }),

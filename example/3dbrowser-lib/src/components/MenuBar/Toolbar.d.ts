@@ -11,6 +11,9 @@ interface MenuBarProps {
     handleOpenUrl?: () => void;
     handleView?: (view: string) => void;
     handleClear?: () => void;
+    handleScreenshot?: () => void;
+    handleWireframe?: () => void;
+    wireframe?: boolean;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
     activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
