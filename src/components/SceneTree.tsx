@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
+import { IconChevronRight, IconChevronDown, IconClose, IconSelectAll, IconEye, IconEyeOff, IconInvert } from "../theme/Icons";
 import { Checkbox } from "./common";
 
 interface TreeNode {
@@ -82,11 +82,16 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
+    onSelectAll?: () => void;
+    onInvertSelection?: () => void;
+    onHideSelected?: () => void;
+    onShowAll?: () => void;
         theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({ 
     t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus, onIsolate,
+    onSelectAll, onInvertSelection, onHideSelected, onShowAll,
     theme 
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
@@ -235,16 +240,16 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             {node.depth > 0 && (
                                 <div style={{ display: 'flex', height: '100%', alignItems: 'center', flexShrink: 0 }}>
                                     {node.parentIsLast?.map((isLast, i) => (
-                                        <div key={i} style={{ 
-                                            width: 16, 
-                                            height: '100%', 
+                                        <div key={i} style={{
+                                            width: 12,
+                                            height: '100%',
                                             position: 'relative',
-                                            borderLeft: isLast ? 'none' : `1px solid var(--border-color)` 
+                                            borderLeft: isLast ? 'none' : `1px solid var(--border-color)`
                                         }} />
                                     ))}
-                                    <div style={{ 
-                                        width: 16, 
-                                        height: '100%', 
+                                    <div style={{
+                                        width: 12,
+                                        height: '100%',
                                         position: 'relative',
                                         display: 'flex',
                                         alignItems: 'center'
@@ -261,7 +266,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                         <div style={{
                                             position: 'absolute',
                                             left: 0,
-                                            width: 8,
+                                            width: 6,
                                             borderTop: `1px solid var(--border-color)`
                                         }} />
                                     </div>
@@ -270,17 +275,29 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
                             <div className="ui-tree-expander" onClick={(e) => { e.stopPropagation(); toggleNode(node.uuid); }}>
                                 {node.children.length > 0 ? (
-                                    node.expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />
+                                    node.expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />
                                 ) : null}
                             </div>
-                            
+
                             <Checkbox
                                 checked={node.visible}
                                 onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
-                                style={{ marginRight: 6, padding: 0, flexShrink: 0 }}
+                                style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
                             />
                             
-                            <div className="ui-tree-label">{node.name}</div>
+                            <div className="ui-tree-label">
+                                {searchQuery ? (
+                                    node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                        <span>
+                                            {node.name.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
+                                                part.toLowerCase() === searchQuery.toLowerCase() 
+                                                    ? <span key={i} style={{ backgroundColor: 'rgba(255, 255, 0, 0.4)', color: 'inherit' }}>{part}</span>
+                                                    : part
+                                            )}
+                                        </span>
+                                    ) : node.name
+                                ) : node.name}
+                            </div>
                         </div>
                     ))}
                 </div>

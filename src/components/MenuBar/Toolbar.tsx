@@ -5,7 +5,8 @@ import {
     IconFolderOpen, IconFile, IconDownload, IconMaximize,
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
-    IconActivity, IconCamera, IconEye, IconSun, IconSelectAll
+    IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
+    IconImage, IconLayers
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -19,6 +20,9 @@ interface MenuBarProps {
     handleOpenUrl?: () => void;
     handleView?: (view: string) => void;
     handleClear?: () => void;
+    handleScreenshot?: () => void;
+    handleWireframe?: () => void;
+    wireframe?: boolean;
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
     activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
@@ -166,6 +170,16 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                                         {t('op_clear')}
                                     </div>
                                 )}
+                                {!isHidden('screenshot') && (
+                                    <div
+                                        style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
+                                        onClick={() => { props.handleScreenshot?.(); setOpenMenu(null); }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        {t('op_screenshot') || '截图'}
+                                    </div>
+                                )}
                             </>
                         ))}
                     </div>
@@ -279,6 +293,15 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
 
             {!isHidden('interface') && (
                 <div className="ui-toolbar-group">
+                    {!isHidden('wireframe') && (
+                        <ImageButton
+                            icon={<IconLayers />}
+                            label={t('tb_wireframe') || '线框'}
+                            active={props.wireframe}
+                            onClick={() => props.handleWireframe?.()}
+                            theme={theme}
+                        />
+                    )}
                     {!isHidden('outline') && (
                         <ImageButton
                             icon={<IconBox />}

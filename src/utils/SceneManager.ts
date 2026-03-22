@@ -284,10 +284,10 @@ export class SceneManager {
         this.selectionBox.visible = false;
         this.helpersGroup.add(this.selectionBox);
 
-        const highlightMat = new THREE.MeshBasicMaterial({ 
-            color: 0xffaa00, 
-            transparent: true, 
-            opacity: 0.4, 
+        const highlightMat = new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            transparent: true,
+            opacity: 0.3,
             depthTest: false,
             depthWrite: false,
             side: THREE.DoubleSide
@@ -2282,6 +2282,7 @@ export class SceneManager {
             if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
+                    m.mesh.instanceColor!.needsUpdate = true;
                 });
             }
         };
@@ -2291,6 +2292,7 @@ export class SceneManager {
             if (mappings) {
                 mappings.forEach(m => {
                     m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
+                    m.mesh.instanceColor!.needsUpdate = true;
                 });
             }
         };

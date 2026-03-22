@@ -105,6 +105,10 @@ export const ThreeViewer = ({
     // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect'>('none');
     
+    // Viewport coords
+    const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
+    const [wireframe, setWireframe] = useState(false);
+    
     // Viewpoint State
     const [viewpoints, setViewpoints] = useState<any[]>([]);
     const [currentFileSetId, setCurrentFileSetId] = useState<string>("");
@@ -239,11 +243,21 @@ export const ThreeViewer = ({
     
     // 隐藏对象记录
     const [hiddenUuids, setHiddenUuids] = useState<Set<string>>(new Set());
+    const [contextMenuOpacity, setContextMenuOpacity] = useState(1.0);
+    
+    // Visibility undo stack
+    const visibilityStackRef = useRef<{uuid: string, visible: boolean}[][]>([]);
     
     // 隐藏选中的对象
     const handleHideSelected = useCallback(() => {
         if (selectedUuids.length === 0 || !sceneMgr.current) return;
         
+        const stateToRestore = selectedUuids.map(uuid => {
+            const obj = sceneMgr.current?.contentGroup.getObjectByProperty('uuid', uuid);
+            return { uuid, visible: obj ? obj.visible : true };
+        });
+        visibilityStackRef.current.push(stateToRestore);
+
         selectedUuids.forEach(uuid => {
             sceneMgr.current?.setObjectVisibility(uuid, false);
             hiddenUuids.add(uuid);
@@ -257,8 +271,11 @@ export const ThreeViewer = ({
     
     // 显示全部对象
     const handleShowAll = useCallback(() => {
-        if (!sceneMgr.current) return;
+        if (!sceneMgr.current || hiddenUuids.size === 0) return;
         
+        const stateToRestore = Array.from(hiddenUuids).map(uuid => ({ uuid, visible: false }));
+        visibilityStackRef.current.push(stateToRestore);
+
         hiddenUuids.forEach(uuid => {
             sceneMgr.current?.setObjectVisibility(uuid, true);
         });
@@ -419,12 +436,20 @@ export const ThreeViewer = ({
         const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
         const cameraState = sceneMgr.current.getCameraState();
         
-        // 截取缩略图
+        // 截取缩略图 (缩放至 64x48 以节省存储空间)
         let image = "";
         try {
             // 确保在截图前渲染一帧
             sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
-            image = sceneMgr.current.canvas.toDataURL("image/jpeg", 0.7);
+            
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = 64;
+            tempCanvas.height = 48;
+            const ctx = tempCanvas.getContext("2d");
+            if (ctx) {
+                ctx.drawImage(sceneMgr.current.canvas, 0, 0, 64, 48);
+                image = tempCanvas.toDataURL("image/jpeg", 0.7);
+            }
         } catch (e) {
             console.error("Failed to capture thumbnail", e);
         }
@@ -716,11 +741,71 @@ export const ThreeViewer = ({
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
         
+        visibilityStackRef.current.push([{ uuid, visible: !visible }]);
+        
         sceneMgr.current.setObjectVisibility(uuid, visible);
+
+        if (visible) {
+            const next = new Set(hiddenUuids);
+            next.delete(uuid);
+            setHiddenUuids(next);
+        } else {
+            const next = new Set(hiddenUuids);
+            next.add(uuid);
+            setHiddenUuids(next);
+        }
 
         // 使用 updateTree 同步最新的结构树状态
         updateTree();
     };
+
+    const handleSelectAll = useCallback(() => {
+        if (!sceneMgr.current) return;
+        const root = sceneMgr.current.structureRoot;
+        if (!root) return;
+        
+        const allUuids: string[] = [];
+        const traverse = (node: any) => {
+            if (node.uuid) allUuids.push(node.uuid);
+            if (node.children) node.children.forEach(traverse);
+        };
+        traverse(root);
+        
+        setSelectedUuids(allUuids);
+        sceneMgr.current.highlightObjects(allUuids);
+    }, []);
+
+    const handleInvertSelection = useCallback(() => {
+        if (!sceneMgr.current) return;
+        const root = sceneMgr.current.structureRoot;
+        if (!root) return;
+        
+        const allUuids: string[] = [];
+        const traverse = (node: any) => {
+            if (node.uuid) allUuids.push(node.uuid);
+            if (node.children) node.children.forEach(traverse);
+        };
+        traverse(root);
+        
+        const nextUuids = allUuids.filter(id => !selectedUuids.includes(id));
+        setSelectedUuids(nextUuids);
+        sceneMgr.current.highlightObjects(nextUuids);
+    }, [selectedUuids]);
+
+    const handleUndoVisibility = useCallback(() => {
+        if (visibilityStackRef.current.length === 0 || !sceneMgr.current) return;
+        const lastAction = visibilityStackRef.current.pop();
+        if (!lastAction) return;
+        
+        const nextHidden = new Set(hiddenUuids);
+        lastAction.forEach(change => {
+            sceneMgr.current?.setObjectVisibility(change.uuid, change.visible);
+            if (change.visible) nextHidden.delete(change.uuid);
+            else nextHidden.add(change.uuid);
+        });
+        setHiddenUuids(nextHidden);
+        updateTree();
+    }, [hiddenUuids]);
 
     const handleDeleteObject = (uuid: string) => {
         if (!sceneMgr.current) return;
@@ -930,13 +1015,38 @@ export const ThreeViewer = ({
         const handleMouseMove = (e: MouseEvent) => {
             if (activeTool === 'measure') {
                 mgr.updateMeasureHover(e.clientX, e.clientY);
+                setMousePos(null);
                 return;
+            }
+            const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
+            if (intersect) {
+                setMousePos(intersect.point);
+            } else {
+                setMousePos(null);
             }
         };
 
         const handleContextMenu = (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            let initialOpacity = 1.0;
+            if (selectedUuids.length > 0 && mgr) {
+                const obj = mgr.contentGroup.getObjectByProperty('uuid', selectedUuids[0]);
+                if (obj) {
+                    let found = false;
+                    obj.traverse((child: any) => {
+                        if (!found && child.isMesh && child.material) {
+                            const m = Array.isArray(child.material) ? child.material[0] : child.material;
+                            if (m.opacity !== undefined) {
+                                initialOpacity = m.opacity;
+                                found = true;
+                            }
+                        }
+                    });
+                }
+            }
+            setContextMenuOpacity(initialOpacity);
             
             // 显示右键菜单
             setContextMenu({
@@ -947,6 +1057,10 @@ export const ThreeViewer = ({
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+                handleUndoVisibility();
+                return;
+            }
             if (e.key === 'Escape') {
                 if (activeTool === 'measure' && measureType !== 'none') {
                     setMeasureType('none');
@@ -1579,6 +1693,37 @@ export const ThreeViewer = ({
         });
     };
 
+    const handleScreenshot = () => {
+        if (!sceneMgr.current) return;
+        try {
+            sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
+            const dataUrl = sceneMgr.current.canvas.toDataURL("image/png");
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = "screenshot.png";
+            a.click();
+            setToast({ message: t("success"), type: 'success' });
+        } catch (e) {
+            console.error(e);
+            setToast({ message: t("failed"), type: 'error' });
+        }
+    };
+
+    const handleWireframe = () => {
+        if (!sceneMgr.current) return;
+        const newWireframe = !wireframe;
+        setWireframe(newWireframe);
+        sceneMgr.current.contentGroup.traverse((child: any) => {
+            if (child.isMesh && child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach((m: any) => m.wireframe = newWireframe);
+                } else {
+                    child.material.wireframe = newWireframe;
+                }
+            }
+        });
+    };
+
     return (
         <ErrorBoundary t={t} theme={theme}>
             <div
@@ -1605,6 +1750,9 @@ export const ThreeViewer = ({
                  handleOpenUrl={handleOpenUrl}
                  handleView={handleView}
                  handleClear={handleClear}
+                 handleScreenshot={handleScreenshot}
+                 handleWireframe={handleWireframe}
+                 wireframe={wireframe}
                  pickEnabled={pickEnabled}
                  setPickEnabled={setPickEnabled}
                  activeTool={activeTool}
@@ -1656,7 +1804,10 @@ export const ThreeViewer = ({
                                     if (uuid) handleDeleteObject(uuid);
                                 }}
                                 onFocus={(obj) => handleFocusObject(obj)}
-
+                                onSelectAll={handleSelectAll}
+                                onInvertSelection={handleInvertSelection}
+                                onHideSelected={handleHideSelected}
+                                onShowAll={handleShowAll}
                                 theme={theme}
                             />
                         </div>
@@ -1689,12 +1840,12 @@ export const ThreeViewer = ({
                             y={contextMenu.y}
                             items={[
                                 {
-                                    label: t("hide_selected"),
+                                    label: t("hide_selected") || "隐藏选中",
                                     onClick: handleHideSelected,
                                     disabled: selectedUuids.length === 0
                                 },
                                 {
-                                    label: t("isolate_selection"),
+                                    label: t("isolate_selection") || "隔离选中",
                                     onClick: () => {
                                         if (selectedUuids.length > 0 && sceneMgr.current) {
                                             sceneMgr.current.isolateObjects(selectedUuids);
@@ -1703,8 +1854,41 @@ export const ThreeViewer = ({
                                     disabled: selectedUuids.length === 0
                                 },
                                 {
-                                    label: t("show_all"),
+                                    label: t("show_all") || "显示全部",
                                     onClick: handleShowAll
+                                },
+                                {
+                                    divider: true
+                                },
+                                {
+                                    label: t("set_opacity") || "设置透明度",
+                                    slider: true,
+                                    value: contextMenuOpacity,
+                                    onChange: (val: number) => {
+                                        setContextMenuOpacity(val);
+                                        if (sceneMgr.current && selectedUuids.length > 0) {
+                                            selectedUuids.forEach(uuid => {
+                                                const obj = sceneMgr.current?.contentGroup.getObjectByProperty('uuid', uuid);
+                                                if (obj) {
+                                                    obj.traverse((child: any) => {
+                                                        if (child.isMesh && child.material) {
+                                                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                                            materials.forEach((m: any) => {
+                                                                if (val < 1.0) {
+                                                                    m.transparent = true;
+                                                                    m.opacity = val;
+                                                                } else {
+                                                                    m.transparent = false;
+                                                                    m.opacity = 1.0;
+                                                                }
+                                                                m.needsUpdate = true;
+                                                            });
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    }
                                 }
                             ]}
                             onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
@@ -1881,6 +2065,11 @@ export const ThreeViewer = ({
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {mousePos && (
+                        <div style={{ opacity: 0.85, fontFamily: 'monospace' }}>
+                            {mousePos.x.toFixed(2)}, {mousePos.y.toFixed(2)}, {mousePos.z.toFixed(2)}
+                        </div>
+                    )}
                     <div style={{ display: 'flex', gap: '10px', opacity: 0.85 }}>
                         <span>{t("tips_rotate")}</span>
                         <span>{t("tips_pan")}</span>

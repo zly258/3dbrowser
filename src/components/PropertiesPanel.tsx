@@ -10,12 +10,23 @@ interface PropertiesPanelProps {
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps, theme }) => {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
+    const [copiedText, setCopiedText] = useState<string | null>(null);
 
     const toggleGroup = (group: string) => {
         const next = new Set(collapsed);
         if (next.has(group)) next.delete(group);
         else next.add(group);
         setCollapsed(next);
+    };
+
+    const handleCopy = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedText(text);
+            setTimeout(() => setCopiedText(null), 1500);
+        } catch (e) {
+            console.error("Failed to copy", e);
+        }
     };
 
     const filteredProps = React.useMemo(() => {
@@ -41,7 +52,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
     }, [selectedProps, searchQuery]);
 
     return (
-        <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden'}}>
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative'}}>
             {selectedProps && (
                 <div style={{ padding: '8px', borderBottom: '1px solid var(--border-color)' }}>
                     <input
@@ -76,12 +87,24 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                         {!collapsed.has(group) && Object.entries(props).map(([k, v]) => (
                             <div key={k} className="ui-prop-row">
                                 <div className="ui-prop-key" title={k}>{k}</div>
-                                <div className="ui-prop-value" title={String(v)}>{String(v)}</div>
+                                <div 
+                                    className="ui-prop-value" 
+                                    title={String(v)}
+                                    onClick={() => handleCopy(String(v))}
+                                    style={{ cursor: 'copy' }}
+                                >
+                                    {String(v)}
+                                </div>
                             </div>
                         ))}
                     </div>
                 )) : <div style={{padding:20, color: 'var(--text-muted)', textAlign:'center', marginTop: 20}}>{t("no_selection")}</div>}
              </div>
+             {copiedText && (
+                <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', zIndex: 100, pointerEvents: 'none' }}>
+                    {t("copied") || "已复制"}
+                </div>
+            )}
         </div>
     );
 };
