@@ -20,7 +20,6 @@ const App: React.FC = () => {
                     allowDragOpen={true}
                     libPath="./libs"
                     showStats={true}
-                    menuMode={'toolbar'}
                 />
             </div>
         </div>

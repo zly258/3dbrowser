@@ -31,29 +31,29 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         >
             <div
                 style={{
-                    width: '16px',
-                    height: '16px',
-                    minWidth: '16px',
-                    minHeight: '16px',
-                    border: '2px solid var(--border-color)',
-                    borderRadius: '3px',
+                    width: '14px',
+                    height: '14px',
+                    minWidth: '14px',
+                    minHeight: '14px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '2px',
                     backgroundColor: checked ? 'var(--accent)' : 'var(--bg-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    transition: 'all 120ms ease',
+                    transition: 'none',
                     flexShrink: 0,
                 }}
             >
                 {checked && (
-                    <svg 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        stroke="white" 
-                        strokeWidth="3" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        style={{ width: '12px', height: '12px' }}
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ width: '10px', height: '10px' }}
                     >
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>

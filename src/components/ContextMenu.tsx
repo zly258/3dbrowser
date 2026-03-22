@@ -2,10 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { ThemeColors } from "../theme/Styles";
 
 interface ContextMenuItem {
-    label: string;
+    label?: string;
     onClick?: () => void;
     disabled?: boolean;
     divider?: boolean;
+    slider?: boolean;
+    value?: number;
+    onChange?: (val: number) => void;
 }
 
 interface ContextMenuProps {
@@ -53,6 +56,23 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
                             key={index}
                             className="ui-context-menu-divider"
                         />
+                    );
+                }
+                if (item.slider) {
+                    return (
+                        <div key={index} className="ui-context-menu-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'default' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                <span>{item.label}</span>
+                                <span>{Math.round((item.value || 0) * 100)}%</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="0" max="1" step="0.01" 
+                                value={item.value || 0} 
+                                onChange={(e) => item.onChange?.(parseFloat(e.target.value))}
+                                style={{ width: '100%', cursor: 'pointer' }}
+                            />
+                        </div>
                     );
                 }
                 return (

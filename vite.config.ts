@@ -17,7 +17,7 @@ export default defineConfig(() => {
       },
       build: {
         target: 'esnext',
-        minify: 'terser',
+        minify: 'terser' as const,
         terserOptions: {
           compress: {
             drop_console: false,
@@ -29,7 +29,7 @@ export default defineConfig(() => {
           entry: 'ThreeViewer.tsx',
           name: 'ThreeBrowser',
           fileName: '3dbrowser',
-          formats: ['es']
+          formats: ['es'] as any
         },
         rollupOptions: {
           external: [

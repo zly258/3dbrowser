@@ -111,6 +111,7 @@ const resources: Record<Lang, Record<string, string>> = {
         measure_stop: "Stop",
         tb_boxSelect: "Box Select",
         tb_boxSelect_hint: "Drag to select objects",
+        tb_wireframe: "Wireframe",
         // 剖切
         clip_title: "Sectioning Tool",
         clip_enable: "Enable Clipping",
@@ -203,6 +204,10 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_empty: "No saved viewpoints",
         viewpoint_loading: "Restoring viewpoint",
         chunk_loading: "Chunks",
+        select_all: "Select All",
+        invert_selection: "Invert Selection",
+        set_opacity: "Opacity",
+        copied: "Copied",
     },
     zh: {
         home: "首页",
@@ -308,6 +313,7 @@ const resources: Record<Lang, Record<string, string>> = {
         measure_stop: "停止测量",
         tb_boxSelect: "框选",
         tb_boxSelect_hint: "拖拽选择对象",
+        tb_wireframe: "线框",
         // 剖切
         clip_title: "剖切面板",
         clip_enable: "开启剖切",
@@ -400,6 +406,10 @@ const resources: Record<Lang, Record<string, string>> = {
         viewpoint_empty: "暂无保存的视点",
         viewpoint_loading: "正在恢复视点",
         chunk_loading: "分片加载",
+        select_all: "全选",
+        invert_selection: "反选",
+        set_opacity: "透明度",
+        copied: "已复制",
     }
 };
 
