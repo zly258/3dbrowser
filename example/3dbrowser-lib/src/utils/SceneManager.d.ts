@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TilesRenderer } from "3d-tiles-renderer";
-export type MeasureType = 'dist' | 'angle' | 'coord' | 'area' | 'volume' | 'none';
+export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 export interface MeasurementRecord {
     id: string;
     type: string;
@@ -200,6 +200,14 @@ export declare class SceneManager {
     private addLineLoop;
     private addPolygonFill;
     private computeGeometryVolume;
+    private computeGeometryArea;
+    /**
+     * 获取对象的面积和体积
+     */
+    getObjectGeometryData(uuid: string): {
+        area: number;
+        volume: number;
+    };
     /**
      * 开始框选
      */

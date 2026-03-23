@@ -2332,13 +2332,6 @@ class SceneManager {
     if (modelUuid) {
       this.currentMeasureModelUuid = modelUuid;
     }
-    if (this.measureType === "area" && this.currentMeasurePoints.length >= 3) {
-      const first = this.currentMeasurePoints[0];
-      if (point.distanceTo(first) < 5) {
-        this.currentMeasurePoints.push(first.clone());
-        return this.finalizeMeasurement();
-      }
-    }
     this.currentMeasurePoints.push(point);
     this.addMarker(point, this.measureGroup);
     if (this.measureType === "dist" && this.currentMeasurePoints.length === 2) {
@@ -2363,21 +2356,6 @@ class SceneManager {
     const points = [...this.currentMeasurePoints];
     if (hoverPoint) points.push(hoverPoint);
     if (points.length < 2) return;
-    if (this.measureType === "area" && points.length >= 3) {
-      const polygonPoints = [...this.currentMeasurePoints];
-      if (hoverPoint) polygonPoints.push(hoverPoint);
-      if (polygonPoints.length >= 3) {
-        const geometry2 = new THREE.BufferGeometry().setFromPoints(polygonPoints);
-        const material2 = new THREE.LineBasicMaterial({
-          color: 16711680,
-          depthTest: false
-        });
-        this.previewPolygon = new THREE.LineLoop(geometry2, material2);
-        this.previewPolygon.renderOrder = 998;
-        this.measureGroup.add(this.previewPolygon);
-      }
-      return;
-    }
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineDashedMaterial({
       color: 16711680,
@@ -2441,60 +2419,6 @@ class SceneManager {
       valStr = displayVal;
       this.addLine(this.currentMeasurePoints, group);
       labelPos.copy(center);
-    } else if (this.measureType === "area") {
-      const pts = this.currentMeasurePoints;
-      if (pts.length >= 3) {
-        const v1 = new THREE.Vector3().subVectors(pts[1], pts[0]);
-        const v2 = new THREE.Vector3().subVectors(pts[2], pts[0]);
-        new THREE.Vector3().crossVectors(v1, v2).normalize();
-        let area = 0;
-        const n = pts.length;
-        for (let i = 0; i < n; i++) {
-          const curr = pts[i];
-          const next = pts[(i + 1) % n];
-          new THREE.Vector3().subVectors(next, curr);
-          area += new THREE.Vector3().crossVectors(curr, next).length();
-        }
-        area = area / 2;
-        displayVal = area.toFixed(3);
-        valStr = `${displayVal} m²`;
-        this.addLineLoop(pts, group);
-        this.addPolygonFill(pts, group);
-        const center = new THREE.Vector3();
-        pts.forEach((p) => center.add(p));
-        center.divideScalar(pts.length);
-        labelPos.copy(center);
-      }
-    } else if (this.measureType === "volume") {
-      const uuid = this.currentMeasureModelUuid;
-      let vol = 0;
-      if (uuid) {
-        const mappings = this.optimizedMapping.get(uuid);
-        if (mappings && mappings.length > 0) {
-          const m = mappings[0];
-          if (m.geometry) {
-            vol = this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
-          }
-        } else {
-          const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-          if (obj && obj.isMesh) {
-            const mesh = obj;
-            vol = this.computeGeometryVolume(mesh.geometry, mesh, void 0);
-          }
-        }
-      }
-      displayVal = vol.toFixed(3);
-      valStr = `${displayVal} m³`;
-      if (uuid) {
-        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-        if (obj) {
-          const box = new THREE.Box3().setFromObject(obj);
-          labelPos.copy(box.getCenter(new THREE.Vector3()));
-          const boxHelper = new THREE.Box3Helper(box, new THREE.Color(16711680));
-          boxHelper.renderOrder = 998;
-          group.add(boxHelper);
-        }
-      }
     } else {
       const p = this.currentMeasurePoints[0];
       displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
@@ -2699,6 +2623,75 @@ class SceneManager {
       }
     }
     return Math.abs(volume);
+  }
+  computeGeometryArea(geometry, mesh, instanceId) {
+    const pos = geometry.attributes.position;
+    const index = geometry.index;
+    let area = 0;
+    const vA = new THREE.Vector3();
+    const vB = new THREE.Vector3();
+    const vC = new THREE.Vector3();
+    const tmpMat = new THREE.Matrix4();
+    if (instanceId !== void 0 && mesh.isInstancedMesh) {
+      mesh.getMatrixAt(instanceId, tmpMat);
+    } else {
+      tmpMat.copy(mesh.matrixWorld);
+    }
+    const applyMatrix = (v) => {
+      v.applyMatrix4(tmpMat);
+    };
+    if (index) {
+      for (let i = 0; i < index.count; i += 3) {
+        vA.fromBufferAttribute(pos, index.getX(i));
+        vB.fromBufferAttribute(pos, index.getX(i + 1));
+        vC.fromBufferAttribute(pos, index.getX(i + 2));
+        applyMatrix(vA);
+        applyMatrix(vB);
+        applyMatrix(vC);
+        const ab = new THREE.Vector3().subVectors(vB, vA);
+        const ac = new THREE.Vector3().subVectors(vC, vA);
+        area += ab.cross(ac).length() / 2;
+      }
+    } else {
+      for (let i = 0; i < pos.count; i += 3) {
+        vA.fromBufferAttribute(pos, i);
+        vB.fromBufferAttribute(pos, i + 1);
+        vC.fromBufferAttribute(pos, i + 2);
+        applyMatrix(vA);
+        applyMatrix(vB);
+        applyMatrix(vC);
+        const ab = new THREE.Vector3().subVectors(vB, vA);
+        const ac = new THREE.Vector3().subVectors(vC, vA);
+        area += ab.cross(ac).length() / 2;
+      }
+    }
+    return area;
+  }
+  /**
+   * 获取对象的面积和体积
+   */
+  getObjectGeometryData(uuid) {
+    let area = 0;
+    let volume = 0;
+    const mappings = this.optimizedMapping.get(uuid);
+    if (mappings && mappings.length > 0) {
+      mappings.forEach((m) => {
+        if (m.geometry) {
+          area += this.computeGeometryArea(m.geometry, m.mesh, m.instanceId);
+          volume += this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
+        }
+      });
+    } else {
+      const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+      if (obj && obj.isMesh) {
+        const mesh = obj;
+        if (mesh.geometry) {
+          area = this.computeGeometryArea(mesh.geometry, mesh, void 0);
+          volume = this.computeGeometryVolume(mesh.geometry, mesh, void 0);
+        }
+      }
+    }
+    return { area, volume };
   }
   // ========== 框选方法 ==========
   /**
@@ -4273,6 +4266,8 @@ const resources = {
     prop_inst: "Instances",
     prop_vert: "Vertices",
     prop_tri: "Triangles",
+    prop_area: "Area",
+    prop_volume: "Volume",
     // 测量
     measure_title: "Measurement Tool",
     measure_type: "Type",
@@ -4280,13 +4275,9 @@ const resources = {
     measure_dist: "Distance",
     measure_angle: "Angle",
     measure_coord: "Coordinate",
-    measure_area: "Area",
-    measure_volume: "Volume",
     measure_instruct_dist: "Click 2 points to measure distance.",
     measure_instruct_angle: "Click 3 points (Start-Vertex-End).",
     measure_instruct_coord: "Click any point to get coordinates.",
-    measure_instruct_area: "Click 3+ points to measure area. Click near first point to close.",
-    measure_instruct_volume: "Click on an object to measure its volume.",
     measure_clear: "Clear All",
     measure_start: "Start",
     measure_stop: "Stop",
@@ -4483,6 +4474,8 @@ const resources = {
     prop_inst: "实例数",
     prop_vert: "顶点数",
     prop_tri: "面数",
+    prop_area: "面积",
+    prop_volume: "体积",
     // 测量
     measure_title: "测量面板",
     measure_type: "测量类型",
@@ -4490,13 +4483,9 @@ const resources = {
     measure_dist: "长度",
     measure_angle: "角度",
     measure_coord: "坐标",
-    measure_area: "面积",
-    measure_volume: "体积",
     measure_instruct_dist: "请在场景中点击两个点以测量距离。",
     measure_instruct_angle: "请点击三个点测量角度 (起点-顶点-终点)。",
     measure_instruct_coord: "点击任意位置获取世界坐标。",
-    measure_instruct_area: "点击 3 个及以上点测量面积，靠近起点点击以闭合。",
-    measure_instruct_volume: "点击对象以测量其体积。",
     measure_clear: "清空测量",
     measure_start: "开始测量",
     measure_stop: "停止测量",
@@ -6418,11 +6407,6 @@ const Icons = {
     /* @__PURE__ */ jsx("circle", { cx: "8", cy: "8", r: "6" }),
     /* @__PURE__ */ jsx("path", { d: "M8 2v12M2 8h12", strokeLinecap: "round" })
   ] }),
-  Area: () => /* @__PURE__ */ jsx("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: /* @__PURE__ */ jsx("path", { d: "M3 12L6 4l5 6 2-4", strokeLinecap: "round", strokeLinejoin: "round" }) }),
-  Volume: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
-    /* @__PURE__ */ jsx("path", { d: "M8 1l6 3.5v7L8 15l-6-3.5v-7z", strokeLinejoin: "round" }),
-    /* @__PURE__ */ jsx("path", { d: "M8 1v7M2 4.5L8 8l6-3.5", strokeLinejoin: "round" })
-  ] }),
   None: () => /* @__PURE__ */ jsxs("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", children: [
     /* @__PURE__ */ jsx("circle", { cx: "8", cy: "8", r: "6" }),
     /* @__PURE__ */ jsx("path", { d: "M5 5l6 6M11 5l-6 6", strokeLinecap: "round" })
@@ -6526,9 +6510,7 @@ const MeasurePanel = ({
     const groups = {
       "dist": [],
       "angle": [],
-      "coord": [],
-      "area": [],
-      "volume": []
+      "coord": []
     };
     measureHistory.forEach((item) => {
       if (groups[item.type]) groups[item.type].push(item);
@@ -6543,9 +6525,7 @@ const MeasurePanel = ({
     { value: "none", label: t("measure_none") || "None", icon: /* @__PURE__ */ jsx(Icons.None, {}) },
     { value: "dist", label: t("measure_dist") || "Distance", icon: /* @__PURE__ */ jsx(Icons.Distance, {}) },
     { value: "angle", label: t("measure_angle") || "Angle", icon: /* @__PURE__ */ jsx(Icons.Angle, {}) },
-    { value: "coord", label: t("measure_coord") || "Coord", icon: /* @__PURE__ */ jsx(Icons.Coordinate, {}) },
-    { value: "area", label: t("measure_area") || "Area", icon: /* @__PURE__ */ jsx(Icons.Area, {}) },
-    { value: "volume", label: t("measure_volume") || "Volume", icon: /* @__PURE__ */ jsx(Icons.Volume, {}) }
+    { value: "coord", label: t("measure_coord") || "Coord", icon: /* @__PURE__ */ jsx(Icons.Coordinate, {}) }
   ];
   const getInstructionText = () => {
     switch (measureType) {
@@ -6555,10 +6535,6 @@ const MeasurePanel = ({
         return t("measure_instruct_angle");
       case "coord":
         return t("measure_instruct_coord");
-      case "area":
-        return t("measure_instruct_area");
-      case "volume":
-        return t("measure_instruct_volume");
       default:
         return "";
     }
@@ -6571,10 +6547,6 @@ const MeasurePanel = ({
         return t("measure_angle") || "Angle";
       case "coord":
         return t("measure_coord") || "Coordinate";
-      case "area":
-        return t("measure_area") || "Area";
-      case "volume":
-        return t("measure_volume") || "Volume";
       default:
         return type;
     }
@@ -8654,6 +8626,13 @@ const ThreeViewer = ({
       }
       if (target.isInstancedMesh) {
         geoProps[t("prop_inst")] = target.count.toLocaleString();
+      }
+      const geometryData = sceneMgr.current.getObjectGeometryData(focusUuid);
+      if (geometryData.area > 0) {
+        geoProps[t("prop_area")] = geometryData.area.toFixed(3);
+      }
+      if (geometryData.volume > 0) {
+        geoProps[t("prop_volume")] = geometryData.volume.toFixed(3);
       }
       const userData = target.userData || {};
       const parentUserData = target.parent?.userData || {};
