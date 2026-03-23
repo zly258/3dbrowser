@@ -154,7 +154,7 @@ export declare class SceneManager {
     setAllVisibility(visible: boolean): void;
     hideObjects(uuids: string[]): void;
     isolateObjects(uuids: string[]): void;
-    setObjectVisibility(uuid: string, visible: boolean): void;
+    setObjectVisibility(uuid: string, visible: boolean, showParents?: boolean): void;
     highlightObject(uuid: string | null): void;
     highlightObjects(uuids: string[]): void;
     pick(clientX: number, clientY: number): {

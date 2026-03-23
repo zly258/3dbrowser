@@ -104,10 +104,11 @@ export const ThreeViewer = ({
     
     // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect'>('none');
-    
+
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
-    const [wireframe, setWireframe] = useState(false);
+    // 显示模式：solid-着色, transparent-透明
+    const [displayMode, setDisplayMode] = useState<'solid' | 'transparent'>('solid');
     
     // Viewpoint State
     const [viewpoints, setViewpoints] = useState<any[]>([]);
@@ -240,9 +241,11 @@ export const ThreeViewer = ({
         y: number;
         visible: boolean;
     }>({ x: 0, y: 0, visible: false });
-    
+
     // 隐藏对象记录
     const [hiddenUuids, setHiddenUuids] = useState<Set<string>>(new Set());
+    // 隔离对象记录
+    const [isolatedUuids, setIsolatedUuids] = useState<Set<string>>(new Set());
     const [contextMenuOpacity, setContextMenuOpacity] = useState(1.0);
     
     // Visibility undo stack
@@ -251,37 +254,39 @@ export const ThreeViewer = ({
     // 隐藏选中的对象
     const handleHideSelected = useCallback(() => {
         if (selectedUuids.length === 0 || !sceneMgr.current) return;
-        
+
         const stateToRestore = selectedUuids.map(uuid => {
             const obj = sceneMgr.current?.contentGroup.getObjectByProperty('uuid', uuid);
             return { uuid, visible: obj ? obj.visible : true };
         });
         visibilityStackRef.current.push(stateToRestore);
 
+        const newHiddenUuids = new Set(hiddenUuids);
+        const newIsolatedUuids = new Set(isolatedUuids);
         selectedUuids.forEach(uuid => {
             sceneMgr.current?.setObjectVisibility(uuid, false);
-            hiddenUuids.add(uuid);
+            newHiddenUuids.add(uuid);
+            newIsolatedUuids.delete(uuid);
         });
-        setHiddenUuids(new Set(hiddenUuids));
+        setHiddenUuids(newHiddenUuids);
+        setIsolatedUuids(newIsolatedUuids);
         setSelectedUuids([]);
         setSelectedProps(null);
         sceneMgr.current?.highlightObjects([]);
         updateTree();
-    }, [selectedUuids, hiddenUuids]);
-    
+    }, [selectedUuids, hiddenUuids, isolatedUuids]);
+
     // 显示全部对象
     const handleShowAll = useCallback(() => {
-        if (!sceneMgr.current || hiddenUuids.size === 0) return;
-        
-        const stateToRestore = Array.from(hiddenUuids).map(uuid => ({ uuid, visible: false }));
-        visibilityStackRef.current.push(stateToRestore);
+        if (!sceneMgr.current) return;
 
-        hiddenUuids.forEach(uuid => {
-            sceneMgr.current?.setObjectVisibility(uuid, true);
-        });
-        setHiddenUuids(new Set());
-        updateTree();
-    }, [hiddenUuids]);
+        if (hiddenUuids.size > 0 || isolatedUuids.size > 0) {
+            sceneMgr.current.setAllVisibility(true);
+            setHiddenUuids(new Set());
+            setIsolatedUuids(new Set());
+            updateTree();
+        }
+    }, [hiddenUuids, isolatedUuids]);
     
     // 状态清理工具
     const cleanStatus = (msg: string) => {
@@ -759,39 +764,6 @@ export const ThreeViewer = ({
         updateTree();
     };
 
-    const handleSelectAll = useCallback(() => {
-        if (!sceneMgr.current) return;
-        const root = sceneMgr.current.structureRoot;
-        if (!root) return;
-        
-        const allUuids: string[] = [];
-        const traverse = (node: any) => {
-            if (node.uuid) allUuids.push(node.uuid);
-            if (node.children) node.children.forEach(traverse);
-        };
-        traverse(root);
-        
-        setSelectedUuids(allUuids);
-        sceneMgr.current.highlightObjects(allUuids);
-    }, []);
-
-    const handleInvertSelection = useCallback(() => {
-        if (!sceneMgr.current) return;
-        const root = sceneMgr.current.structureRoot;
-        if (!root) return;
-        
-        const allUuids: string[] = [];
-        const traverse = (node: any) => {
-            if (node.uuid) allUuids.push(node.uuid);
-            if (node.children) node.children.forEach(traverse);
-        };
-        traverse(root);
-        
-        const nextUuids = allUuids.filter(id => !selectedUuids.includes(id));
-        setSelectedUuids(nextUuids);
-        sceneMgr.current.highlightObjects(nextUuids);
-    }, [selectedUuids]);
-
     const handleUndoVisibility = useCallback(() => {
         if (visibilityStackRef.current.length === 0 || !sceneMgr.current) return;
         const lastAction = visibilityStackRef.current.pop();
@@ -951,7 +923,7 @@ export const ThreeViewer = ({
                         });
                         updateTree();
                         setStatus(t("tileset_loaded"));
-                        setTimeout(() => mgrInstance?.fitView(), 500);
+                        setTimeout(() => mgrInstance?.fitView(true), 500);
                     } else {
                         modelItems.push(item);
                     }
@@ -1114,8 +1086,11 @@ export const ThreeViewer = ({
             if (e.button !== 0) return;
             const uuids = mgr.endBoxSelect();
             if (uuids.length > 0) {
-                setSelectedUuids(uuids);
-                mgr.highlightObjects(uuids);
+                const nextUuids = e.shiftKey
+                    ? [...new Set([...selectedUuids, ...uuids])]
+                    : uuids;
+                setSelectedUuids(nextUuids);
+                mgr.highlightObjects(nextUuids);
             }
         };
 
@@ -1342,7 +1317,7 @@ export const ThreeViewer = ({
             updateTree();
             setStatus(t("success"));
             console.log("[ThreeViewer] processFiles completed successfully");
-            sceneMgr.current?.fitView();
+            sceneMgr.current?.fitView(true);
         } catch (err) {
             console.error("[ThreeViewer] processFiles error:", err); 
             setStatus(t("failed")); 
@@ -1488,7 +1463,7 @@ export const ThreeViewer = ({
                     });
                     updateTree();
                     setStatus(t("tileset_loaded"));
-                    sceneMgr.current?.fitView();
+                    sceneMgr.current?.fitView(true);
                 }
             } else {
                 // 直接传递 URL 到 processFiles，让其内部处理或传递给加载器
@@ -1551,7 +1526,7 @@ export const ThreeViewer = ({
                 });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
-                sceneMgr.current?.fitView();
+                sceneMgr.current?.fitView(true);
             }
         } catch (err) { console.error(err); setStatus(t("failed") + ": " + (err as Error).message); } 
         finally { setLoading(false); }
@@ -1710,17 +1685,23 @@ export const ThreeViewer = ({
         }
     };
 
-    const handleWireframe = () => {
+    const handleDisplayModeChange = (mode: 'solid' | 'transparent') => {
         if (!sceneMgr.current) return;
-        const newWireframe = !wireframe;
-        setWireframe(newWireframe);
+        setDisplayMode(mode);
         sceneMgr.current.contentGroup.traverse((child: any) => {
             if (child.isMesh && child.material) {
-                if (Array.isArray(child.material)) {
-                    child.material.forEach((m: any) => m.wireframe = newWireframe);
-                } else {
-                    child.material.wireframe = newWireframe;
-                }
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((m: any) => {
+                    if (mode === 'transparent') {
+                        m.wireframe = false;
+                        m.transparent = true;
+                        m.opacity = 0.5;
+                    } else {
+                        m.wireframe = false;
+                        m.transparent = false;
+                        m.opacity = 1;
+                    }
+                });
             }
         });
     };
@@ -1741,7 +1722,7 @@ export const ThreeViewer = ({
              
 
              {/* Top Toolbar */}
-             <Toolbar 
+             <Toolbar
                  t={t}
                  themeType={themeMode}
                  setThemeType={setThemeMode}
@@ -1752,8 +1733,8 @@ export const ThreeViewer = ({
                  handleView={handleView}
                  handleClear={handleClear}
                  handleScreenshot={handleScreenshot}
-                 handleWireframe={handleWireframe}
-                 wireframe={wireframe}
+                 handleDisplayModeChange={handleDisplayModeChange}
+                 displayMode={displayMode}
                  pickEnabled={pickEnabled}
                  setPickEnabled={setPickEnabled}
                  activeTool={activeTool}
@@ -1805,12 +1786,6 @@ export const ThreeViewer = ({
                                     if (uuid) handleDeleteObject(uuid);
                                 }}
                                 onFocus={(obj) => handleFocusObject(obj)}
-                                onClearSelection={handleClearSelection}
-                                onSelectAll={handleSelectAll}
-                                onInvertSelection={handleInvertSelection}
-                                onHideSelected={handleHideSelected}
-                                onShowAll={handleShowAll}
-                                theme={theme}
                             />
                         </div>
                         {/* Resize handle */}
@@ -1850,9 +1825,18 @@ export const ThreeViewer = ({
                                     label: t("isolate_selection") || "隔离选中",
                                     onClick: () => {
                                         if (selectedUuids.length > 0 && sceneMgr.current) {
-                                            sceneMgr.current.isolateObjects(selectedUuids);
+                                            const newIsolated = selectedUuids.filter(id => !isolatedUuids.has(id));
+                                            if (newIsolated.length > 0) {
+                                                sceneMgr.current.isolateObjects(selectedUuids);
+                                                setIsolatedUuids(new Set([...isolatedUuids, ...newIsolated]));
+                                            }
                                         }
                                     },
+                                    disabled: selectedUuids.length === 0
+                                },
+                                {
+                                    label: t("clear_selection") || "清空选择",
+                                    onClick: handleClearSelection,
                                     disabled: selectedUuids.length === 0
                                 },
                                 {

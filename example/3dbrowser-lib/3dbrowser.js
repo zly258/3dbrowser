@@ -124,7 +124,7 @@ class SceneManager {
       1e6
     );
     this.camera.up.set(0, 0, 1);
-    this.camera.position.set(1e3, 1e3, 1e3);
+    this.camera.position.set(1e3, -1e3, 1e3);
     this.camera.lookAt(0, 0, 0);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = false;
@@ -1571,7 +1571,7 @@ class SceneManager {
       this.ghostGroup.add(edges);
     });
     this.reportChunkProgress();
-    this.fitView();
+    this.fitView(true);
     if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
     this.checkCullingAndLoad();
   }
@@ -1673,9 +1673,52 @@ class SceneManager {
   }
   isolateObjects(uuids) {
     this.setAllVisibility(false);
-    uuids.forEach((id) => this.setObjectVisibility(id, true));
+    const affectedBatchedMeshes = /* @__PURE__ */ new Set();
+    uuids.forEach((uuid) => {
+      this.setObjectVisibility(uuid, true);
+      const nodes = this.nodeMap.get(uuid);
+      if (nodes) {
+        nodes.forEach((node) => {
+          const showChildrenRecursive = (n) => {
+            if (n.id !== uuid) {
+              this.setObjectVisibility(n.id, true);
+            }
+            if (n.children) {
+              n.children.forEach(showChildrenRecursive);
+            }
+          };
+          showChildrenRecursive(node);
+        });
+      }
+      const mappings = this.optimizedMapping.get(uuid);
+      if (mappings) {
+        mappings.forEach((m) => {
+          affectedBatchedMeshes.add(m.mesh);
+        });
+      }
+    });
+    affectedBatchedMeshes.forEach((bm) => {
+      bm.visible = true;
+      let parent = bm.parent;
+      while (parent && parent !== this.scene) {
+        parent.visible = true;
+        parent = parent.parent;
+      }
+    });
+    uuids.forEach((uuid) => {
+      const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+      if (obj) {
+        let parent = obj.parent;
+        while (parent && parent !== this.scene) {
+          parent.visible = true;
+          parent = parent.parent;
+        }
+      }
+    });
+    this.interactableListValid = false;
+    this.updateSceneBounds();
   }
-  setObjectVisibility(uuid, visible) {
+  setObjectVisibility(uuid, visible, showParents = true) {
     const nodes = this.nodeMap.get(uuid);
     if (nodes) {
       nodes.forEach((node) => {
@@ -1691,7 +1734,7 @@ class SceneManager {
       });
     }
     const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-    if (visible && obj) {
+    if (visible && obj && showParents) {
       let parent = obj.parent;
       while (parent && parent !== this.scene) {
         parent.visible = true;
@@ -2749,7 +2792,9 @@ class SceneManager {
     newMatrix.multiplyMatrices(scaleMatrix, translateMatrix);
     const modifiedProjectionMatrix = newMatrix.multiply(originalMatrix);
     const frustum = new THREE.Frustum();
-    frustum.setFromProjectionMatrix(modifiedProjectionMatrix);
+    const viewMatrix = this.camera.matrixWorldInverse;
+    const projViewMatrix = modifiedProjectionMatrix.clone().multiply(viewMatrix);
+    frustum.setFromProjectionMatrix(projViewMatrix);
     const selected = [];
     const box = new THREE.Box3();
     const tmpMat = new THREE.Matrix4();
@@ -4194,6 +4239,7 @@ const resources = {
     expand_all: "Expand All",
     collapse_all: "Collapse All",
     isolate_selection: "Isolate Selection",
+    clear_selection: "Clear Selection",
     ctx_show_all: "Show All",
     hide_selected: "Hide Selected",
     show_all: "Show All",
@@ -4249,9 +4295,10 @@ const resources = {
     tb_wireframe: "Wireframe",
     op_screenshot: "Screenshot",
     // 渲染样式
-    display_mode: "Display Mode",
-    dm_wireframe: "Wireframe",
+    display_mode: "DisplayMode",
     dm_solid: "Solid",
+    dm_transparent: "Transparent",
+    dm_wireframe: "Wireframe",
     dm_solidwire: "Solid with Outline",
     dm_hidden: "Hidden Line",
     // 剖切
@@ -4403,6 +4450,7 @@ const resources = {
     expand_all: "全部展开",
     collapse_all: "全部折叠",
     isolate_selection: "隔离选择",
+    clear_selection: "清空选择",
     ctx_show_all: "显示所有",
     hide_selected: "隐藏选中",
     show_all: "显示全部",
@@ -4457,9 +4505,10 @@ const resources = {
     tb_wireframe: "线框",
     op_screenshot: "场景截图",
     // 渲染样式
-    display_mode: "显示样式",
-    dm_wireframe: "线框",
+    display_mode: "样式",
     dm_solid: "着色",
+    dm_transparent: "透明",
+    dm_wireframe: "线框",
     dm_solidwire: "着色带轮廓线",
     dm_hidden: "消隐",
     // 剖切
@@ -5572,16 +5621,60 @@ const Toolbar = (props) => {
       ] })
     ] }),
     !isHidden("interface") && /* @__PURE__ */ jsxs("div", { className: "ui-toolbar-group", children: [
-      !isHidden("wireframe") && /* @__PURE__ */ jsx(
-        ImageButton,
-        {
-          icon: /* @__PURE__ */ jsx(IconLayers, {}),
-          label: t("tb_wireframe") || "线框",
-          active: props.wireframe,
-          onClick: () => props.handleWireframe?.(),
-          theme
-        }
-      ),
+      !isHidden("wireframe") && /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
+        /* @__PURE__ */ jsx(
+          ImageButton,
+          {
+            icon: /* @__PURE__ */ jsx(IconLayers, {}),
+            label: t("display_mode") || "样式",
+            active: openMenu === "displayMode",
+            onClick: () => toggleMenu("displayMode"),
+            theme
+          }
+        ),
+        renderDropdown("displayMode", /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: {
+                padding: "6px 16px",
+                fontSize: "12px",
+                color: props.displayMode === "solid" ? theme.accent : theme.text,
+                cursor: "pointer",
+                backgroundColor: props.displayMode === "solid" ? theme.itemHover : "transparent",
+                fontWeight: props.displayMode === "solid" ? "600" : "400"
+              },
+              onClick: () => {
+                props.handleDisplayModeChange?.("solid");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = props.displayMode === "solid" ? theme.itemHover : "transparent",
+              children: t("dm_solid") || "着色"
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "div",
+            {
+              style: {
+                padding: "6px 16px",
+                fontSize: "12px",
+                color: props.displayMode === "transparent" ? theme.accent : theme.text,
+                cursor: "pointer",
+                backgroundColor: props.displayMode === "transparent" ? theme.itemHover : "transparent",
+                fontWeight: props.displayMode === "transparent" ? "600" : "400"
+              },
+              onClick: () => {
+                props.handleDisplayModeChange?.("transparent");
+                setOpenMenu(null);
+              },
+              onMouseEnter: (e) => e.currentTarget.style.backgroundColor = theme.itemHover,
+              onMouseLeave: (e) => e.currentTarget.style.backgroundColor = props.displayMode === "transparent" ? theme.itemHover : "transparent",
+              children: t("dm_transparent") || "透明"
+            }
+          )
+        ] }))
+      ] }),
       !isHidden("outline") && /* @__PURE__ */ jsx(
         ImageButton,
         {
@@ -5710,14 +5803,7 @@ const SceneTree = ({
   onSelect,
   onToggleVisibility,
   onDelete,
-  onFocus,
-  onIsolate,
-  onClearSelection,
-  onSelectAll,
-  onInvertSelection,
-  onHideSelected,
-  onShowAll,
-  theme
+  onFocus
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [hoveredUuid, setHoveredUuid] = useState(null);
@@ -5924,36 +6010,13 @@ const SceneTree = ({
           {
             className: "ui-context-menu-item",
             onClick: () => {
-              onIsolate?.(contextMenu.node.uuid);
-              setContextMenu(null);
-            },
-            children: t("isolate_selection")
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            className: "ui-context-menu-item",
-            onClick: () => {
               onDelete?.(contextMenu.node.object);
               setContextMenu(null);
             },
             children: t("delete_item")
           }
         )
-      ] }),
-      /* @__PURE__ */ jsx("div", { className: "ui-context-menu-divider" }),
-      /* @__PURE__ */ jsx(
-        "div",
-        {
-          className: "ui-context-menu-item",
-          onClick: () => {
-            onClearSelection?.();
-            setContextMenu(null);
-          },
-          children: "清空选择"
-        }
-      )
+      ] })
     ] })
   ] });
 };
@@ -6576,12 +6639,16 @@ const AxisSliderRow = ({ axis, label, active, value, onToggle, onChange, disable
       },
       children: [
         /* @__PURE__ */ jsx(
-          "input",
+          Checkbox,
           {
-            type: "checkbox",
             checked: active,
-            onChange: (e) => onToggle(e.target.checked),
-            style: { width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }
+            onChange: (e) => onToggle(e),
+            style: {
+              width: "16px",
+              height: "16px",
+              cursor: "pointer",
+              flexShrink: 0
+            }
           }
         ),
         /* @__PURE__ */ jsx(
@@ -6648,67 +6715,75 @@ const ClipPanel = ({
       height: 260,
       resizable: false,
       storageId: "tool_clip",
-      children: /* @__PURE__ */ jsxs("div", { className: "flex flex-col p-3", style: { height: "100%", gap: "12px" }, children: [
-        /* @__PURE__ */ jsxs("div", { className: "flex items-center justify-between p-2", style: { borderBottom: "1px solid var(--border-color)" }, children: [
-          /* @__PURE__ */ jsx("span", { className: "text-sm font-semibold", children: t("clip_enable") }),
-          /* @__PURE__ */ jsx(
-            Switch,
-            {
-              checked: clipEnabled,
-              onChange: (v) => setClipEnabled(v)
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxs(
-          "div",
-          {
-            className: "flex flex-col",
-            style: {
-              flex: 1,
-              opacity: clipEnabled ? 1 : 0.4,
-              pointerEvents: clipEnabled ? "auto" : "none"
-            },
-            children: [
-              /* @__PURE__ */ jsx(
-                AxisSliderRow,
-                {
-                  axis: "x",
-                  label: t("clip_x"),
-                  active: clipActive.x,
-                  value: clipValues.x,
-                  onToggle: (v) => setClipActive({ ...clipActive, x: v }),
-                  onChange: (val) => setClipValues({ ...clipValues, x: val }),
-                  disabled: !clipEnabled
-                }
-              ),
-              /* @__PURE__ */ jsx(
-                AxisSliderRow,
-                {
-                  axis: "y",
-                  label: t("clip_y"),
-                  active: clipActive.y,
-                  value: clipValues.y,
-                  onToggle: (v) => setClipActive({ ...clipActive, y: v }),
-                  onChange: (val) => setClipValues({ ...clipValues, y: val }),
-                  disabled: !clipEnabled
-                }
-              ),
-              /* @__PURE__ */ jsx(
-                AxisSliderRow,
-                {
-                  axis: "z",
-                  label: t("clip_z"),
-                  active: clipActive.z,
-                  value: clipValues.z,
-                  onToggle: (v) => setClipActive({ ...clipActive, z: v }),
-                  onChange: (val) => setClipValues({ ...clipValues, z: val }),
-                  disabled: !clipEnabled
-                }
-              )
-            ]
-          }
-        )
-      ] })
+      children: /* @__PURE__ */ jsxs(
+        "div",
+        {
+          className: "flex flex-col p-3",
+          style: { height: "100%", gap: "12px" },
+          children: [
+            /* @__PURE__ */ jsxs(
+              "div",
+              {
+                className: "flex items-center justify-between p-2",
+                style: { borderBottom: "1px solid var(--border-color)" },
+                children: [
+                  /* @__PURE__ */ jsx("span", { className: "text-sm font-semibold", children: t("clip_enable") }),
+                  /* @__PURE__ */ jsx(Switch, { checked: clipEnabled, onChange: (v) => setClipEnabled(v) })
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxs(
+              "div",
+              {
+                className: "flex flex-col",
+                style: {
+                  flex: 1,
+                  opacity: clipEnabled ? 1 : 0.4,
+                  pointerEvents: clipEnabled ? "auto" : "none"
+                },
+                children: [
+                  /* @__PURE__ */ jsx(
+                    AxisSliderRow,
+                    {
+                      axis: "x",
+                      label: t("clip_x"),
+                      active: clipActive.x,
+                      value: clipValues.x,
+                      onToggle: (v) => setClipActive({ ...clipActive, x: v }),
+                      onChange: (val) => setClipValues({ ...clipValues, x: val }),
+                      disabled: !clipEnabled
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    AxisSliderRow,
+                    {
+                      axis: "y",
+                      label: t("clip_y"),
+                      active: clipActive.y,
+                      value: clipValues.y,
+                      onToggle: (v) => setClipActive({ ...clipActive, y: v }),
+                      onChange: (val) => setClipValues({ ...clipValues, y: val }),
+                      disabled: !clipEnabled
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    AxisSliderRow,
+                    {
+                      axis: "z",
+                      label: t("clip_z"),
+                      active: clipActive.z,
+                      value: clipValues.z,
+                      onToggle: (v) => setClipActive({ ...clipActive, z: v }),
+                      onChange: (val) => setClipValues({ ...clipValues, z: val }),
+                      disabled: !clipEnabled
+                    }
+                  )
+                ]
+              }
+            )
+          ]
+        }
+      )
     }
   );
 };
@@ -7700,7 +7775,7 @@ const ThreeViewer = ({
   const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
   const [activeTool, setActiveTool] = useState("none");
   const [mousePos, setMousePos] = useState(null);
-  const [wireframe, setWireframe] = useState(false);
+  const [displayMode, setDisplayMode] = useState("solid");
   const [viewpoints, setViewpoints] = useState([]);
   const [currentFileSetId, setCurrentFileSetId] = useState("");
   const [measureType, setMeasureType] = useState("none");
@@ -7795,6 +7870,7 @@ const ThreeViewer = ({
   const [toast, setToast] = useState(null);
   const [contextMenu, setContextMenu] = useState({ x: 0, y: 0, visible: false });
   const [hiddenUuids, setHiddenUuids] = useState(/* @__PURE__ */ new Set());
+  const [isolatedUuids, setIsolatedUuids] = useState(/* @__PURE__ */ new Set());
   const [contextMenuOpacity, setContextMenuOpacity] = useState(1);
   const visibilityStackRef = useRef([]);
   const handleHideSelected = useCallback(() => {
@@ -7804,26 +7880,29 @@ const ThreeViewer = ({
       return { uuid, visible: obj ? obj.visible : true };
     });
     visibilityStackRef.current.push(stateToRestore);
+    const newHiddenUuids = new Set(hiddenUuids);
+    const newIsolatedUuids = new Set(isolatedUuids);
     selectedUuids.forEach((uuid) => {
       sceneMgr.current?.setObjectVisibility(uuid, false);
-      hiddenUuids.add(uuid);
+      newHiddenUuids.add(uuid);
+      newIsolatedUuids.delete(uuid);
     });
-    setHiddenUuids(new Set(hiddenUuids));
+    setHiddenUuids(newHiddenUuids);
+    setIsolatedUuids(newIsolatedUuids);
     setSelectedUuids([]);
     setSelectedProps(null);
     sceneMgr.current?.highlightObjects([]);
     updateTree();
-  }, [selectedUuids, hiddenUuids]);
+  }, [selectedUuids, hiddenUuids, isolatedUuids]);
   const handleShowAll = useCallback(() => {
-    if (!sceneMgr.current || hiddenUuids.size === 0) return;
-    const stateToRestore = Array.from(hiddenUuids).map((uuid) => ({ uuid, visible: false }));
-    visibilityStackRef.current.push(stateToRestore);
-    hiddenUuids.forEach((uuid) => {
-      sceneMgr.current?.setObjectVisibility(uuid, true);
-    });
-    setHiddenUuids(/* @__PURE__ */ new Set());
-    updateTree();
-  }, [hiddenUuids]);
+    if (!sceneMgr.current) return;
+    if (hiddenUuids.size > 0 || isolatedUuids.size > 0) {
+      sceneMgr.current.setAllVisibility(true);
+      setHiddenUuids(/* @__PURE__ */ new Set());
+      setIsolatedUuids(/* @__PURE__ */ new Set());
+      updateTree();
+    }
+  }, [hiddenUuids, isolatedUuids]);
   const cleanStatus = (msg) => {
     if (!msg) return "";
     return msg.replace(/:\s*\d+%/g, "").replace(/\(\d+%\)/g, "").replace(/\d+%/g, "").trim();
@@ -8214,33 +8293,6 @@ const ThreeViewer = ({
     }
     updateTree();
   };
-  const handleSelectAll = useCallback(() => {
-    if (!sceneMgr.current) return;
-    const root = sceneMgr.current.structureRoot;
-    if (!root) return;
-    const allUuids = [];
-    const traverse = (node) => {
-      if (node.uuid) allUuids.push(node.uuid);
-      if (node.children) node.children.forEach(traverse);
-    };
-    traverse(root);
-    setSelectedUuids(allUuids);
-    sceneMgr.current.highlightObjects(allUuids);
-  }, []);
-  const handleInvertSelection = useCallback(() => {
-    if (!sceneMgr.current) return;
-    const root = sceneMgr.current.structureRoot;
-    if (!root) return;
-    const allUuids = [];
-    const traverse = (node) => {
-      if (node.uuid) allUuids.push(node.uuid);
-      if (node.children) node.children.forEach(traverse);
-    };
-    traverse(root);
-    const nextUuids = allUuids.filter((id) => !selectedUuids.includes(id));
-    setSelectedUuids(nextUuids);
-    sceneMgr.current.highlightObjects(nextUuids);
-  }, [selectedUuids]);
   const handleUndoVisibility = useCallback(() => {
     if (visibilityStackRef.current.length === 0 || !sceneMgr.current) return;
     const lastAction = visibilityStackRef.current.pop();
@@ -8355,7 +8407,7 @@ const ThreeViewer = ({
             });
             updateTree();
             setStatus(t("tileset_loaded"));
-            setTimeout(() => mgrInstance?.fitView(), 500);
+            setTimeout(() => mgrInstance?.fitView(true), 500);
           } else {
             modelItems.push(item);
           }
@@ -8486,8 +8538,9 @@ const ThreeViewer = ({
       if (e.button !== 0) return;
       const uuids = mgr.endBoxSelect();
       if (uuids.length > 0) {
-        setSelectedUuids(uuids);
-        mgr.highlightObjects(uuids);
+        const nextUuids = e.shiftKey ? [.../* @__PURE__ */ new Set([...selectedUuids, ...uuids])] : uuids;
+        setSelectedUuids(nextUuids);
+        mgr.highlightObjects(nextUuids);
       }
     };
     canvas.addEventListener("pointerdown", onPointerDown);
@@ -8655,7 +8708,7 @@ const ThreeViewer = ({
       updateTree();
       setStatus(t("success"));
       console.log("[ThreeViewer] processFiles completed successfully");
-      sceneMgr.current?.fitView();
+      sceneMgr.current?.fitView(true);
     } catch (err) {
       console.error("[ThreeViewer] processFiles error:", err);
       setStatus(t("failed"));
@@ -8785,7 +8838,7 @@ const ThreeViewer = ({
           });
           updateTree();
           setStatus(t("tileset_loaded"));
-          sceneMgr.current?.fitView();
+          sceneMgr.current?.fitView(true);
         }
       } else {
         await processFiles([url]);
@@ -8840,7 +8893,7 @@ const ThreeViewer = ({
         });
         updateTree();
         setStatus(t("tileset_loaded"));
-        sceneMgr.current?.fitView();
+        sceneMgr.current?.fitView(true);
       }
     } catch (err) {
       console.error(err);
@@ -8981,17 +9034,23 @@ const ThreeViewer = ({
       setToast({ message: t("failed"), type: "error" });
     }
   };
-  const handleWireframe = () => {
+  const handleDisplayModeChange = (mode) => {
     if (!sceneMgr.current) return;
-    const newWireframe = !wireframe;
-    setWireframe(newWireframe);
+    setDisplayMode(mode);
     sceneMgr.current.contentGroup.traverse((child) => {
       if (child.isMesh && child.material) {
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.wireframe = newWireframe);
-        } else {
-          child.material.wireframe = newWireframe;
-        }
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((m) => {
+          if (mode === "transparent") {
+            m.wireframe = false;
+            m.transparent = true;
+            m.opacity = 0.5;
+          } else {
+            m.wireframe = false;
+            m.transparent = false;
+            m.opacity = 1;
+          }
+        });
       }
     });
   };
@@ -9028,8 +9087,8 @@ const ThreeViewer = ({
             handleView,
             handleClear,
             handleScreenshot,
-            handleWireframe,
-            wireframe,
+            handleDisplayModeChange,
+            displayMode,
             pickEnabled,
             setPickEnabled,
             activeTool,
@@ -9079,13 +9138,7 @@ const ThreeViewer = ({
                   const uuid = obj?.uuid || obj?.id;
                   if (uuid) handleDeleteObject(uuid);
                 },
-                onFocus: (obj) => handleFocusObject(obj),
-                onClearSelection: handleClearSelection,
-                onSelectAll: handleSelectAll,
-                onInvertSelection: handleInvertSelection,
-                onHideSelected: handleHideSelected,
-                onShowAll: handleShowAll,
-                theme
+                onFocus: (obj) => handleFocusObject(obj)
               }
             ) }),
             /* @__PURE__ */ jsx(
@@ -9120,17 +9173,23 @@ const ThreeViewer = ({
                     label: t("isolate_selection") || "隔离选中",
                     onClick: () => {
                       if (selectedUuids.length > 0 && sceneMgr.current) {
-                        sceneMgr.current.isolateObjects(selectedUuids);
+                        const newIsolated = selectedUuids.filter((id) => !isolatedUuids.has(id));
+                        if (newIsolated.length > 0) {
+                          sceneMgr.current.isolateObjects(selectedUuids);
+                          setIsolatedUuids(/* @__PURE__ */ new Set([...isolatedUuids, ...newIsolated]));
+                        }
                       }
                     },
                     disabled: selectedUuids.length === 0
                   },
                   {
-                    label: t("show_all") || "显示全部",
-                    onClick: handleShowAll
+                    label: t("clear_selection") || "清空选择",
+                    onClick: handleClearSelection,
+                    disabled: selectedUuids.length === 0
                   },
                   {
-                    divider: true
+                    label: t("show_all") || "显示全部",
+                    onClick: handleShowAll
                   }
                 ],
                 onClose: () => setContextMenu((prev) => ({ ...prev, visible: false })),

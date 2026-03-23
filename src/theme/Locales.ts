@@ -59,6 +59,7 @@ const resources: Record<Lang, Record<string, string>> = {
         expand_all: "Expand All",
         collapse_all: "Collapse All",
         isolate_selection: "Isolate Selection",
+        clear_selection: "Clear Selection",
         ctx_show_all: "Show All",
         hide_selected: "Hide Selected",
         show_all: "Show All",
@@ -114,9 +115,10 @@ const resources: Record<Lang, Record<string, string>> = {
         tb_wireframe: "Wireframe",
         op_screenshot: "Screenshot",
         // 渲染样式
-        display_mode: "Display Mode",
-        dm_wireframe: "Wireframe",
+        display_mode: "DisplayMode",
         dm_solid: "Solid",
+        dm_transparent: "Transparent",
+        dm_wireframe: "Wireframe",
         dm_solidwire: "Solid with Outline",
         dm_hidden: "Hidden Line",
         // 剖切
@@ -269,6 +271,7 @@ const resources: Record<Lang, Record<string, string>> = {
         expand_all: "全部展开",
         collapse_all: "全部折叠",
         isolate_selection: "隔离选择",
+        clear_selection: "清空选择",
         ctx_show_all: "显示所有",
         hide_selected: "隐藏选中",
         show_all: "显示全部",
@@ -323,9 +326,10 @@ const resources: Record<Lang, Record<string, string>> = {
         tb_wireframe: "线框",
         op_screenshot: "场景截图",
         // 渲染样式
-        display_mode: "显示样式",
-        dm_wireframe: "线框",
+        display_mode: "样式",
         dm_solid: "着色",
+        dm_transparent: "透明",
+        dm_wireframe: "线框",
         dm_solidwire: "着色带轮廓线",
         dm_hidden: "消隐",
         // 剖切

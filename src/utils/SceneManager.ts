@@ -237,7 +237,7 @@ export class SceneManager {
             -1000000, 1000000 
         );
         this.camera.up.set(0, 0, 1);
-        this.camera.position.set(1000, 1000, 1000);
+        this.camera.position.set(1000, -1000, 1000);
         this.camera.lookAt(0, 0, 0);
 
         // 控制器
@@ -2039,7 +2039,7 @@ export class SceneManager {
 
         this.reportChunkProgress();
 
-        this.fitView();
+        this.fitView(true);
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
         this.checkCullingAndLoad();
     }
@@ -2166,11 +2166,70 @@ export class SceneManager {
     }
 
     isolateObjects(uuids: string[]) {
+        // 1. 先隐藏所有对象
         this.setAllVisibility(false);
-        uuids.forEach(id => this.setObjectVisibility(id, true));
+        
+        // 2. 显示所有选中的对象及其子对象
+        const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
+        
+        uuids.forEach(uuid => {
+            // 使用 setObjectVisibility 来确保父节点也可见
+            this.setObjectVisibility(uuid, true);
+            
+            // 递归显示所有子对象
+            const nodes = this.nodeMap.get(uuid);
+            if (nodes) {
+                nodes.forEach(node => {
+                    const showChildrenRecursive = (n: StructureTreeNode) => {
+                        if (n.id !== uuid) {
+                            this.setObjectVisibility(n.id, true);
+                        }
+                        if (n.children) {
+                            n.children.forEach(showChildrenRecursive);
+                        }
+                    };
+                    showChildrenRecursive(node);
+                });
+            }
+            
+            // 收集受影响的 BatchedMesh
+            const mappings = this.optimizedMapping.get(uuid);
+            if (mappings) {
+                mappings.forEach(m => {
+                    affectedBatchedMeshes.add(m.mesh);
+                });
+            }
+        });
+        
+        // 3. 确保所有相关的 BatchedMesh 及其父节点可见
+        affectedBatchedMeshes.forEach(bm => {
+            bm.visible = true;
+            // 确保父节点可见
+            let parent = bm.parent;
+            while (parent && parent !== this.scene) {
+                parent.visible = true;
+                parent = parent.parent;
+            }
+        });
+        
+        // 4. 同时确保所有非优化对象的父节点也可见
+        uuids.forEach(uuid => {
+            const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+            if (obj) {
+                let parent = obj.parent;
+                while (parent && parent !== this.scene) {
+                    parent.visible = true;
+                    parent = parent.parent;
+                }
+            }
+        });
+        
+        // 5. 更新状态
+        this.interactableListValid = false;
+        this.updateSceneBounds();
     }
 
-    setObjectVisibility(uuid: string, visible: boolean) {
+    setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
         // 更新结构树中的状态 (可能存在多个节点指向同一个 UUID)
         const nodes = this.nodeMap.get(uuid);
         if (nodes) {
@@ -2192,7 +2251,7 @@ export class SceneManager {
         const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
         
         // 如果设置为可见，确保所有父节点也可见
-        if (visible && obj) {
+        if (visible && obj && showParents) {
             let parent = obj.parent;
             while (parent && parent !== this.scene) {
                 parent.visible = true;
@@ -3450,7 +3509,11 @@ export class SceneManager {
 
         // 创建 Frustum
         const frustum = new THREE.Frustum();
-        frustum.setFromProjectionMatrix(modifiedProjectionMatrix);
+        const viewMatrix = this.camera.matrixWorldInverse;
+        // 正确的顺序：先视图矩阵，再投影矩阵
+        // 因为 Three.js 中矩阵乘法是从右到左应用的
+        const projViewMatrix = modifiedProjectionMatrix.clone().multiply(viewMatrix);
+        frustum.setFromProjectionMatrix(projViewMatrix);
 
         const selected: string[] = [];
         const box = new THREE.Box3();

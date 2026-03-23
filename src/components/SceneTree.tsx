@@ -82,18 +82,10 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
-    onClearSelection?: () => void;
-    onSelectAll?: () => void;
-    onInvertSelection?: () => void;
-    onHideSelected?: () => void;
-    onShowAll?: () => void;
-        theme: any;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
-    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus, onIsolate, onClearSelection,
-    onSelectAll, onInvertSelection, onHideSelected, onShowAll,
-    theme
+    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
@@ -323,25 +315,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             <div className="ui-context-menu-divider" />
                             <div
                                 className="ui-context-menu-item"
-                                onClick={() => { onIsolate?.(contextMenu.node.uuid); setContextMenu(null); }}
-                            >
-                                {t("isolate_selection")}
-                            </div>
-                            <div
-                                className="ui-context-menu-item"
                                 onClick={() => { onDelete?.(contextMenu.node.object); setContextMenu(null); }}
                             >
                                 {t("delete_item")}
                             </div>
                         </>
                     )}
-                    <div className="ui-context-menu-divider" />
-                    <div
-                        className="ui-context-menu-item"
-                        onClick={() => { onClearSelection?.(); setContextMenu(null); }}
-                    >
-                        清空选择
-                    </div>
                 </div>
             )}
         </div>

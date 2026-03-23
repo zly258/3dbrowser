@@ -23,12 +23,6 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
-    onClearSelection?: () => void;
-    onSelectAll?: () => void;
-    onInvertSelection?: () => void;
-    onHideSelected?: () => void;
-    onShowAll?: () => void;
-    theme: any;
 }
 export declare const SceneTree: React.FC<SceneTreeProps>;
 export {};

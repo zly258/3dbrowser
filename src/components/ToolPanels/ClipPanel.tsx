@@ -1,6 +1,6 @@
 import React from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Switch, DualSlider } from "../common";
+import { Switch, DualSlider, Checkbox } from "../common";
 
 interface ClipPanelProps {
   t: any;
@@ -12,12 +12,12 @@ interface ClipPanelProps {
   setClipValues: any;
   clipActive: any;
   setClipActive: any;
-    theme?: any;
+  theme?: any;
 }
 
 // Axis Slider Row
 const AxisSliderRow: React.FC<{
-  axis: 'x' | 'y' | 'z';
+  axis: "x" | "y" | "z";
   label: string;
   active: boolean;
   value: [number, number];
@@ -29,28 +29,32 @@ const AxisSliderRow: React.FC<{
     <div
       className="flex items-center"
       style={{
-        gap: '8px',
-        padding: '6px 0',
-        borderBottom: '1px solid var(--border-color)',
+        gap: "8px",
+        padding: "6px 0",
+        borderBottom: "1px solid var(--border-color)",
         opacity: disabled ? 0.5 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
+        pointerEvents: disabled ? "none" : "auto",
       }}
     >
-      {/* Checkbox */}
-      <input
-        type="checkbox"
+
+      <Checkbox
         checked={active}
-        onChange={(e) => onToggle(e.target.checked)}
-        style={{ width: '16px', height: '16px', cursor: 'pointer', flexShrink: 0 }}
+        onChange={(e) => onToggle(e)}
+        style={{
+          width: "16px",
+          height: "16px",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
       />
 
       {/* Axis label */}
       <span
         style={{
-          fontSize: '12px',
-          fontWeight: '600',
-          minWidth: '16px',
-          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+          fontSize: "12px",
+          fontWeight: "600",
+          minWidth: "16px",
+          color: active ? "var(--text-primary)" : "var(--text-secondary)",
           flexShrink: 0,
         }}
       >
@@ -71,10 +75,10 @@ const AxisSliderRow: React.FC<{
       {/* Value display */}
       <span
         style={{
-          fontSize: '11px',
-          color: 'var(--text-primary)',
-          minWidth: '45px',
-          textAlign: 'right',
+          fontSize: "11px",
+          color: "var(--text-primary)",
+          minWidth: "45px",
+          textAlign: "right",
           flexShrink: 0,
         }}
       >
@@ -85,8 +89,14 @@ const AxisSliderRow: React.FC<{
 };
 
 export const ClipPanel: React.FC<ClipPanelProps> = ({
-  t, onClose, clipEnabled, setClipEnabled,
-  clipValues, setClipValues, clipActive, setClipActive,
+  t,
+  onClose,
+  clipEnabled,
+  setClipEnabled,
+  clipValues,
+  setClipValues,
+  clipActive,
+  setClipActive,
 }) => {
   return (
     <FloatingPanel
@@ -97,14 +107,17 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
       resizable={false}
       storageId="tool_clip"
     >
-      <div className="flex flex-col p-3" style={{ height: '100%', gap: '12px' }}>
+      <div
+        className="flex flex-col p-3"
+        style={{ height: "100%", gap: "12px" }}
+      >
         {/* Header with main switch */}
-        <div className="flex items-center justify-between p-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <div
+          className="flex items-center justify-between p-2"
+          style={{ borderBottom: "1px solid var(--border-color)" }}
+        >
           <span className="text-sm font-semibold">{t("clip_enable")}</span>
-          <Switch
-            checked={clipEnabled}
-            onChange={(v) => setClipEnabled(v)}
-          />
+          <Switch checked={clipEnabled} onChange={(v) => setClipEnabled(v)} />
         </div>
 
         {/* Axis controls */}
@@ -113,7 +126,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
           style={{
             flex: 1,
             opacity: clipEnabled ? 1 : 0.4,
-            pointerEvents: clipEnabled ? 'auto' : 'none',
+            pointerEvents: clipEnabled ? "auto" : "none",
           }}
         >
           <AxisSliderRow
