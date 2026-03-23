@@ -12,8 +12,8 @@ interface MenuBarProps {
     handleView?: (view: string) => void;
     handleClear?: () => void;
     handleScreenshot?: () => void;
-    handleWireframe?: () => void;
-    wireframe?: boolean;
+    handleDisplayModeChange?: (mode: 'solid' | 'transparent') => void;
+    displayMode?: 'solid' | 'transparent';
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
     activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';

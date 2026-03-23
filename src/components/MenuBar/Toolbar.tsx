@@ -6,7 +6,7 @@ import {
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
-    IconImage, IconLayers
+    IconImage, IconLayers, IconChevronDown
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -21,8 +21,8 @@ interface MenuBarProps {
     handleView?: (view: string) => void;
     handleClear?: () => void;
     handleScreenshot?: () => void;
-    handleWireframe?: () => void;
-    wireframe?: boolean;
+    handleDisplayModeChange?: (mode: 'solid' | 'transparent') => void;
+    displayMode?: 'solid' | 'transparent';
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
     activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
@@ -294,13 +294,49 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             {!isHidden('interface') && (
                 <div className="ui-toolbar-group">
                     {!isHidden('wireframe') && (
-                        <ImageButton
-                            icon={<IconLayers />}
-                            label={t('tb_wireframe') || '线框'}
-                            active={props.wireframe}
-                            onClick={() => props.handleWireframe?.()}
-                            theme={theme}
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <ImageButton
+                                icon={<IconLayers />}
+                                label={t('display_mode') || '样式'}
+                                active={openMenu === 'displayMode'}
+                                onClick={() => toggleMenu('displayMode')}
+                                theme={theme}
+                            />
+                            {renderDropdown('displayMode', (
+                                <>
+                                    <div
+                                        style={{
+                                            padding: '6px 16px',
+                                            fontSize: '12px',
+                                            color: props.displayMode === 'solid' ? theme.accent : theme.text,
+                                            cursor: 'pointer',
+                                            backgroundColor: props.displayMode === 'solid' ? theme.itemHover : 'transparent',
+                                            fontWeight: props.displayMode === 'solid' ? '600' : '400'
+                                        }}
+                                        onClick={() => { props.handleDisplayModeChange?.('solid'); setOpenMenu(null); }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = props.displayMode === 'solid' ? theme.itemHover : 'transparent'}
+                                    >
+                                        {t('dm_solid') || '着色'}
+                                    </div>
+                                    <div
+                                        style={{
+                                            padding: '6px 16px',
+                                            fontSize: '12px',
+                                            color: props.displayMode === 'transparent' ? theme.accent : theme.text,
+                                            cursor: 'pointer',
+                                            backgroundColor: props.displayMode === 'transparent' ? theme.itemHover : 'transparent',
+                                            fontWeight: props.displayMode === 'transparent' ? '600' : '400'
+                                        }}
+                                        onClick={() => { props.handleDisplayModeChange?.('transparent'); setOpenMenu(null); }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = props.displayMode === 'transparent' ? theme.itemHover : 'transparent'}
+                                    >
+                                        {t('dm_transparent') || '透明'}
+                                    </div>
+                                </>
+                            ))}
+                        </div>
                     )}
                     {!isHidden('outline') && (
                         <ImageButton
