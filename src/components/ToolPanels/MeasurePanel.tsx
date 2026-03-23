@@ -183,9 +183,7 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
     const groups: Record<string, any[]> = {
       'dist': [],
       'angle': [],
-      'coord': [],
-      'area': [],
-      'volume': []
+      'coord': []
     };
     measureHistory.forEach((item: any) => {
       if (groups[item.type]) groups[item.type].push(item);
@@ -203,8 +201,6 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
     { value: 'dist', label: t("measure_dist") || 'Distance', icon: <Icons.Distance /> },
     { value: 'angle', label: t("measure_angle") || 'Angle', icon: <Icons.Angle /> },
     { value: 'coord', label: t("measure_coord") || 'Coord', icon: <Icons.Coordinate /> },
-    { value: 'area', label: t("measure_area") || 'Area', icon: <Icons.Area /> },
-    { value: 'volume', label: t("measure_volume") || 'Volume', icon: <Icons.Volume /> },
   ];
 
   const getInstructionText = () => {
@@ -212,8 +208,6 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       case 'dist': return t("measure_instruct_dist");
       case 'angle': return t("measure_instruct_angle");
       case 'coord': return t("measure_instruct_coord");
-      case 'area': return t("measure_instruct_area");
-      case 'volume': return t("measure_instruct_volume");
       default: return '';
     }
   };
@@ -223,8 +217,6 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       case 'dist': return t("measure_dist") || 'Distance';
       case 'angle': return t("measure_angle") || 'Angle';
       case 'coord': return t("measure_coord") || 'Coordinate';
-      case 'area': return t("measure_area") || 'Area';
-      case 'volume': return t("measure_volume") || 'Volume';
       default: return type;
     }
   };

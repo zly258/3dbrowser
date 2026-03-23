@@ -1252,6 +1252,15 @@ export const ThreeViewer = ({
                  geoProps[t("prop_inst")] = target.count.toLocaleString();
              }
 
+            // --- 面积和体积计算 ---            
+            const geometryData = sceneMgr.current.getObjectGeometryData(focusUuid);
+            if (geometryData.area > 0) {
+                geoProps[t("prop_area")] = geometryData.area.toFixed(3);
+            }
+            if (geometryData.volume > 0) {
+                geoProps[t("prop_volume")] = geometryData.volume.toFixed(3);
+            }
+
             // --- IFC 属性获取逻辑 ---
             // 检查 userData 或 parent.userData
             const userData = target.userData || {};

@@ -9,7 +9,7 @@ import {
     createBatchedMeshFromItems
 } from "./octree";
 
-export type MeasureType = 'dist' | 'angle' | 'coord' | 'area' | 'volume' | 'none';
+export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 
 export interface MeasurementRecord {
     id: string;
@@ -2920,15 +2920,6 @@ export class SceneManager {
             this.currentMeasureModelUuid = modelUuid;
         }
 
-        // 面积测量：双击结束（3个点以上），检测是否接近第一个点
-        if (this.measureType === 'area' && this.currentMeasurePoints.length >= 3) {
-            const first = this.currentMeasurePoints[0];
-            if (point.distanceTo(first) < 5) {
-                this.currentMeasurePoints.push(first.clone()); // 闭合
-                return this.finalizeMeasurement();
-            }
-        }
-
         this.currentMeasurePoints.push(point);
         // 临时点标记只在预览阶段显示，finalize 时会清除预览并重新生成正式点
         this.addMarker(point, this.measureGroup); 
@@ -2959,24 +2950,6 @@ export class SceneManager {
         const points = [...this.currentMeasurePoints];
         if (hoverPoint) points.push(hoverPoint);
         if (points.length < 2) return;
-
-        // 面积测量：用闭合多边形预览
-        if (this.measureType === 'area' && points.length >= 3) {
-            const polygonPoints = [...this.currentMeasurePoints];
-            if (hoverPoint) polygonPoints.push(hoverPoint);
-            // 闭合多边形
-            if (polygonPoints.length >= 3) {
-                const geometry = new THREE.BufferGeometry().setFromPoints(polygonPoints);
-                const material = new THREE.LineBasicMaterial({ 
-                    color: 0xff0000, 
-                    depthTest: false 
-                });
-                this.previewPolygon = new THREE.LineLoop(geometry, material);
-                this.previewPolygon.renderOrder = 998;
-                this.measureGroup.add(this.previewPolygon);
-            }
-            return;
-        }
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineDashedMaterial({ 
@@ -3051,73 +3024,6 @@ export class SceneManager {
             valStr = displayVal;
             this.addLine(this.currentMeasurePoints, group);
             labelPos.copy(center);
-        } else if (this.measureType === 'area') {
-            // 面积测量：使用向量叉积求多边形面积
-            const pts = this.currentMeasurePoints;
-            if (pts.length >= 3) {
-                // 计算法线方向 (使用前3个点)
-                const v1 = new THREE.Vector3().subVectors(pts[1], pts[0]);
-                const v2 = new THREE.Vector3().subVectors(pts[2], pts[0]);
-                const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
-                
-                // 使用鞋带公式(Shoelace formula)的3D版本计算面积
-                let area = 0;
-                const n = pts.length;
-                for (let i = 0; i < n; i++) {
-                    const curr = pts[i];
-                    const next = pts[(i + 1) % n];
-                    const edge = new THREE.Vector3().subVectors(next, curr);
-                    area += new THREE.Vector3().crossVectors(curr, next).length();
-                }
-                area = area / 2;
-                
-                displayVal = area.toFixed(3);
-                valStr = `${displayVal} m²`;
-                // 绘制闭合多边形
-                this.addLineLoop(pts, group);
-                // 填充半透明面
-                this.addPolygonFill(pts, group);
-                // 标签放在多边形中心
-                const center = new THREE.Vector3();
-                pts.forEach(p => center.add(p));
-                center.divideScalar(pts.length);
-                labelPos.copy(center);
-            }
-        } else if (this.measureType === 'volume') {
-            // 体积测量：通过 pick 获取的对象
-            // 在点击处理中已经记录了 currentMeasureModelUuid
-            const uuid = this.currentMeasureModelUuid;
-            let vol = 0;
-            if (uuid) {
-                const mappings = this.optimizedMapping.get(uuid);
-                if (mappings && mappings.length > 0) {
-                    const m = mappings[0];
-                    if (m.geometry) {
-                        vol = this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
-                    }
-                } else {
-                    // 尝试从 contentGroup 中获取 mesh
-                    const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-                    if (obj && (obj as THREE.Mesh).isMesh) {
-                        const mesh = obj as THREE.Mesh;
-                        vol = this.computeGeometryVolume(mesh.geometry, mesh, undefined);
-                    }
-                }
-            }
-            displayVal = vol.toFixed(3);
-            valStr = `${displayVal} m³`;
-            // 如果有模型 UUID，在对象位置显示标签
-            if (uuid) {
-                const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-                if (obj) {
-                    const box = new THREE.Box3().setFromObject(obj);
-                    labelPos.copy(box.getCenter(new THREE.Vector3()));
-                    // 绘制包围盒
-                    const boxHelper = new THREE.Box3Helper(box, new THREE.Color(0xff0000));
-                    boxHelper.renderOrder = 998;
-                    group.add(boxHelper);
-                }
-            }
         } else {
             const p = this.currentMeasurePoints[0];
             displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
@@ -3367,6 +3273,82 @@ export class SceneManager {
             }
         }
         return Math.abs(volume);
+    }
+
+    private computeGeometryArea(geometry: THREE.BufferGeometry, mesh: THREE.Mesh, instanceId?: number): number {
+        const pos = geometry.attributes.position;
+        const index = geometry.index;
+        let area = 0;
+        const vA = new THREE.Vector3();
+        const vB = new THREE.Vector3();
+        const vC = new THREE.Vector3();
+        const tmpMat = new THREE.Matrix4();
+        
+        if (instanceId !== undefined && mesh.isInstancedMesh) {
+            (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, tmpMat);
+        } else {
+            tmpMat.copy(mesh.matrixWorld);
+        }
+
+        const applyMatrix = (v: THREE.Vector3) => {
+            v.applyMatrix4(tmpMat);
+        };
+
+        if (index) {
+            for (let i = 0; i < index.count; i += 3) {
+                vA.fromBufferAttribute(pos, index.getX(i));
+                vB.fromBufferAttribute(pos, index.getX(i + 1));
+                vC.fromBufferAttribute(pos, index.getX(i + 2));
+                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
+                // 计算三角形面积
+                const ab = new THREE.Vector3().subVectors(vB, vA);
+                const ac = new THREE.Vector3().subVectors(vC, vA);
+                area += ab.cross(ac).length() / 2;
+            }
+        } else {
+            for (let i = 0; i < pos.count; i += 3) {
+                vA.fromBufferAttribute(pos, i);
+                vB.fromBufferAttribute(pos, i + 1);
+                vC.fromBufferAttribute(pos, i + 2);
+                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
+                // 计算三角形面积
+                const ab = new THREE.Vector3().subVectors(vB, vA);
+                const ac = new THREE.Vector3().subVectors(vC, vA);
+                area += ab.cross(ac).length() / 2;
+            }
+        }
+        return area;
+    }
+
+    /**
+     * 获取对象的面积和体积
+     */
+    getObjectGeometryData(uuid: string): { area: number, volume: number } {
+        let area = 0;
+        let volume = 0;
+        
+        // 尝试从优化映射中获取
+        const mappings = this.optimizedMapping.get(uuid);
+        if (mappings && mappings.length > 0) {
+            mappings.forEach(m => {
+                if (m.geometry) {
+                    area += this.computeGeometryArea(m.geometry, m.mesh, m.instanceId);
+                    volume += this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
+                }
+            });
+        } else {
+            // 尝试从 contentGroup 中获取
+            const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+            if (obj && (obj as THREE.Mesh).isMesh) {
+                const mesh = obj as THREE.Mesh;
+                if (mesh.geometry) {
+                    area = this.computeGeometryArea(mesh.geometry, mesh, undefined);
+                    volume = this.computeGeometryVolume(mesh.geometry, mesh, undefined);
+                }
+            }
+        }
+        
+        return { area, volume };
     }
 
     // ========== 框选方法 ==========
