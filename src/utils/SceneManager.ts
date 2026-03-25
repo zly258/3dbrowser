@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TilesRenderer } from "3d-tiles-renderer";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { 
     calculateGeometryMemory, 
     collectItems, 
@@ -26,6 +27,16 @@ export interface SceneSettings {
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
+    colorSpace?: 'srgb' | 'linear';
+    toneMapping?: 'none' | 'aces' | 'neutral';
+    exposure?: number;
+    environmentMapUrl?: string;
+    shadowQuality?: 'off' | 'low' | 'medium' | 'high';
+    adaptiveQuality?: boolean;
+    minPixelRatio?: number;
+    maxPixelRatio?: number;
+    targetFps?: number;
+    materialMode?: 'default' | 'flat' | 'wireframe' | 'xray';
     // 光照模拟参数
     sunLatitude?: number;   // 纬度 (-90 ~ 90)
     sunLongitude?: number;  // 经度 (-180 ~ 180)
@@ -122,11 +133,22 @@ export class SceneManager {
         dirInt: 1.0,
         bgColor: "#1e1e1e",
         viewCubeSize: 100,
+        colorSpace: 'srgb',
+        toneMapping: 'aces',
+        exposure: 1,
+        shadowQuality: 'medium',
+        adaptiveQuality: true,
+        minPixelRatio: 0.8,
+        maxPixelRatio: 2,
+        targetFps: 50,
+        materialMode: 'default',
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
     };
 
     // 资源
     dotTexture: THREE.Texture;
+    pmremGenerator: THREE.PMREMGenerator | null = null;
+    environmentTexture: THREE.Texture | null = null;
     
     // 缓存
     sceneBounds: THREE.Box3 = new THREE.Box3();
@@ -177,6 +199,11 @@ export class SceneManager {
     private workerQueue: { resolve: Function, reject: Function, data: any, transferables: any[] }[] = [];
     private activeWorkerCount = 0;
     private maxWorkers = 4; // 限制固定为 4 个，平衡性能与系统开销
+    private frameSampleTime = performance.now();
+    private frameCounter = 0;
+    private fps = 0;
+    private isCameraMoving = false;
+    private activePixelRatio = 1;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -201,6 +228,12 @@ export class SceneManager {
         this.renderer.setSize(width, height, false);
         this.renderer.setClearColor(this.settings.bgColor);
         this.renderer.localClippingEnabled = true; 
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1;
+        this.activePixelRatio = this.renderer.getPixelRatio();
+        this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+        this.pmremGenerator.compileEquirectangularShader();
         
         // 场景
         this.scene = new THREE.Scene();
@@ -250,6 +283,15 @@ export class SceneManager {
             MIDDLE: THREE.MOUSE.PAN,
             RIGHT: undefined as any
         };
+        this.controls.addEventListener('start', () => {
+            this.isCameraMoving = true;
+        });
+        this.controls.addEventListener('change', () => {
+            this.isCameraMoving = true;
+        });
+        this.controls.addEventListener('end', () => {
+            this.isCameraMoving = false;
+        });
         
         // 灯光
         this.ambientLight = new THREE.AmbientLight(0xffffff, this.settings.ambientInt);
@@ -339,11 +381,26 @@ export class SceneManager {
         this.ambientLight.intensity = this.settings.ambientInt;
         this.dirLight.intensity = this.settings.dirInt;
 
+        // 应用渲染色彩链路
+        this.renderer.outputColorSpace = this.settings.colorSpace === 'linear'
+            ? THREE.LinearSRGBColorSpace
+            : THREE.SRGBColorSpace;
+        this.renderer.toneMapping = this.settings.toneMapping === 'none'
+            ? THREE.NoToneMapping
+            : this.settings.toneMapping === 'neutral'
+                ? THREE.NeutralToneMapping
+                : THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = this.settings.exposure ?? 1;
+
         // 应用光照模拟（太阳光）
         if (newSettings.sunEnabled !== undefined || newSettings.sunLatitude !== undefined ||
             newSettings.sunLongitude !== undefined || newSettings.sunTime !== undefined ||
             newSettings.sunShadow !== undefined) {
             this.updateSunPosition();
+        }
+
+        if (newSettings.environmentMapUrl !== undefined) {
+            void this.updateEnvironmentMap(this.settings.environmentMapUrl);
         }
 
         // 应用背景
@@ -369,8 +426,62 @@ export class SceneManager {
             this.checkCullingAndLoad();
         }
 
+        if (newSettings.materialMode !== undefined) {
+            this.applyMaterialMode();
+        }
+
+        if (newSettings.shadowQuality !== undefined || newSettings.sunShadow !== undefined) {
+            this.updateSunShadow();
+        }
+
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
+    }
+
+    private async updateEnvironmentMap(url?: string) {
+        if (this.environmentTexture) {
+            this.environmentTexture.dispose();
+            this.environmentTexture = null;
+        }
+
+        this.scene.environment = null;
+
+        if (!url || !this.pmremGenerator) return;
+
+        try {
+            const texture = await new RGBELoader().loadAsync(url);
+            const envMap = this.pmremGenerator.fromEquirectangular(texture).texture;
+            texture.dispose();
+            this.environmentTexture = envMap;
+            this.scene.environment = envMap;
+        } catch (error) {
+            console.warn("[SceneManager] Failed to load environment map", error);
+        }
+    }
+
+    private applyMaterialMode() {
+        this.contentGroup.traverse((obj) => {
+            if (!(obj as THREE.Mesh).isMesh) return;
+            const mesh = obj as THREE.Mesh;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+            materials.forEach((material: any) => {
+                if (!material) return;
+
+                material.wireframe = this.settings.materialMode === 'wireframe';
+
+                if ('transparent' in material) {
+                    material.transparent = this.settings.materialMode === 'xray';
+                    material.opacity = this.settings.materialMode === 'xray' ? 0.35 : 1;
+                }
+
+                if ('flatShading' in material) {
+                    material.flatShading = this.settings.materialMode === 'flat';
+                }
+
+                material.needsUpdate = true;
+            });
+        });
     }
 
     // 根据经纬度和时间计算太阳位置
@@ -438,12 +549,21 @@ export class SceneManager {
 
     // 更新阴影设置
     private updateSunShadow() {
-        const shadowEnabled = this.settings.sunShadow === true && this.settings.sunEnabled !== false;
+        const shadowEnabled = this.settings.shadowQuality !== 'off' &&
+            this.settings.sunShadow === true &&
+            this.settings.sunEnabled !== false;
+        const shadowMapSize = this.settings.shadowQuality === 'high'
+            ? 4096
+            : this.settings.shadowQuality === 'low'
+                ? 1024
+                : 2048;
 
         if (shadowEnabled) {
             // 启用渲染器阴影
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.sunLight.shadow.mapSize.width = shadowMapSize;
+            this.sunLight.shadow.mapSize.height = shadowMapSize;
 
             // 遍历场景中的物体启用阴影
             this.contentGroup.traverse((obj) => {
@@ -456,6 +576,7 @@ export class SceneManager {
 
             this.sunLight.castShadow = true;
         } else {
+            this.renderer.shadowMap.enabled = false;
             this.sunLight.castShadow = false;
         }
     }
@@ -478,10 +599,19 @@ export class SceneManager {
 
     animate() {
         requestAnimationFrame(this.animate);
+        this.frameCounter++;
+        const frameNow = performance.now();
+        if (frameNow - this.frameSampleTime >= 500) {
+            this.fps = (this.frameCounter * 1000) / (frameNow - this.frameSampleTime);
+            this.frameCounter = 0;
+            this.frameSampleTime = frameNow;
+        }
         
         if (this.controls) {
             this.controls.update();
         }
+
+        this.updateAdaptiveQuality();
 
         // 如果需要更新边界 (例如分块加载/卸载后)
         if (this._needsBoundsUpdate) {
@@ -505,6 +635,32 @@ export class SceneManager {
         }
 
         this.renderer.render(this.scene, this.camera);
+    }
+
+    private updateAdaptiveQuality() {
+        if (!this.settings.adaptiveQuality) return;
+
+        const deviceRatio = window.devicePixelRatio || 1;
+        const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
+        const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
+        const targetFps = this.settings.targetFps ?? 50;
+
+        let desiredRatio = maxRatio;
+        if (this.isCameraMoving) {
+            desiredRatio = Math.max(minRatio, maxRatio * 0.75);
+        } else if (this.fps > 0 && this.fps < targetFps - 5) {
+            desiredRatio = Math.max(minRatio, this.activePixelRatio - 0.1);
+        } else if (this.fps > targetFps + 8) {
+            desiredRatio = Math.min(maxRatio, this.activePixelRatio + 0.05);
+        }
+
+        desiredRatio = Math.max(minRatio, Math.min(maxRatio, desiredRatio));
+        if (Math.abs(desiredRatio - this.activePixelRatio) < 0.05) return;
+
+        this.activePixelRatio = desiredRatio;
+        this.renderer.setPixelRatio(desiredRatio);
+        const rect = this.canvas.getBoundingClientRect();
+        this.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
     }
     
     updateCameraClipping() {
@@ -564,7 +720,11 @@ export class SceneManager {
         
         cam.updateProjectionMatrix();
         
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        const maxRatio = this.settings.adaptiveQuality
+            ? Math.min(window.devicePixelRatio, this.settings.maxPixelRatio ?? 2)
+            : Math.min(window.devicePixelRatio, 2);
+        this.activePixelRatio = maxRatio;
+        this.renderer.setPixelRatio(maxRatio);
         this.renderer.setSize(w, h, false);
         
         // 如果使用了 OrbitControls，需要更新它
@@ -3801,12 +3961,15 @@ export class SceneManager {
             meshes, 
             faces: Math.floor(faces), 
             memory: parseFloat(memory.toFixed(2)),
-            drawCalls 
+            drawCalls,
+            fps: Math.round(this.fps)
         };
     }
 
     dispose() {
         if (this.logicTimer) clearInterval(this.logicTimer);
+        if (this.environmentTexture) this.environmentTexture.dispose();
+        if (this.pmremGenerator) this.pmremGenerator.dispose();
         this.renderer.dispose();
         if (this.tilesRenderer) this.tilesRenderer.dispose();
     }

@@ -160,6 +160,12 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               onChange={(v) => onUpdate({ viewCubeSize: v })}
             />
           </Row>
+          <Row label={t("st_adaptive_quality") || "Adaptive"} labelWidth="90px">
+            <Switch
+              checked={settings.adaptiveQuality !== false}
+              onChange={(v) => onUpdate({ adaptiveQuality: v })}
+            />
+          </Row>
         </Section>
 
         {/* 灯光设置 */}
@@ -182,6 +188,50 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               step={0.1}
               value={settings.dirInt}
               onChange={(v) => onUpdate({ dirInt: v })}
+            />
+          </Row>
+          <Row label={t("st_exposure") || "Exposure"} labelWidth="90px" stretch={true}>
+            <SettingSlider
+              min={0.2}
+              max={2.5}
+              step={0.05}
+              value={settings.exposure || 1}
+              onChange={(v) => onUpdate({ exposure: v })}
+            />
+          </Row>
+          <Row label={t("st_tonemapping") || "Tone Map"} labelWidth="90px" stretch={true}>
+            <Select
+              value={settings.toneMapping || 'aces'}
+              options={[
+                { value: 'aces', label: 'ACES' },
+                { value: 'neutral', label: 'Neutral' },
+                { value: 'none', label: 'None' }
+              ]}
+              onChange={(v) => onUpdate({ toneMapping: v as SceneSettings['toneMapping'] })}
+            />
+          </Row>
+          <Row label={t("st_shadow_quality") || "Shadow"} labelWidth="90px" stretch={true}>
+            <Select
+              value={settings.shadowQuality || 'medium'}
+              options={[
+                { value: 'off', label: t("st_shadow_off") || 'Off' },
+                { value: 'low', label: t("st_shadow_low") || 'Low' },
+                { value: 'medium', label: t("st_shadow_medium") || 'Medium' },
+                { value: 'high', label: t("st_shadow_high") || 'High' }
+              ]}
+              onChange={(v) => onUpdate({ shadowQuality: v as SceneSettings['shadowQuality'] })}
+            />
+          </Row>
+          <Row label={t("st_material_mode") || "Material"} labelWidth="90px" stretch={true}>
+            <Select
+              value={settings.materialMode || 'default'}
+              options={[
+                { value: 'default', label: t("st_material_default") || 'Default' },
+                { value: 'flat', label: t("st_material_flat") || 'Flat' },
+                { value: 'wireframe', label: t("st_material_wireframe") || 'Wireframe' },
+                { value: 'xray', label: t("st_material_xray") || 'X-Ray' }
+              ]}
+              onChange={(v) => onUpdate({ materialMode: v as SceneSettings['materialMode'] })}
             />
           </Row>
         </Section>

@@ -7,5 +7,5 @@ export interface LoadedItem {
     type: "MODEL" | "TILES";
     object?: THREE.Object3D;
 }
-export declare const loadModelFiles: (files: (File | string)[], onProgress: ProgressCallback, t: TFunc, _settings: SceneSettings, libPath?: string) => Promise<THREE.Object3D[]>;
+export declare const loadModelFiles: (files: (File | string)[], onProgress: ProgressCallback, t: TFunc, settings: SceneSettings, libPath?: string) => Promise<THREE.Object3D[]>;
 export declare const parseTilesetFromFolder: (files: FileList, onProgress: ProgressCallback, t: TFunc) => Promise<string | null>;

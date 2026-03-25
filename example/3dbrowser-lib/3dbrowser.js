@@ -2,13 +2,12 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
 import React, { useRef, useCallback, useState, useEffect, useMemo, Component } from 'react';
 import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
-import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader } from './loaders-CUgi9oyM.js';
+import { O as OrbitControls, R as RGBELoader, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, M as MTLLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader, D as DRACOLoader, K as KTX2Loader } from './loaders-DuZasUXP.js';
 import { TilesRenderer } from '3d-tiles-renderer';
-import { c as createBatchedMeshFromItems, a as collectItems, b as buildOctree, d as collectLeafNodes, e as calculateGeometryMemory, f as convertLMBTo3DTiles, g as exportGLB, h as exportLMB } from './utils-CbdbJT3N.js';
+import { c as createBatchedMeshFromItems, a as collectItems, b as buildOctree, d as collectLeafNodes, e as calculateGeometryMemory, f as convertLMBTo3DTiles, g as exportGLB, h as exportLMB } from './utils-Dtzxd6W8.js';
 import * as WebIFC from 'web-ifc';
 
 class SceneManager {
-  // 限制固定为 4 个，平衡性能与系统开销
   constructor(canvas) {
     this.structureRoot = { id: "root", name: "Root", type: "Group", children: [] };
     this.nodeMap = /* @__PURE__ */ new Map();
@@ -41,9 +40,20 @@ class SceneManager {
       dirInt: 1,
       bgColor: "#1e1e1e",
       viewCubeSize: 100,
+      colorSpace: "srgb",
+      toneMapping: "aces",
+      exposure: 1,
+      shadowQuality: "medium",
+      adaptiveQuality: true,
+      minPixelRatio: 0.8,
+      maxPixelRatio: 2,
+      targetFps: 50,
+      materialMode: "default",
       maxRenderDistance: 1e6
       // 增加默认渲染距离到 1km (针对 mm 单位)
     };
+    this.pmremGenerator = null;
+    this.environmentTexture = null;
     this.sceneBounds = new THREE.Box3();
     this.cachedSceneSphere = new THREE.Sphere();
     this.sceneSphereValid = false;
@@ -79,6 +89,11 @@ class SceneManager {
     this.workerQueue = [];
     this.activeWorkerCount = 0;
     this.maxWorkers = 4;
+    this.frameSampleTime = performance.now();
+    this.frameCounter = 0;
+    this.fps = 0;
+    this.isCameraMoving = false;
+    this.activePixelRatio = 1;
     this.canvas = canvas;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -97,6 +112,12 @@ class SceneManager {
     this.renderer.setSize(width, height, false);
     this.renderer.setClearColor(this.settings.bgColor);
     this.renderer.localClippingEnabled = true;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1;
+    this.activePixelRatio = this.renderer.getPixelRatio();
+    this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+    this.pmremGenerator.compileEquirectangularShader();
     this.scene = new THREE.Scene();
     this.contentGroup = new THREE.Group();
     this.contentGroup.name = "Content";
@@ -135,6 +156,15 @@ class SceneManager {
       MIDDLE: THREE.MOUSE.PAN,
       RIGHT: void 0
     };
+    this.controls.addEventListener("start", () => {
+      this.isCameraMoving = true;
+    });
+    this.controls.addEventListener("change", () => {
+      this.isCameraMoving = true;
+    });
+    this.controls.addEventListener("end", () => {
+      this.isCameraMoving = false;
+    });
     this.ambientLight = new THREE.AmbientLight(16777215, this.settings.ambientInt);
     this.scene.add(this.ambientLight);
     this.dirLight = new THREE.DirectionalLight(16777215, this.settings.dirInt);
@@ -201,8 +231,14 @@ class SceneManager {
     this.settings = { ...this.settings, ...newSettings };
     this.ambientLight.intensity = this.settings.ambientInt;
     this.dirLight.intensity = this.settings.dirInt;
+    this.renderer.outputColorSpace = this.settings.colorSpace === "linear" ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
+    this.renderer.toneMapping = this.settings.toneMapping === "none" ? THREE.NoToneMapping : this.settings.toneMapping === "neutral" ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = this.settings.exposure ?? 1;
     if (newSettings.sunEnabled !== void 0 || newSettings.sunLatitude !== void 0 || newSettings.sunLongitude !== void 0 || newSettings.sunTime !== void 0 || newSettings.sunShadow !== void 0) {
       this.updateSunPosition();
+    }
+    if (newSettings.environmentMapUrl !== void 0) {
+      void this.updateEnvironmentMap(this.settings.environmentMapUrl);
     }
     this.renderer.setClearColor(this.settings.bgColor);
     if (newSettings.frustumCulling !== void 0) {
@@ -218,7 +254,49 @@ class SceneManager {
       this.maxRenderDistance = newSettings.maxRenderDistance;
       this.checkCullingAndLoad();
     }
+    if (newSettings.materialMode !== void 0) {
+      this.applyMaterialMode();
+    }
+    if (newSettings.shadowQuality !== void 0 || newSettings.sunShadow !== void 0) {
+      this.updateSunShadow();
+    }
     this.renderer.render(this.scene, this.camera);
+  }
+  async updateEnvironmentMap(url) {
+    if (this.environmentTexture) {
+      this.environmentTexture.dispose();
+      this.environmentTexture = null;
+    }
+    this.scene.environment = null;
+    if (!url || !this.pmremGenerator) return;
+    try {
+      const texture = await new RGBELoader().loadAsync(url);
+      const envMap = this.pmremGenerator.fromEquirectangular(texture).texture;
+      texture.dispose();
+      this.environmentTexture = envMap;
+      this.scene.environment = envMap;
+    } catch (error) {
+      console.warn("[SceneManager] Failed to load environment map", error);
+    }
+  }
+  applyMaterialMode() {
+    this.contentGroup.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const mesh = obj;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => {
+        if (!material) return;
+        material.wireframe = this.settings.materialMode === "wireframe";
+        if ("transparent" in material) {
+          material.transparent = this.settings.materialMode === "xray";
+          material.opacity = this.settings.materialMode === "xray" ? 0.35 : 1;
+        }
+        if ("flatShading" in material) {
+          material.flatShading = this.settings.materialMode === "flat";
+        }
+        material.needsUpdate = true;
+      });
+    });
   }
   // 根据经纬度和时间计算太阳位置
   updateSunPosition() {
@@ -256,10 +334,13 @@ class SceneManager {
   }
   // 更新阴影设置
   updateSunShadow() {
-    const shadowEnabled = this.settings.sunShadow === true && this.settings.sunEnabled !== false;
+    const shadowEnabled = this.settings.shadowQuality !== "off" && this.settings.sunShadow === true && this.settings.sunEnabled !== false;
+    const shadowMapSize = this.settings.shadowQuality === "high" ? 4096 : this.settings.shadowQuality === "low" ? 1024 : 2048;
     if (shadowEnabled) {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.sunLight.shadow.mapSize.width = shadowMapSize;
+      this.sunLight.shadow.mapSize.height = shadowMapSize;
       this.contentGroup.traverse((obj) => {
         if (obj.isMesh) {
           const mesh = obj;
@@ -269,6 +350,7 @@ class SceneManager {
       });
       this.sunLight.castShadow = true;
     } else {
+      this.renderer.shadowMap.enabled = false;
       this.sunLight.castShadow = false;
     }
   }
@@ -289,9 +371,17 @@ class SceneManager {
   }
   animate() {
     requestAnimationFrame(this.animate);
+    this.frameCounter++;
+    const frameNow = performance.now();
+    if (frameNow - this.frameSampleTime >= 500) {
+      this.fps = this.frameCounter * 1e3 / (frameNow - this.frameSampleTime);
+      this.frameCounter = 0;
+      this.frameSampleTime = frameNow;
+    }
     if (this.controls) {
       this.controls.update();
     }
+    this.updateAdaptiveQuality();
     if (this._needsBoundsUpdate) {
       this.updateSceneBounds();
       this._needsBoundsUpdate = false;
@@ -307,6 +397,27 @@ class SceneManager {
       this.tilesRenderer.update();
     }
     this.renderer.render(this.scene, this.camera);
+  }
+  updateAdaptiveQuality() {
+    if (!this.settings.adaptiveQuality) return;
+    const deviceRatio = window.devicePixelRatio || 1;
+    const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
+    const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
+    const targetFps = this.settings.targetFps ?? 50;
+    let desiredRatio = maxRatio;
+    if (this.isCameraMoving) {
+      desiredRatio = Math.max(minRatio, maxRatio * 0.75);
+    } else if (this.fps > 0 && this.fps < targetFps - 5) {
+      desiredRatio = Math.max(minRatio, this.activePixelRatio - 0.1);
+    } else if (this.fps > targetFps + 8) {
+      desiredRatio = Math.min(maxRatio, this.activePixelRatio + 0.05);
+    }
+    desiredRatio = Math.max(minRatio, Math.min(maxRatio, desiredRatio));
+    if (Math.abs(desiredRatio - this.activePixelRatio) < 0.05) return;
+    this.activePixelRatio = desiredRatio;
+    this.renderer.setPixelRatio(desiredRatio);
+    const rect = this.canvas.getBoundingClientRect();
+    this.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
   }
   updateCameraClipping() {
     if (!this.sceneBounds || this.sceneBounds.isEmpty()) return;
@@ -345,7 +456,9 @@ class SceneManager {
     cam.top = halfHeight;
     cam.bottom = -halfHeight;
     cam.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const maxRatio = this.settings.adaptiveQuality ? Math.min(window.devicePixelRatio, this.settings.maxPixelRatio ?? 2) : Math.min(window.devicePixelRatio, 2);
+    this.activePixelRatio = maxRatio;
+    this.renderer.setPixelRatio(maxRatio);
     this.renderer.setSize(w, h, false);
     if (this.controls) {
       this.controls.update();
@@ -3026,11 +3139,14 @@ class SceneManager {
       meshes,
       faces: Math.floor(faces),
       memory: parseFloat(memory.toFixed(2)),
-      drawCalls
+      drawCalls,
+      fps: Math.round(this.fps)
     };
   }
   dispose() {
     if (this.logicTimer) clearInterval(this.logicTimer);
+    if (this.environmentTexture) this.environmentTexture.dispose();
+    if (this.pmremGenerator) this.pmremGenerator.dispose();
     this.renderer.dispose();
     if (this.tilesRenderer) this.tilesRenderer.dispose();
   }
@@ -3374,6 +3490,200 @@ class LMBLoader extends Loader {
     };
   }
 }
+
+// This file is part of meshoptimizer library and is distributed under the terms of MIT License.
+// Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+var MeshoptDecoder = (function () {
+	// Built with clang version 18.1.2
+	// Built from meshoptimizer 0.22
+	var wasm_base =
+		'b9H79Tebbbe8Fv9Gbb9Gvuuuuueu9Giuuub9Geueu9Giuuueuikqbeeedddillviebeoweuec:q:Odkr;leDo9TW9T9VV95dbH9F9F939H79T9F9J9H229F9Jt9VV7bb8A9TW79O9V9Wt9F9KW9J9V9KW9wWVtW949c919M9MWVbeY9TW79O9V9Wt9F9KW9J9V9KW69U9KW949c919M9MWVbdE9TW79O9V9Wt9F9KW9J9V9KW69U9KW949tWG91W9U9JWbiL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9p9JtblK9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9r919HtbvL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWVT949Wbol79IV9Rbrq;w8Wqdbk;esezu8Jjjjjbcj;eb9Rgv8Kjjjjbc9:hodnadcefal0mbcuhoaiRbbc:Ge9hmbavaialfgrad9Radz1jjjbhwcj;abad9Uc;WFbGgocjdaocjd6EhDaicefhocbhqdnindndndnaeaq9nmbaDaeaq9RaqaDfae6Egkcsfglcl4cifcd4hxalc9WGgmTmecbhPawcjdfhsaohzinaraz9Rax6mvarazaxfgo9RcK6mvczhlcbhHinalgic9WfgOawcj;cbffhldndndndndnazaOco4fRbbaHcoG4ciGPlbedibkal9cb83ibalcwf9cb83ibxikalaoRblaoRbbgOco4gAaAciSgAE86bbawcj;cbfaifglcGfaoclfaAfgARbbaOcl4ciGgCaCciSgCE86bbalcVfaAaCfgARbbaOcd4ciGgCaCciSgCE86bbalc7faAaCfgARbbaOciGgOaOciSgOE86bbalctfaAaOfgARbbaoRbegOco4gCaCciSgCE86bbalc91faAaCfgARbbaOcl4ciGgCaCciSgCE86bbalc4faAaCfgARbbaOcd4ciGgCaCciSgCE86bbalc93faAaCfgARbbaOciGgOaOciSgOE86bbalc94faAaOfgARbbaoRbdgOco4gCaCciSgCE86bbalc95faAaCfgARbbaOcl4ciGgCaCciSgCE86bbalc96faAaCfgARbbaOcd4ciGgCaCciSgCE86bbalc97faAaCfgARbbaOciGgOaOciSgOE86bbalc98faAaOfgORbbaoRbigoco4gAaAciSgAE86bbalc99faOaAfgORbbaocl4ciGgAaAciSgAE86bbalc9:faOaAfgORbbaocd4ciGgAaAciSgAE86bbalcufaOaAfglRbbaociGgoaociSgoE86bbalaofhoxdkalaoRbwaoRbbgOcl4gAaAcsSgAE86bbawcj;cbfaifglcGfaocwfaAfgARbbaOcsGgOaOcsSgOE86bbalcVfaAaOfgORbbaoRbegAcl4gCaCcsSgCE86bbalc7faOaCfgORbbaAcsGgAaAcsSgAE86bbalctfaOaAfgORbbaoRbdgAcl4gCaCcsSgCE86bbalc91faOaCfgORbbaAcsGgAaAcsSgAE86bbalc4faOaAfgORbbaoRbigAcl4gCaCcsSgCE86bbalc93faOaCfgORbbaAcsGgAaAcsSgAE86bbalc94faOaAfgORbbaoRblgAcl4gCaCcsSgCE86bbalc95faOaCfgORbbaAcsGgAaAcsSgAE86bbalc96faOaAfgORbbaoRbvgAcl4gCaCcsSgCE86bbalc97faOaCfgORbbaAcsGgAaAcsSgAE86bbalc98faOaAfgORbbaoRbogAcl4gCaCcsSgCE86bbalc99faOaCfgORbbaAcsGgAaAcsSgAE86bbalc9:faOaAfgORbbaoRbrgocl4gAaAcsSgAE86bbalcufaOaAfglRbbaocsGgoaocsSgoE86bbalaofhoxekalao8Pbb83bbalcwfaocwf8Pbb83bbaoczfhokdnaiam9pmbaHcdfhHaiczfhlarao9RcL0mekkaiam6mvaoTmvdnakTmbawaPfRbbhHawcj;cbfhlashiakhOinaialRbbgzce4cbazceG9R7aHfgH86bbaiadfhialcefhlaOcufgOmbkkascefhsaohzaPcefgPad9hmbxikkcbc99arao9Radcaadca0ESEhoxlkaoaxad2fhCdnakmbadhlinaoTmlarao9Rax6mlaoaxfhoalcufglmbkaChoxekcbhmawcjdfhAinarao9Rax6miawamfRbbhHawcj;cbfhlaAhiakhOinaialRbbgzce4cbazceG9R7aHfgH86bbaiadfhialcefhlaOcufgOmbkaAcefhAaoaxfhoamcefgmad9hmbkaChokabaqad2fawcjdfakad2z1jjjb8Aawawcjdfakcufad2fadz1jjjb8Aakaqfhqaombkc9:hoxekc9:hokavcj;ebf8Kjjjjbaok;cseHu8Jjjjjbc;ae9Rgv8Kjjjjbc9:hodnaeci9UgrcHfal0mbcuhoaiRbbgwc;WeGc;Ge9hmbawcsGgwce0mbavc;abfcFecjez:jjjjb8AavcUf9cu83ibavc8Wf9cu83ibavcyf9cu83ibavcaf9cu83ibavcKf9cu83ibavczf9cu83ibav9cu83iwav9cu83ibaialfc9WfhDaicefgqarfhidnaeTmbcmcsawceSEhkcbhxcbhmcbhPcbhwcbhlindnaiaD9nmbc9:hoxikdndnaqRbbgoc;Ve0mbavc;abfalaocu7gscl4fcsGcitfgzydlhrazydbhzdnaocsGgHak9pmbavawasfcsGcdtfydbaxaHEhoaHThsdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkaxasfhxcdhHavawcdtfaoBdbawasfhwcehsalhOxdkdndnaHcsSmbaHc987aHamffcefhoxekaicefhoai8SbbgHcFeGhsdndnaHcu9mmbaohixekaicvfhiascFbGhscrhHdninao8SbbgOcFbGaHtasVhsaOcu9kmeaocefhoaHcrfgHc8J9hmbxdkkaocefhikasce4cbasceG9R7amfhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhHavawcdtfaoBdbcehsawcefhwalhOaohmxekdnaocpe0mbaxcefgHavawaDaocsGfRbbgocl49RcsGcdtfydbaocz6gzEhravawao9RcsGcdtfydbaHazfgAaocsGgHEhoaHThCdndnadcd9hmbabaPcetfgHax87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHaxBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfaxBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgOaxBdlaOarBdbavawazfgwcsGcdtfaoBdbalcefcsGhOawaCfhwaxhzaAaCfhxxekaxcbaiRbbgOEgzaoc;:eSgHfhraOcsGhCaOcl4hAdndnaOcs0mbarcefhoxekarhoavawaA9RcsGcdtfydbhrkdndnaCmbaocefhxxekaohxavawaO9RcsGcdtfydbhokdndnaHTmbaicefhHxekaicdfhHai8SbegscFeGhzdnascu9kmbaicofhXazcFbGhzcrhidninaH8SbbgscFbGaitazVhzascu9kmeaHcefhHaicrfgic8J9hmbkaXhHxekaHcefhHkazce4cbazceG9R7amfgmhzkdndnaAcsSmbaHhsxekaHcefhsaH8SbbgicFeGhrdnaicu9kmbaHcvfhXarcFbGhrcrhidninas8SbbgHcFbGaitarVhraHcu9kmeascefhsaicrfgic8J9hmbkaXhsxekascefhskarce4cbarceG9R7amfgmhrkdndnaCcsSmbashixekascefhias8SbbgocFeGhHdnaocu9kmbascvfhXaHcFbGhHcrhodninai8SbbgscFbGaotaHVhHascu9kmeaicefhiaocrfgoc8J9hmbkaXhixekaicefhikaHce4cbaHceG9R7amfgmhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfazBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgXazBdlaXarBdbavawaOcz6aAcsSVfgwcsGcdtfaoBdbawaCTaCcsSVfhwalcefcsGhOkaqcefhqavc;abfaOcitfgOarBdlaOaoBdbavc;abfalasfcsGcitfgraoBdlarazBdbawcsGhwalaHfcsGhlaPcifgPae6mbkkcbc99aiaDSEhokavc;aef8Kjjjjbaok:flevu8Jjjjjbcz9Rhvc9:hodnaecvfal0mbcuhoaiRbbc;:eGc;qe9hmbav9cb83iwaicefhraialfc98fhwdnaeTmbdnadcdSmbcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcdtfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfglBdbaoalBdbaDcefgDae9hmbxdkkcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcetfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfgl87ebaoalBdbaDcefgDae9hmbkkcbc99arawSEhokaok:Lvoeue99dud99eud99dndnadcl9hmbaeTmeindndnabcdfgd8Sbb:Yab8Sbbgi:Ygl:l:tabcefgv8Sbbgo:Ygr:l:tgwJbb;:9cawawNJbbbbawawJbbbb9GgDEgq:mgkaqaicb9iEalMgwawNakaqaocb9iEarMgqaqNMM:r:vglNJbbbZJbbb:;aDEMgr:lJbbb9p9DTmbar:Ohixekcjjjj94hikadai86bbdndnaqalNJbbbZJbbb:;aqJbbbb9GEMgq:lJbbb9p9DTmbaq:Ohdxekcjjjj94hdkavad86bbdndnawalNJbbbZJbbb:;awJbbbb9GEMgw:lJbbb9p9DTmbaw:Ohdxekcjjjj94hdkabad86bbabclfhbaecufgembxdkkaeTmbindndnabclfgd8Ueb:Yab8Uebgi:Ygl:l:tabcdfgv8Uebgo:Ygr:l:tgwJb;:FSawawNJbbbbawawJbbbb9GgDEgq:mgkaqaicb9iEalMgwawNakaqaocb9iEarMgqaqNMM:r:vglNJbbbZJbbb:;aDEMgr:lJbbb9p9DTmbar:Ohixekcjjjj94hikadai87ebdndnaqalNJbbbZJbbb:;aqJbbbb9GEMgq:lJbbb9p9DTmbaq:Ohdxekcjjjj94hdkavad87ebdndnawalNJbbbZJbbb:;awJbbbb9GEMgw:lJbbb9p9DTmbaw:Ohdxekcjjjj94hdkabad87ebabcwfhbaecufgembkkk;oiliui99iue99dnaeTmbcbhiabhlindndnJ;Zl81Zalcof8UebgvciV:Y:vgoal8Ueb:YNgrJb;:FSNJbbbZJbbb:;arJbbbb9GEMgw:lJbbb9p9DTmbaw:OhDxekcjjjj94hDkalclf8Uebhqalcdf8UebhkabaiavcefciGfcetfaD87ebdndnaoak:YNgwJb;:FSNJbbbZJbbb:;awJbbbb9GEMgx:lJbbb9p9DTmbax:OhDxekcjjjj94hDkabaiavciGfgkcd7cetfaD87ebdndnaoaq:YNgoJb;:FSNJbbbZJbbb:;aoJbbbb9GEMgx:lJbbb9p9DTmbax:OhDxekcjjjj94hDkabaiavcufciGfcetfaD87ebdndnJbbjZararN:tawawN:taoaoN:tgrJbbbbarJbbbb9GE:rJb;:FSNJbbbZMgr:lJbbb9p9DTmbar:Ohvxekcjjjj94hvkabakcetfav87ebalcwfhlaiclfhiaecufgembkkk9mbdnadcd4ae2gdTmbinababydbgecwtcw91:Yaece91cjjj98Gcjjj;8if::NUdbabclfhbadcufgdmbkkk9teiucbcbydj1jjbgeabcifc98GfgbBdj1jjbdndnabZbcztgd9nmbcuhiabad9RcFFifcz4nbcuSmekaehikaik;LeeeudndnaeabVciGTmbabhixekdndnadcz9pmbabhixekabhiinaiaeydbBdbaiclfaeclfydbBdbaicwfaecwfydbBdbaicxfaecxfydbBdbaeczfheaiczfhiadc9Wfgdcs0mbkkadcl6mbinaiaeydbBdbaeclfheaiclfhiadc98fgdci0mbkkdnadTmbinaiaeRbb86bbaicefhiaecefheadcufgdmbkkabk;aeedudndnabciGTmbabhixekaecFeGc:b:c:ew2hldndnadcz9pmbabhixekabhiinaialBdbaicxfalBdbaicwfalBdbaiclfalBdbaiczfhiadc9Wfgdcs0mbkkadcl6mbinaialBdbaiclfhiadc98fgdci0mbkkdnadTmbinaiae86bbaicefhiadcufgdmbkkabkkkebcjwklzNbb'; // embed! base
+	var wasm_simd =
+		'b9H79TebbbeKl9Gbb9Gvuuuuueu9Giuuub9Geueuikqbbebeedddilve9Weeeviebeoweuec:q:6dkr;leDo9TW9T9VV95dbH9F9F939H79T9F9J9H229F9Jt9VV7bb8A9TW79O9V9Wt9F9KW9J9V9KW9wWVtW949c919M9MWVbdY9TW79O9V9Wt9F9KW9J9V9KW69U9KW949c919M9MWVblE9TW79O9V9Wt9F9KW9J9V9KW69U9KW949tWG91W9U9JWbvL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9p9JtboK9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9r919HtbrL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWVT949Wbwl79IV9RbDq:p9sqlbzik9:evu8Jjjjjbcz9Rhbcbheincbhdcbhiinabcwfadfaicjuaead4ceGglE86bbaialfhiadcefgdcw9hmbkaec:q:yjjbfai86bbaecitc:q1jjbfab8Piw83ibaecefgecjd9hmbkk:N8JlHud97euo978Jjjjjbcj;kb9Rgv8Kjjjjbc9:hodnadcefal0mbcuhoaiRbbc:Ge9hmbavaialfgrad9Rad;8qbbcj;abad9UhlaicefhodnaeTmbadTmbalc;WFbGglcjdalcjd6EhwcbhDinawaeaD9RaDawfae6Egqcsfglc9WGgkci2hxakcethmalcl4cifcd4hPabaDad2fhsakc;ab6hzcbhHincbhOaohAdndninaraA9RaP6meavcj;cbfaOak2fhCaAaPfhocbhidnazmbarao9Rc;Gb6mbcbhlinaCalfhidndndndndnaAalco4fRbbgXciGPlbedibkaipxbbbbbbbbbbbbbbbbpklbxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklbaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklbaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaiaopbbbpklbaoczfhokdndndndndnaXcd4ciGPlbedibkaipxbbbbbbbbbbbbbbbbpklzxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklzaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklzaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaiaopbbbpklzaoczfhokdndndndndnaXcl4ciGPlbedibkaipxbbbbbbbbbbbbbbbbpklaxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklaaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklaaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaiaopbbbpklaaoczfhokdndndndndnaXco4Plbedibkaipxbbbbbbbbbbbbbbbbpkl8WxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibaXc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkl8WaoclfaYpQbfaXc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibaXc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkl8WaocwfaYpQbfaXc:q:yjjbfRbbfhoxekaiaopbbbpkl8Waoczfhokalc;abfhialcjefak0meaihlarao9Rc;Fb0mbkkdnaiak9pmbaici4hlinarao9RcK6miaCaifhXdndndndndnaAaico4fRbbalcoG4ciGPlbedibkaXpxbbbbbbbbbbbbbbbbpkbbxikaXaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkbbaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaXaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkbbaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaXaopbbbpkbbaoczfhokalcdfhlaiczfgiak6mbkkaoTmeaohAaOcefgOclSmdxbkkc9:hoxlkdnakTmbavcjdfaHfhiavaHfpbdbhYcbhXinaiavcj;cbfaXfglpblbgLcep9TaLpxeeeeeeeeeeeeeeeegQp9op9Hp9rgLalakfpblbg8Acep9Ta8AaQp9op9Hp9rg8ApmbzeHdOiAlCvXoQrLgEalamfpblbg3cep9Ta3aQp9op9Hp9rg3alaxfpblbg5cep9Ta5aQp9op9Hp9rg5pmbzeHdOiAlCvXoQrLg8EpmbezHdiOAlvCXorQLgQaQpmbedibedibedibediaYp9UgYp9AdbbaiadfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfglaYaEa8EpmwDKYqk8AExm35Ps8E8FgQaQpmbedibedibedibedip9UgYp9AdbbaladfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfglaYaLa8ApmwKDYq8AkEx3m5P8Es8FgLa3a5pmwKDYq8AkEx3m5P8Es8Fg8ApmbezHdiOAlvCXorQLgQaQpmbedibedibedibedip9UgYp9AdbbaladfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfglaYaLa8ApmwDKYqk8AExm35Ps8E8FgQaQpmbedibedibedibedip9UgYp9AdbbaladfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfhiaXczfgXak6mbkkaHclfgHad6mbkasavcjdfaqad2;8qbbavavcjdfaqcufad2fad;8qbbaqaDfgDae6mbkkcbc99arao9Radcaadca0ESEhokavcj;kbf8Kjjjjbaokwbz:bjjjbk::seHu8Jjjjjbc;ae9Rgv8Kjjjjbc9:hodnaeci9UgrcHfal0mbcuhoaiRbbgwc;WeGc;Ge9hmbawcsGgwce0mbavc;abfcFecje;8kbavcUf9cu83ibavc8Wf9cu83ibavcyf9cu83ibavcaf9cu83ibavcKf9cu83ibavczf9cu83ibav9cu83iwav9cu83ibaialfc9WfhDaicefgqarfhidnaeTmbcmcsawceSEhkcbhxcbhmcbhPcbhwcbhlindnaiaD9nmbc9:hoxikdndnaqRbbgoc;Ve0mbavc;abfalaocu7gscl4fcsGcitfgzydlhrazydbhzdnaocsGgHak9pmbavawasfcsGcdtfydbaxaHEhoaHThsdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkaxasfhxcdhHavawcdtfaoBdbawasfhwcehsalhOxdkdndnaHcsSmbaHc987aHamffcefhoxekaicefhoai8SbbgHcFeGhsdndnaHcu9mmbaohixekaicvfhiascFbGhscrhHdninao8SbbgOcFbGaHtasVhsaOcu9kmeaocefhoaHcrfgHc8J9hmbxdkkaocefhikasce4cbasceG9R7amfhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhHavawcdtfaoBdbcehsawcefhwalhOaohmxekdnaocpe0mbaxcefgHavawaDaocsGfRbbgocl49RcsGcdtfydbaocz6gzEhravawao9RcsGcdtfydbaHazfgAaocsGgHEhoaHThCdndnadcd9hmbabaPcetfgHax87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHaxBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfaxBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgOaxBdlaOarBdbavawazfgwcsGcdtfaoBdbalcefcsGhOawaCfhwaxhzaAaCfhxxekaxcbaiRbbgOEgzaoc;:eSgHfhraOcsGhCaOcl4hAdndnaOcs0mbarcefhoxekarhoavawaA9RcsGcdtfydbhrkdndnaCmbaocefhxxekaohxavawaO9RcsGcdtfydbhokdndnaHTmbaicefhHxekaicdfhHai8SbegscFeGhzdnascu9kmbaicofhXazcFbGhzcrhidninaH8SbbgscFbGaitazVhzascu9kmeaHcefhHaicrfgic8J9hmbkaXhHxekaHcefhHkazce4cbazceG9R7amfgmhzkdndnaAcsSmbaHhsxekaHcefhsaH8SbbgicFeGhrdnaicu9kmbaHcvfhXarcFbGhrcrhidninas8SbbgHcFbGaitarVhraHcu9kmeascefhsaicrfgic8J9hmbkaXhsxekascefhskarce4cbarceG9R7amfgmhrkdndnaCcsSmbashixekascefhias8SbbgocFeGhHdnaocu9kmbascvfhXaHcFbGhHcrhodninai8SbbgscFbGaotaHVhHascu9kmeaicefhiaocrfgoc8J9hmbkaXhixekaicefhikaHce4cbaHceG9R7amfgmhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfazBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgXazBdlaXarBdbavawaOcz6aAcsSVfgwcsGcdtfaoBdbawaCTaCcsSVfhwalcefcsGhOkaqcefhqavc;abfaOcitfgOarBdlaOaoBdbavc;abfalasfcsGcitfgraoBdlarazBdbawcsGhwalaHfcsGhlaPcifgPae6mbkkcbc99aiaDSEhokavc;aef8Kjjjjbaok:flevu8Jjjjjbcz9Rhvc9:hodnaecvfal0mbcuhoaiRbbc;:eGc;qe9hmbav9cb83iwaicefhraialfc98fhwdnaeTmbdnadcdSmbcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcdtfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfglBdbaoalBdbaDcefgDae9hmbxdkkcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcetfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfgl87ebaoalBdbaDcefgDae9hmbkkcbc99arawSEhokaok:wPliuo97eue978Jjjjjbca9Rhiaec98Ghldndnadcl9hmbdnalTmbcbhvabhdinadadpbbbgocKp:RecKp:Sep;6egraocwp:RecKp:Sep;6earp;Geaoczp:RecKp:Sep;6egwp;Gep;Kep;LegDpxbbbbbbbbbbbbbbbbp:2egqarpxbbbjbbbjbbbjbbbjgkp9op9rp;Kegrpxbb;:9cbb;:9cbb;:9cbb;:9cararp;MeaDaDp;Meawaqawakp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFbbbFbbbFbbbFbbbp9oaopxbbbFbbbFbbbFbbbFp9op9qarawp;Meaqp;Kecwp:RepxbFbbbFbbbFbbbFbbp9op9qaDawp;Meaqp;Keczp:RepxbbFbbbFbbbFbbbFbp9op9qpkbbadczfhdavclfgval6mbkkalaeSmeaipxbbbbbbbbbbbbbbbbgqpklbaiabalcdtfgdaeciGglcdtgv;8qbbdnalTmbaiaipblbgocKp:RecKp:Sep;6egraocwp:RecKp:Sep;6earp;Geaoczp:RecKp:Sep;6egwp;Gep;Kep;LegDaqp:2egqarpxbbbjbbbjbbbjbbbjgkp9op9rp;Kegrpxbb;:9cbb;:9cbb;:9cbb;:9cararp;MeaDaDp;Meawaqawakp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFbbbFbbbFbbbFbbbp9oaopxbbbFbbbFbbbFbbbFp9op9qarawp;Meaqp;Kecwp:RepxbFbbbFbbbFbbbFbbp9op9qaDawp;Meaqp;Keczp:RepxbbFbbbFbbbFbbbFbp9op9qpklbkadaiav;8qbbskdnalTmbcbhvabhdinadczfgxaxpbbbgopxbbbbbbFFbbbbbbFFgkp9oadpbbbgDaopmbediwDqkzHOAKY8AEgwczp:Reczp:Sep;6egraDaopmlvorxmPsCXQL358E8FpxFubbFubbFubbFubbp9op;6eawczp:Sep;6egwp;Gearp;Gep;Kep;Legopxbbbbbbbbbbbbbbbbp:2egqarpxbbbjbbbjbbbjbbbjgmp9op9rp;Kegrpxb;:FSb;:FSb;:FSb;:FSararp;Meaoaop;Meawaqawamp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFFbbFFbbFFbbFFbbp9oaoawp;Meaqp;Keczp:Rep9qgoarawp;Meaqp;KepxFFbbFFbbFFbbFFbbp9ogrpmwDKYqk8AExm35Ps8E8Fp9qpkbbadaDakp9oaoarpmbezHdiOAlvCXorQLp9qpkbbadcafhdavclfgval6mbkkalaeSmbaiaeciGgvcitgdfcbcaad9R;8kbaiabalcitfglad;8qbbdnavTmbaiaipblzgopxbbbbbbFFbbbbbbFFgkp9oaipblbgDaopmbediwDqkzHOAKY8AEgwczp:Reczp:Sep;6egraDaopmlvorxmPsCXQL358E8FpxFubbFubbFubbFubbp9op;6eawczp:Sep;6egwp;Gearp;Gep;Kep;Legopxbbbbbbbbbbbbbbbbp:2egqarpxbbbjbbbjbbbjbbbjgmp9op9rp;Kegrpxb;:FSb;:FSb;:FSb;:FSararp;Meaoaop;Meawaqawamp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFFbbFFbbFFbbFFbbp9oaoawp;Meaqp;Keczp:Rep9qgoarawp;Meaqp;KepxFFbbFFbbFFbbFFbbp9ogrpmwDKYqk8AExm35Ps8E8Fp9qpklzaiaDakp9oaoarpmbezHdiOAlvCXorQLp9qpklbkalaiad;8qbbkk;4wllue97euv978Jjjjjbc8W9Rhidnaec98GglTmbcbhvabhoinaiaopbbbgraoczfgwpbbbgDpmlvorxmPsCXQL358E8Fgqczp:Segkclp:RepklbaopxbbjZbbjZbbjZbbjZpx;Zl81Z;Zl81Z;Zl81Z;Zl81Zakpxibbbibbbibbbibbbp9qp;6ep;NegkaraDpmbediwDqkzHOAKY8AEgrczp:Reczp:Sep;6ep;MegDaDp;Meakarczp:Sep;6ep;Megxaxp;Meakaqczp:Reczp:Sep;6ep;Megqaqp;Mep;Kep;Kep;Lepxbbbbbbbbbbbbbbbbp:4ep;Jepxb;:FSb;:FSb;:FSb;:FSgkp;Mepxbbn0bbn0bbn0bbn0grp;KepxFFbbFFbbFFbbFFbbgmp9oaxakp;Mearp;Keczp:Rep9qgxaDakp;Mearp;Keamp9oaqakp;Mearp;Keczp:Rep9qgkpmbezHdiOAlvCXorQLgrp5baipblbpEb:T:j83ibaocwfarp5eaipblbpEe:T:j83ibawaxakpmwDKYqk8AExm35Ps8E8Fgkp5baipblbpEd:T:j83ibaocKfakp5eaipblbpEi:T:j83ibaocafhoavclfgval6mbkkdnalaeSmbaiaeciGgvcitgofcbcaao9R;8kbaiabalcitfgwao;8qbbdnavTmbaiaipblbgraipblzgDpmlvorxmPsCXQL358E8Fgqczp:Segkclp:RepklaaipxbbjZbbjZbbjZbbjZpx;Zl81Z;Zl81Z;Zl81Z;Zl81Zakpxibbbibbbibbbibbbp9qp;6ep;NegkaraDpmbediwDqkzHOAKY8AEgrczp:Reczp:Sep;6ep;MegDaDp;Meakarczp:Sep;6ep;Megxaxp;Meakaqczp:Reczp:Sep;6ep;Megqaqp;Mep;Kep;Kep;Lepxbbbbbbbbbbbbbbbbp:4ep;Jepxb;:FSb;:FSb;:FSb;:FSgkp;Mepxbbn0bbn0bbn0bbn0grp;KepxFFbbFFbbFFbbFFbbgmp9oaxakp;Mearp;Keczp:Rep9qgxaDakp;Mearp;Keamp9oaqakp;Mearp;Keczp:Rep9qgkpmbezHdiOAlvCXorQLgrp5baipblapEb:T:j83ibaiarp5eaipblapEe:T:j83iwaiaxakpmwDKYqk8AExm35Ps8E8Fgkp5baipblapEd:T:j83izaiakp5eaipblapEi:T:j83iKkawaiao;8qbbkk:Pddiue978Jjjjjbc;ab9Rhidnadcd4ae2glc98GgvTmbcbheabhdinadadpbbbgocwp:Recwp:Sep;6eaocep:SepxbbjFbbjFbbjFbbjFp9opxbbjZbbjZbbjZbbjZp:Uep;Mepkbbadczfhdaeclfgeav6mbkkdnavalSmbaialciGgecdtgdVcbc;abad9R;8kbaiabavcdtfgvad;8qbbdnaeTmbaiaipblbgocwp:Recwp:Sep;6eaocep:SepxbbjFbbjFbbjFbbjFp9opxbbjZbbjZbbjZbbjZp:Uep;Mepklbkavaiad;8qbbkk9teiucbcbydj1jjbgeabcifc98GfgbBdj1jjbdndnabZbcztgd9nmbcuhiabad9RcFFifcz4nbcuSmekaehikaikkkebcjwklz:Dbb'; // embed! simd
+
+	var detector = new Uint8Array([
+		0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 3, 2, 0, 0, 5, 3, 1, 0, 1, 12, 1, 0, 10, 22, 2, 12, 0, 65, 0, 65, 0, 65, 0, 252, 10, 0, 0,
+		11, 7, 0, 65, 0, 253, 15, 26, 11,
+	]);
+	var wasmpack = new Uint8Array([
+		32, 0, 65, 2, 1, 106, 34, 33, 3, 128, 11, 4, 13, 64, 6, 253, 10, 7, 15, 116, 127, 5, 8, 12, 40, 16, 19, 54, 20, 9, 27, 255, 113, 17, 42, 67,
+		24, 23, 146, 148, 18, 14, 22, 45, 70, 69, 56, 114, 101, 21, 25, 63, 75, 136, 108, 28, 118, 29, 73, 115,
+	]);
+
+	if (typeof WebAssembly !== 'object') {
+		return {
+			supported: false,
+		};
+	}
+
+	var wasm = WebAssembly.validate(detector) ? unpack(wasm_simd) : unpack(wasm_base);
+
+	var instance;
+
+	var ready = WebAssembly.instantiate(wasm, {}).then(function (result) {
+		instance = result.instance;
+		instance.exports.__wasm_call_ctors();
+	});
+
+	function unpack(data) {
+		var result = new Uint8Array(data.length);
+		for (var i = 0; i < data.length; ++i) {
+			var ch = data.charCodeAt(i);
+			result[i] = ch > 96 ? ch - 97 : ch > 64 ? ch - 39 : ch + 4;
+		}
+		var write = 0;
+		for (var i = 0; i < data.length; ++i) {
+			result[write++] = result[i] < 60 ? wasmpack[result[i]] : (result[i] - 60) * 64 + result[++i];
+		}
+		return result.buffer.slice(0, write);
+	}
+
+	function decode(instance, fun, target, count, size, source, filter) {
+		var sbrk = instance.exports.sbrk;
+		var count4 = (count + 3) & -4;
+		var tp = sbrk(count4 * size);
+		var sp = sbrk(source.length);
+		var heap = new Uint8Array(instance.exports.memory.buffer);
+		heap.set(source, sp);
+		var res = fun(tp, count, size, sp, source.length);
+		if (res == 0 && filter) {
+			filter(tp, count4, size);
+		}
+		target.set(heap.subarray(tp, tp + count * size));
+		sbrk(tp - sbrk(0));
+		if (res != 0) {
+			throw new Error('Malformed buffer data: ' + res);
+		}
+	}
+
+	var filters = {
+		NONE: '',
+		OCTAHEDRAL: 'meshopt_decodeFilterOct',
+		QUATERNION: 'meshopt_decodeFilterQuat',
+		EXPONENTIAL: 'meshopt_decodeFilterExp',
+	};
+
+	var decoders = {
+		ATTRIBUTES: 'meshopt_decodeVertexBuffer',
+		TRIANGLES: 'meshopt_decodeIndexBuffer',
+		INDICES: 'meshopt_decodeIndexSequence',
+	};
+
+	var workers = [];
+	var requestId = 0;
+
+	function createWorker(url) {
+		var worker = {
+			object: new Worker(url),
+			pending: 0,
+			requests: {},
+		};
+
+		worker.object.onmessage = function (event) {
+			var data = event.data;
+
+			worker.pending -= data.count;
+			worker.requests[data.id][data.action](data.value);
+			delete worker.requests[data.id];
+		};
+
+		return worker;
+	}
+
+	function initWorkers(count) {
+		var source =
+			'self.ready = WebAssembly.instantiate(new Uint8Array([' +
+			new Uint8Array(wasm) +
+			']), {})' +
+			'.then(function(result) { result.instance.exports.__wasm_call_ctors(); return result.instance; });' +
+			'self.onmessage = ' +
+			workerProcess.name +
+			';' +
+			decode.toString() +
+			workerProcess.toString();
+
+		var blob = new Blob([source], { type: 'text/javascript' });
+		var url = URL.createObjectURL(blob);
+
+		for (var i = workers.length; i < count; ++i) {
+			workers[i] = createWorker(url);
+		}
+
+		for (var i = count; i < workers.length; ++i) {
+			workers[i].object.postMessage({});
+		}
+
+		workers.length = count;
+
+		URL.revokeObjectURL(url);
+	}
+
+	function decodeWorker(count, size, source, mode, filter) {
+		var worker = workers[0];
+
+		for (var i = 1; i < workers.length; ++i) {
+			if (workers[i].pending < worker.pending) {
+				worker = workers[i];
+			}
+		}
+
+		return new Promise(function (resolve, reject) {
+			var data = new Uint8Array(source);
+			var id = ++requestId;
+
+			worker.pending += count;
+			worker.requests[id] = { resolve: resolve, reject: reject };
+			worker.object.postMessage({ id: id, count: count, size: size, source: data, mode: mode, filter: filter }, [data.buffer]);
+		});
+	}
+
+	function workerProcess(event) {
+		var data = event.data;
+		if (!data.id) {
+			return self.close();
+		}
+		self.ready.then(function (instance) {
+			try {
+				var target = new Uint8Array(data.count * data.size);
+				decode(instance, instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
+				self.postMessage({ id: data.id, count: data.count, action: 'resolve', value: target }, [target.buffer]);
+			} catch (error) {
+				self.postMessage({ id: data.id, count: data.count, action: 'reject', value: error });
+			}
+		});
+	}
+
+	return {
+		ready: ready,
+		supported: true,
+		useWorkers: function (count) {
+			initWorkers(count);
+		},
+		decodeVertexBuffer: function (target, count, size, source, filter) {
+			decode(instance, instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
+		},
+		decodeIndexBuffer: function (target, count, size, source) {
+			decode(instance, instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
+		},
+		decodeIndexSequence: function (target, count, size, source) {
+			decode(instance, instance.exports.meshopt_decodeIndexSequence, target, count, size, source);
+		},
+		decodeGltfBuffer: function (target, count, size, source, mode, filter) {
+			decode(instance, instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+		},
+		decodeGltfBufferAsync: function (count, size, source, mode, filter) {
+			if (workers.length > 0) {
+				return decodeWorker(count, size, source, decoders[mode], filters[filter]);
+			}
+
+			return ready.then(function () {
+				var target = new Uint8Array(count * size);
+				decode(instance, instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+				return target;
+			});
+		},
+	};
+})();
 
 const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
   const ifcApi = new WebIFC.IfcAPI();
@@ -3975,7 +4285,244 @@ class OCCTLoader {
   }
 }
 
-const loadModelFiles = async (files, onProgress, t, _settings, libPath = "./libs") => {
+function normalizePath(path) {
+  return path.replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/^\/+/, "").toLowerCase();
+}
+function candidateKeys(input) {
+  const normalized = normalizePath(input);
+  const parts = normalized.split("/");
+  const fileName = parts[parts.length - 1];
+  return Array.from(/* @__PURE__ */ new Set([
+    normalized,
+    fileName,
+    `./${normalized}`,
+    `./${fileName}`
+  ]));
+}
+function createResourceResolver(files) {
+  const localFiles = files.filter((item) => item instanceof File);
+  if (localFiles.length === 0) return null;
+  const blobUrlMap = /* @__PURE__ */ new Map();
+  const register = (key, file) => {
+    if (!key || blobUrlMap.has(key)) return;
+    blobUrlMap.set(key, URL.createObjectURL(file));
+  };
+  localFiles.forEach((file) => {
+    register(normalizePath(file.name), file);
+    const relativePath = file.webkitRelativePath;
+    if (relativePath) {
+      const trimmed = relativePath.split("/").slice(1).join("/");
+      register(normalizePath(trimmed), file);
+    }
+  });
+  return {
+    resolve: (url) => {
+      if (!url || /^(blob:|data:|https?:)/i.test(url)) return url;
+      for (const key of candidateKeys(url)) {
+        const resolved = blobUrlMap.get(key);
+        if (resolved) return resolved;
+      }
+      return url;
+    },
+    has: (url) => candidateKeys(url).some((key) => blobUrlMap.has(key)),
+    dispose: () => {
+      blobUrlMap.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+      blobUrlMap.clear();
+    }
+  };
+}
+
+const STAGE_LABELS = {
+  fetch: "reading",
+  parse: "analyzing",
+  normalize: "processing",
+  optimize: "processing",
+  addToScene: "processing"
+};
+const STAGE_WEIGHTS = {
+  fetch: [0, 20],
+  parse: [20, 58],
+  normalize: [58, 72],
+  optimize: [72, 92],
+  addToScene: [92, 100]
+};
+function createLoadingManager(files, libPath, settings, renderer) {
+  const resourceResolver = createResourceResolver(files);
+  const manager = new THREE.LoadingManager();
+  if (resourceResolver) {
+    manager.setURLModifier((url) => resourceResolver.resolve(url));
+  }
+  const dracoLoader = new DRACOLoader(manager);
+  dracoLoader.setDecoderPath(`${libPath.replace(/\/$/, "")}/draco/gltf/`);
+  const ktx2Loader = new KTX2Loader(manager);
+  ktx2Loader.setTranscoderPath(`${libPath.replace(/\/$/, "")}/basis/`);
+  let probeRenderer = null;
+  if (!renderer && typeof document !== "undefined") {
+    try {
+      probeRenderer = new THREE.WebGLRenderer({ canvas: document.createElement("canvas") });
+      renderer = probeRenderer;
+    } catch (error) {
+      console.warn("[LoaderUtils] Unable to create probe renderer for KTX2", error);
+    }
+  }
+  if (renderer) {
+    try {
+      ktx2Loader.detectSupport(renderer);
+    } catch (error) {
+      console.warn("[LoaderUtils] KTX2 detectSupport failed", error);
+    }
+  }
+  const cleanup = () => {
+    resourceResolver?.dispose();
+    dracoLoader.dispose();
+    ktx2Loader.dispose();
+    probeRenderer?.dispose();
+  };
+  return { manager, dracoLoader, ktx2Loader, cleanup, settings, resourceResolver };
+}
+function createStageProgressReporter(onProgress, t, fileName, fileBaseProgress, fileWeight) {
+  return (stage, progress, msg) => {
+    const [start, end] = STAGE_WEIGHTS[stage];
+    const safeP = Math.min(100, Math.max(0, Number.isFinite(progress) ? progress : 0));
+    const stagePercent = start + safeP / 100 * (end - start);
+    const totalPercent = fileBaseProgress + stagePercent / 100 * fileWeight;
+    const label = msg || `${t(STAGE_LABELS[stage])} ${fileName}`;
+    onProgress(Math.round(totalPercent), label);
+  };
+}
+async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t, settings, libPath) {
+  const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
+  const loaderContext = createLoadingManager(files, libPath, settings);
+  const { manager, dracoLoader, ktx2Loader, cleanup, resourceResolver } = loaderContext;
+  try {
+    if (ext === "lmb") {
+      const loader = new LMBLoader();
+      reportStage("parse", 0);
+      return await loader.loadAsync(url, (p) => reportStage("parse", p * 100));
+    }
+    if (ext === "glb" || ext === "gltf") {
+      const loader = new GLTFLoader(manager);
+      loader.setDRACOLoader(dracoLoader);
+      loader.setMeshoptDecoder(MeshoptDecoder);
+      if (supportsCompressedTextures) {
+        loader.setKTX2Loader(ktx2Loader);
+      }
+      reportStage("parse", 0);
+      const gltf = await new Promise((resolve, reject) => {
+        loader.load(
+          url,
+          resolve,
+          (e) => {
+            if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+            else reportStage("parse", 50);
+          },
+          reject
+        );
+      });
+      return gltf.scene;
+    }
+    if (ext === "fbx") {
+      const loader = new FBXLoader(manager);
+      reportStage("parse", 0);
+      return await new Promise((resolve, reject) => {
+        loader.load(
+          url,
+          resolve,
+          (e) => {
+            if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+            else reportStage("parse", 50);
+          },
+          reject
+        );
+      });
+    }
+    if (ext === "ifc") {
+      reportStage("parse", 0);
+      return await loadIFC(typeof fileOrUrl === "string" ? url : fileOrUrl, (p, msg) => reportStage("parse", p, msg), t, libPath);
+    }
+    if (ext === "obj") {
+      const objLoader = new OBJLoader(manager);
+      const mtlName = url.replace(/\.[^.]+$/i, ".mtl");
+      if (loaderContext.settings.materialMode !== "flat" && resourceResolver?.has(mtlName)) {
+        try {
+          const materials = await new Promise((resolve, reject) => {
+            const mtlLoader = new MTLLoader(manager);
+            mtlLoader.load(mtlName, resolve, void 0, reject);
+          });
+          materials.preload();
+          objLoader.setMaterials(materials);
+        } catch (error) {
+          console.warn("[LoaderUtils] Failed to load companion MTL", error);
+        }
+      }
+      reportStage("parse", 0);
+      return await objLoader.loadAsync(url, (e) => {
+        if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+        else reportStage("parse", 50);
+      });
+    }
+    if (ext === "stl") {
+      const loader = new STLLoader(manager);
+      reportStage("parse", 0);
+      const geometry = await loader.loadAsync(url, (e) => {
+        if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+      });
+      return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 8947848 }));
+    }
+    if (ext === "ply") {
+      const loader = new PLYLoader(manager);
+      reportStage("parse", 0);
+      const geometry = await loader.loadAsync(url, (e) => {
+        if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+      });
+      return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+        color: 8947848,
+        vertexColors: geometry.hasAttribute("color")
+      }));
+    }
+    if (ext === "3mf") {
+      const loader = new ThreeMFLoader(manager);
+      reportStage("parse", 0);
+      return await loader.loadAsync(url, (e) => {
+        if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+      });
+    }
+    if (ext === "stp" || ext === "step" || ext === "igs" || ext === "iges") {
+      reportStage("fetch", 0);
+      const buffer = typeof fileOrUrl === "string" ? await fetch(url).then((r) => r.arrayBuffer()) : await fileOrUrl.arrayBuffer();
+      const wasmUrl = `${libPath}/occt-import-js/occt-import-js.wasm`;
+      const loader = new OCCTLoader(wasmUrl);
+      reportStage("parse", 0);
+      return await loader.load(buffer, t, (p, msg) => reportStage("parse", p, msg));
+    }
+    return null;
+  } finally {
+    cleanup();
+  }
+}
+function normalizeLoadedObject(object, settings) {
+  object.traverse((child) => {
+    if (child.isMesh) {
+      const mesh = child;
+      mesh.frustumCulled = settings.frustumCulling ?? true;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((material) => {
+        if (!material) return;
+        if ("wireframe" in material) {
+          material.wireframe = settings.materialMode === "wireframe";
+        }
+        if ("transparent" in material && settings.materialMode === "xray") {
+          material.transparent = true;
+          material.opacity = 0.35;
+          material.needsUpdate = true;
+        }
+      });
+    }
+  });
+}
+const loadModelFiles = async (files, onProgress, t, settings, libPath = "./libs") => {
   const loadedObjects = [];
   const totalFiles = files.length;
   for (let i = 0; i < totalFiles; i++) {
@@ -3989,109 +4536,31 @@ const loadModelFiles = async (files, onProgress, t, _settings, libPath = "./libs
       const urlPath = url.split("?")[0].split("#")[0];
       fileName = urlPath.split("/").pop() || "model";
       ext = fileName.split(".").pop()?.toLowerCase() || "";
-      console.log(`[LoaderUtils] Loading URL: ${url}`);
-      console.log(`[LoaderUtils] Parsed fileName: ${fileName}, ext: ${ext}`);
     } else {
-      const file = fileOrUrl;
-      fileName = file.name;
+      fileName = fileOrUrl.name;
       ext = fileName.split(".").pop()?.toLowerCase() || "";
-      url = URL.createObjectURL(file);
-      console.log(`[LoaderUtils] Loading File: ${fileName}, ext: ${ext}`);
+      url = URL.createObjectURL(fileOrUrl);
     }
     const fileBaseProgress = i / totalFiles * 100;
     const fileWeight = 100 / totalFiles;
-    const updateFileProgress = (p, msg) => {
-      const safeP = isNaN(p) ? 0 : Math.min(100, Math.max(0, p));
-      const status = msg || `${t("reading")} ${fileName}`;
-      onProgress(Math.round(fileBaseProgress + safeP * fileWeight / 100), status);
-    };
-    updateFileProgress(0);
-    let object = null;
+    const reportStage = createStageProgressReporter(onProgress, t, fileName, fileBaseProgress, fileWeight);
     try {
-      console.log(`[LoaderUtils] Dispatching loader for ext: ${ext}`);
-      if (ext === "lmb") {
-        const loader = new LMBLoader();
-        object = await loader.loadAsync(url, (p) => updateFileProgress(p * 100));
-      } else if (ext === "glb" || ext === "gltf") {
-        const loader = new GLTFLoader();
-        const gltf = await new Promise((resolve, reject) => {
-          loader.load(url, resolve, (e) => {
-            if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-            else updateFileProgress(50);
-          }, reject);
-        });
-        object = gltf.scene;
-      } else if (ext === "fbx") {
-        console.log(`[LoaderUtils] Starting FBXLoader for ${url}`);
-        const loader = new FBXLoader();
-        object = await new Promise((resolve, reject) => {
-          loader.load(url, (fbx) => {
-            console.log(`[LoaderUtils] FBX loaded successfully:`, fbx);
-            resolve(fbx);
-          }, (e) => {
-            if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-            else updateFileProgress(50);
-          }, (err) => {
-            console.error(`[LoaderUtils] FBXLoader error:`, err);
-            reject(err);
-          });
-        });
-      } else if (ext === "ifc") {
-        object = await loadIFC(isUrl ? url : fileOrUrl, updateFileProgress, t, libPath);
-      } else if (ext === "obj") {
-        const loader = new OBJLoader();
-        object = await loader.loadAsync(url, (e) => {
-          if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-        });
-      } else if (ext === "stl") {
-        const loader = new STLLoader();
-        const geometry = await loader.loadAsync(url, (e) => {
-          if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-        });
-        object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 8947848 }));
-      } else if (ext === "ply") {
-        const loader = new PLYLoader();
-        const geometry = await loader.loadAsync(url, (e) => {
-          if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-        });
-        object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-          color: 8947848,
-          vertexColors: geometry.hasAttribute("color")
-        }));
-      } else if (ext === "3mf") {
-        const loader = new ThreeMFLoader();
-        object = await loader.loadAsync(url, (e) => {
-          if (e.total && e.total > 0) updateFileProgress(e.loaded / e.total * 100);
-        });
-      } else if (ext === "stp" || ext === "step" || ext === "igs" || ext === "iges") {
-        const buffer = isUrl ? await fetch(url).then((r) => r.arrayBuffer()) : await fileOrUrl.arrayBuffer();
-        const wasmUrl = `${libPath}/occt-import-js/occt-import-js.wasm`;
-        const loader = new OCCTLoader(wasmUrl);
-        object = await loader.load(buffer, t, (p, msg) => {
-          updateFileProgress(p, msg);
-        });
-      }
-      if (object) {
-        object.name = fileName;
-        loadedObjects.push(object);
-      }
-    } catch (e) {
-      console.error(`加载${fileName}失败`, e);
+      reportStage("fetch", 5);
+      const object = await loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t, settings, libPath);
+      if (!object) continue;
+      object.name = fileName;
+      reportStage("normalize", 30, `${t("processing")} ${fileName}`);
+      normalizeLoadedObject(object, settings);
+      reportStage("optimize", 100, `${t("analyzing")} ${fileName}`);
+      reportStage("addToScene", 100, `${t("success")} ${fileName}`);
+      loadedObjects.push(object);
+    } catch (error) {
+      console.error(`加载 ${fileName} 失败`, error);
     } finally {
       if (!isUrl) URL.revokeObjectURL(url);
     }
   }
   onProgress(100, t("analyzing"));
-  for (const object of loadedObjects) {
-    object.traverse((child) => {
-      if (child.isMesh) {
-        const mesh = child;
-        mesh.frustumCulled = true;
-        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-        if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
-      }
-    });
-  }
   return loadedObjects;
 };
 const parseTilesetFromFolder = async (files, onProgress, t) => {
@@ -4125,8 +4594,8 @@ const parseTilesetFromFolder = async (files, onProgress, t) => {
   const json = JSON.parse(text);
   const replaceUris = (node) => {
     if (node.content && node.content.uri) {
-      const m = blobUrlMap.get(node.content.uri);
-      if (m) node.content.uri = m;
+      const mapped = blobUrlMap.get(node.content.uri);
+      if (mapped) node.content.uri = mapped;
     }
     if (node.children) node.children.forEach(replaceUris);
   };
@@ -4347,6 +4816,19 @@ const resources = {
     tb_about: "About",
     tb_sun: "Sun",
     st_monitor: "Performance Panel",
+    st_adaptive_quality: "Adaptive Quality",
+    st_exposure: "Exposure",
+    st_tonemapping: "Tone Mapping",
+    st_shadow_quality: "Shadow Quality",
+    st_shadow_off: "Off",
+    st_shadow_low: "Low",
+    st_shadow_medium: "Medium",
+    st_shadow_high: "High",
+    st_material_mode: "Material Mode",
+    st_material_default: "Default",
+    st_material_flat: "Flat",
+    st_material_wireframe: "Wireframe",
+    st_material_xray: "X-Ray",
     st_instancing: "Instancing Render",
     st_viewport: "Viewport",
     st_viewcube_size: "ViewCube Size",
@@ -4555,6 +5037,19 @@ const resources = {
     tb_about: "关于",
     tb_sun: "光照",
     st_monitor: "性能面板",
+    st_adaptive_quality: "自适应画质",
+    st_exposure: "曝光",
+    st_tonemapping: "色调映射",
+    st_shadow_quality: "阴影质量",
+    st_shadow_off: "关闭",
+    st_shadow_low: "低",
+    st_shadow_medium: "中",
+    st_shadow_high: "高",
+    st_material_mode: "材质模式",
+    st_material_default: "默认",
+    st_material_flat: "平面",
+    st_material_wireframe: "线框",
+    st_material_xray: "透视",
     st_instancing: "实例化渲染",
     st_viewport: "视口设置",
     st_viewcube_size: "导航方块大小",
@@ -6362,16 +6857,25 @@ const SettingsPanel = ({
             }
           ) }) })
         ] }),
-        /* @__PURE__ */ jsx(Section, { title: t("st_viewport"), children: /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
-          SettingSlider,
-          {
-            min: 100,
-            max: 300,
-            step: 10,
-            value: settings.viewCubeSize || 100,
-            onChange: (v) => onUpdate({ viewCubeSize: v })
-          }
-        ) }) }),
+        /* @__PURE__ */ jsxs(Section, { title: t("st_viewport"), children: [
+          /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            SettingSlider,
+            {
+              min: 100,
+              max: 300,
+              step: 10,
+              value: settings.viewCubeSize || 100,
+              onChange: (v) => onUpdate({ viewCubeSize: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_adaptive_quality") || "Adaptive", labelWidth: "90px", children: /* @__PURE__ */ jsx(
+            Switch,
+            {
+              checked: settings.adaptiveQuality !== false,
+              onChange: (v) => onUpdate({ adaptiveQuality: v })
+            }
+          ) })
+        ] }),
         /* @__PURE__ */ jsxs(Section, { title: t("st_lighting"), children: [
           /* @__PURE__ */ jsx(Row, { label: t("st_ambient"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
             SettingSlider,
@@ -6391,6 +6895,54 @@ const SettingsPanel = ({
               step: 0.1,
               value: settings.dirInt,
               onChange: (v) => onUpdate({ dirInt: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_exposure") || "Exposure", labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            SettingSlider,
+            {
+              min: 0.2,
+              max: 2.5,
+              step: 0.05,
+              value: settings.exposure || 1,
+              onChange: (v) => onUpdate({ exposure: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_tonemapping") || "Tone Map", labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            Select,
+            {
+              value: settings.toneMapping || "aces",
+              options: [
+                { value: "aces", label: "ACES" },
+                { value: "neutral", label: "Neutral" },
+                { value: "none", label: "None" }
+              ],
+              onChange: (v) => onUpdate({ toneMapping: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_shadow_quality") || "Shadow", labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            Select,
+            {
+              value: settings.shadowQuality || "medium",
+              options: [
+                { value: "off", label: t("st_shadow_off") || "Off" },
+                { value: "low", label: t("st_shadow_low") || "Low" },
+                { value: "medium", label: t("st_shadow_medium") || "Medium" },
+                { value: "high", label: t("st_shadow_high") || "High" }
+              ],
+              onChange: (v) => onUpdate({ shadowQuality: v })
+            }
+          ) }),
+          /* @__PURE__ */ jsx(Row, { label: t("st_material_mode") || "Material", labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsx(
+            Select,
+            {
+              value: settings.materialMode || "default",
+              options: [
+                { value: "default", label: t("st_material_default") || "Default" },
+                { value: "flat", label: t("st_material_flat") || "Flat" },
+                { value: "wireframe", label: t("st_material_wireframe") || "Wireframe" },
+                { value: "xray", label: t("st_material_xray") || "X-Ray" }
+              ],
+              onChange: (v) => onUpdate({ materialMode: v })
             }
           ) })
         ] })
@@ -7695,6 +8247,36 @@ const ContextMenu = ({ x, y, items, onClose, theme }) => {
   );
 };
 
+function usePersistentState(key, initialValue, options = {}) {
+  const {
+    storage = typeof window !== "undefined" ? window.localStorage : void 0,
+    serializer = JSON.stringify,
+    parser = JSON.parse
+  } = options;
+  const resolveInitialValue = () => typeof initialValue === "function" ? initialValue() : initialValue;
+  const [state, setState] = useState(() => {
+    const fallback = resolveInitialValue();
+    if (!storage) return fallback;
+    try {
+      const raw = storage.getItem(key);
+      if (raw === null) return fallback;
+      return parser(raw);
+    } catch (error) {
+      console.warn(`[usePersistentState] Failed to read "${key}"`, error);
+      return fallback;
+    }
+  });
+  useEffect(() => {
+    if (!storage) return;
+    try {
+      storage.setItem(key, serializer(state));
+    } catch (error) {
+      console.warn(`[usePersistentState] Failed to write "${key}"`, error);
+    }
+  }, [key, serializer, state, storage]);
+  return [state, setState];
+}
+
 const ThreeViewer = ({
   allowDragOpen = true,
   hiddenMenus = [],
@@ -7710,32 +8292,35 @@ const ThreeViewer = ({
   onLoad,
   hideDeleteModel = false
 }) => {
-  const [themeMode, setThemeMode] = useState(() => {
-    if (defaultTheme) return defaultTheme;
-    try {
-      const saved = localStorage.getItem("3dbrowser_themeMode");
-      return saved === "dark" || saved === "light" ? saved : "light";
-    } catch {
-      return "light";
+  const [themeMode, setThemeMode] = usePersistentState(
+    "3dbrowser_themeMode",
+    () => defaultTheme || "light",
+    {
+      serializer: (value) => value,
+      parser: (raw) => raw === "dark" || raw === "light" ? raw : "light"
     }
-  });
+  );
   const theme = useMemo(() => {
     return themes[themeMode];
   }, [themeMode]);
-  const [lang, setLang] = useState(() => {
-    if (defaultLang) return defaultLang;
-    try {
-      const saved = localStorage.getItem("3dbrowser_lang");
-      return saved === "zh" || saved === "en" ? saved : "zh";
-    } catch {
-      return "zh";
+  const [lang, setLang] = usePersistentState(
+    "3dbrowser_lang",
+    () => defaultLang || "zh",
+    {
+      serializer: (value) => value,
+      parser: (raw) => raw === "zh" || raw === "en" ? raw : "zh"
     }
-  });
+  );
   useEffect(() => {
     if (defaultLang && defaultLang !== lang) {
       setLang(defaultLang);
     }
-  }, [defaultLang]);
+  }, [defaultLang, lang, setLang]);
+  useEffect(() => {
+    if (defaultTheme && defaultTheme !== themeMode) {
+      setThemeMode(defaultTheme);
+    }
+  }, [defaultTheme, themeMode, setThemeMode]);
   const [treeRoot, setTreeRoot] = useState([]);
   const [selectedUuids, setSelectedUuids] = useState([]);
   const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
@@ -7756,75 +8341,54 @@ const ThreeViewer = ({
   const [clipEnabled, setClipEnabled] = useState(false);
   const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
   const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
-  const [pickEnabled, setPickEnabled] = useState(() => {
-    try {
-      return localStorage.getItem("3dbrowser_pickEnabled") === "true";
-    } catch {
-      return false;
-    }
+  const [pickEnabled, setPickEnabled] = usePersistentState("3dbrowser_pickEnabled", false, {
+    serializer: (value) => String(value),
+    parser: (raw) => raw === "true"
   });
-  const [showStats, setShowStats] = useState(() => {
-    if (propShowStats !== void 0) return propShowStats;
-    try {
-      const saved = localStorage.getItem("3dbrowser_showStats");
-      return saved !== null ? saved === "true" : true;
-    } catch {
-      return true;
-    }
+  const [showStats, setShowStats] = usePersistentState("3dbrowser_showStats", propShowStats ?? true, {
+    serializer: (value) => String(value),
+    parser: (raw) => raw === "true"
   });
-  const [showOutline, setShowOutline] = useState(() => {
-    if (propShowOutline !== void 0) return propShowOutline;
-    try {
-      const saved = localStorage.getItem("3dbrowser_showOutline");
-      return saved !== null ? saved === "true" : true;
-    } catch {
-      return true;
-    }
+  const [showOutline, setShowOutline] = usePersistentState("3dbrowser_showOutline", propShowOutline ?? true, {
+    serializer: (value) => String(value),
+    parser: (raw) => raw === "true"
   });
-  const [showProps, setShowProps] = useState(() => {
-    if (propShowProperties !== void 0) return propShowProperties;
-    try {
-      const saved = localStorage.getItem("3dbrowser_showProps");
-      return saved !== null ? saved === "true" : true;
-    } catch {
-      return true;
-    }
+  const [showProps, setShowProps] = usePersistentState("3dbrowser_showProps", propShowProperties ?? true, {
+    serializer: (value) => String(value),
+    parser: (raw) => raw === "true"
   });
-  const [sceneSettings, setSceneSettings] = useState(() => {
-    let baseSettings = {
+  const [sceneSettings, setSceneSettings] = usePersistentState("3dbrowser_sceneSettings", () => {
+    const baseSettings = {
       ambientInt: 2,
       dirInt: 1,
       bgColor: theme.canvasBg,
       viewCubeSize: 100,
+      colorSpace: "srgb",
+      toneMapping: "aces",
+      exposure: 1,
+      shadowQuality: "medium",
+      adaptiveQuality: true,
+      minPixelRatio: 0.8,
+      maxPixelRatio: 2,
+      targetFps: 50,
+      materialMode: "default",
       sunEnabled: false,
       sunLatitude: 0,
       sunLongitude: 0,
       sunTime: 12,
       sunShadow: false
     };
-    try {
-      const saved = localStorage.getItem("3dbrowser_sceneSettings");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        baseSettings = {
-          ambientInt: typeof parsed.ambientInt === "number" ? parsed.ambientInt : 2,
-          dirInt: typeof parsed.dirInt === "number" ? parsed.dirInt : 1,
-          bgColor: typeof parsed.bgColor === "string" ? parsed.bgColor : theme.canvasBg,
-          viewCubeSize: typeof parsed.viewCubeSize === "number" ? parsed.viewCubeSize : 100,
-          frustumCulling: parsed.frustumCulling,
-          maxRenderDistance: parsed.maxRenderDistance,
-          sunEnabled: parsed.sunEnabled || false,
-          sunLatitude: parsed.sunLatitude || 0,
-          sunLongitude: parsed.sunLongitude || 0,
-          sunTime: parsed.sunTime !== void 0 ? parsed.sunTime : 12,
-          sunShadow: parsed.sunShadow || false
-        };
-      }
-    } catch (e) {
-      console.error("Failed to load sceneSettings", e);
-    }
     return initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
   });
+  useEffect(() => {
+    if (propShowStats !== void 0) setShowStats(propShowStats);
+  }, [propShowStats, setShowStats]);
+  useEffect(() => {
+    if (propShowOutline !== void 0) setShowOutline(propShowOutline);
+  }, [propShowOutline, setShowOutline]);
+  useEffect(() => {
+    if (propShowProperties !== void 0) setShowProps(propShowProperties);
+  }, [propShowProperties, setShowProps]);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: "", message: "", action: () => {
   } });
   const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -7916,27 +8480,6 @@ const ThreeViewer = ({
       window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, [lang, t]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_themeMode", themeMode);
-    } catch (e) {
-      console.error("Failed to save themeMode", e);
-    }
-  }, [themeMode]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_lang", lang);
-    } catch (e) {
-      console.error("Failed to save lang", e);
-    }
-  }, [lang]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_sceneSettings", JSON.stringify(sceneSettings));
-    } catch (e) {
-      console.error("Failed to save sceneSettings", e);
-    }
-  }, [sceneSettings]);
   useEffect(() => {
     const prevLang = lang === "zh" ? "en" : "zh";
     if (status === getTranslation(prevLang, "ready")) {
@@ -8132,34 +8675,6 @@ const ThreeViewer = ({
       handleSettingsUpdate({ bgColor: newBg });
     }
   }, [themeMode]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_pickEnabled", String(pickEnabled));
-    } catch (e) {
-      console.warn("无法保存pickEnabled状态", e);
-    }
-  }, [pickEnabled]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_showStats", String(showStats));
-    } catch (e) {
-      console.warn("无法保存showStats状态", e);
-    }
-  }, [showStats]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_showOutline", String(showOutline));
-    } catch (e) {
-      console.warn("无法保存showOutline状态", e);
-    }
-  }, [showOutline]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("3dbrowser_showProps", String(showProps));
-    } catch (e) {
-      console.warn("无法保存showProps状态", e);
-    }
-  }, [showProps]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => {
@@ -8743,10 +9258,14 @@ const ThreeViewer = ({
         libPath
       );
       console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
-      for (const obj of loadedObjects) {
+      const totalObjects = Math.max(loadedObjects.length, 1);
+      for (let index = 0; index < loadedObjects.length; index++) {
+        const obj = loadedObjects[index];
         if (!sceneMgr.current) return;
+        const objectBase = 92 + Math.round(index / totalObjects * 8);
         await sceneMgr.current.addModel(obj, (p, msg) => {
-          setProgress(p);
+          const stagedProgress = Math.min(100, objectBase + Math.round(p / 100 * (8 / totalObjects)));
+          setProgress(stagedProgress);
           if (msg) setStatus(cleanStatus(msg));
         });
       }
@@ -9077,10 +9596,7 @@ const ThreeViewer = ({
             showProps,
             setShowProps,
             showStats,
-            setShowStats: (v) => {
-              setShowStats(v);
-              localStorage.setItem("3dbrowser_showStats", String(v));
-            },
+            setShowStats,
             sceneMgr: sceneMgr.current,
             theme,
             hiddenMenus,
