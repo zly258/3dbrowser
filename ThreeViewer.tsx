@@ -2,7 +2,7 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 // @ts-ignore
 import * as THREE from "three";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
-import { loadModelFiles, parseTilesetFromFolder } from "./src/loader/LoaderUtils";
+import { parseTilesetFromFolder } from "./src/loader/LoaderUtils";
 import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
 import { themes, ThemeColors, DEFAULT_FONT } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
@@ -20,6 +20,7 @@ import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { ContextMenu } from "./src/components/ContextMenu";
 import { IconClose, IconSun, IconMoon, IconBox, IconActivity, IconGrid } from "./src/theme/Icons";
 import { usePersistentState } from "./src/hooks/usePersistentState";
+import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "./src/viewer/fileLoading";
 
 // --- 全局样式注入 ---
 
@@ -104,7 +105,18 @@ export const ThreeViewer = ({
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [stats, setStats] = useState({ meshes: 0, faces: 0, memory: 0, drawCalls: 0 });
+    const [stats, setStats] = useState({
+        meshes: 0,
+        faces: 0,
+        memory: 0,
+        textureMemory: 0,
+        drawCalls: 0,
+        fps: 0,
+        chunksLoaded: 0,
+        chunksTotal: 0,
+        chunksQueued: 0,
+        pixelRatio: 1
+    });
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
@@ -275,12 +287,6 @@ export const ThreeViewer = ({
             updateTree();
         }
     }, [hiddenUuids, isolatedUuids]);
-    
-    // 状态清理工具
-    const cleanStatus = (msg: string) => {
-        if (!msg) return "";
-        return msg.replace(/:\s*\d+%/g, '').replace(/\(\d+%\)/g, '').replace(/\d+%/g, '').trim();
-    };
     
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
@@ -854,7 +860,7 @@ export const ThreeViewer = ({
                         console.log("[ThreeViewer] Initial URL detected as 3D Tiles:", item);
                         mgrInstance.addTileset(item, (p, msg) => {
                             setProgress(p);
-                            if(msg) setStatus(cleanStatus(msg));
+                            if(msg) setStatus(cleanLoadingStatus(msg));
                         });
                         updateTree();
                         setStatus(t("tileset_loaded"));
@@ -1244,8 +1250,7 @@ export const ThreeViewer = ({
         if (!items.length || !sceneMgr.current) return;
         
         // Update current file set ID
-        const names = items.map(item => typeof item === 'string' ? item : item.name).sort();
-        const setId = names.join('|');
+        const setId = createFileSetId(items);
         setCurrentFileSetId(setId);
         
         console.log("[ThreeViewer] processFiles called with", items.length, "items");
@@ -1274,67 +1279,17 @@ export const ThreeViewer = ({
     const loadItemsIntoScene = async (items: (File | string)[]) => {
         if (!items.length || !sceneMgr.current) return;
 
-        const nbimItems: (File | string)[] = [];
-        const otherItems: (File | string)[] = [];
-
-        for (const item of items) {
-            const path = typeof item === 'string' ? item.split('?')[0].split('#')[0] : item.name;
-            if (path.toLowerCase().endsWith('.nbim')) {
-                nbimItems.push(item);
-            } else {
-                otherItems.push(item);
+        await loadSceneItems({
+            items,
+            manager: sceneMgr.current,
+            sceneSettings,
+            libPath,
+            t,
+            onProgress: (p, msg) => {
+                setProgress(p);
+                if (msg) setStatus(cleanLoadingStatus(msg));
             }
-        }
-        
-        console.log("[ThreeViewer] nbimItems:", nbimItems.length, "otherItems:", otherItems.length);
-
-        for (const item of nbimItems) {
-            if (!sceneMgr.current) return;
-            if (typeof item === 'string') {
-                console.log("[ThreeViewer] Fetching NBIM URL:", item);
-                const response = await fetch(item);
-                if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
-                const blob = await response.blob();
-                const fileName = item.split('?')[0].split('#')[0].split('/').pop() || 'model.nbim';
-                const file = new File([blob], fileName);
-                await (sceneMgr.current as any).loadNbim(file, (p: number, msg: string) => {
-                    setProgress(p);
-                    if (msg) setStatus(cleanStatus(msg));
-                });
-            } else {
-                console.log("[ThreeViewer] Loading NBIM File:", item.name);
-                await (sceneMgr.current as any).loadNbim(item, (p: number, msg: string) => {
-                    setProgress(p);
-                    if (msg) setStatus(cleanStatus(msg));
-                });
-            }
-        }
-
-        if (otherItems.length > 0) {
-            console.log("[ThreeViewer] Loading other model files via loadModelFiles...");
-            const loadedObjects = await loadModelFiles(
-                otherItems, 
-                (p, msg) => {
-                    setProgress(p);
-                    if (msg) setStatus(cleanStatus(msg));
-                }, 
-                t,
-                sceneSettings,
-                libPath
-            );
-            console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
-            const totalObjects = Math.max(loadedObjects.length, 1);
-            for (let index = 0; index < loadedObjects.length; index++) {
-                const obj = loadedObjects[index];
-                if (!sceneMgr.current) return;
-                const objectBase = 92 + Math.round((index / totalObjects) * 8);
-                await sceneMgr.current.addModel(obj, (p: number, msg: string) => {
-                    const stagedProgress = Math.min(100, objectBase + Math.round((p / 100) * (8 / totalObjects)));
-                    setProgress(stagedProgress);
-                    if (msg) setStatus(cleanStatus(msg));
-                });
-            }
-        }
+        });
     };
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1407,7 +1362,7 @@ export const ThreeViewer = ({
                 if (sceneMgr.current) {
                     sceneMgr.current.addTileset(url, (p, msg) => {
                         setProgress(p);
-                        if(msg) setStatus(cleanStatus(msg));
+                        if(msg) setStatus(cleanLoadingStatus(msg));
                     });
                     updateTree();
                     setStatus(t("tileset_loaded"));
@@ -1463,14 +1418,14 @@ export const ThreeViewer = ({
                 e.target.files, 
                 (p, msg) => {
                     setProgress(p);
-                    if(msg) setStatus(cleanStatus(msg));
+                    if(msg) setStatus(cleanLoadingStatus(msg));
                 }, 
                 t
             );
             if (url) {
                 sceneMgr.current.addTileset(url, (p, msg) => {
                     setProgress(p);
-                    if(msg) setStatus(cleanStatus(msg));
+                    if(msg) setStatus(cleanLoadingStatus(msg));
                 });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
@@ -1544,7 +1499,7 @@ export const ThreeViewer = ({
                             const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
                             setProgress(p);
                         }
-                        setStatus(cleanStatus(msg));
+                        setStatus(cleanLoadingStatus(msg));
                     });
                 setStatus(t("writing"));
                     let writeCount = 0;
@@ -1563,7 +1518,7 @@ export const ThreeViewer = ({
                 } else if (format === 'glb') {
                     blob = await exportGLB(exportGroup);
                 } else if (format === 'lmb') {
-                    blob = await exportLMB(exportGroup, (msg) => setStatus(cleanStatus(msg)));
+                    blob = await exportLMB(exportGroup, (msg) => setStatus(cleanLoadingStatus(msg)));
                 }
 
                 if (blob) {
@@ -1992,6 +1947,28 @@ export const ThreeViewer = ({
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
                                 <IconActivity width={14} height={14} />
                                 <span>{formatMemory(stats.memory)}</span>
+                            </div>
+                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="FPS">
+                                {stats.fps} FPS
+                            </div>
+                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Draw Calls">
+                                DC {formatNumber(stats.drawCalls)}
+                            </div>
+                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Texture Memory">
+                                TEX {formatMemory(stats.textureMemory)}
+                            </div>
+                            {stats.chunksTotal > 0 && (
+                                <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunks">
+                                    CH {stats.chunksLoaded}/{stats.chunksTotal}
+                                </div>
+                            )}
+                            {stats.chunksQueued > 0 && (
+                                <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunk Queue">
+                                    Q {stats.chunksQueued}
+                                </div>
+                            )}
+                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Pixel Ratio">
+                                DPR {stats.pixelRatio}
                             </div>
                         </div>
                     )}
