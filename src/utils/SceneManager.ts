@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TilesRenderer } from "3d-tiles-renderer";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { 
     calculateGeometryMemory, 
     collectItems, 
@@ -449,7 +450,9 @@ export class SceneManager {
         if (!url || !this.pmremGenerator) return;
 
         try {
-            const texture = await new RGBELoader().loadAsync(url);
+            const texture = url.toLowerCase().endsWith(".exr")
+                ? await new EXRLoader().loadAsync(url)
+                : await new RGBELoader().loadAsync(url);
             const envMap = this.pmremGenerator.fromEquirectangular(texture).texture;
             texture.dispose();
             this.environmentTexture = envMap;
@@ -3916,6 +3919,8 @@ export class SceneManager {
         let meshes = 0;
         let faces = 0;
         let memory = 0;
+        let textureMemory = 0;
+        const textures = new Set<THREE.Texture>();
 
         this.contentGroup.traverse((obj) => {
             if (obj.name === "__EdgesHelper") return;
@@ -3953,6 +3958,22 @@ export class SceneManager {
                     faces += meshFaces;
                     memory += calculateGeometryMemory(mesh.geometry);
                 }
+
+                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                materials.forEach((material: any) => {
+                    if (!material) return;
+                    Object.values(material).forEach((value) => {
+                        if (value instanceof THREE.Texture && !textures.has(value)) {
+                            textures.add(value);
+                            const image = (value as any).image;
+                            const width = image?.width || 0;
+                            const height = image?.height || 0;
+                            if (width > 0 && height > 0) {
+                                textureMemory += (width * height * 4) / (1024 * 1024);
+                            }
+                        }
+                    });
+                });
             }
         });
         
@@ -3961,8 +3982,13 @@ export class SceneManager {
             meshes, 
             faces: Math.floor(faces), 
             memory: parseFloat(memory.toFixed(2)),
+            textureMemory: parseFloat(textureMemory.toFixed(2)),
             drawCalls,
-            fps: Math.round(this.fps)
+            fps: Math.round(this.fps),
+            chunksLoaded: this.chunkLoadedCount,
+            chunksTotal: this.chunks.length,
+            chunksQueued: this.processingChunks.size,
+            pixelRatio: Number(this.activePixelRatio.toFixed(2))
         };
     }
 

@@ -274,8 +274,13 @@ export declare class SceneManager {
         meshes: number;
         faces: number;
         memory: number;
+        textureMemory: number;
         drawCalls: any;
         fps: number;
+        chunksLoaded: number;
+        chunksTotal: number;
+        chunksQueued: number;
+        pixelRatio: number;
     };
     dispose(): void;
 }

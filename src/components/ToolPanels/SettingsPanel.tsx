@@ -234,6 +234,16 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               onChange={(v) => onUpdate({ materialMode: v as SceneSettings['materialMode'] })}
             />
           </Row>
+          <Row label={t("st_env_map") || "Env Map"} labelWidth="90px" stretch={true}>
+            <input
+              type="text"
+              value={settings.environmentMapUrl || ''}
+              onChange={(e) => onUpdate({ environmentMapUrl: e.target.value })}
+              placeholder={t("st_env_map_placeholder") || "https://.../studio.hdr"}
+              className="ui-input"
+              style={{ width: '100%' }}
+            />
+          </Row>
         </Section>
       </div>
     </FloatingPanel>
