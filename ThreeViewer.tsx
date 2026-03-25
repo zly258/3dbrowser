@@ -19,6 +19,7 @@ import { ViewCube } from "./src/components/ViewCube";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { ContextMenu } from "./src/components/ContextMenu";
 import { IconClose, IconSun, IconMoon, IconBox, IconActivity, IconGrid } from "./src/theme/Icons";
+import { usePersistentState } from "./src/hooks/usePersistentState";
 
 // --- 全局样式注入 ---
 
@@ -57,15 +58,14 @@ export const ThreeViewer = ({
      hideDeleteModel = false
  }: ThreeViewerProps) => {
     // 主题状态 - 从localStorage恢复或使用prop
-    const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
-        if (defaultTheme) return defaultTheme;
-        try {
-            const saved = localStorage.getItem('3dbrowser_themeMode');
-            return (saved === 'dark' || saved === 'light') ? saved : 'light';
-        } catch {
-            return 'light';
+    const [themeMode, setThemeMode] = usePersistentState<'dark' | 'light'>(
+        '3dbrowser_themeMode',
+        () => defaultTheme || 'light',
+        {
+            serializer: (value) => value,
+            parser: (raw) => (raw === 'dark' || raw === 'light') ? raw : 'light'
         }
-    });
+    );
 
     const theme = useMemo(() => {
         return themes[themeMode];
@@ -74,22 +74,27 @@ export const ThreeViewer = ({
     
 
     // 语言状态 - 从localStorage恢复
-    const [lang, setLang] = useState<Lang>(() => {
-        if (defaultLang) return defaultLang;
-        try {
-            const saved = localStorage.getItem('3dbrowser_lang');
-            return (saved === 'zh' || saved === 'en') ? saved : 'zh';
-        } catch {
-            return 'zh';
+    const [lang, setLang] = usePersistentState<Lang>(
+        '3dbrowser_lang',
+        () => defaultLang || 'zh',
+        {
+            serializer: (value) => value,
+            parser: (raw) => (raw === 'zh' || raw === 'en') ? raw : 'zh'
         }
-    });
+    );
 
     // 监听外部语言切换
     useEffect(() => {
         if (defaultLang && defaultLang !== lang) {
             setLang(defaultLang);
         }
-    }, [defaultLang]);
+    }, [defaultLang, lang, setLang]);
+
+    useEffect(() => {
+        if (defaultTheme && defaultTheme !== themeMode) {
+            setThemeMode(defaultTheme);
+        }
+    }, [defaultTheme, themeMode, setThemeMode]);
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
@@ -125,76 +130,59 @@ export const ThreeViewer = ({
     const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
 
     // Toolbar State - 从localStorage恢复状态
-    const [pickEnabled, setPickEnabled] = useState(() => {
-        try {
-            return localStorage.getItem('3dbrowser_pickEnabled') === 'true';
-        } catch {
-            return false;
-        }
+    const [pickEnabled, setPickEnabled] = usePersistentState<boolean>('3dbrowser_pickEnabled', false, {
+        serializer: (value) => String(value),
+        parser: (raw) => raw === 'true'
     });
-    const [showStats, setShowStats] = useState(() => {
-        if (propShowStats !== undefined) return propShowStats;
-        try {
-            const saved = localStorage.getItem('3dbrowser_showStats');
-            return saved !== null ? saved === 'true' : true;
-        } catch {
-            return true;
-        }
+    const [showStats, setShowStats] = usePersistentState<boolean>('3dbrowser_showStats', propShowStats ?? true, {
+        serializer: (value) => String(value),
+        parser: (raw) => raw === 'true'
     });
-    const [showOutline, setShowOutline] = useState(() => {
-        if (propShowOutline !== undefined) return propShowOutline;
-        try {
-            const saved = localStorage.getItem('3dbrowser_showOutline');
-            return saved !== null ? saved === 'true' : true;
-        } catch {
-            return true;
-        }
+    const [showOutline, setShowOutline] = usePersistentState<boolean>('3dbrowser_showOutline', propShowOutline ?? true, {
+        serializer: (value) => String(value),
+        parser: (raw) => raw === 'true'
     });
-    const [showProps, setShowProps] = useState(() => {
-        if (propShowProperties !== undefined) return propShowProperties;
-        try {
-            const saved = localStorage.getItem('3dbrowser_showProps');
-            return saved !== null ? saved === 'true' : true;
-        } catch {
-            return true;
-        }
+    const [showProps, setShowProps] = usePersistentState<boolean>('3dbrowser_showProps', propShowProperties ?? true, {
+        serializer: (value) => String(value),
+        parser: (raw) => raw === 'true'
     });
 
     // Settings State (mirrors SceneManager) - 从localStorage恢复
-    const [sceneSettings, setSceneSettings] = useState<SceneSettings>(() => {
-        let baseSettings: SceneSettings = {
+    const [sceneSettings, setSceneSettings] = usePersistentState<SceneSettings>('3dbrowser_sceneSettings', () => {
+        const baseSettings: SceneSettings = {
             ambientInt: 2.0,
             dirInt: 1.0,
             bgColor: theme.canvasBg,
             viewCubeSize: 100,
+            colorSpace: 'srgb',
+            toneMapping: 'aces',
+            exposure: 1,
+            shadowQuality: 'medium',
+            adaptiveQuality: true,
+            minPixelRatio: 0.8,
+            maxPixelRatio: 2,
+            targetFps: 50,
+            materialMode: 'default',
             sunEnabled: false,
             sunLatitude: 0,
             sunLongitude: 0,
             sunTime: 12,
             sunShadow: false,
         };
-        try {
-            const saved = localStorage.getItem('3dbrowser_sceneSettings');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                baseSettings = {
-                    ambientInt: typeof parsed.ambientInt === 'number' ? parsed.ambientInt : 2.0,
-                    dirInt: typeof parsed.dirInt === 'number' ? parsed.dirInt : 1.0,
-                    bgColor: typeof parsed.bgColor === 'string' ? parsed.bgColor : theme.canvasBg,
-                    viewCubeSize: typeof parsed.viewCubeSize === 'number' ? parsed.viewCubeSize : 100,
-                    frustumCulling: parsed.frustumCulling,
-                    maxRenderDistance: parsed.maxRenderDistance,
-                    sunEnabled: parsed.sunEnabled || false,
-                    sunLatitude: parsed.sunLatitude || 0,
-                    sunLongitude: parsed.sunLongitude || 0,
-                    sunTime: parsed.sunTime !== undefined ? parsed.sunTime : 12,
-                    sunShadow: parsed.sunShadow || false,
-                };
-            }
-        } catch (e) { console.error("Failed to load sceneSettings", e); }
-        
         return initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
     });
+
+    useEffect(() => {
+        if (propShowStats !== undefined) setShowStats(propShowStats);
+    }, [propShowStats, setShowStats]);
+
+    useEffect(() => {
+        if (propShowOutline !== undefined) setShowOutline(propShowOutline);
+    }, [propShowOutline, setShowOutline]);
+
+    useEffect(() => {
+        if (propShowProperties !== undefined) setShowProps(propShowProperties);
+    }, [propShowProperties, setShowProps]);
 
     // Confirmation Modal State
     const [confirmState, setConfirmState] = useState<{
@@ -341,26 +329,6 @@ export const ThreeViewer = ({
             window.removeEventListener('unhandledrejection', handleRejection);
         };
     }, [lang, t]);
-
-    // 持久化主题和语言设置
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_themeMode', themeMode);
-        } catch (e) { console.error("Failed to save themeMode", e); }
-    }, [themeMode]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_lang', lang);
-        } catch (e) { console.error("Failed to save lang", e); }
-    }, [lang]);
-
-    // 持久化场景设置
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_sceneSettings', JSON.stringify(sceneSettings));
-        } catch (e) { console.error("Failed to save sceneSettings", e); }
-    }, [sceneSettings]);
 
     // Update status when lang changes if status is "Ready" (or equivalent)
     useEffect(() => {
@@ -605,39 +573,6 @@ export const ThreeViewer = ({
              handleSettingsUpdate({ bgColor: newBg });
         }
     }, [themeMode]);
-
-    // 界面状态保存
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_pickEnabled', String(pickEnabled));
-        } catch (e) {
-            console.warn('无法保存pickEnabled状态', e);
-        }
-    }, [pickEnabled]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_showStats', String(showStats));
-        } catch (e) {
-            console.warn('无法保存showStats状态', e);
-        }
-    }, [showStats]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_showOutline', String(showOutline));
-        } catch (e) {
-            console.warn('无法保存showOutline状态', e);
-        }
-    }, [showOutline]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('3dbrowser_showProps', String(showProps));
-        } catch (e) {
-            console.warn('无法保存showProps状态', e);
-        }
-    }, [showProps]);
 
     // 树结构更新
     useEffect(() => {
@@ -1388,10 +1323,14 @@ export const ThreeViewer = ({
                 libPath
             );
             console.log("[ThreeViewer] loadModelFiles returned", loadedObjects.length, "objects");
-            for (const obj of loadedObjects) {
+            const totalObjects = Math.max(loadedObjects.length, 1);
+            for (let index = 0; index < loadedObjects.length; index++) {
+                const obj = loadedObjects[index];
                 if (!sceneMgr.current) return;
+                const objectBase = 92 + Math.round((index / totalObjects) * 8);
                 await sceneMgr.current.addModel(obj, (p: number, msg: string) => {
-                    setProgress(p);
+                    const stagedProgress = Math.min(100, objectBase + Math.round((p / 100) * (8 / totalObjects)));
+                    setProgress(stagedProgress);
                     if (msg) setStatus(cleanStatus(msg));
                 });
             }
@@ -1753,10 +1692,7 @@ export const ThreeViewer = ({
                  showProps={showProps}
                  setShowProps={setShowProps}
                  showStats={showStats}
-                 setShowStats={(v: boolean) => {
-                     setShowStats(v);
-                     localStorage.setItem('3dbrowser_showStats', String(v));
-                 }}
+                 setShowStats={setShowStats}
                  sceneMgr={sceneMgr.current}
                  theme={theme}
                  hiddenMenus={hiddenMenus}

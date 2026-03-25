@@ -11,7 +11,7 @@ export default defineConfig(() => {
       plugins: [react({
         jsxRuntime: 'automatic'
       })],
-      assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.lmb', '**/*.lmbz', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges'],
+      assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.mtl', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.lmb', '**/*.lmbz', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges', '**/*.hdr', '**/*.exr', '**/*.ktx2'],
       optimizeDeps: {
         exclude: ['web-ifc', '3d-tiles-renderer', 'occt-import-js']
       },
@@ -48,9 +48,13 @@ export default defineConfig(() => {
                 'three/examples/jsm/loaders/GLTFLoader.js',
                 'three/examples/jsm/loaders/FBXLoader.js',
                 'three/examples/jsm/loaders/OBJLoader.js',
+                'three/examples/jsm/loaders/MTLLoader.js',
                 'three/examples/jsm/loaders/STLLoader.js',
                 'three/examples/jsm/loaders/PLYLoader.js',
                 'three/examples/jsm/loaders/3MFLoader.js',
+                'three/examples/jsm/loaders/DRACOLoader.js',
+                'three/examples/jsm/loaders/KTX2Loader.js',
+                'three/examples/jsm/loaders/RGBELoader.js',
                 'three/examples/jsm/exporters/GLTFExporter.js',
                 'three/examples/jsm/controls/OrbitControls.js',
                 'three/examples/jsm/utils/BufferGeometryUtils.js'

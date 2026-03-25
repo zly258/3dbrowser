@@ -16,6 +16,16 @@ export interface SceneSettings {
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
+    colorSpace?: 'srgb' | 'linear';
+    toneMapping?: 'none' | 'aces' | 'neutral';
+    exposure?: number;
+    environmentMapUrl?: string;
+    shadowQuality?: 'off' | 'low' | 'medium' | 'high';
+    adaptiveQuality?: boolean;
+    minPixelRatio?: number;
+    maxPixelRatio?: number;
+    targetFps?: number;
+    materialMode?: 'default' | 'flat' | 'wireframe' | 'xray';
     sunLatitude?: number;
     sunLongitude?: number;
     sunTime?: number;
@@ -80,6 +90,8 @@ export declare class SceneManager {
     }[]>;
     settings: SceneSettings;
     dotTexture: THREE.Texture;
+    pmremGenerator: THREE.PMREMGenerator | null;
+    environmentTexture: THREE.Texture | null;
     sceneBounds: THREE.Box3;
     private cachedSceneSphere;
     private sceneSphereValid;
@@ -114,12 +126,20 @@ export declare class SceneManager {
     private workerQueue;
     private activeWorkerCount;
     private maxWorkers;
+    private frameSampleTime;
+    private frameCounter;
+    private fps;
+    private isCameraMoving;
+    private activePixelRatio;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
+    private updateEnvironmentMap;
+    private applyMaterialMode;
     private updateSunPosition;
     private updateSunShadow;
     createCircleTexture(): any;
     animate(): void;
+    private updateAdaptiveQuality;
     updateCameraClipping(): void;
     resize(width?: number, height?: number): void;
     private reportChunkProgress;
@@ -255,6 +275,7 @@ export declare class SceneManager {
         faces: number;
         memory: number;
         drawCalls: any;
+        fps: number;
     };
     dispose(): void;
 }
