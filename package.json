@@ -32,7 +32,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && node scripts/post-build.js",
-    "build:example": "cd example && npm install && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

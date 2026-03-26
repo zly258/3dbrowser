@@ -5,7 +5,8 @@ import { FloatingPanel } from "./FloatingPanel";
 import {
     Switch,
     SegmentedControl,
-    Select
+    Select,
+    Slider
 } from "../common";
 
 /**
@@ -150,9 +151,20 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {/* 视口设置 */}
         <Section title={t("st_viewport")}>
-          <Row label={t("st_viewcube_size")} labelWidth="90px">
-            <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-              {settings.viewCubeSize || 100}px
+          <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Slider
+                  min={60}
+                  max={180}
+                  step={5}
+                  value={settings.viewCubeSize || 100}
+                  onChange={(value) => onUpdate({ viewCubeSize: value })}
+                />
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '44px', textAlign: 'right' }}>
+                {settings.viewCubeSize || 100}px
+              </div>
             </div>
           </Row>
           <Row label={t("st_adaptive_quality") || "Adaptive"} labelWidth="90px">
