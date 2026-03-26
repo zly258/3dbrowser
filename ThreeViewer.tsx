@@ -18,7 +18,7 @@ import { AboutModal } from "./src/components/AboutModal";
 import { ViewCube } from "./src/components/ViewCube";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { ContextMenu } from "./src/components/ContextMenu";
-import { IconClose, IconSun, IconMoon, IconBox, IconActivity, IconGrid } from "./src/theme/Icons";
+import { IconClose, IconSun, IconMoon, IconActivity } from "./src/theme/Icons";
 import { usePersistentState } from "./src/hooks/usePersistentState";
 import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "./src/viewer/fileLoading";
 
@@ -174,7 +174,6 @@ export const ThreeViewer = ({
             minPixelRatio: 0.8,
             maxPixelRatio: 2,
             targetFps: 50,
-            materialMode: 'default',
             sunEnabled: false,
             sunLatitude: 0,
             sunLongitude: 0,
@@ -822,6 +821,10 @@ export const ThreeViewer = ({
             setMeasureHistory(records.map(r => ({ id: r.id, type: r.type, val: r.val })));
         };
 
+        manager.onStructureUpdate = () => {
+            updateTree();
+        };
+
         // 监听瓦片更新（防抖刷新树）
         let debounceTimer: any;
         manager.onTilesUpdate = () => {
@@ -1078,6 +1081,7 @@ export const ThreeViewer = ({
             sceneMgr.current.updateSettings(merged);
         }
     };
+
 
     // 剖切参数更新
     useEffect(() => {
@@ -1937,34 +1941,15 @@ export const ThreeViewer = ({
                             borderLeft: `1px solid ${theme.border}`
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
-                                <IconBox width={14} height={14} />
-                                <span>{formatNumber(stats.meshes)}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
-                                <IconGrid width={14} height={14} />
-                                <span>{formatNumber(stats.faces)}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
                                 <IconActivity width={14} height={14} />
                                 <span>{formatMemory(stats.memory)}</span>
                             </div>
                             <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="FPS">
                                 {stats.fps} FPS
                             </div>
-                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Draw Calls">
-                                DC {formatNumber(stats.drawCalls)}
-                            </div>
-                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Texture Memory">
-                                TEX {formatMemory(stats.textureMemory)}
-                            </div>
                             {stats.chunksTotal > 0 && (
                                 <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunks">
                                     CH {stats.chunksLoaded}/{stats.chunksTotal}
-                                </div>
-                            )}
-                            {stats.chunksQueued > 0 && (
-                                <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunk Queue">
-                                    Q {stats.chunksQueued}
                                 </div>
                             )}
                             <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Pixel Ratio">

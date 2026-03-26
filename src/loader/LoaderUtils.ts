@@ -171,7 +171,7 @@ async function loadObjectByExtension(
         if (ext === "obj") {
             const objLoader = new OBJLoader(manager);
             const mtlName = url.replace(/\.[^.]+$/i, ".mtl");
-            if (loaderContext.settings.materialMode !== "flat" && resourceResolver?.has(mtlName)) {
+            if (resourceResolver?.has(mtlName)) {
                 try {
                     const materials = await new Promise<any>((resolve, reject) => {
                         const mtlLoader = new MTLLoader(manager);
@@ -251,13 +251,7 @@ function normalizeLoadedObject(object: THREE.Object3D, settings: SceneSettings) 
                 if (!material) return;
 
                 if ("wireframe" in material) {
-                    material.wireframe = settings.materialMode === "wireframe";
-                }
-
-                if ("transparent" in material && settings.materialMode === "xray") {
-                    material.transparent = true;
-                    material.opacity = 0.35;
-                    material.needsUpdate = true;
+                    material.wireframe = false;
                 }
             });
         }

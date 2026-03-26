@@ -222,6 +222,88 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
 }
 
 /**
+ * 分批收集可渲染项，避免超大模型长时间阻塞主线程
+ */
+async function collectItemsBatched(
+  root: THREE.Object3D,
+  options: {
+    batchSize?: number;
+    onProgress?: (processed: number, total: number) => void;
+  } = {}
+): Promise<OctreeItem[]> {
+  const items: OctreeItem[] = [];
+  const _m4 = new THREE.Matrix4();
+  const batchSize = options.batchSize ?? 4000;
+
+  root.updateMatrixWorld(true);
+
+  const renderables: THREE.Object3D[] = [];
+  root.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) renderables.push(obj);
+  });
+
+  for (let start = 0; start < renderables.length; start += batchSize) {
+    const batch = renderables.slice(start, start + batchSize);
+
+    for (const obj of batch) {
+      const mesh = obj as THREE.Mesh;
+      const geometry = mesh.geometry;
+      const material = mesh.material;
+
+      if (!geometry) continue;
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      const worldMatrix = mesh.matrixWorld;
+
+      const center = new THREE.Vector3();
+      geometry.boundingBox!.getCenter(center);
+      center.applyMatrix4(worldMatrix);
+
+      const matUuid = Array.isArray(material) ? material[0]?.uuid : material?.uuid;
+      const id = `${geometry.uuid}_${matUuid}`;
+
+      if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
+        const instancedMesh = mesh as THREE.InstancedMesh;
+        for (let i = 0; i < instancedMesh.count; i++) {
+          instancedMesh.getMatrixAt(i, _m4);
+          _m4.premultiply(worldMatrix);
+
+          const instanceCenter = new THREE.Vector3();
+          geometry.boundingBox!.getCenter(instanceCenter);
+          instanceCenter.applyMatrix4(_m4);
+
+          items.push({
+            id,
+            uuid: mesh.uuid,
+            expressID: instancedMesh.userData.expressID,
+            geometry,
+            material: material as THREE.Material,
+            color: extractColor(mesh),
+            matrix: _m4.clone(),
+            center: instanceCenter
+          });
+        }
+      } else {
+        items.push({
+          id,
+          uuid: mesh.uuid,
+          expressID: mesh.userData.expressID,
+          geometry,
+          material: material as THREE.Material,
+          color: extractColor(mesh),
+          matrix: worldMatrix.clone(),
+          center: center
+        });
+      }
+    }
+
+    options.onProgress?.(Math.min(start + batch.length, renderables.length), renderables.length);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
+  return items;
+}
+
+/**
  * 构建八叉树
  * @param items 可渲染项数组
  * @param bounds 边界框
@@ -389,6 +471,100 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   return batchedMesh;
 }
 
+async function createBatchedMeshFromItemsAsync(
+  items: OctreeItem[],
+  material: THREE.Material,
+  options: {
+    batchSize?: number;
+    yieldControl?: () => Promise<void>;
+  } = {}
+): Promise<THREE.BatchedMesh | null> {
+  if (items.length === 0) return null;
+
+  const batchSize = options.batchSize ?? 1200;
+  const yieldControl = options.yieldControl ?? (() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+
+  let vertexCount = 0;
+  let indexCount = 0;
+
+  const sanitizedGeometries = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+  const sanitizedItems: OctreeItem[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    let sanitized = sanitizedGeometries.get(item.geometry);
+    if (!sanitized) {
+      sanitized = sanitizeGeometry(item.geometry);
+      sanitizedGeometries.set(item.geometry, sanitized);
+    }
+    sanitizedItems.push({
+      ...item,
+      geometry: sanitized
+    });
+
+    vertexCount += sanitized.attributes.position.count;
+    if (sanitized.index) {
+      indexCount += sanitized.index.count;
+    }
+
+    if (i > 0 && i % batchSize === 0) {
+      await yieldControl();
+    }
+  }
+
+  const batchedMesh = new THREE.BatchedMesh(sanitizedItems.length, vertexCount, indexCount, material);
+  batchedMesh.frustumCulled = false;
+  (batchedMesh as any).perInstanceFrustumCulling = false;
+
+  const geometryMap = new Map<THREE.BufferGeometry, number>();
+  const batchIdToExpressId = new Map<number, number>();
+  const batchIdToUuid = new Map<number, string>();
+  const batchIdToColor = new Map<number, number>();
+  const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
+
+  for (let i = 0; i < sanitizedItems.length; i++) {
+    const item = sanitizedItems[i];
+    let geometryId = geometryMap.get(item.geometry);
+    if (geometryId === undefined) {
+      geometryId = batchedMesh.addGeometry(item.geometry);
+      geometryMap.set(item.geometry, geometryId);
+    }
+
+    if (geometryId !== -1) {
+      const instanceId = batchedMesh.addInstance(geometryId);
+      batchedMesh.setMatrixAt(instanceId, item.matrix);
+
+      if (!item.geometry.boundingBox) item.geometry.computeBoundingBox();
+      if ((batchedMesh as any).setBoundingBoxAt) {
+        (batchedMesh as any).setBoundingBoxAt(instanceId, item.geometry.boundingBox);
+      }
+
+      const color = new THREE.Color(item.color);
+      batchedMesh.setColorAt(instanceId, color);
+
+      if (item.expressID !== undefined) {
+        batchIdToExpressId.set(instanceId, item.expressID);
+      }
+
+      batchIdToUuid.set(instanceId, item.uuid);
+      batchIdToColor.set(instanceId, item.color);
+      batchIdToGeometry.set(instanceId, item.geometry);
+    }
+
+    if (i > 0 && i % batchSize === 0) {
+      await yieldControl();
+    }
+  }
+
+  batchedMesh.userData.batchIdToExpressId = batchIdToExpressId;
+  batchedMesh.userData.batchIdToUuid = batchIdToUuid;
+  batchedMesh.userData.batchIdToColor = batchIdToColor;
+  batchedMesh.userData.batchIdToGeometry = batchIdToGeometry;
+  batchedMesh.computeBoundingBox();
+  batchedMesh.computeBoundingSphere();
+  return batchedMesh;
+}
+
 /**
  * 将八叉树转换为一组 BatchedMesh 节点
  * @param node 八叉树节点
@@ -433,4 +609,4 @@ export type { OctreeItem, OctreeNode, OctreeConfig };
 /**
  * 导出内部函数以便在其他文件中使用
  */
-export { collectItems, buildOctree, createSceneFromItems, createBatchedMeshFromItems, convertOctreeToBatchedMeshes };
+export { collectItems, collectItemsBatched, buildOctree, createSceneFromItems, createBatchedMeshFromItems, createBatchedMeshFromItemsAsync, convertOctreeToBatchedMeshes };

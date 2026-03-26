@@ -36,6 +36,13 @@ export declare function sanitizeGeometry(source: THREE.BufferGeometry): THREE.Bu
  */
 declare function collectItems(root: THREE.Object3D): OctreeItem[];
 /**
+ * 分批收集可渲染项，避免超大模型长时间阻塞主线程
+ */
+declare function collectItemsBatched(root: THREE.Object3D, options?: {
+    batchSize?: number;
+    onProgress?: (processed: number, total: number) => void;
+}): Promise<OctreeItem[]>;
+/**
  * 构建八叉树
  * @param items 可渲染项数组
  * @param bounds 边界框
@@ -57,6 +64,10 @@ declare function createSceneFromItems(items: OctreeItem[]): THREE.Scene;
  * @returns 创建的 BatchedMesh
  */
 declare function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Material): THREE.BatchedMesh | null;
+declare function createBatchedMeshFromItemsAsync(items: OctreeItem[], material: THREE.Material, options?: {
+    batchSize?: number;
+    yieldControl?: () => Promise<void>;
+}): Promise<THREE.BatchedMesh | null>;
 /**
  * 将八叉树转换为一组 BatchedMesh 节点
  * @param node 八叉树节点
@@ -75,4 +86,4 @@ export type { OctreeItem, OctreeNode, OctreeConfig };
 /**
  * 导出内部函数以便在其他文件中使用
  */
-export { collectItems, buildOctree, createSceneFromItems, createBatchedMeshFromItems, convertOctreeToBatchedMeshes };
+export { collectItems, collectItemsBatched, buildOctree, createSceneFromItems, createBatchedMeshFromItems, createBatchedMeshFromItemsAsync, convertOctreeToBatchedMeshes };

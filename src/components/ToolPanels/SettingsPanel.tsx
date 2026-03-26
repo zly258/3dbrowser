@@ -5,7 +5,6 @@ import { FloatingPanel } from "./FloatingPanel";
 import {
     Switch,
     SegmentedControl,
-    SettingSlider,
     Select
 } from "../common";
 
@@ -71,7 +70,7 @@ const Row: React.FC<{
 
 /**
  * SettingsPanel - 设置面板主组件
- * 提供主题、语言、字体大小、视口、灯光等配置选项
+ * 提供主题、语言、字体大小和大模型优先相关配置
  */
 export const SettingsPanel: React.FC<SettingsModalProps> = ({
   t,              // 翻译函数
@@ -151,97 +150,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {/* 视口设置 */}
         <Section title={t("st_viewport")}>
-          <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
-            <SettingSlider
-              min={100}
-              max={300}
-              step={10}
-              value={settings.viewCubeSize || 100}
-              onChange={(v) => onUpdate({ viewCubeSize: v })}
-            />
+          <Row label={t("st_viewcube_size")} labelWidth="90px">
+            <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+              {settings.viewCubeSize || 100}px
+            </div>
           </Row>
           <Row label={t("st_adaptive_quality") || "Adaptive"} labelWidth="90px">
             <Switch
               checked={settings.adaptiveQuality !== false}
               onChange={(v) => onUpdate({ adaptiveQuality: v })}
-            />
-          </Row>
-        </Section>
-
-        {/* 灯光设置 */}
-        <Section title={t("st_lighting")}>
-          {/* 环境光强度 */}
-          <Row label={t("st_ambient")} labelWidth="90px" stretch={true}>
-            <SettingSlider
-              min={0}
-              max={5}
-              step={0.1}
-              value={settings.ambientInt}
-              onChange={(v) => onUpdate({ ambientInt: v })}
-            />
-          </Row>
-          {/* 定向光强度 */}
-          <Row label={t("st_dir")} labelWidth="90px" stretch={true}>
-            <SettingSlider
-              min={0}
-              max={5}
-              step={0.1}
-              value={settings.dirInt}
-              onChange={(v) => onUpdate({ dirInt: v })}
-            />
-          </Row>
-          <Row label={t("st_exposure") || "Exposure"} labelWidth="90px" stretch={true}>
-            <SettingSlider
-              min={0.2}
-              max={2.5}
-              step={0.05}
-              value={settings.exposure || 1}
-              onChange={(v) => onUpdate({ exposure: v })}
-            />
-          </Row>
-          <Row label={t("st_tonemapping") || "Tone Map"} labelWidth="90px" stretch={true}>
-            <Select
-              value={settings.toneMapping || 'aces'}
-              options={[
-                { value: 'aces', label: 'ACES' },
-                { value: 'neutral', label: 'Neutral' },
-                { value: 'none', label: 'None' }
-              ]}
-              onChange={(v) => onUpdate({ toneMapping: v as SceneSettings['toneMapping'] })}
-            />
-          </Row>
-          <Row label={t("st_shadow_quality") || "Shadow"} labelWidth="90px" stretch={true}>
-            <Select
-              value={settings.shadowQuality || 'medium'}
-              options={[
-                { value: 'off', label: t("st_shadow_off") || 'Off' },
-                { value: 'low', label: t("st_shadow_low") || 'Low' },
-                { value: 'medium', label: t("st_shadow_medium") || 'Medium' },
-                { value: 'high', label: t("st_shadow_high") || 'High' }
-              ]}
-              onChange={(v) => onUpdate({ shadowQuality: v as SceneSettings['shadowQuality'] })}
-            />
-          </Row>
-          <Row label={t("st_material_mode") || "Material"} labelWidth="90px" stretch={true}>
-            <Select
-              value={settings.materialMode || 'default'}
-              options={[
-                { value: 'default', label: t("st_material_default") || 'Default' },
-                { value: 'flat', label: t("st_material_flat") || 'Flat' },
-                { value: 'wireframe', label: t("st_material_wireframe") || 'Wireframe' },
-                { value: 'xray', label: t("st_material_xray") || 'X-Ray' }
-              ]}
-              onChange={(v) => onUpdate({ materialMode: v as SceneSettings['materialMode'] })}
-            />
-          </Row>
-          <Row label={t("st_env_map") || "Env Map"} labelWidth="90px" stretch={true}>
-            <input
-              type="text"
-              value={settings.environmentMapUrl || ''}
-              onChange={(e) => onUpdate({ environmentMapUrl: e.target.value })}
-              placeholder={t("st_env_map_placeholder") || "https://.../studio.hdr"}
-              className="ui-input"
-              style={{ width: '100%' }}
             />
           </Row>
         </Section>

@@ -22,18 +22,38 @@ interface ParseResult {
   originalUuid: string;
 }
 
+interface OctreeLeafPlan {
+  bounds: [number, number, number, number, number, number];
+  itemIndices: Uint32Array;
+  level: number;
+}
+
 self.onmessage = function (e: MessageEvent) {
-  const { buffer, version, originalUuid, bimIdTable } = e.data;
+  const { taskType = "parseNbim" } = e.data;
   
   try {
+    if (taskType === "buildOctreePlan") {
+      const result = buildOctreePlan(
+        e.data.centers,
+        e.data.radii,
+        e.data.bounds,
+        e.data.maxItemsPerNode,
+        e.data.maxDepth
+      );
+      const transferables: Transferable[] = result.map((leaf) => leaf.itemIndices.buffer);
+      // @ts-ignore
+      self.postMessage({ type: "success", result }, transferables);
+      return;
+    }
+
+    const { buffer, version, originalUuid, bimIdTable } = e.data;
     let result: ParseResult;
     if (version >= 8) {
       result = parseChunkBinaryV8(buffer, originalUuid, bimIdTable || []);
     } else {
       result = parseChunkBinaryV7(buffer, originalUuid);
     }
-    
-    // 发送结果，并将所有 ArrayBuffer 加入 transferable 列表
+
     const transferables: Transferable[] = [];
     result.geometries.forEach(geo => {
       if (geo.position) transferables.push(geo.position.buffer);
@@ -43,7 +63,7 @@ self.onmessage = function (e: MessageEvent) {
     result.instances.forEach(inst => {
       if (inst.matrix) transferables.push(inst.matrix.buffer);
     });
-    
+
     // @ts-ignore - self.postMessage in Worker context
     self.postMessage({ type: 'success', result }, transferables);
   } catch (err: any) {
@@ -51,6 +71,77 @@ self.onmessage = function (e: MessageEvent) {
     self.postMessage({ type: 'error', error: err.message || String(err) });
   }
 };
+
+function buildOctreePlan(
+  centers: Float32Array,
+  radii: Float32Array,
+  bounds: [number, number, number, number, number, number],
+  maxItemsPerNode: number,
+  maxDepth: number
+): OctreeLeafPlan[] {
+  const allIndices = new Uint32Array(radii.length);
+  for (let i = 0; i < radii.length; i++) allIndices[i] = i;
+
+  const leaves: OctreeLeafPlan[] = [];
+
+  const recurse = (
+    itemIndices: Uint32Array,
+    nodeBounds: [number, number, number, number, number, number],
+    level: number
+  ) => {
+    if (itemIndices.length <= maxItemsPerNode || level >= maxDepth) {
+      leaves.push({
+        bounds: nodeBounds,
+        itemIndices,
+        level
+      });
+      return;
+    }
+
+    const [minX, minY, minZ, maxX, maxY, maxZ] = nodeBounds;
+    const centerX = (minX + maxX) * 0.5;
+    const centerY = (minY + maxY) * 0.5;
+    const centerZ = (minZ + maxZ) * 0.5;
+
+    const buckets: number[][] = Array.from({ length: 8 }, () => []);
+
+    for (let i = 0; i < itemIndices.length; i++) {
+      const itemIndex = itemIndices[i];
+      const offset = itemIndex * 3;
+      const x = centers[offset];
+      const y = centers[offset + 1];
+      const z = centers[offset + 2];
+      const bucket = (x >= centerX ? 1 : 0) | (y >= centerY ? 2 : 0) | (z >= centerZ ? 4 : 0);
+      buckets[bucket].push(itemIndex);
+    }
+
+    let hasChildren = false;
+    for (let i = 0; i < 8; i++) {
+      if (buckets[i].length === 0) continue;
+      hasChildren = true;
+      const childBounds: [number, number, number, number, number, number] = [
+        (i & 1) ? centerX : minX,
+        (i & 2) ? centerY : minY,
+        (i & 4) ? centerZ : minZ,
+        (i & 1) ? maxX : centerX,
+        (i & 2) ? maxY : centerY,
+        (i & 4) ? maxZ : centerZ
+      ];
+      recurse(Uint32Array.from(buckets[i]), childBounds, level + 1);
+    }
+
+    if (!hasChildren) {
+      leaves.push({
+        bounds: nodeBounds,
+        itemIndices,
+        level
+      });
+    }
+  };
+
+  recurse(allIndices, bounds, 0);
+  return leaves;
+}
 
 /**
  * 通用的几何体解析和索引一致性处理
