@@ -110,6 +110,7 @@ export const DualSlider: React.FC<DualSliderProps> = ({
                 opacity: disabled ? 0.5 : 1,
                 width: '100%',
                 minWidth: 0,
+                flex: 1,
                 height: '24px',
                 position: 'relative',
                 cursor: disabled ? 'not-allowed' : 'pointer',
@@ -156,6 +157,7 @@ export const DualSlider: React.FC<DualSliderProps> = ({
                     position: 'absolute',
                     transform: 'translateX(-50%)',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                    zIndex: 1,
                 }}
                 onMouseDown={handleThumb1MouseDown}
             />
@@ -173,6 +175,7 @@ export const DualSlider: React.FC<DualSliderProps> = ({
                     position: 'absolute',
                     transform: 'translateX(-50%)',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                    zIndex: 1,
                 }}
                 onMouseDown={handleThumb2MouseDown}
             />

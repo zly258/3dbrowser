@@ -14,6 +14,7 @@ interface FloatingPanelProps {
         theme?: any;
     storageId?: string;
     modal?: boolean;  // 模态对话框模式
+    autoHeight?: boolean;
 }
 
 export const FloatingPanel: React.FC<FloatingPanelProps> = ({
@@ -27,7 +28,8 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     resizable = false,
     movable = true,
     storageId,
-    modal = false  // 默认非模态模式
+    modal = false,  // 默认非模态模式
+    autoHeight = height === undefined
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
     const minWidth = storageId === 'tool_measure' ? 320 : 220;
@@ -37,7 +39,10 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         // 模态模式默认居中 - 模态模式会通过useEffect重新计算
         if (modal) {
             // 初始值，会被useEffect覆盖
-            return { x: (window.innerWidth - width) / 2, y: (window.innerHeight - height) / 2 };
+            return {
+                x: Math.max(0, (window.innerWidth - width) / 2),
+                y: Math.max(0, (window.innerHeight - (height ?? minHeight)) / 2)
+            };
         }
 
         // 如果有 storageId，尝试从 localStorage 加载
@@ -58,7 +63,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         // 如果没有指定位置且没有 storageId，默认居中
         if (x === 100 && y === 100 && !storageId) {
             const centerX = (window.innerWidth - width) / 2;
-            const centerY = (window.innerHeight - height) / 2;
+            const centerY = (window.innerHeight - (height ?? minHeight)) / 2;
             return { x: Math.max(0, centerX), y: Math.max(0, centerY) };
         }
         return { x, y };
@@ -79,7 +84,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                 }
             } catch(e) {}
         }
-        return { w: width, h: height };
+        return { w: width, h: height ?? minHeight };
     });
 
     // 模态模式下窗口resize时重新居中
@@ -87,8 +92,11 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         if (!modal) return;
 
         const centerPanel = () => {
+            const measuredHeight = autoHeight
+                ? Math.min(window.innerHeight - 64, panelRef.current?.offsetHeight || size.h)
+                : size.h;
             const centerX = (window.innerWidth - size.w) / 2;
-            const centerY = (window.innerHeight - size.h) / 2;
+            const centerY = (window.innerHeight - measuredHeight) / 2;
             setPos({ x: Math.max(0, centerX), y: Math.max(0, centerY) });
         };
 
@@ -98,7 +106,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         return () => {
             window.removeEventListener('resize', centerPanel);
         };
-    }, [modal, size.w, size.h]);
+    }, [autoHeight, modal, size.w, size.h]);
 
     const isDragging = useRef(false);
     const isResizing = useRef(false);
@@ -227,12 +235,13 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                     left: pos.x,
                     top: pos.y,
                     width: size.w,
-                    height: size.h,
+                    height: autoHeight ? 'auto' : size.h,
+                    maxHeight: autoHeight ? 'calc(100vh - 64px)' : undefined,
                     zIndex: modal ? 2000 : 200,
                 }}
             >
                 <div
-                    className="ui-panel-header"
+                    className={`ui-panel-header ${(!movable || modal) ? 'ui-panel-header-static' : ''}`}
                     onMouseDown={onHeaderDown}
                 >
                     <span className="ui-panel-title">{title}</span>

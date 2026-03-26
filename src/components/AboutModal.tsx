@@ -32,6 +32,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
             width={400}
             height={520}
             modal={true}
+            movable={false}
             theme={theme}
         >
             <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%', overflowY: 'auto' }}>

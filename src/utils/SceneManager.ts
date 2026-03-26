@@ -25,6 +25,10 @@ export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
     bgColor: string;
+    clip?: {
+        helperVisible?: boolean;
+        helperOpacity?: number;
+    };
     viewCubeSize?: number;
     frustumCulling?: boolean;
     maxRenderDistance?: number;
@@ -141,6 +145,8 @@ export class SceneManager {
     // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
     clipPlaneHelpers: THREE.Mesh[] = [];
+    clipHelperVisible = false;
+    clipHelperOpacity = 0.12;
     
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
     
@@ -475,7 +481,9 @@ export class SceneManager {
         this.sunLight.shadow.camera.top = 100;
         this.sunLight.shadow.camera.bottom = -100;
         this.sunLight.shadow.bias = -0.0005;
+        this.sunLight.shadow.normalBias = 0.02;
         this.scene.add(this.sunLight);
+        this.scene.add(this.sunLight.target);
 
         // 选择辅助器
         const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
@@ -533,6 +541,12 @@ export class SceneManager {
     
     updateSettings(newSettings: Partial<SceneSettings>) {
         this.settings = { ...this.settings, ...newSettings };
+        if (newSettings.clip) {
+            this.setClipHelperOptions({
+                visible: newSettings.clip.helperVisible,
+                opacity: newSettings.clip.helperOpacity
+            });
+        }
 
         // 应用光照
         this.ambientLight.intensity = this.settings.ambientInt;
@@ -593,12 +607,21 @@ export class SceneManager {
         const lng = this.settings.sunLongitude || 0;
         const time = this.settings.sunTime !== undefined ? this.settings.sunTime : 12;
         const enabled = this.settings.sunEnabled !== false;
+        let bounds = this.computeTotalBounds(true);
+        if (bounds.isEmpty()) {
+            bounds = this.computeTotalBounds(false);
+        }
+        const center = !bounds.isEmpty() ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3();
+        const size = !bounds.isEmpty() ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(100, 100, 100);
+        const sceneSpan = Math.max(size.x, size.y, size.z, 100);
 
         this.sunLight.visible = enabled;
 
         if (!enabled) {
             // 如果禁用太阳光，降低方向光强度作为补偿
             this.dirLight.intensity = this.settings.dirInt;
+            this.ambientLight.intensity = this.settings.ambientInt;
+            this.backLight.intensity = 0.5;
             return;
         }
 
@@ -618,12 +641,14 @@ export class SceneManager {
         const azimuthAngle = hourAngle + (lng * Math.PI / 180);
 
         // 计算太阳位置（相对于场景中心）
-        const distance = 100;
+        const distance = Math.max(sceneSpan * 2.2, 120);
         const x = distance * Math.cos(elevationRad) * Math.sin(azimuthAngle);
         const y = distance * Math.sin(elevationRad);
         const z = distance * Math.cos(elevationRad) * Math.cos(azimuthAngle);
 
-        this.sunLight.position.set(x, Math.max(y, 1), z);
+        this.sunLight.position.set(center.x + x, center.y + Math.max(y, sceneSpan * 0.15), center.z + z);
+        this.sunLight.target.position.copy(center);
+        this.sunLight.target.updateMatrixWorld();
         
         // 调整太阳光强度（根据高度角）
         const intensity = Math.max(0.2, Math.sin(elevationRad)) * 2;
@@ -644,14 +669,16 @@ export class SceneManager {
         this.sunLight.color = sunColor;
 
         // 降低方向光强度，避免过曝
-        this.dirLight.intensity = this.settings.dirInt * 0.3;
+        this.dirLight.intensity = this.settings.dirInt * 0.18;
+        this.ambientLight.intensity = this.settings.ambientInt * 0.65;
+        this.backLight.intensity = 0.22;
 
         // 处理阴影
-        this.updateSunShadow();
+        this.updateSunShadow(bounds, center, sceneSpan);
     }
 
     // 更新阴影设置
-    private updateSunShadow() {
+    private updateSunShadow(bounds?: THREE.Box3, center?: THREE.Vector3, sceneSpan?: number) {
         const shadowEnabled = this.settings.shadowQuality !== 'off' &&
             this.settings.sunShadow === true &&
             this.settings.sunEnabled !== false;
@@ -667,6 +694,21 @@ export class SceneManager {
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             this.sunLight.shadow.mapSize.width = shadowMapSize;
             this.sunLight.shadow.mapSize.height = shadowMapSize;
+            this.sunLight.shadow.bias = -0.00015;
+            this.sunLight.shadow.normalBias = 0.02;
+
+            const effectiveBounds = bounds && !bounds.isEmpty() ? bounds : this.computeTotalBounds(true);
+            const effectiveCenter = center || (!effectiveBounds.isEmpty() ? effectiveBounds.getCenter(new THREE.Vector3()) : new THREE.Vector3());
+            const effectiveSize = sceneSpan || (!effectiveBounds.isEmpty() ? effectiveBounds.getSize(new THREE.Vector3()).length() : 100);
+            const radius = Math.max(effectiveSize * 0.7, 40);
+
+            this.sunLight.shadow.camera.left = -radius;
+            this.sunLight.shadow.camera.right = radius;
+            this.sunLight.shadow.camera.top = radius;
+            this.sunLight.shadow.camera.bottom = -radius;
+            this.sunLight.shadow.camera.near = 0.5;
+            this.sunLight.shadow.camera.far = Math.max(radius * 6, 500);
+            this.sunLight.shadow.camera.updateProjectionMatrix();
 
             // 遍历场景中的物体启用阴影
             this.contentGroup.traverse((obj) => {
@@ -678,6 +720,8 @@ export class SceneManager {
             });
 
             this.sunLight.castShadow = true;
+            this.sunLight.target.position.copy(effectiveCenter);
+            this.sunLight.target.updateMatrixWorld();
         } else {
             this.renderer.shadowMap.enabled = false;
             this.sunLight.castShadow = false;
@@ -4667,7 +4711,7 @@ export class SceneManager {
             const mat = new THREE.MeshBasicMaterial({
                 color: colors[i],
                 transparent: true,
-                opacity: 0.3,
+                opacity: this.clipHelperOpacity,
                 side: THREE.DoubleSide,
                 depthWrite: false,
                 polygonOffset: true,
@@ -4684,7 +4728,7 @@ export class SceneManager {
             const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
                 color: colors[i],
                 transparent: true,
-                opacity: 0.3,
+                opacity: Math.min(1, this.clipHelperOpacity + 0.08),
                 depthWrite: false
             }));
             line.visible = false; // 隐藏边框
@@ -4693,6 +4737,35 @@ export class SceneManager {
 
             this.clipPlaneHelpers.push(mesh);
             this.clipHelpersGroup.add(mesh);
+        }
+    }
+
+    setClipHelperOptions(options: { visible?: boolean; opacity?: number }) {
+        if (typeof options.visible === "boolean") {
+            this.clipHelperVisible = options.visible;
+        }
+        if (typeof options.opacity === "number" && !Number.isNaN(options.opacity)) {
+            this.clipHelperOpacity = THREE.MathUtils.clamp(options.opacity, 0.05, 0.35);
+        }
+
+        this.clipPlaneHelpers.forEach((helper) => {
+            const surfaceMat = helper.material as THREE.MeshBasicMaterial;
+            surfaceMat.opacity = this.clipHelperOpacity;
+            surfaceMat.needsUpdate = true;
+
+            helper.children.forEach((child) => {
+                const lineMat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
+                if (lineMat) {
+                    lineMat.opacity = Math.min(1, this.clipHelperOpacity + 0.08);
+                    lineMat.needsUpdate = true;
+                }
+            });
+        });
+
+        if (!this.clipHelperVisible || this.renderer.clippingPlanes.length === 0) {
+            this.clipPlaneHelpers.forEach((helper) => {
+                helper.visible = false;
+            });
         }
     }
 
@@ -4769,7 +4842,7 @@ export class SceneManager {
         const helper = this.clipPlaneHelpers[idx];
         if (!helper) return;
 
-        helper.visible = isEnabled;
+        helper.visible = isEnabled && this.clipHelperVisible;
         helper.scale.set(size, size, 1);
         
         // 设置位置：在对应轴向上设置为 dist，增加一个微小的偏移量 (1mm) 以减少与模型表面的闪烁

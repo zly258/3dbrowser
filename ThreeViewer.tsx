@@ -5,13 +5,13 @@ import "./src/styles/index.css";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { parseTilesetFromFolder } from "./src/loader/LoaderUtils";
 import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
-import { themes, ThemeColors, DEFAULT_FONT } from "./src/theme/Styles";
+import { themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
 import { Toolbar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, ViewpointPanel, SunPanel, SettingsPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SunPanel, SettingsPanel } from "./src/components/ToolPanels";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
@@ -117,7 +117,7 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect'>('none');
 
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
@@ -137,6 +137,25 @@ export const ThreeViewer = ({
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
     const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
+    const [clipHelperVisible, setClipHelperVisible] = usePersistentState<boolean>(
+        '3dbrowser_clipHelperVisible',
+        initialSettings?.clip?.helperVisible ?? false,
+        {
+            serializer: (value) => String(value),
+            parser: (raw) => raw === 'true'
+        }
+    );
+    const [clipHelperOpacity, setClipHelperOpacity] = usePersistentState<number>(
+        '3dbrowser_clipHelperOpacity',
+        initialSettings?.clip?.helperOpacity ?? 0.12,
+        {
+            serializer: (value) => String(value),
+            parser: (raw) => {
+                const parsed = Number(raw);
+                return Number.isFinite(parsed) ? parsed : 0.12;
+            }
+        }
+    );
 
     // Toolbar State - 从localStorage恢复状态
     const [pickEnabled, setPickEnabled] = usePersistentState<boolean>('3dbrowser_pickEnabled', false, {
@@ -176,6 +195,10 @@ export const ThreeViewer = ({
             sunLongitude: 0,
             sunTime: 12,
             sunShadow: false,
+            clip: {
+                helperVisible: initialSettings?.clip?.helperVisible ?? false,
+                helperOpacity: initialSettings?.clip?.helperOpacity ?? 0.12,
+            },
         };
         const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
         return sceneBgFollowsTheme
@@ -252,6 +275,21 @@ export const ThreeViewer = ({
             return merged;
         });
     }, [sceneBgFollowsTheme, setSceneSettings, theme.canvasBg]);
+
+    useEffect(() => {
+        const normalizedOpacity = Math.min(0.35, Math.max(0.05, clipHelperOpacity));
+        if (normalizedOpacity !== clipHelperOpacity) {
+            setClipHelperOpacity(normalizedOpacity);
+            return;
+        }
+
+        if (sceneMgr.current) {
+            sceneMgr.current.setClipHelperOptions({
+                visible: clipHelperVisible,
+                opacity: normalizedOpacity
+            });
+        }
+    }, [clipHelperVisible, clipHelperOpacity, setClipHelperOpacity]);
     
     // 是否加载了模型（基于treeRoot判断）
     const hasModels = treeRoot.length > 0;
@@ -434,7 +472,37 @@ export const ThreeViewer = ({
         }
     }, [currentFileSetId]);
 
-    const handleSaveViewpoint = useCallback((customName?: string) => {
+    const persistViewpoints = useCallback((nextViewpoints: any[]) => {
+        if (!currentFileSetId) return;
+        setViewpoints(nextViewpoints);
+        try {
+            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
+        } catch (e) {
+            console.error("Failed to persist viewpoints", e);
+        }
+    }, [currentFileSetId]);
+
+    const captureViewThumbnail = useCallback(() => {
+        if (!sceneMgr.current) return "";
+
+        let image = "";
+        try {
+            sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = 64;
+            tempCanvas.height = 48;
+            const ctx = tempCanvas.getContext("2d");
+            if (ctx) {
+                ctx.drawImage(sceneMgr.current.canvas, 0, 0, 64, 48);
+                image = tempCanvas.toDataURL("image/jpeg", 0.7);
+            }
+        } catch (e) {
+            console.error("Failed to capture thumbnail", e);
+        }
+        return image;
+    }, []);
+
+    const handleSaveViewpoint = useCallback((customName?: string, replaceId?: string) => {
         if (!sceneMgr.current || !currentFileSetId) {
             setToast({ message: t("no_models"), type: 'info' });
             return;
@@ -449,52 +517,28 @@ export const ThreeViewer = ({
 
         const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
         const cameraState = sceneMgr.current.getCameraState();
-        
-        // 截取缩略图 (缩放至 64x48 以节省存储空间)
-        let image = "";
-        try {
-            // 确保在截图前渲染一帧
-            sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
-            
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = 64;
-            tempCanvas.height = 48;
-            const ctx = tempCanvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(sceneMgr.current.canvas, 0, 0, 64, 48);
-                image = tempCanvas.toDataURL("image/jpeg", 0.7);
-            }
-        } catch (e) {
-            console.error("Failed to capture thumbnail", e);
-        }
+        const image = captureViewThumbnail();
 
-        const newVP = {
-            id: Date.now().toString(),
-            name,
-            cameraState,
-            image
-        };
+        const nextViewpoints = replaceId
+            ? viewpoints.map((vp) => vp.id === replaceId ? { ...vp, name, cameraState, image } : vp)
+            : [
+                ...viewpoints,
+                {
+                    id: Date.now().toString(),
+                    name,
+                    cameraState,
+                    image
+                }
+            ];
 
-        const nextViewpoints = [...viewpoints, newVP];
-        setViewpoints(nextViewpoints);
-        
-        try {
-            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
-            setToast({ message: t("success"), type: 'success' });
-        } catch (e) {
-            console.error("Failed to save viewpoints to storage", e);
-        }
-    }, [viewpoints, currentFileSetId, t]);
+        persistViewpoints(nextViewpoints);
+        setToast({ message: t("success"), type: 'success' });
+    }, [captureViewThumbnail, currentFileSetId, persistViewpoints, t, viewpoints]);
 
     const handleUpdateViewpointName = useCallback((id: string, newName: string) => {
         const nextViewpoints = viewpoints.map(v => v.id === id ? { ...v, name: newName } : v);
-        setViewpoints(nextViewpoints);
-        try {
-            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
-        } catch (e) {
-            console.error("Failed to update viewpoint name", e);
-        }
-    }, [viewpoints, currentFileSetId]);
+        persistViewpoints(nextViewpoints);
+    }, [persistViewpoints, viewpoints]);
 
     const handleLoadViewpoint = useCallback((vp: any) => {
         if (!sceneMgr.current || !vp.cameraState) return;
@@ -502,15 +546,24 @@ export const ThreeViewer = ({
         setToast({ message: `${t("viewpoint_loading")}: ${vp.name}`, type: 'info' });
     }, [t]);
 
+    const handleOverwriteViewpoint = useCallback((id: string) => {
+        const viewpoint = viewpoints.find((vp) => vp.id === id);
+        if (!viewpoint) return;
+        handleSaveViewpoint(viewpoint.name, id);
+    }, [handleSaveViewpoint, viewpoints]);
+
     const handleDeleteViewpoint = useCallback((id: string) => {
-        const nextViewpoints = viewpoints.filter(v => v.id !== id);
-        setViewpoints(nextViewpoints);
-        try {
-            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
-        } catch (e) {
-            console.error("Failed to delete viewpoint", e);
-        }
-    }, [viewpoints, currentFileSetId]);
+        const viewpoint = viewpoints.find((vp) => vp.id === id);
+        setConfirmState({
+            isOpen: true,
+            title: t("viewpoint_title"),
+            message: `${t("confirm_delete")} "${viewpoint?.name || "Viewpoint"}"?`,
+            action: () => {
+                const nextViewpoints = viewpoints.filter(v => v.id !== id);
+                persistViewpoints(nextViewpoints);
+            }
+        });
+    }, [persistViewpoints, t, viewpoints]);
 
     // 1. 使用 ResizeObserver 处理容器尺寸变化
     useEffect(() => {
@@ -731,6 +784,25 @@ export const ThreeViewer = ({
         updateTree();
     };
 
+    const handleHideObject = useCallback((uuid: string) => {
+        if (!sceneMgr.current) return;
+        visibilityStackRef.current.push([{ uuid, visible: true }]);
+        sceneMgr.current.setObjectVisibility(uuid, false);
+        setHiddenUuids((prev) => new Set(prev).add(uuid));
+        setSelectedUuids((prev) => prev.filter((id) => id !== uuid));
+        updateTree();
+    }, [updateTree]);
+
+    const handleIsolateObject = useCallback((uuid: string) => {
+        if (!sceneMgr.current) return;
+        sceneMgr.current.isolateObjects([uuid]);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set([uuid]));
+        setSelectedUuids([uuid]);
+        sceneMgr.current.highlightObjects([uuid]);
+        updateTree();
+    }, [updateTree]);
+
     const handleUndoVisibility = useCallback(() => {
         if (visibilityStackRef.current.length === 0 || !sceneMgr.current) return;
         const lastAction = visibilityStackRef.current.pop();
@@ -796,8 +868,7 @@ export const ThreeViewer = ({
         const uuid = obj.uuid || obj.id;
         if (!uuid) return;
         sceneMgr.current.fitViewToObject(uuid);
-        sceneMgr.current.highlightObjects([uuid]);
-        setSelectedUuids([uuid]);
+        void handleSelect(obj);
     };
 
     const handleClearSelection = () => {
@@ -817,6 +888,10 @@ export const ThreeViewer = ({
 
         // Initial setup
         manager.updateSettings(sceneSettings);
+        manager.setClipHelperOptions({
+            visible: clipHelperVisible,
+            opacity: clipHelperOpacity
+        });
         requestAnimationFrame(() => {
             manager.resize();
         });
@@ -1646,15 +1721,30 @@ export const ThreeViewer = ({
         });
     };
 
-    const handleScreenshot = () => {
+    const handleScreenshot = (mode: 'scene' | 'transparent' = 'scene') => {
         if (!sceneMgr.current) return;
         try {
-            sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
+            const renderer = sceneMgr.current.renderer;
+            const scene = sceneMgr.current.scene;
+            const previousBackground = scene.background;
+
+            if (mode === 'transparent') {
+                scene.background = null;
+                renderer.setClearAlpha(0);
+            } else {
+                renderer.setClearAlpha(1);
+            }
+
+            renderer.render(scene, sceneMgr.current.camera);
             const dataUrl = sceneMgr.current.canvas.toDataURL("image/png");
             const a = document.createElement("a");
             a.href = dataUrl;
-            a.download = "screenshot.png";
+            a.download = mode === 'transparent' ? "screenshot-transparent.png" : "screenshot.png";
             a.click();
+
+            scene.background = previousBackground;
+            renderer.setClearAlpha(1);
+            renderer.render(scene, sceneMgr.current.camera);
             setToast({ message: t("success"), type: 'success' });
         } catch (e) {
             console.error(e);
@@ -1709,7 +1799,7 @@ export const ThreeViewer = ({
                  handleOpenUrl={handleOpenUrl}
                  handleView={handleView}
                  handleClear={handleClear}
-                 handleScreenshot={handleScreenshot}
+                 openScreenshotPanel={() => setActiveTool('screenshot')}
                  handleDisplayModeChange={handleDisplayModeChange}
                  displayMode={displayMode}
                  pickEnabled={pickEnabled}
@@ -1760,6 +1850,9 @@ export const ThreeViewer = ({
                                     if (uuid) handleDeleteObject(uuid);
                                 }}
                                 onFocus={(obj) => handleFocusObject(obj)}
+                                onHide={handleHideObject}
+                                onIsolate={handleIsolateObject}
+                                onShowAll={handleShowAll}
                             />
                         </div>
                         {/* Resize handle */}
@@ -1878,12 +1971,28 @@ export const ThreeViewer = ({
                             clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
                             clipValues={clipValues} setClipValues={setClipValues}
                             clipActive={clipActive} setClipActive={setClipActive}
+                            clipHelperVisible={clipHelperVisible}
+                            setClipHelperVisible={setClipHelperVisible}
+                            clipHelperOpacity={clipHelperOpacity}
+                            setClipHelperOpacity={setClipHelperOpacity}
                             theme={theme}
                         />
                     )}
 
                     {activeTool === 'export' && (
                         <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} theme={theme} />
+                    )}
+
+                    {activeTool === 'screenshot' && (
+                        <ScreenshotPanel
+                            t={t}
+                            onClose={() => setActiveTool('none')}
+                            onCapture={(mode) => {
+                                handleScreenshot(mode);
+                                setActiveTool('none');
+                            }}
+                            theme={theme}
+                        />
                     )}
 
                     {activeTool === 'settings' && (
@@ -1903,6 +2012,7 @@ export const ThreeViewer = ({
                             onUpdateName={handleUpdateViewpointName}
                             onLoad={handleLoadViewpoint}
                             onDelete={handleDeleteViewpoint}
+                            onOverwrite={handleOverwriteViewpoint}
                             onClose={() => setActiveTool('none')}
                             theme={theme} 
                         />
@@ -1921,25 +2031,18 @@ export const ThreeViewer = ({
 
                 {/* Right Sidebar: Properties */}
                 {showProps && (
-                    <div style={{ 
+                    <div className="ui-sidebar" style={{ 
                         width: `${rightWidth}px`, 
-                        backgroundColor: theme.panelBg, 
                         borderLeft: `1px solid ${theme.border}`,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        zIndex: 10,
-                        position: 'relative'
                     }}>
                         <div className="ui-sidebar-header">
                             <span>{t("interface_props")}</span>
-                            <div 
+                            <button
+                                className="ui-sidebar-close"
                                 onClick={() => setShowProps(false)} 
-                                style={{ cursor: 'pointer', opacity: 0.6, display:'flex', padding: 2, borderRadius: '50%' }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
                                 <IconClose width={16} height={16} />
-                            </div>
+                            </button>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
                             <PropertiesPanel t={t} selectedProps={selectedProps} theme={theme} />
@@ -1947,29 +2050,16 @@ export const ThreeViewer = ({
                         {/* Resize handle */}
                         <div 
                             onMouseDown={() => resizingRight.current = true}
-                            style={{ 
-                                position: 'absolute', left: -2, top: 0, bottom: 0, width: 4, 
-                                cursor: 'col-resize', zIndex: 20 
-                            }} 
+                            className="ui-sidebar-resize"
+                            style={{ left: -2 }}
                         />
                     </div>
                 )}
              </div>
 
              {/* Bottom Status Bar */}
-             <div style={{
-                height: '24px',
-                backgroundColor: theme.bg,
-                color: theme.text, 
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0 12px',
-                fontSize: '11px',
-                zIndex: 1000,
-                justifyContent: 'space-between',
-                borderTop: `1px solid ${theme.border}`
-             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+             <div className="ui-statusbar">
+                <div className="ui-statusbar-left">
                     <span>{status}</span>
                     {loading && <span>{progress}%</span>}
                     {selectedUuid && selectedUuids.length > 1 && (
@@ -1990,35 +2080,34 @@ export const ThreeViewer = ({
                             </div>
                         </div>
                     )}
+                    {(hiddenUuids.size > 0 || isolatedUuids.size > 0) && (
+                        <button className="ui-statusbar-tag" onClick={handleShowAll}>
+                            {hiddenUuids.size > 0 ? `${t("hide_selected") || "隐藏选中"} ${hiddenUuids.size}` : `${t("isolate_selection") || "隔离选中"} ${isolatedUuids.size}`}
+                        </button>
+                    )}
                 </div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div className="ui-statusbar-right">
                     {mousePos && (
                         <div style={{ opacity: 0.85 }}>
                             {mousePos.x.toFixed(2)}, {mousePos.y.toFixed(2)}, {mousePos.z.toFixed(2)}
                         </div>
                     )}
-                    <div style={{ display: 'flex', gap: '10px', opacity: 0.85 }}>
+                    <div className="ui-tips">
                         <span>{t("tips_rotate")}</span>
                         <span>{t("tips_pan")}</span>
                         <span>{t("tips_zoom")}</span>
                     </div>
                     {showStats && (
-                        <div style={{ 
-                            display: 'flex', 
-                            gap: '12px', 
-                            alignItems: 'center',
-                            paddingLeft: '12px',
-                            borderLeft: `1px solid ${theme.border}`
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }} title="Original Meshes">
+                        <div className="ui-stats-group">
+                            <div className="ui-stats-item" title="Original Meshes">
                                 <IconBox width={14} height={14} />
                                 <span>{formatNumber(stats.meshes)}</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }} title="Triangles">
+                            <div className="ui-stats-item" title="Triangles">
                                 <IconGrid width={14} height={14} />
                                 <span>{formatNumber(stats.faces)}</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
+                            <div className="ui-stats-item">
                                 <IconActivity width={14} height={14} />
                                 <span>{formatMemory(stats.memory)}</span>
                             </div>
@@ -2035,43 +2124,21 @@ export const ThreeViewer = ({
                             </div>
                         </div>
                     )}
-                    <div 
+                    <button
+                        className="ui-statusbar-btn"
                         onClick={() => handleThemeModeChange(themeMode === 'dark' ? 'light' : 'dark')}
-                        style={{ 
-                            cursor: 'pointer', 
-                            padding: '4px', 
-                            borderRadius: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'background-color 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                         title={themeMode === 'dark' ? t("theme_light") : t("theme_dark")}
                     >
                         {themeMode === 'dark' ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
-                    </div>
-                    <div 
+                    </button>
+                    <button
+                        className="ui-statusbar-tag"
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-                        style={{ 
-                            cursor: 'pointer', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px',
-                            backgroundColor: theme.itemHover,
-                        }}
                     >
                         {lang === 'zh' ? 'EN' : '中文'}
-                    </div>
-                    <div style={{ width: '1px', height: '12px', backgroundColor: theme.border }} />
-                    <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        backgroundColor: theme.itemHover
-                    }}>
+                    </button>
+                    <div className="ui-divider-vertical" style={{ height: '12px' }} />
+                    <div className="ui-statusbar-tag">
                         <span style={{ fontWeight: '600', letterSpacing: '0.5px' }}>3D BROWSER</span>
                     </div>
                 </div>

@@ -196,6 +196,10 @@ body {
   cursor: move;
 }
 
+.ui-panel-header-static {
+  cursor: default;
+}
+
 .ui-panel-title {
   flex: 1;
   overflow: hidden;
@@ -1387,6 +1391,12 @@ body.font-loose,
   font-weight: 600;
   letter-spacing: 0.5px;
   cursor: default;
+  border: none;
+  font-family: inherit;
+}
+
+.ui-statusbar-tag:hover {
+  background-color: var(--bg-active);
 }
 
 /* 链接 ：下划线区分，不用彩色 */
@@ -1444,6 +1454,50 @@ body.font-loose,
 .ui-search-bar {
   padding: 8px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.ui-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ui-search-clear {
+  position: absolute;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ui-search-clear:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ui-search-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-search-hit {
+  background-color: var(--accent-subtle);
+  color: var(--text-primary);
+  border-radius: 2px;
+}
+
+.ui-input-compact {
+  min-height: 28px;
+  padding-right: 28px;
 }
 
 /* 数据行 - 紧凑型 */
@@ -1533,6 +1587,148 @@ body.font-loose,
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ui-tree-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ui-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.ui-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-primary);
+}
+
+.ui-panel-section-fill {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ui-panel-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ui-form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.ui-form-row-top {
+  align-items: flex-start;
+}
+
+.ui-form-label {
+  min-width: 84px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.ui-form-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ui-form-value-stretch {
+  flex: 1;
+}
+
+.ui-slider-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-slider-value {
+  min-width: 44px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.ui-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.ui-inline-actions-wrap {
+  flex-wrap: wrap;
+}
+
+.ui-empty-state {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ui-viewpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ui-viewpoint-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-panel);
+}
+
+.ui-viewpoint-preview {
+  width: 104px;
+  height: 76px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ui-viewpoint-preview:hover {
+  border-color: var(--accent);
+}
+
+.ui-viewpoint-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
 }
 
 /* 错误模态框 */

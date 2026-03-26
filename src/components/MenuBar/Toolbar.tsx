@@ -6,7 +6,7 @@ import {
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
-    IconLayers, IconChevronDown
+    IconLayers
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -20,13 +20,13 @@ interface MenuBarProps {
     handleOpenUrl?: () => void;
     handleView?: (view: string) => void;
     handleClear?: () => void;
-    handleScreenshot?: () => void;
+    openScreenshotPanel?: () => void;
     handleDisplayModeChange?: (mode: 'solid' | 'transparent') => void;
     displayMode?: 'solid' | 'transparent';
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;
@@ -173,7 +173,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                                 {!isHidden('screenshot') && (
                                     <div
                                         style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                        onClick={() => { props.handleScreenshot?.(); setOpenMenu(null); }}
+                                        onClick={() => { props.openScreenshotPanel?.(); setOpenMenu(null); }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
