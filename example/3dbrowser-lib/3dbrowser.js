@@ -8767,6 +8767,7 @@ const ThreeViewer = ({
   onLoad,
   hideDeleteModel = false
 }) => {
+  const sceneBgFollowsTheme = initialSettings?.bgColor === void 0;
   const [themeMode, setThemeMode] = usePersistentState(
     "3dbrowser_themeMode",
     () => defaultTheme || "light",
@@ -8858,7 +8859,8 @@ const ThreeViewer = ({
       sunTime: 12,
       sunShadow: false
     };
-    return initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
+    const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
+    return sceneBgFollowsTheme ? { ...merged, bgColor: theme.canvasBg } : merged;
   });
   useEffect(() => {
     if (propShowStats !== void 0) setShowStats(propShowStats);
@@ -8884,21 +8886,30 @@ const ThreeViewer = ({
   const handleThemeModeChange = useCallback((nextThemeMode) => {
     setThemeMode(nextThemeMode);
     const nextTheme = themes[nextThemeMode];
-    const prevTheme = themes[nextThemeMode === "light" ? "dark" : "light"];
     setSceneSettings((prevSettings) => {
-      const shouldFollowThemeBg = !prevSettings.bgColor || prevSettings.bgColor === prevTheme.canvasBg;
-      const merged = shouldFollowThemeBg ? { ...prevSettings, bgColor: nextTheme.canvasBg } : prevSettings;
-      if (sceneMgr.current && shouldFollowThemeBg) {
+      const merged = sceneBgFollowsTheme ? { ...prevSettings, bgColor: nextTheme.canvasBg } : prevSettings;
+      if (sceneMgr.current && sceneBgFollowsTheme) {
         sceneMgr.current.updateSettings(merged);
       }
       return merged;
     });
-  }, [setSceneSettings, setThemeMode]);
+  }, [sceneBgFollowsTheme, setSceneSettings, setThemeMode]);
   useEffect(() => {
     if (defaultTheme && defaultTheme !== themeMode) {
       handleThemeModeChange(defaultTheme);
     }
   }, [defaultTheme, themeMode, handleThemeModeChange]);
+  useEffect(() => {
+    if (!sceneBgFollowsTheme) return;
+    setSceneSettings((prevSettings) => {
+      if (prevSettings.bgColor === theme.canvasBg) return prevSettings;
+      const merged = { ...prevSettings, bgColor: theme.canvasBg };
+      if (sceneMgr.current) {
+        sceneMgr.current.updateSettings(merged);
+      }
+      return merged;
+    });
+  }, [sceneBgFollowsTheme, setSceneSettings, theme.canvasBg]);
   const hasModels = treeRoot.length > 0;
   const completedFileSetsRef = useRef(/* @__PURE__ */ new Set());
   const [errorState, setErrorState] = useState({ isOpen: false, title: "", message: "" });
@@ -9574,7 +9585,11 @@ const ThreeViewer = ({
     }
   }, [activeTool]);
   const handleSettingsUpdate = (newSettings) => {
-    const merged = { ...sceneSettings, ...newSettings };
+    const merged = {
+      ...sceneSettings,
+      ...newSettings,
+      ...sceneBgFollowsTheme && newSettings.bgColor === void 0 ? { bgColor: theme.canvasBg } : {}
+    };
     setSceneSettings(merged);
     if (sceneMgr.current) {
       sceneMgr.current.updateSettings(merged);
