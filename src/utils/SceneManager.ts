@@ -180,6 +180,7 @@ export class SceneManager {
     
     // 渐进式加载状态 (对齐 refs)
     private chunks: any[] = [];
+    private chunkIdSet = new Set<string>();
     private processingChunks = new Set<string>();
     private cancelledChunkIds = new Set<string>();
     private frustum = new THREE.Frustum();
@@ -326,6 +327,18 @@ export class SceneManager {
     private boundsScanBatchSize = 2400;
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
+
+    private registerChunk(chunk: any) {
+        this.chunks.push(chunk);
+        this.chunkIdSet.add(chunk.id);
+    }
+
+    private rebuildChunkIdSet() {
+        this.chunkIdSet.clear();
+        for (const chunk of this.chunks) {
+            this.chunkIdSet.add(chunk.id);
+        }
+    }
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -1149,7 +1162,7 @@ export class SceneManager {
                 const paddedBounds = chunkBounds.clone();
                 const padSize = chunkBounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
                 paddedBounds.expandByVector(padSize);
-                this.chunks.push({
+                this.registerChunk({
                     id: chunkId,
                     bounds: chunkBounds,
                     paddedBounds,
@@ -1646,7 +1659,7 @@ export class SceneManager {
             }
 
             if (bm) {
-                if (this.cancelledChunkIds.has(chunk.id) || !this.chunks.some(c => c.id === chunk.id)) {
+                if (this.cancelledChunkIds.has(chunk.id) || !this.chunkIdSet.has(chunk.id)) {
                     this.disposeChunkMesh(bm);
                     return;
                 }
@@ -2000,14 +2013,27 @@ export class SceneManager {
         this.checkCullingAndLoad();
         void this.createChunkGhostsProgressively(ghostSpecs);
 
-        const meshesToHide: THREE.Object3D[] = [];
-        object.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-                meshesToHide.push(child);
+        const meshesToHideSet = new Set<THREE.Mesh>();
+        for (const item of items) {
+            const sourceMesh = (item as any).sourceMesh as THREE.Mesh | undefined;
+            if (sourceMesh?.isMesh) {
+                meshesToHideSet.add(sourceMesh);
             }
-        });
+        }
+        const meshesToHide = meshesToHideSet.size > 0
+            ? Array.from(meshesToHideSet)
+            : (() => {
+                const fallbackMeshes: THREE.Mesh[] = [];
+                object.traverse((child) => {
+                    if ((child as THREE.Mesh).isMesh) {
+                        fallbackMeshes.push(child as THREE.Mesh);
+                    }
+                });
+                return fallbackMeshes;
+            })();
+
         for (let i = 0; i < meshesToHide.length; i++) {
-            const child = meshesToHide[i] as THREE.Mesh;
+            const child = meshesToHide[i];
             child.visible = false;
             child.userData.isOptimized = true;
             if (i > 0 && i % 6000 === 0) {
@@ -2196,6 +2222,7 @@ export class SceneManager {
             }
             return true;
         });
+        this.rebuildChunkIdSet();
 
         // 4. 从结构树中彻底移除该节点
         if (this.structureRoot) {
@@ -2880,7 +2907,7 @@ export class SceneManager {
             const paddedBounds = bounds.clone();
             const padSize = bounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
             paddedBounds.expandByVector(padSize);
-            this.chunks.push({
+            this.registerChunk({
                 id: chunkId,
                 bounds: bounds,
                 paddedBounds,
@@ -2982,6 +3009,7 @@ export class SceneManager {
             this.nodeMap.clear();
             this.bimIdToNodeIds.clear();
             this.chunks = [];
+            this.chunkIdSet.clear();
             this.lastReportedProgress = { loaded: -1, total: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
