@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G as GLTFExporter } from './loaders-CEnCNUVm.js';
+import { G as GLTFExporter } from './loaders-MBHA5ASo.js';
 
 function calculateGeometryMemory(geometry) {
   let bytes = 0;

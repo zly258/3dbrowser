@@ -1,19 +1,6 @@
 import * as THREE from "three";
-import { LMBLoader } from "./lmbLoader";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
-import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { TFunc, ProgressCallback } from "../theme/Locales";
 import { SceneSettings } from "../utils/SceneManager";
-import { loadIFC } from "./IFCLoader";
-import { OCCTLoader } from "./OCCTLoader";
 import { createResourceResolver } from "./resourceResolver";
 
 export interface LoadedItem {
@@ -41,11 +28,19 @@ const STAGE_WEIGHTS: Record<LoadStage, [number, number]> = {
     addToScene: [92, 100]
 };
 
+const libPathCache = new Map<string, string>();
+
+function normalizeLibPath(libPath: string) {
+    if (!libPathCache.has(libPath)) {
+        libPathCache.set(libPath, libPath.replace(/\/$/, ""));
+    }
+    return libPathCache.get(libPath)!;
+}
+
 function createLoadingManager(
     files: (File | string)[],
-    libPath: string,
-    settings: SceneSettings,
-    renderer?: THREE.WebGLRenderer
+    _libPath: string,
+    _settings: SceneSettings
 ) {
     const resourceResolver = createResourceResolver(files);
     const manager = new THREE.LoadingManager();
@@ -54,36 +49,60 @@ function createLoadingManager(
         manager.setURLModifier((url) => resourceResolver.resolve(url));
     }
 
+    const cleanup = () => {
+        resourceResolver?.dispose();
+    };
+
+    return { manager, cleanup, resourceResolver };
+}
+
+async function createGltfLoaderRuntime(manager: THREE.LoadingManager, libPath: string) {
+    const [
+        { GLTFLoader },
+        { DRACOLoader },
+        { KTX2Loader },
+        { MeshoptDecoder }
+    ] = await Promise.all([
+        import("three/examples/jsm/loaders/GLTFLoader.js"),
+        import("three/examples/jsm/loaders/DRACOLoader.js"),
+        import("three/examples/jsm/loaders/KTX2Loader.js"),
+        import("three/examples/jsm/libs/meshopt_decoder.module.js")
+    ]);
+
+    const normalizedLibPath = normalizeLibPath(libPath);
+    const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
+    let probeRenderer: THREE.WebGLRenderer | null = null;
+
     const dracoLoader = new DRACOLoader(manager);
-    dracoLoader.setDecoderPath(`${libPath.replace(/\/$/, "")}/draco/gltf/`);
+    dracoLoader.setDecoderPath(`${normalizedLibPath}/draco/gltf/`);
 
     const ktx2Loader = new KTX2Loader(manager);
-    ktx2Loader.setTranscoderPath(`${libPath.replace(/\/$/, "")}/basis/`);
-    let probeRenderer: THREE.WebGLRenderer | null = null;
-    if (!renderer && typeof document !== "undefined") {
+    ktx2Loader.setTranscoderPath(`${normalizedLibPath}/basis/`);
+
+    if (typeof document !== "undefined") {
         try {
             probeRenderer = new THREE.WebGLRenderer({ canvas: document.createElement("canvas") });
-            renderer = probeRenderer;
-        } catch (error) {
-            console.warn("[LoaderUtils] Unable to create probe renderer for KTX2", error);
-        }
-    }
-    if (renderer) {
-        try {
-            ktx2Loader.detectSupport(renderer);
+            ktx2Loader.detectSupport(probeRenderer);
         } catch (error) {
             console.warn("[LoaderUtils] KTX2 detectSupport failed", error);
         }
     }
 
-    const cleanup = () => {
-        resourceResolver?.dispose();
-        dracoLoader.dispose();
-        ktx2Loader.dispose();
-        probeRenderer?.dispose();
-    };
+    const loader = new GLTFLoader(manager);
+    loader.setDRACOLoader(dracoLoader);
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    if (supportsCompressedTextures) {
+        loader.setKTX2Loader(ktx2Loader);
+    }
 
-    return { manager, dracoLoader, ktx2Loader, cleanup, settings, resourceResolver };
+    return {
+        loader,
+        cleanup: () => {
+            dracoLoader.dispose();
+            ktx2Loader.dispose();
+            probeRenderer?.dispose();
+        }
+    };
 }
 
 function createStageProgressReporter(
@@ -115,39 +134,39 @@ async function loadObjectByExtension(
 ) {
     const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
     const loaderContext = createLoadingManager(files, libPath, settings);
-    const { manager, dracoLoader, ktx2Loader, cleanup, resourceResolver } = loaderContext;
+    const { manager, cleanup, resourceResolver } = loaderContext;
 
     try {
         if (ext === "lmb") {
+            const { LMBLoader } = await import("./lmbLoader");
             const loader = new LMBLoader();
             reportStage("parse", 0);
             return await loader.loadAsync(url, (p) => reportStage("parse", p * 100));
         }
 
         if (ext === "glb" || ext === "gltf") {
-            const loader = new GLTFLoader(manager);
-            loader.setDRACOLoader(dracoLoader);
-            loader.setMeshoptDecoder(MeshoptDecoder);
-            if (supportsCompressedTextures) {
-                loader.setKTX2Loader(ktx2Loader);
-            }
-
+            const { loader, cleanup: cleanupGltf } = await createGltfLoaderRuntime(manager, libPath);
             reportStage("parse", 0);
-            const gltf = await new Promise<any>((resolve, reject) => {
-                loader.load(
-                    url,
-                    resolve,
-                    (e) => {
-                        if (e.total && e.total > 0) reportStage("parse", (e.loaded / e.total) * 100);
-                        else reportStage("parse", 50);
-                    },
-                    reject
-                );
-            });
-            return gltf.scene;
+            try {
+                const gltf = await new Promise<any>((resolve, reject) => {
+                    loader.load(
+                        url,
+                        resolve,
+                        (e) => {
+                            if (e.total && e.total > 0) reportStage("parse", (e.loaded / e.total) * 100);
+                            else reportStage("parse", 50);
+                        },
+                        reject
+                    );
+                });
+                return gltf.scene;
+            } finally {
+                cleanupGltf();
+            }
         }
 
         if (ext === "fbx") {
+            const { FBXLoader } = await import("three/examples/jsm/loaders/FBXLoader.js");
             const loader = new FBXLoader(manager);
             reportStage("parse", 0);
             return await new Promise<THREE.Group>((resolve, reject) => {
@@ -164,11 +183,16 @@ async function loadObjectByExtension(
         }
 
         if (ext === "ifc") {
+            const { loadIFC } = await import("./IFCLoader");
             reportStage("parse", 0);
             return await loadIFC(typeof fileOrUrl === "string" ? url : fileOrUrl, (p, msg) => reportStage("parse", p, msg), t, libPath);
         }
 
         if (ext === "obj") {
+            const [{ OBJLoader }, { MTLLoader }] = await Promise.all([
+                import("three/examples/jsm/loaders/OBJLoader.js"),
+                import("three/examples/jsm/loaders/MTLLoader.js")
+            ]);
             const objLoader = new OBJLoader(manager);
             const mtlName = url.replace(/\.[^.]+$/i, ".mtl");
             if (resourceResolver?.has(mtlName)) {
@@ -192,6 +216,7 @@ async function loadObjectByExtension(
         }
 
         if (ext === "stl") {
+            const { STLLoader } = await import("three/examples/jsm/loaders/STLLoader.js");
             const loader = new STLLoader(manager);
             reportStage("parse", 0);
             const geometry = await loader.loadAsync(url, (e) => {
@@ -201,6 +226,7 @@ async function loadObjectByExtension(
         }
 
         if (ext === "ply") {
+            const { PLYLoader } = await import("three/examples/jsm/loaders/PLYLoader.js");
             const loader = new PLYLoader(manager);
             reportStage("parse", 0);
             const geometry = await loader.loadAsync(url, (e) => {
@@ -213,6 +239,7 @@ async function loadObjectByExtension(
         }
 
         if (ext === "3mf") {
+            const { ThreeMFLoader } = await import("three/examples/jsm/loaders/3MFLoader.js");
             const loader = new ThreeMFLoader(manager);
             reportStage("parse", 0);
             return await loader.loadAsync(url, (e) => {
@@ -226,6 +253,7 @@ async function loadObjectByExtension(
                 ? await fetch(url).then((r) => r.arrayBuffer())
                 : await fileOrUrl.arrayBuffer();
             const wasmUrl = `${libPath}/occt-import-js/occt-import-js.wasm`;
+            const { OCCTLoader } = await import("./OCCTLoader");
             const loader = new OCCTLoader(wasmUrl);
             reportStage("parse", 0);
             return await loader.load(buffer, t, (p, msg) => reportStage("parse", p, msg));
