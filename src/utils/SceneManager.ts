@@ -319,6 +319,10 @@ export class SceneManager {
     private movingPeripheralCursor = 0;
     private movingPeripheralLastRefreshAt = 0;
     private postMoveRecoveryUntil = 0;
+    private readonly chunkCullingTempSize = new THREE.Vector3();
+    private readonly chunkCullingTempDirection = new THREE.Vector3();
+    private readonly chunkCullingTempForward = new THREE.Vector3();
+    private readonly chunkCullingTempCenterNdc = new THREE.Vector3();
     private boundsScanBatchSize = 2400;
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
@@ -1382,9 +1386,11 @@ export class SceneManager {
 
         const padding = this.chunkPadding;
         const cameraPos = this.camera.position;
-        const cameraForward = new THREE.Vector3();
+        const cameraForward = this.chunkCullingTempForward;
         this.camera.getWorldDirection(cameraForward);
-        const toChunkDirection = new THREE.Vector3();
+        const toChunkDirection = this.chunkCullingTempDirection;
+        const tempSize = this.chunkCullingTempSize;
+        const tempCenterNdc = this.chunkCullingTempCenterNdc;
         const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
         const canvasHeight = this.renderer.domElement.clientHeight;
 
@@ -1395,7 +1401,7 @@ export class SceneManager {
         const totalChunks = this.chunks.length;
         this.chunks.forEach((c, chunkIndex) => {
             if (!c.paddedBounds || c._padding !== padding) {
-                const size = c.bounds.getSize(new THREE.Vector3());
+                const size = c.bounds.getSize(tempSize);
                 const pb = c.bounds.clone();
                 pb.expandByVector(size.multiplyScalar(padding));
                 c.paddedBounds = pb;
@@ -1412,9 +1418,9 @@ export class SceneManager {
             
             // 计算屏幕空间占用大小 (SSE 优化)
             // 对于正交相机，大小与距离无关，只与 zoom 和 frustumSize 有关
-            const boxSize = c.bounds.getSize(new THREE.Vector3()).length();
+            const boxSize = c.bounds.getSize(tempSize).length();
             const pixelSize = (boxSize / viewHeight) * canvasHeight;
-            const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
+            const centerNDC = tempCenterNdc.copy(c.center).applyMatrix4(this.projScreenMatrix);
             const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
             const centrality = 1.0 - Math.min(1.0, ndcDistance);
             const forwardness = dist > 1e-5
