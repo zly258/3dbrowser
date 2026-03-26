@@ -159,7 +159,7 @@ export declare class SceneManager {
     animate(): void;
     private updateAdaptiveQuality;
     private initHardwareProfile;
-    private analyzeObjectStats;
+    private collectObjectOverview;
     private countStructureRenderableNodes;
     private estimateNbimStats;
     private registerOriginalStats;
@@ -172,7 +172,6 @@ export declare class SceneManager {
     private unregisterOptimizedMeshMapping;
     private registerOptimizedMeshMapping;
     private ensureChunkGhost;
-    private countRenderableMeshes;
     private attachStructureRoot;
     private replaceStructureNode;
     private buildAndRegisterModelStructure;
