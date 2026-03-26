@@ -6,7 +6,7 @@ import {
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
-    IconImage, IconLayers, IconChevronDown
+    IconLayers, IconChevronDown
 } from "../../theme/Icons";
 
 interface MenuBarProps {

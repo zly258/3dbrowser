@@ -3,7 +3,7 @@ import { TFunc, Lang } from "../../theme/Locales";
 import { SceneSettings } from "../../utils/SceneManager";
 /**
  * SettingsPanel - 设置面板主组件
- * 提供主题、语言、字体大小、视口、灯光等配置选项
+ * 提供主题、语言、字体大小和大模型优先相关配置
  */
 export declare const SettingsPanel: React.FC<SettingsModalProps>;
 /**

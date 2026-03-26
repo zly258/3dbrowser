@@ -1,6 +1,6 @@
 import React from "react";
-import { IconClose } from "../theme/Icons";
 import { TFunc } from "../theme/Locales";
+import { FloatingPanel } from "./ToolPanels/FloatingPanel";
 
 interface ConfirmModalProps {
     isOpen: boolean;
@@ -16,27 +16,50 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
     if (!isOpen) return null;
 
     return (
-        <div className="ui-modal-overlay">
-            <div className="ui-modal" style={{ width: '320px', height: 'auto' }}>
-                <div className="ui-modal-header">
-                    <span className="ui-modal-title">{title}</span>
-                    <button className="ui-modal-close" onClick={onCancel}>
-                        <IconClose width={20} height={20} />
-                    </button>
-                </div>
-                
-                <div className="ui-modal-body text-base">
+        <FloatingPanel
+            title={title}
+            onClose={onCancel}
+            width={360}
+            height={220}
+            modal={true}
+            movable={false}
+            theme={theme}
+        >
+            <div
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '100%',
+                    padding: '16px',
+                    gap: '16px'
+                }}
+            >
+                <div
+                    className="text-base"
+                    style={{
+                        flex: 1,
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.6
+                    }}
+                >
                     {message}
                 </div>
-
-                <div className="ui-modal-footer">
-                     <button 
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: '10px',
+                        borderTop: '1px solid var(--border-color)',
+                        paddingTop: '14px'
+                    }}
+                >
+                    <button
                         className="ui-btn ui-btn-ghost w-[80px]"
                         onClick={onCancel}
                     >
                         {t("btn_cancel")}
                     </button>
-                    <button 
+                    <button
                         className="ui-btn ui-btn-danger w-[80px]"
                         style={{ backgroundColor: 'var(--error)', borderColor: 'var(--error)', color: 'white' }}
                         onClick={onConfirm}
@@ -45,6 +68,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                     </button>
                 </div>
             </div>
-        </div>
+        </FloatingPanel>
     );
 };
