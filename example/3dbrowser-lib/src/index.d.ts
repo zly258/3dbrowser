@@ -1,3 +1,4 @@
+import './styles/index.css';
 export { ThreeViewer } from './ThreeViewer';
 export type { ThreeViewerProps } from './ThreeViewer';
 export * from './utils/SceneManager';

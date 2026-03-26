@@ -149,6 +149,8 @@ export declare class SceneManager {
     private updateAdaptiveQuality;
     private initHardwareProfile;
     private analyzeObjectStats;
+    private countStructureRenderableNodes;
+    private estimateNbimStats;
     private registerOriginalStats;
     private unregisterOriginalStats;
     private disposeChunkMesh;

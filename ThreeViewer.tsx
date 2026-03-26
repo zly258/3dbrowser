@@ -18,7 +18,7 @@ import { AboutModal } from "./src/components/AboutModal";
 import { ViewCube } from "./src/components/ViewCube";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { ContextMenu } from "./src/components/ContextMenu";
-import { IconClose, IconSun, IconMoon, IconActivity } from "./src/theme/Icons";
+import { IconClose, IconSun, IconMoon, IconActivity, IconBox, IconGrid } from "./src/theme/Icons";
 import { usePersistentState } from "./src/hooks/usePersistentState";
 import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "./src/viewer/fileLoading";
 
@@ -1940,11 +1940,13 @@ export const ThreeViewer = ({
                             paddingLeft: '12px',
                             borderLeft: `1px solid ${theme.border}`
                         }}>
-                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Original Meshes">
-                                M {formatNumber(stats.meshes)}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }} title="Original Meshes">
+                                <IconBox width={14} height={14} />
+                                <span>{formatNumber(stats.meshes)}</span>
                             </div>
-                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Triangles">
-                                F {formatNumber(stats.faces)}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }} title="Triangles">
+                                <IconGrid width={14} height={14} />
+                                <span>{formatNumber(stats.faces)}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
                                 <IconActivity width={14} height={14} />
