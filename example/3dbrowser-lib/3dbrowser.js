@@ -102,6 +102,8 @@ class SceneManager {
     this.initialChunkLoadTarget = 18;
     this.warmupChunkBoost = 8;
     this.chunkWarmupActive = false;
+    this.movingFocusCentralityThreshold = 0.18;
+    this.movingFocusPixelThreshold = 28;
     this.canvas = canvas;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -730,8 +732,12 @@ class SceneManager {
       const inRange = dist < this.maxRenderDistance;
       const boxSize = c.bounds.getSize(new THREE.Vector3()).length();
       const pixelSize = boxSize / viewHeight * canvasHeight;
+      const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
+      const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
+      const centrality = 1 - Math.min(1, ndcDistance);
       const isTooSmall = pixelSize < 4;
-      const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall;
+      const shouldHidePeripheralWhileMoving = this.isCameraMoving && centrality < this.movingFocusCentralityThreshold && pixelSize < this.movingFocusPixelThreshold;
+      const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
       if (c.loaded) {
         loadedChunks.push(c);
         if (c.mesh) {
@@ -747,14 +753,15 @@ class SceneManager {
           }
         }
       } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
-        const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
-        const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
-        const centrality = 1 - Math.min(1, ndcDistance);
         const viewportBoost = centrality > 0.8 ? 4.5 : centrality > 0.62 ? 2.8 : 1;
         const sizeScore = Math.min(8, pixelSize / 120);
         const distanceScore = 1e3 / (dist + 1);
         const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget ? centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0 : 0;
-        c.priority = warmupBoost + viewportBoost * 1e3 + sizeScore * 120 + distanceScore + centrality * 300;
+        const movingPriorityBoost = this.isCameraMoving ? centrality > 0.65 ? 900 : centrality > 0.4 ? 250 : -250 : 0;
+        if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
+          return;
+        }
+        c.priority = movingPriorityBoost + warmupBoost + viewportBoost * 1e3 + sizeScore * 120 + distanceScore + centrality * 300;
         toLoad.push(c);
       }
     });
@@ -774,7 +781,8 @@ class SceneManager {
       toLoad.sort((a, b) => b.priority - a.priority);
       const available = this.maxConcurrentChunkLoads - this.processingChunks.size;
       const warmupExtra = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget ? this.warmupChunkBoost : 0;
-      const count = Math.min(available, this.maxChunkLoadsPerFrame + warmupExtra, toLoad.length);
+      const movingBudget = this.isCameraMoving ? Math.max(2, Math.min(6, Math.floor(this.maxChunkLoadsPerFrame / 4))) : this.maxChunkLoadsPerFrame + warmupExtra;
+      const count = Math.min(available, movingBudget, toLoad.length);
       for (let i = 0; i < count; i++) {
         this.loadChunk(toLoad[i]);
       }

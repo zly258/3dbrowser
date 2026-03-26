@@ -138,6 +138,8 @@ export declare class SceneManager {
     private initialChunkLoadTarget;
     private warmupChunkBoost;
     private chunkWarmupActive;
+    private movingFocusCentralityThreshold;
+    private movingFocusPixelThreshold;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
     private updateSunPosition;
