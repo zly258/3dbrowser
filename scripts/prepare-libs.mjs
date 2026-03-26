@@ -6,12 +6,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
-const srcDir = path.join(
+const srcDistLibsDir = path.join(
   rootDir,
   "node_modules",
   "@zhangly1403",
   "3dbrowser",
   "dist",
+  "libs"
+);
+const srcRootLibsDir = path.join(
+  rootDir,
+  "node_modules",
+  "@zhangly1403",
+  "3dbrowser",
   "libs"
 );
 const dstDir = path.join(rootDir, "public", "libs");
@@ -39,8 +46,10 @@ function copyDirRecursive(from, to) {
   }
 }
 
+const srcDir = fs.existsSync(srcDistLibsDir) ? srcDistLibsDir : srcRootLibsDir;
+
 if (!fs.existsSync(srcDir)) {
-  console.error(`未找到库资源目录: ${srcDir}`);
+  console.error(`未找到库资源目录: ${srcDistLibsDir} 或 ${srcRootLibsDir}`);
   process.exit(1);
 }
 

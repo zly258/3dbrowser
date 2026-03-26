@@ -1,0 +1,33 @@
+import React from "react";
+import { ThemeColors } from "../../theme/Styles";
+interface MenuBarProps {
+    t: (key: string) => string;
+    theme: ThemeColors;
+    themeType?: 'dark' | 'light';
+    setThemeType?: (type: 'dark' | 'light') => void;
+    handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleOpenFolder?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleOpenUrl?: () => void;
+    handleView?: (view: string) => void;
+    handleClear?: () => void;
+    handleScreenshot?: () => void;
+    handleDisplayModeChange?: (mode: 'solid' | 'transparent') => void;
+    displayMode?: 'solid' | 'transparent';
+    pickEnabled?: boolean;
+    setPickEnabled?: (enabled: boolean) => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'viewpoint' | 'sun' | 'boxSelect') => void;
+    showOutline?: boolean;
+    setShowOutline?: (show: boolean) => void;
+    showProps?: boolean;
+    setShowProps?: (show: boolean) => void;
+    showStats?: boolean;
+    setShowStats?: (show: boolean) => void;
+    sceneMgr?: any;
+    hiddenMenus?: string[];
+    onOpenAbout?: () => void;
+    hasModels?: boolean;
+}
+export declare const Toolbar: React.FC<MenuBarProps>;
+export {};

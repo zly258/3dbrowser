@@ -1,0 +1,42 @@
+{
+  "name": "@zhangly1403/3dbrowser",
+  "version": "1.5.6",
+  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, 3D Tiles, GLB, and more.",
+  "keywords": [
+    "threejs",
+    "bim",
+    "ifc",
+    "3dtiles",
+    "3d-viewer",
+    "browser"
+  ],
+  "license": "CC-BY-NC-4.0",
+  "author": "zhangly1403@163.com",
+  "type": "module",
+  "main": "./3dbrowser.js",
+  "module": "./3dbrowser.js",
+  "types": "./ThreeViewer.d.ts",
+  "exports": {
+    ".": {
+      "types": "./ThreeViewer.d.ts",
+      "import": "./3dbrowser.js",
+      "require": "./3dbrowser.js"
+    }
+  },
+  "files": [
+    "3dbrowser.css",
+    "3dbrowser.js",
+    "IFCLoader-*.js",
+    "OCCTLoader-*.js",
+    "lmbLoader-*.js",
+    "loaders-*.js",
+    "meshopt_decoder.module-*.js",
+    "utils-*.js",
+    "ThreeViewer.d.ts",
+    "assets",
+    "libs",
+    "src",
+    "README.md",
+    "LICENSE"
+  ]
+}
