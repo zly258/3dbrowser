@@ -1,6 +1,7 @@
 import React, { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
 // @ts-ignore
 import * as THREE from "three";
+import "./src/styles/index.css";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
 import { parseTilesetFromFolder } from "./src/loader/LoaderUtils";
 import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
