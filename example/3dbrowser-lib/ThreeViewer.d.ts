@@ -1,3 +1,4 @@
+import "./src/styles/index.css";
 import { SceneManager, SceneSettings } from "./src/utils/SceneManager";
 import { Lang } from "./src/theme/Locales";
 export interface ThreeViewerProps {
