@@ -1,11 +1,9 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime';
 import React, { useRef, useCallback, useState, useEffect, useMemo, Component } from 'react';
 import * as THREE from 'three';
-import { Loader, FileLoader } from 'three';
-import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, M as MTLLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader, D as DRACOLoader, K as KTX2Loader } from './loaders-CEnCNUVm.js';
+import { O as OrbitControls } from './loaders-MBHA5ASo.js';
 import { TilesRenderer } from '3d-tiles-renderer';
-import { c as calculateGeometryMemory, b as buildOctree, a as collectLeafNodes, d as createBatchedMeshFromItemsAsync, e as collectItemsBatched, f as collectItems, g as convertLMBTo3DTiles, h as exportGLB, i as exportLMB } from './utils-BgwjYSL5.js';
-import * as WebIFC from 'web-ifc';
+import { c as calculateGeometryMemory, b as buildOctree, a as collectLeafNodes, d as createBatchedMeshFromItemsAsync, e as collectItemsBatched, f as collectItems, g as convertLMBTo3DTiles, h as exportGLB, i as exportLMB } from './utils-D0sDuH7g.js';
 
 class SceneManager {
   constructor(canvas) {
@@ -3720,1139 +3718,6 @@ class SceneManager {
   }
 }
 
-const LMB_EXPRESS_ID_START = 1e6;
-const LMB_SCALE_SNAP_1 = 0.01;
-const LMB_SCALE_SNAP_2 = 0.02;
-const NORMAL_INV_PRECISION = 1 / 511;
-const NORMAL_COMPONENT_MASK = 1023;
-const NORMAL_SHIFT_X = 20;
-const NORMAL_SHIFT_Y = 10;
-const NORMAL_SIGN_THRESHOLD = 512;
-const NORMAL_SIGN_OFFSET = 1024;
-const setMaterialProperties = (material) => {
-  if (!material) return;
-  material.side = THREE.DoubleSide;
-  material.flatShading = false;
-  material.transparent = false;
-  material.depthWrite = true;
-  material.depthTest = true;
-};
-function decompressVertice(baseVertex, vertexScale, vertex) {
-  const baseX = baseVertex[0];
-  const baseY = baseVertex[1];
-  const baseZ = baseVertex[2];
-  const scaleX = vertexScale[0];
-  const scaleY = vertexScale[1];
-  const scaleZ = vertexScale[2];
-  const qX = vertex[0];
-  const qY = vertex[1];
-  const qZ = vertex[2];
-  const rx = baseX + qX / scaleX;
-  const ry = baseY + qY / scaleY;
-  const rz = baseZ + qZ / scaleZ;
-  return { rx, ry, rz };
-}
-const decodeNormal = (packed) => {
-  let x = packed >> NORMAL_SHIFT_X & NORMAL_COMPONENT_MASK;
-  let y = packed >> NORMAL_SHIFT_Y & NORMAL_COMPONENT_MASK;
-  let z = packed & NORMAL_COMPONENT_MASK;
-  x = x >= NORMAL_SIGN_THRESHOLD ? x - NORMAL_SIGN_OFFSET : x;
-  y = y >= NORMAL_SIGN_THRESHOLD ? y - NORMAL_SIGN_OFFSET : y;
-  z = z >= NORMAL_SIGN_THRESHOLD ? z - NORMAL_SIGN_OFFSET : z;
-  let nx = x * NORMAL_INV_PRECISION;
-  let ny = y * NORMAL_INV_PRECISION;
-  let nz = z * NORMAL_INV_PRECISION;
-  const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
-  if (length > 0) {
-    nx /= length;
-    ny /= length;
-    nz /= length;
-  }
-  return { nx, ny, nz };
-};
-const parseColor = (color) => {
-  const r = color >> 16 & 255;
-  const g = color >> 8 & 255;
-  const b = color & 255;
-  return r << 16 | g << 8 | b;
-};
-const extractScaleFromMatrix3 = (matrix) => {
-  if (!matrix || matrix.length < 9) {
-    return [1, 1, 1];
-  }
-  const sx = Math.sqrt(matrix[0] * matrix[0] + matrix[1] * matrix[1] + matrix[2] * matrix[2]);
-  const sy = Math.sqrt(matrix[3] * matrix[3] + matrix[4] * matrix[4] + matrix[5] * matrix[5]);
-  const sz = Math.sqrt(matrix[6] * matrix[6] + matrix[7] * matrix[7] + matrix[8] * matrix[8]);
-  const processScale = (scale) => {
-    if (Math.abs(scale - LMB_SCALE_SNAP_1) < 1e-6) return LMB_SCALE_SNAP_1;
-    if (Math.abs(scale - LMB_SCALE_SNAP_2) < 1e-6) return LMB_SCALE_SNAP_2;
-    return scale;
-  };
-  return [processScale(sx), processScale(sy), processScale(sz)];
-};
-const normalizeMatrix3 = (matrix) => {
-  if (!matrix || matrix.length < 9) return Float32Array.from(matrix);
-  const scales = extractScaleFromMatrix3(matrix);
-  const normalized = Float32Array.from(matrix);
-  for (let i = 0; i < 3; i++) {
-    const offset = i * 3;
-    const scale = scales[i];
-    if (Math.abs(scale) > 1e-6) {
-      normalized[offset] /= scale;
-      normalized[offset + 1] /= scale;
-      normalized[offset + 2] /= scale;
-    }
-  }
-  return normalized;
-};
-const composeMatrixByMatrix3 = (matrix, position) => {
-  const matrix4 = new THREE.Matrix4();
-  if (matrix && matrix.length >= 9 && position && position.length >= 3) {
-    if (matrix.some((x) => isNaN(x)) || position.some((x) => isNaN(x))) {
-      matrix4.identity();
-      return matrix4;
-    }
-    const scales = extractScaleFromMatrix3(matrix);
-    const normalizedRotation = normalizeMatrix3(matrix);
-    const array = [
-      normalizedRotation[0] * scales[0],
-      normalizedRotation[1] * scales[0],
-      normalizedRotation[2] * scales[0],
-      0,
-      normalizedRotation[3] * scales[1],
-      normalizedRotation[4] * scales[1],
-      normalizedRotation[5] * scales[1],
-      0,
-      normalizedRotation[6] * scales[2],
-      normalizedRotation[7] * scales[2],
-      normalizedRotation[8] * scales[2],
-      0,
-      position[0],
-      position[1],
-      position[2],
-      1
-    ];
-    matrix4.fromArray(array);
-  } else {
-    matrix4.identity();
-    if (position && position.length >= 3 && !position.some((x) => isNaN(x))) {
-      matrix4.setPosition(position[0], position[1], position[2]);
-    }
-  }
-  return matrix4;
-};
-class LMBLoader extends Loader {
-  static {
-    this.expressIdCounter = LMB_EXPRESS_ID_START;
-  }
-  constructor(manager) {
-    super(manager);
-    this.manager = manager || THREE.DefaultLoadingManager;
-  }
-  async loadAsync(url, onProgress) {
-    const loader = new FileLoader(this.manager);
-    loader.setResponseType("arraybuffer");
-    let buffer = await new Promise((resolve, reject) => {
-      loader.load(url, (data) => resolve(data), onProgress, reject);
-    });
-    const isCompressed = url.split("?")[0].split("#")[0].toLowerCase().endsWith("lmbz");
-    if (isCompressed) throw new Error("不支持 lmbz 压缩格式，请使用 .lmb");
-    return this.parse(buffer, onProgress);
-  }
-  parse(buffer, onProgress = () => {
-  }) {
-    const view = new DataView(buffer);
-    let offset = 0;
-    const position = new Float32Array(3);
-    for (let i = 0; i < 3; i++) {
-      position[i] = view.getFloat32(offset, true);
-      offset += 4;
-    }
-    const colorCount = view.getUint32(offset, true);
-    offset += 4;
-    const nodeCount = view.getUint32(offset, true);
-    offset += 4;
-    let currentStep = 0;
-    const totalSteps = colorCount + nodeCount;
-    const colors = [];
-    for (let i = 0; i < colorCount; i++) {
-      onProgress(currentStep / totalSteps);
-      currentStep++;
-      const color = view.getUint32(offset, true);
-      colors.push(color);
-      offset += 4;
-    }
-    const root = new THREE.Group();
-    root.name = "LMB_Root";
-    if (!isNaN(position[0])) {
-      root.position.set(position[0], position[1], position[2]);
-    }
-    const materials = colors.map((color) => {
-      const material = new THREE.MeshPhongMaterial({
-        color: new THREE.Color(parseColor(color)),
-        side: THREE.DoubleSide,
-        flatShading: false,
-        shininess: 30
-      });
-      setMaterialProperties(material);
-      return material;
-    });
-    for (let i = 0; i < nodeCount; i++) {
-      onProgress(currentStep / totalSteps);
-      currentStep++;
-      const node = this.parseNode(buffer, view, offset);
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(node.vertices, 3));
-      geometry.setAttribute("normal", new THREE.Float32BufferAttribute(node.normals, 3));
-      geometry.setIndex(new THREE.Uint32BufferAttribute(node.indices, 1));
-      geometry.computeBoundingBox();
-      const nodeName = node.name && node.name.length > 0 ? node.name : `Node_${i}`;
-      const expressID = LMBLoader.expressIdCounter++;
-      geometry.userData = { expressID, bimId: String(expressID) };
-      if (node.instances.length > 0) {
-        const instancedMesh = new THREE.InstancedMesh(
-          geometry,
-          materials[node.colorIndex],
-          node.instances.length + 1
-        );
-        instancedMesh.name = nodeName;
-        instancedMesh.userData.expressID = expressID;
-        instancedMesh.userData.bimId = String(expressID);
-        const nodeMatrix = composeMatrixByMatrix3(node.matrix, node.position);
-        instancedMesh.setMatrixAt(0, nodeMatrix);
-        instancedMesh.setColorAt(0, new THREE.Color(parseColor(colors[node.colorIndex])));
-        node.instances.forEach((instance, index) => {
-          const instanceMatrix = composeMatrixByMatrix3(instance.matrix, instance.position);
-          instancedMesh.setMatrixAt(index + 1, instanceMatrix);
-          instancedMesh.setColorAt(index + 1, new THREE.Color(parseColor(colors[instance.colorIndex])));
-        });
-        root.add(instancedMesh);
-      } else {
-        const mesh = new THREE.Mesh(geometry, materials[node.colorIndex]);
-        mesh.name = nodeName;
-        mesh.userData.expressID = expressID;
-        mesh.userData.bimId = String(expressID);
-        const matrix = composeMatrixByMatrix3(node.matrix, node.position);
-        mesh.applyMatrix4(matrix);
-        root.add(mesh);
-      }
-      offset = node.nextOffset;
-    }
-    onProgress(1);
-    return root;
-  }
-  parseNode(buffer, view, offset) {
-    const nameLength = view.getUint16(offset, true);
-    offset += 2;
-    const name = new TextDecoder().decode(new Uint8Array(buffer, offset, nameLength));
-    offset += nameLength;
-    while (offset % 4 !== 0) offset++;
-    const matrix = new Float32Array(9);
-    for (let i = 0; i < 9; i++) {
-      matrix[i] = view.getFloat32(offset, true);
-      offset += 4;
-    }
-    const nodePosition = new Float32Array(3);
-    for (let i = 0; i < 3; i++) {
-      nodePosition[i] = view.getFloat32(offset, true);
-      offset += 4;
-    }
-    const baseVertex = new Float32Array(3);
-    for (let i = 0; i < 3; i++) {
-      baseVertex[i] = view.getFloat32(offset, true);
-      offset += 4;
-    }
-    const vertexScale = new Float32Array(3);
-    for (let i = 0; i < 3; i++) {
-      vertexScale[i] = view.getFloat32(offset, true);
-      offset += 4;
-    }
-    const vertexCount = view.getUint32(offset, true);
-    offset += 4;
-    const vertices = new Float32Array(vertexCount * 3);
-    vertices[0] = baseVertex[0];
-    vertices[1] = baseVertex[1];
-    vertices[2] = baseVertex[2];
-    for (let i = 0; i < vertexCount - 1; i++) {
-      const packedvertex = new Int16Array(3);
-      for (let j = 0; j < 3; j++) {
-        packedvertex[j] = view.getInt16(offset, true);
-        offset += 2;
-      }
-      const { rx, ry, rz } = decompressVertice(baseVertex, vertexScale, packedvertex);
-      vertices[(i + 1) * 3] = rx;
-      vertices[(i + 1) * 3 + 1] = ry;
-      vertices[(i + 1) * 3 + 2] = rz;
-    }
-    while (offset % 4 !== 0) offset++;
-    const normalCount = vertexCount;
-    const normals = new Float32Array(normalCount * 3);
-    for (let i = 0; i < normalCount; i++) {
-      const compressedNormal = view.getUint32(offset, true);
-      offset += 4;
-      const { nx, ny, nz } = decodeNormal(compressedNormal);
-      normals[i * 3] = nx;
-      normals[i * 3 + 1] = ny;
-      normals[i * 3 + 2] = nz;
-    }
-    while (offset % 4 !== 0) offset++;
-    const indexCount = view.getUint32(offset, true);
-    offset += 4;
-    const indexSize = vertexCount <= 255 ? 1 : vertexCount <= 65535 ? 2 : 4;
-    let indices;
-    if (vertexCount <= 255) indices = new Uint8Array(indexCount);
-    else if (vertexCount <= 65535) indices = new Uint16Array(indexCount);
-    else indices = new Uint32Array(indexCount);
-    for (let i = 0; i < indexCount; i++) {
-      if (indexSize === 1) indices[i] = view.getUint8(offset);
-      else if (indexSize === 2) indices[i] = view.getUint16(offset, true);
-      else indices[i] = view.getUint32(offset, true);
-      offset += indexSize;
-    }
-    if (indexSize < 4) {
-      while (offset % 4 !== 0) offset++;
-    }
-    const colorIndex = view.getUint32(offset, true);
-    offset += 4;
-    const instanceCount = view.getUint32(offset, true);
-    offset += 4;
-    const instances = [];
-    if (instanceCount > 0) {
-      for (let i = 0; i < instanceCount; i++) {
-        const instanceNameLength = view.getUint16(offset, true);
-        offset += 2;
-        const instanceName = new TextDecoder().decode(new Uint8Array(buffer, offset, instanceNameLength));
-        offset += instanceNameLength;
-        const alignmentPadding = (4 - offset % 4) % 4;
-        offset += alignmentPadding;
-        const instanceMatrix = new Float32Array(9);
-        for (let j = 0; j < 9; j++) {
-          instanceMatrix[j] = view.getFloat32(offset, true);
-          offset += 4;
-        }
-        const instancePosition = new Float32Array(3);
-        for (let j = 0; j < 3; j++) {
-          instancePosition[j] = view.getFloat32(offset, true);
-          offset += 4;
-        }
-        const instanceColorIndex = view.getUint32(offset, true);
-        offset += 4;
-        instances.push({
-          name: instanceName,
-          matrix: instanceMatrix,
-          position: instancePosition,
-          colorIndex: instanceColorIndex
-        });
-      }
-    }
-    return {
-      name,
-      matrix,
-      position: nodePosition,
-      vertices,
-      normals,
-      indices,
-      colorIndex,
-      instances,
-      nextOffset: offset
-    };
-  }
-}
-
-// This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
-var MeshoptDecoder = (function () {
-	// Built with clang version 18.1.2
-	// Built from meshoptimizer 0.22
-	var wasm_base =
-		'b9H79Tebbbe8Fv9Gbb9Gvuuuuueu9Giuuub9Geueu9Giuuueuikqbeeedddillviebeoweuec:q:Odkr;leDo9TW9T9VV95dbH9F9F939H79T9F9J9H229F9Jt9VV7bb8A9TW79O9V9Wt9F9KW9J9V9KW9wWVtW949c919M9MWVbeY9TW79O9V9Wt9F9KW9J9V9KW69U9KW949c919M9MWVbdE9TW79O9V9Wt9F9KW9J9V9KW69U9KW949tWG91W9U9JWbiL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9p9JtblK9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9r919HtbvL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWVT949Wbol79IV9Rbrq;w8Wqdbk;esezu8Jjjjjbcj;eb9Rgv8Kjjjjbc9:hodnadcefal0mbcuhoaiRbbc:Ge9hmbavaialfgrad9Radz1jjjbhwcj;abad9Uc;WFbGgocjdaocjd6EhDaicefhocbhqdnindndndnaeaq9nmbaDaeaq9RaqaDfae6Egkcsfglcl4cifcd4hxalc9WGgmTmecbhPawcjdfhsaohzinaraz9Rax6mvarazaxfgo9RcK6mvczhlcbhHinalgic9WfgOawcj;cbffhldndndndndnazaOco4fRbbaHcoG4ciGPlbedibkal9cb83ibalcwf9cb83ibxikalaoRblaoRbbgOco4gAaAciSgAE86bbawcj;cbfaifglcGfaoclfaAfgARbbaOcl4ciGgCaCciSgCE86bbalcVfaAaCfgARbbaOcd4ciGgCaCciSgCE86bbalc7faAaCfgARbbaOciGgOaOciSgOE86bbalctfaAaOfgARbbaoRbegOco4gCaCciSgCE86bbalc91faAaCfgARbbaOcl4ciGgCaCciSgCE86bbalc4faAaCfgARbbaOcd4ciGgCaCciSgCE86bbalc93faAaCfgARbbaOciGgOaOciSgOE86bbalc94faAaOfgARbbaoRbdgOco4gCaCciSgCE86bbalc95faAaCfgARbbaOcl4ciGgCaCciSgCE86bbalc96faAaCfgARbbaOcd4ciGgCaCciSgCE86bbalc97faAaCfgARbbaOciGgOaOciSgOE86bbalc98faAaOfgORbbaoRbigoco4gAaAciSgAE86bbalc99faOaAfgORbbaocl4ciGgAaAciSgAE86bbalc9:faOaAfgORbbaocd4ciGgAaAciSgAE86bbalcufaOaAfglRbbaociGgoaociSgoE86bbalaofhoxdkalaoRbwaoRbbgOcl4gAaAcsSgAE86bbawcj;cbfaifglcGfaocwfaAfgARbbaOcsGgOaOcsSgOE86bbalcVfaAaOfgORbbaoRbegAcl4gCaCcsSgCE86bbalc7faOaCfgORbbaAcsGgAaAcsSgAE86bbalctfaOaAfgORbbaoRbdgAcl4gCaCcsSgCE86bbalc91faOaCfgORbbaAcsGgAaAcsSgAE86bbalc4faOaAfgORbbaoRbigAcl4gCaCcsSgCE86bbalc93faOaCfgORbbaAcsGgAaAcsSgAE86bbalc94faOaAfgORbbaoRblgAcl4gCaCcsSgCE86bbalc95faOaCfgORbbaAcsGgAaAcsSgAE86bbalc96faOaAfgORbbaoRbvgAcl4gCaCcsSgCE86bbalc97faOaCfgORbbaAcsGgAaAcsSgAE86bbalc98faOaAfgORbbaoRbogAcl4gCaCcsSgCE86bbalc99faOaCfgORbbaAcsGgAaAcsSgAE86bbalc9:faOaAfgORbbaoRbrgocl4gAaAcsSgAE86bbalcufaOaAfglRbbaocsGgoaocsSgoE86bbalaofhoxekalao8Pbb83bbalcwfaocwf8Pbb83bbaoczfhokdnaiam9pmbaHcdfhHaiczfhlarao9RcL0mekkaiam6mvaoTmvdnakTmbawaPfRbbhHawcj;cbfhlashiakhOinaialRbbgzce4cbazceG9R7aHfgH86bbaiadfhialcefhlaOcufgOmbkkascefhsaohzaPcefgPad9hmbxikkcbc99arao9Radcaadca0ESEhoxlkaoaxad2fhCdnakmbadhlinaoTmlarao9Rax6mlaoaxfhoalcufglmbkaChoxekcbhmawcjdfhAinarao9Rax6miawamfRbbhHawcj;cbfhlaAhiakhOinaialRbbgzce4cbazceG9R7aHfgH86bbaiadfhialcefhlaOcufgOmbkaAcefhAaoaxfhoamcefgmad9hmbkaChokabaqad2fawcjdfakad2z1jjjb8Aawawcjdfakcufad2fadz1jjjb8Aakaqfhqaombkc9:hoxekc9:hokavcj;ebf8Kjjjjbaok;cseHu8Jjjjjbc;ae9Rgv8Kjjjjbc9:hodnaeci9UgrcHfal0mbcuhoaiRbbgwc;WeGc;Ge9hmbawcsGgwce0mbavc;abfcFecjez:jjjjb8AavcUf9cu83ibavc8Wf9cu83ibavcyf9cu83ibavcaf9cu83ibavcKf9cu83ibavczf9cu83ibav9cu83iwav9cu83ibaialfc9WfhDaicefgqarfhidnaeTmbcmcsawceSEhkcbhxcbhmcbhPcbhwcbhlindnaiaD9nmbc9:hoxikdndnaqRbbgoc;Ve0mbavc;abfalaocu7gscl4fcsGcitfgzydlhrazydbhzdnaocsGgHak9pmbavawasfcsGcdtfydbaxaHEhoaHThsdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkaxasfhxcdhHavawcdtfaoBdbawasfhwcehsalhOxdkdndnaHcsSmbaHc987aHamffcefhoxekaicefhoai8SbbgHcFeGhsdndnaHcu9mmbaohixekaicvfhiascFbGhscrhHdninao8SbbgOcFbGaHtasVhsaOcu9kmeaocefhoaHcrfgHc8J9hmbxdkkaocefhikasce4cbasceG9R7amfhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhHavawcdtfaoBdbcehsawcefhwalhOaohmxekdnaocpe0mbaxcefgHavawaDaocsGfRbbgocl49RcsGcdtfydbaocz6gzEhravawao9RcsGcdtfydbaHazfgAaocsGgHEhoaHThCdndnadcd9hmbabaPcetfgHax87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHaxBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfaxBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgOaxBdlaOarBdbavawazfgwcsGcdtfaoBdbalcefcsGhOawaCfhwaxhzaAaCfhxxekaxcbaiRbbgOEgzaoc;:eSgHfhraOcsGhCaOcl4hAdndnaOcs0mbarcefhoxekarhoavawaA9RcsGcdtfydbhrkdndnaCmbaocefhxxekaohxavawaO9RcsGcdtfydbhokdndnaHTmbaicefhHxekaicdfhHai8SbegscFeGhzdnascu9kmbaicofhXazcFbGhzcrhidninaH8SbbgscFbGaitazVhzascu9kmeaHcefhHaicrfgic8J9hmbkaXhHxekaHcefhHkazce4cbazceG9R7amfgmhzkdndnaAcsSmbaHhsxekaHcefhsaH8SbbgicFeGhrdnaicu9kmbaHcvfhXarcFbGhrcrhidninas8SbbgHcFbGaitarVhraHcu9kmeascefhsaicrfgic8J9hmbkaXhsxekascefhskarce4cbarceG9R7amfgmhrkdndnaCcsSmbashixekascefhias8SbbgocFeGhHdnaocu9kmbascvfhXaHcFbGhHcrhodninai8SbbgscFbGaotaHVhHascu9kmeaicefhiaocrfgoc8J9hmbkaXhixekaicefhikaHce4cbaHceG9R7amfgmhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfazBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgXazBdlaXarBdbavawaOcz6aAcsSVfgwcsGcdtfaoBdbawaCTaCcsSVfhwalcefcsGhOkaqcefhqavc;abfaOcitfgOarBdlaOaoBdbavc;abfalasfcsGcitfgraoBdlarazBdbawcsGhwalaHfcsGhlaPcifgPae6mbkkcbc99aiaDSEhokavc;aef8Kjjjjbaok:flevu8Jjjjjbcz9Rhvc9:hodnaecvfal0mbcuhoaiRbbc;:eGc;qe9hmbav9cb83iwaicefhraialfc98fhwdnaeTmbdnadcdSmbcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcdtfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfglBdbaoalBdbaDcefgDae9hmbxdkkcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcetfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfgl87ebaoalBdbaDcefgDae9hmbkkcbc99arawSEhokaok:Lvoeue99dud99eud99dndnadcl9hmbaeTmeindndnabcdfgd8Sbb:Yab8Sbbgi:Ygl:l:tabcefgv8Sbbgo:Ygr:l:tgwJbb;:9cawawNJbbbbawawJbbbb9GgDEgq:mgkaqaicb9iEalMgwawNakaqaocb9iEarMgqaqNMM:r:vglNJbbbZJbbb:;aDEMgr:lJbbb9p9DTmbar:Ohixekcjjjj94hikadai86bbdndnaqalNJbbbZJbbb:;aqJbbbb9GEMgq:lJbbb9p9DTmbaq:Ohdxekcjjjj94hdkavad86bbdndnawalNJbbbZJbbb:;awJbbbb9GEMgw:lJbbb9p9DTmbaw:Ohdxekcjjjj94hdkabad86bbabclfhbaecufgembxdkkaeTmbindndnabclfgd8Ueb:Yab8Uebgi:Ygl:l:tabcdfgv8Uebgo:Ygr:l:tgwJb;:FSawawNJbbbbawawJbbbb9GgDEgq:mgkaqaicb9iEalMgwawNakaqaocb9iEarMgqaqNMM:r:vglNJbbbZJbbb:;aDEMgr:lJbbb9p9DTmbar:Ohixekcjjjj94hikadai87ebdndnaqalNJbbbZJbbb:;aqJbbbb9GEMgq:lJbbb9p9DTmbaq:Ohdxekcjjjj94hdkavad87ebdndnawalNJbbbZJbbb:;awJbbbb9GEMgw:lJbbb9p9DTmbaw:Ohdxekcjjjj94hdkabad87ebabcwfhbaecufgembkkk;oiliui99iue99dnaeTmbcbhiabhlindndnJ;Zl81Zalcof8UebgvciV:Y:vgoal8Ueb:YNgrJb;:FSNJbbbZJbbb:;arJbbbb9GEMgw:lJbbb9p9DTmbaw:OhDxekcjjjj94hDkalclf8Uebhqalcdf8UebhkabaiavcefciGfcetfaD87ebdndnaoak:YNgwJb;:FSNJbbbZJbbb:;awJbbbb9GEMgx:lJbbb9p9DTmbax:OhDxekcjjjj94hDkabaiavciGfgkcd7cetfaD87ebdndnaoaq:YNgoJb;:FSNJbbbZJbbb:;aoJbbbb9GEMgx:lJbbb9p9DTmbax:OhDxekcjjjj94hDkabaiavcufciGfcetfaD87ebdndnJbbjZararN:tawawN:taoaoN:tgrJbbbbarJbbbb9GE:rJb;:FSNJbbbZMgr:lJbbb9p9DTmbar:Ohvxekcjjjj94hvkabakcetfav87ebalcwfhlaiclfhiaecufgembkkk9mbdnadcd4ae2gdTmbinababydbgecwtcw91:Yaece91cjjj98Gcjjj;8if::NUdbabclfhbadcufgdmbkkk9teiucbcbydj1jjbgeabcifc98GfgbBdj1jjbdndnabZbcztgd9nmbcuhiabad9RcFFifcz4nbcuSmekaehikaik;LeeeudndnaeabVciGTmbabhixekdndnadcz9pmbabhixekabhiinaiaeydbBdbaiclfaeclfydbBdbaicwfaecwfydbBdbaicxfaecxfydbBdbaeczfheaiczfhiadc9Wfgdcs0mbkkadcl6mbinaiaeydbBdbaeclfheaiclfhiadc98fgdci0mbkkdnadTmbinaiaeRbb86bbaicefhiaecefheadcufgdmbkkabk;aeedudndnabciGTmbabhixekaecFeGc:b:c:ew2hldndnadcz9pmbabhixekabhiinaialBdbaicxfalBdbaicwfalBdbaiclfalBdbaiczfhiadc9Wfgdcs0mbkkadcl6mbinaialBdbaiclfhiadc98fgdci0mbkkdnadTmbinaiae86bbaicefhiadcufgdmbkkabkkkebcjwklzNbb'; // embed! base
-	var wasm_simd =
-		'b9H79TebbbeKl9Gbb9Gvuuuuueu9Giuuub9Geueuikqbbebeedddilve9Weeeviebeoweuec:q:6dkr;leDo9TW9T9VV95dbH9F9F939H79T9F9J9H229F9Jt9VV7bb8A9TW79O9V9Wt9F9KW9J9V9KW9wWVtW949c919M9MWVbdY9TW79O9V9Wt9F9KW9J9V9KW69U9KW949c919M9MWVblE9TW79O9V9Wt9F9KW9J9V9KW69U9KW949tWG91W9U9JWbvL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9p9JtboK9TW79O9V9Wt9F9KW9J9V9KWS9P2tWV9r919HtbrL9TW79O9V9Wt9F9KW9J9V9KWS9P2tWVT949Wbwl79IV9RbDq:p9sqlbzik9:evu8Jjjjjbcz9Rhbcbheincbhdcbhiinabcwfadfaicjuaead4ceGglE86bbaialfhiadcefgdcw9hmbkaec:q:yjjbfai86bbaecitc:q1jjbfab8Piw83ibaecefgecjd9hmbkk:N8JlHud97euo978Jjjjjbcj;kb9Rgv8Kjjjjbc9:hodnadcefal0mbcuhoaiRbbc:Ge9hmbavaialfgrad9Rad;8qbbcj;abad9UhlaicefhodnaeTmbadTmbalc;WFbGglcjdalcjd6EhwcbhDinawaeaD9RaDawfae6Egqcsfglc9WGgkci2hxakcethmalcl4cifcd4hPabaDad2fhsakc;ab6hzcbhHincbhOaohAdndninaraA9RaP6meavcj;cbfaOak2fhCaAaPfhocbhidnazmbarao9Rc;Gb6mbcbhlinaCalfhidndndndndnaAalco4fRbbgXciGPlbedibkaipxbbbbbbbbbbbbbbbbpklbxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklbaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklbaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaiaopbbbpklbaoczfhokdndndndndnaXcd4ciGPlbedibkaipxbbbbbbbbbbbbbbbbpklzxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklzaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklzaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaiaopbbbpklzaoczfhokdndndndndnaXcl4ciGPlbedibkaipxbbbbbbbbbbbbbbbbpklaxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklaaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spklaaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaiaopbbbpklaaoczfhokdndndndndnaXco4Plbedibkaipxbbbbbbbbbbbbbbbbpkl8WxikaiaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibaXc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkl8WaoclfaYpQbfaXc:q:yjjbfRbbfhoxdkaiaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibaXc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgXcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkl8WaocwfaYpQbfaXc:q:yjjbfRbbfhoxekaiaopbbbpkl8Waoczfhokalc;abfhialcjefak0meaihlarao9Rc;Fb0mbkkdnaiak9pmbaici4hlinarao9RcK6miaCaifhXdndndndndnaAaico4fRbbalcoG4ciGPlbedibkaXpxbbbbbbbbbbbbbbbbpkbbxikaXaopbblaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLgQcdp:meaQpmbzeHdOiAlCvXoQrLpxiiiiiiiiiiiiiiiip9ogLpxiiiiiiiiiiiiiiiip8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkbbaoclfaYpQbfaKc:q:yjjbfRbbfhoxdkaXaopbbwaopbbbgQclp:meaQpmbzeHdOiAlCvXoQrLpxssssssssssssssssp9ogLpxssssssssssssssssp8JgQp5b9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibaKc:q:yjjbfpbbbgYaYpmbbbbbbbbbbbbbbbbaQp5e9cjF;8;4;W;G;ab9:9cU1:NgKcitc:q1jjbfpbibp9UpmbedilvorzHOACXQLpPaLaQp9spkbbaocwfaYpQbfaKc:q:yjjbfRbbfhoxekaXaopbbbpkbbaoczfhokalcdfhlaiczfgiak6mbkkaoTmeaohAaOcefgOclSmdxbkkc9:hoxlkdnakTmbavcjdfaHfhiavaHfpbdbhYcbhXinaiavcj;cbfaXfglpblbgLcep9TaLpxeeeeeeeeeeeeeeeegQp9op9Hp9rgLalakfpblbg8Acep9Ta8AaQp9op9Hp9rg8ApmbzeHdOiAlCvXoQrLgEalamfpblbg3cep9Ta3aQp9op9Hp9rg3alaxfpblbg5cep9Ta5aQp9op9Hp9rg5pmbzeHdOiAlCvXoQrLg8EpmbezHdiOAlvCXorQLgQaQpmbedibedibedibediaYp9UgYp9AdbbaiadfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfglaYaEa8EpmwDKYqk8AExm35Ps8E8FgQaQpmbedibedibedibedip9UgYp9AdbbaladfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfglaYaLa8ApmwKDYq8AkEx3m5P8Es8FgLa3a5pmwKDYq8AkEx3m5P8Es8Fg8ApmbezHdiOAlvCXorQLgQaQpmbedibedibedibedip9UgYp9AdbbaladfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfglaYaLa8ApmwDKYqk8AExm35Ps8E8FgQaQpmbedibedibedibedip9UgYp9AdbbaladfglaYaQaQpmlvorlvorlvorlvorp9UgYp9AdbbaladfglaYaQaQpmwDqkwDqkwDqkwDqkp9UgYp9AdbbaladfglaYaQaQpmxmPsxmPsxmPsxmPsp9UgYp9AdbbaladfhiaXczfgXak6mbkkaHclfgHad6mbkasavcjdfaqad2;8qbbavavcjdfaqcufad2fad;8qbbaqaDfgDae6mbkkcbc99arao9Radcaadca0ESEhokavcj;kbf8Kjjjjbaokwbz:bjjjbk::seHu8Jjjjjbc;ae9Rgv8Kjjjjbc9:hodnaeci9UgrcHfal0mbcuhoaiRbbgwc;WeGc;Ge9hmbawcsGgwce0mbavc;abfcFecje;8kbavcUf9cu83ibavc8Wf9cu83ibavcyf9cu83ibavcaf9cu83ibavcKf9cu83ibavczf9cu83ibav9cu83iwav9cu83ibaialfc9WfhDaicefgqarfhidnaeTmbcmcsawceSEhkcbhxcbhmcbhPcbhwcbhlindnaiaD9nmbc9:hoxikdndnaqRbbgoc;Ve0mbavc;abfalaocu7gscl4fcsGcitfgzydlhrazydbhzdnaocsGgHak9pmbavawasfcsGcdtfydbaxaHEhoaHThsdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkaxasfhxcdhHavawcdtfaoBdbawasfhwcehsalhOxdkdndnaHcsSmbaHc987aHamffcefhoxekaicefhoai8SbbgHcFeGhsdndnaHcu9mmbaohixekaicvfhiascFbGhscrhHdninao8SbbgOcFbGaHtasVhsaOcu9kmeaocefhoaHcrfgHc8J9hmbxdkkaocefhikasce4cbasceG9R7amfhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhHavawcdtfaoBdbcehsawcefhwalhOaohmxekdnaocpe0mbaxcefgHavawaDaocsGfRbbgocl49RcsGcdtfydbaocz6gzEhravawao9RcsGcdtfydbaHazfgAaocsGgHEhoaHThCdndnadcd9hmbabaPcetfgHax87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHaxBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfaxBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgOaxBdlaOarBdbavawazfgwcsGcdtfaoBdbalcefcsGhOawaCfhwaxhzaAaCfhxxekaxcbaiRbbgOEgzaoc;:eSgHfhraOcsGhCaOcl4hAdndnaOcs0mbarcefhoxekarhoavawaA9RcsGcdtfydbhrkdndnaCmbaocefhxxekaohxavawaO9RcsGcdtfydbhokdndnaHTmbaicefhHxekaicdfhHai8SbegscFeGhzdnascu9kmbaicofhXazcFbGhzcrhidninaH8SbbgscFbGaitazVhzascu9kmeaHcefhHaicrfgic8J9hmbkaXhHxekaHcefhHkazce4cbazceG9R7amfgmhzkdndnaAcsSmbaHhsxekaHcefhsaH8SbbgicFeGhrdnaicu9kmbaHcvfhXarcFbGhrcrhidninas8SbbgHcFbGaitarVhraHcu9kmeascefhsaicrfgic8J9hmbkaXhsxekascefhskarce4cbarceG9R7amfgmhrkdndnaCcsSmbashixekascefhias8SbbgocFeGhHdnaocu9kmbascvfhXaHcFbGhHcrhodninai8SbbgscFbGaotaHVhHascu9kmeaicefhiaocrfgoc8J9hmbkaXhixekaicefhikaHce4cbaHceG9R7amfgmhokdndnadcd9hmbabaPcetfgHaz87ebaHclfao87ebaHcdfar87ebxekabaPcdtfgHazBdbaHcwfaoBdbaHclfarBdbkcdhsavawcdtfazBdbavawcefgwcsGcdtfarBdbcihHavc;abfalcitfgXazBdlaXarBdbavawaOcz6aAcsSVfgwcsGcdtfaoBdbawaCTaCcsSVfhwalcefcsGhOkaqcefhqavc;abfaOcitfgOarBdlaOaoBdbavc;abfalasfcsGcitfgraoBdlarazBdbawcsGhwalaHfcsGhlaPcifgPae6mbkkcbc99aiaDSEhokavc;aef8Kjjjjbaok:flevu8Jjjjjbcz9Rhvc9:hodnaecvfal0mbcuhoaiRbbc;:eGc;qe9hmbav9cb83iwaicefhraialfc98fhwdnaeTmbdnadcdSmbcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcdtfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfglBdbaoalBdbaDcefgDae9hmbxdkkcbhDindnaraw6mbc9:skarcefhoar8SbbglcFeGhidndnalcu9mmbaohrxekarcvfhraicFbGhicrhldninao8SbbgdcFbGaltaiVhiadcu9kmeaocefhoalcrfglc8J9hmbxdkkaocefhrkabaDcetfaic8Etc8F91aicd47avcwfaiceGcdtVgoydbfgl87ebaoalBdbaDcefgDae9hmbkkcbc99arawSEhokaok:wPliuo97eue978Jjjjjbca9Rhiaec98Ghldndnadcl9hmbdnalTmbcbhvabhdinadadpbbbgocKp:RecKp:Sep;6egraocwp:RecKp:Sep;6earp;Geaoczp:RecKp:Sep;6egwp;Gep;Kep;LegDpxbbbbbbbbbbbbbbbbp:2egqarpxbbbjbbbjbbbjbbbjgkp9op9rp;Kegrpxbb;:9cbb;:9cbb;:9cbb;:9cararp;MeaDaDp;Meawaqawakp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFbbbFbbbFbbbFbbbp9oaopxbbbFbbbFbbbFbbbFp9op9qarawp;Meaqp;Kecwp:RepxbFbbbFbbbFbbbFbbp9op9qaDawp;Meaqp;Keczp:RepxbbFbbbFbbbFbbbFbp9op9qpkbbadczfhdavclfgval6mbkkalaeSmeaipxbbbbbbbbbbbbbbbbgqpklbaiabalcdtfgdaeciGglcdtgv;8qbbdnalTmbaiaipblbgocKp:RecKp:Sep;6egraocwp:RecKp:Sep;6earp;Geaoczp:RecKp:Sep;6egwp;Gep;Kep;LegDaqp:2egqarpxbbbjbbbjbbbjbbbjgkp9op9rp;Kegrpxbb;:9cbb;:9cbb;:9cbb;:9cararp;MeaDaDp;Meawaqawakp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFbbbFbbbFbbbFbbbp9oaopxbbbFbbbFbbbFbbbFp9op9qarawp;Meaqp;Kecwp:RepxbFbbbFbbbFbbbFbbp9op9qaDawp;Meaqp;Keczp:RepxbbFbbbFbbbFbbbFbp9op9qpklbkadaiav;8qbbskdnalTmbcbhvabhdinadczfgxaxpbbbgopxbbbbbbFFbbbbbbFFgkp9oadpbbbgDaopmbediwDqkzHOAKY8AEgwczp:Reczp:Sep;6egraDaopmlvorxmPsCXQL358E8FpxFubbFubbFubbFubbp9op;6eawczp:Sep;6egwp;Gearp;Gep;Kep;Legopxbbbbbbbbbbbbbbbbp:2egqarpxbbbjbbbjbbbjbbbjgmp9op9rp;Kegrpxb;:FSb;:FSb;:FSb;:FSararp;Meaoaop;Meawaqawamp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFFbbFFbbFFbbFFbbp9oaoawp;Meaqp;Keczp:Rep9qgoarawp;Meaqp;KepxFFbbFFbbFFbbFFbbp9ogrpmwDKYqk8AExm35Ps8E8Fp9qpkbbadaDakp9oaoarpmbezHdiOAlvCXorQLp9qpkbbadcafhdavclfgval6mbkkalaeSmbaiaeciGgvcitgdfcbcaad9R;8kbaiabalcitfglad;8qbbdnavTmbaiaipblzgopxbbbbbbFFbbbbbbFFgkp9oaipblbgDaopmbediwDqkzHOAKY8AEgwczp:Reczp:Sep;6egraDaopmlvorxmPsCXQL358E8FpxFubbFubbFubbFubbp9op;6eawczp:Sep;6egwp;Gearp;Gep;Kep;Legopxbbbbbbbbbbbbbbbbp:2egqarpxbbbjbbbjbbbjbbbjgmp9op9rp;Kegrpxb;:FSb;:FSb;:FSb;:FSararp;Meaoaop;Meawaqawamp9op9rp;Kegrarp;Mep;Kep;Kep;Jep;Negwp;Mepxbbn0bbn0bbn0bbn0gqp;KepxFFbbFFbbFFbbFFbbp9oaoawp;Meaqp;Keczp:Rep9qgoarawp;Meaqp;KepxFFbbFFbbFFbbFFbbp9ogrpmwDKYqk8AExm35Ps8E8Fp9qpklzaiaDakp9oaoarpmbezHdiOAlvCXorQLp9qpklbkalaiad;8qbbkk;4wllue97euv978Jjjjjbc8W9Rhidnaec98GglTmbcbhvabhoinaiaopbbbgraoczfgwpbbbgDpmlvorxmPsCXQL358E8Fgqczp:Segkclp:RepklbaopxbbjZbbjZbbjZbbjZpx;Zl81Z;Zl81Z;Zl81Z;Zl81Zakpxibbbibbbibbbibbbp9qp;6ep;NegkaraDpmbediwDqkzHOAKY8AEgrczp:Reczp:Sep;6ep;MegDaDp;Meakarczp:Sep;6ep;Megxaxp;Meakaqczp:Reczp:Sep;6ep;Megqaqp;Mep;Kep;Kep;Lepxbbbbbbbbbbbbbbbbp:4ep;Jepxb;:FSb;:FSb;:FSb;:FSgkp;Mepxbbn0bbn0bbn0bbn0grp;KepxFFbbFFbbFFbbFFbbgmp9oaxakp;Mearp;Keczp:Rep9qgxaDakp;Mearp;Keamp9oaqakp;Mearp;Keczp:Rep9qgkpmbezHdiOAlvCXorQLgrp5baipblbpEb:T:j83ibaocwfarp5eaipblbpEe:T:j83ibawaxakpmwDKYqk8AExm35Ps8E8Fgkp5baipblbpEd:T:j83ibaocKfakp5eaipblbpEi:T:j83ibaocafhoavclfgval6mbkkdnalaeSmbaiaeciGgvcitgofcbcaao9R;8kbaiabalcitfgwao;8qbbdnavTmbaiaipblbgraipblzgDpmlvorxmPsCXQL358E8Fgqczp:Segkclp:RepklaaipxbbjZbbjZbbjZbbjZpx;Zl81Z;Zl81Z;Zl81Z;Zl81Zakpxibbbibbbibbbibbbp9qp;6ep;NegkaraDpmbediwDqkzHOAKY8AEgrczp:Reczp:Sep;6ep;MegDaDp;Meakarczp:Sep;6ep;Megxaxp;Meakaqczp:Reczp:Sep;6ep;Megqaqp;Mep;Kep;Kep;Lepxbbbbbbbbbbbbbbbbp:4ep;Jepxb;:FSb;:FSb;:FSb;:FSgkp;Mepxbbn0bbn0bbn0bbn0grp;KepxFFbbFFbbFFbbFFbbgmp9oaxakp;Mearp;Keczp:Rep9qgxaDakp;Mearp;Keamp9oaqakp;Mearp;Keczp:Rep9qgkpmbezHdiOAlvCXorQLgrp5baipblapEb:T:j83ibaiarp5eaipblapEe:T:j83iwaiaxakpmwDKYqk8AExm35Ps8E8Fgkp5baipblapEd:T:j83izaiakp5eaipblapEi:T:j83iKkawaiao;8qbbkk:Pddiue978Jjjjjbc;ab9Rhidnadcd4ae2glc98GgvTmbcbheabhdinadadpbbbgocwp:Recwp:Sep;6eaocep:SepxbbjFbbjFbbjFbbjFp9opxbbjZbbjZbbjZbbjZp:Uep;Mepkbbadczfhdaeclfgeav6mbkkdnavalSmbaialciGgecdtgdVcbc;abad9R;8kbaiabavcdtfgvad;8qbbdnaeTmbaiaipblbgocwp:Recwp:Sep;6eaocep:SepxbbjFbbjFbbjFbbjFp9opxbbjZbbjZbbjZbbjZp:Uep;Mepklbkavaiad;8qbbkk9teiucbcbydj1jjbgeabcifc98GfgbBdj1jjbdndnabZbcztgd9nmbcuhiabad9RcFFifcz4nbcuSmekaehikaikkkebcjwklz:Dbb'; // embed! simd
-
-	var detector = new Uint8Array([
-		0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 3, 2, 0, 0, 5, 3, 1, 0, 1, 12, 1, 0, 10, 22, 2, 12, 0, 65, 0, 65, 0, 65, 0, 252, 10, 0, 0,
-		11, 7, 0, 65, 0, 253, 15, 26, 11,
-	]);
-	var wasmpack = new Uint8Array([
-		32, 0, 65, 2, 1, 106, 34, 33, 3, 128, 11, 4, 13, 64, 6, 253, 10, 7, 15, 116, 127, 5, 8, 12, 40, 16, 19, 54, 20, 9, 27, 255, 113, 17, 42, 67,
-		24, 23, 146, 148, 18, 14, 22, 45, 70, 69, 56, 114, 101, 21, 25, 63, 75, 136, 108, 28, 118, 29, 73, 115,
-	]);
-
-	if (typeof WebAssembly !== 'object') {
-		return {
-			supported: false,
-		};
-	}
-
-	var wasm = WebAssembly.validate(detector) ? unpack(wasm_simd) : unpack(wasm_base);
-
-	var instance;
-
-	var ready = WebAssembly.instantiate(wasm, {}).then(function (result) {
-		instance = result.instance;
-		instance.exports.__wasm_call_ctors();
-	});
-
-	function unpack(data) {
-		var result = new Uint8Array(data.length);
-		for (var i = 0; i < data.length; ++i) {
-			var ch = data.charCodeAt(i);
-			result[i] = ch > 96 ? ch - 97 : ch > 64 ? ch - 39 : ch + 4;
-		}
-		var write = 0;
-		for (var i = 0; i < data.length; ++i) {
-			result[write++] = result[i] < 60 ? wasmpack[result[i]] : (result[i] - 60) * 64 + result[++i];
-		}
-		return result.buffer.slice(0, write);
-	}
-
-	function decode(instance, fun, target, count, size, source, filter) {
-		var sbrk = instance.exports.sbrk;
-		var count4 = (count + 3) & -4;
-		var tp = sbrk(count4 * size);
-		var sp = sbrk(source.length);
-		var heap = new Uint8Array(instance.exports.memory.buffer);
-		heap.set(source, sp);
-		var res = fun(tp, count, size, sp, source.length);
-		if (res == 0 && filter) {
-			filter(tp, count4, size);
-		}
-		target.set(heap.subarray(tp, tp + count * size));
-		sbrk(tp - sbrk(0));
-		if (res != 0) {
-			throw new Error('Malformed buffer data: ' + res);
-		}
-	}
-
-	var filters = {
-		NONE: '',
-		OCTAHEDRAL: 'meshopt_decodeFilterOct',
-		QUATERNION: 'meshopt_decodeFilterQuat',
-		EXPONENTIAL: 'meshopt_decodeFilterExp',
-	};
-
-	var decoders = {
-		ATTRIBUTES: 'meshopt_decodeVertexBuffer',
-		TRIANGLES: 'meshopt_decodeIndexBuffer',
-		INDICES: 'meshopt_decodeIndexSequence',
-	};
-
-	var workers = [];
-	var requestId = 0;
-
-	function createWorker(url) {
-		var worker = {
-			object: new Worker(url),
-			pending: 0,
-			requests: {},
-		};
-
-		worker.object.onmessage = function (event) {
-			var data = event.data;
-
-			worker.pending -= data.count;
-			worker.requests[data.id][data.action](data.value);
-			delete worker.requests[data.id];
-		};
-
-		return worker;
-	}
-
-	function initWorkers(count) {
-		var source =
-			'self.ready = WebAssembly.instantiate(new Uint8Array([' +
-			new Uint8Array(wasm) +
-			']), {})' +
-			'.then(function(result) { result.instance.exports.__wasm_call_ctors(); return result.instance; });' +
-			'self.onmessage = ' +
-			workerProcess.name +
-			';' +
-			decode.toString() +
-			workerProcess.toString();
-
-		var blob = new Blob([source], { type: 'text/javascript' });
-		var url = URL.createObjectURL(blob);
-
-		for (var i = workers.length; i < count; ++i) {
-			workers[i] = createWorker(url);
-		}
-
-		for (var i = count; i < workers.length; ++i) {
-			workers[i].object.postMessage({});
-		}
-
-		workers.length = count;
-
-		URL.revokeObjectURL(url);
-	}
-
-	function decodeWorker(count, size, source, mode, filter) {
-		var worker = workers[0];
-
-		for (var i = 1; i < workers.length; ++i) {
-			if (workers[i].pending < worker.pending) {
-				worker = workers[i];
-			}
-		}
-
-		return new Promise(function (resolve, reject) {
-			var data = new Uint8Array(source);
-			var id = ++requestId;
-
-			worker.pending += count;
-			worker.requests[id] = { resolve: resolve, reject: reject };
-			worker.object.postMessage({ id: id, count: count, size: size, source: data, mode: mode, filter: filter }, [data.buffer]);
-		});
-	}
-
-	function workerProcess(event) {
-		var data = event.data;
-		if (!data.id) {
-			return self.close();
-		}
-		self.ready.then(function (instance) {
-			try {
-				var target = new Uint8Array(data.count * data.size);
-				decode(instance, instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
-				self.postMessage({ id: data.id, count: data.count, action: 'resolve', value: target }, [target.buffer]);
-			} catch (error) {
-				self.postMessage({ id: data.id, count: data.count, action: 'reject', value: error });
-			}
-		});
-	}
-
-	return {
-		ready: ready,
-		supported: true,
-		useWorkers: function (count) {
-			initWorkers(count);
-		},
-		decodeVertexBuffer: function (target, count, size, source, filter) {
-			decode(instance, instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
-		},
-		decodeIndexBuffer: function (target, count, size, source) {
-			decode(instance, instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
-		},
-		decodeIndexSequence: function (target, count, size, source) {
-			decode(instance, instance.exports.meshopt_decodeIndexSequence, target, count, size, source);
-		},
-		decodeGltfBuffer: function (target, count, size, source, mode, filter) {
-			decode(instance, instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
-		},
-		decodeGltfBufferAsync: function (count, size, source, mode, filter) {
-			if (workers.length > 0) {
-				return decodeWorker(count, size, source, decoders[mode], filters[filter]);
-			}
-
-			return ready.then(function () {
-				var target = new Uint8Array(count * size);
-				decode(instance, instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
-				return target;
-			});
-		},
-	};
-})();
-
-const loadIFC = async (input, onProgress, t, libPath = "./libs") => {
-  const ifcApi = new WebIFC.IfcAPI();
-  const wasmPath = libPath.endsWith("/") ? `${libPath}web-ifc/` : `${libPath}/web-ifc/`;
-  ifcApi.SetWasmPath(wasmPath);
-  await ifcApi.Init();
-  let buffer;
-  if (typeof input !== "string") {
-    if (input instanceof ArrayBuffer) {
-      buffer = input;
-    } else {
-      onProgress(5, `${t("reading")}...`);
-      buffer = await input.arrayBuffer();
-      onProgress(25, `${t("reading")}...`);
-    }
-  } else {
-    const loader = new THREE.FileLoader();
-    loader.setResponseType("arraybuffer");
-    let staticReadCounter = 0;
-    buffer = await new Promise((resolve, reject) => {
-      loader.load(
-        input,
-        (data2) => resolve(data2),
-        (event) => {
-          if (event.total > 0) {
-            const readPercent = event.loaded / event.total * 100;
-            onProgress(readPercent, `${t("reading")}...`);
-          } else {
-            staticReadCounter = staticReadCounter + 5;
-            onProgress(Math.min(35, staticReadCounter), `${t("reading")}...`);
-          }
-        },
-        reject
-      );
-    });
-  }
-  const data = new Uint8Array(buffer);
-  onProgress(30, t("analyzing"));
-  const modelID = ifcApi.OpenModel(data, {
-    COORDINATE_TO_ORIGIN: true,
-    CIRCLE_SEGMENTS: 12,
-    MEMORY_LIMIT: 1073741824
-    // 1GB（内存限制）
-  });
-  const rootGroup = new THREE.Group();
-  rootGroup.name = "IFC模型";
-  const propertyMap = /* @__PURE__ */ new Map();
-  try {
-    const relID = ifcApi.GetTypeCodeFromName("IFCRELDEFINESBYPROPERTIES");
-    const lines = ifcApi.GetLineIDsWithType(modelID, relID);
-    const size = lines.size();
-    for (let i = 0; i < size; i++) {
-      const id = lines.get(i);
-      const rel = ifcApi.GetLine(modelID, id);
-      if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
-        const psetID = rel.RelatingPropertyDefinition?.value;
-        if (psetID) {
-          rel.RelatedObjects.forEach((objRef) => {
-            const objID = objRef.value;
-            if (!propertyMap.has(objID)) propertyMap.set(objID, []);
-            propertyMap.get(objID).push(psetID);
-          });
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("无法构建属性映射表", e);
-  }
-  rootGroup.userData.isIFC = true;
-  rootGroup.userData.ifcAPI = ifcApi;
-  rootGroup.userData.modelID = modelID;
-  const layerMap = /* @__PURE__ */ new Map();
-  try {
-    const layerType = ifcApi.GetTypeCodeFromName("IFCPRESENTATIONLAYERASSIGNMENT");
-    const layers = ifcApi.GetLineIDsWithType(modelID, layerType);
-    for (let i = 0; i < layers.size(); i++) {
-      const id = layers.get(i);
-      const layer = ifcApi.GetLine(modelID, id);
-      const layerName = layer.Name?.value || `Layer_${id}`;
-      if (layer.AssignedItems && Array.isArray(layer.AssignedItems)) {
-        layer.AssignedItems.forEach((itemRef) => {
-          const itemID = itemRef.value;
-          layerMap.set(itemID, layerName);
-        });
-      }
-    }
-  } catch (e) {
-    console.warn("无法构建图层映射表", e);
-  }
-  rootGroup.userData.layerMap = layerMap;
-  const nodesMap = /* @__PURE__ */ new Map();
-  nodesMap.set(0, rootGroup);
-  const aggregatesMap = /* @__PURE__ */ new Map();
-  const containmentMap = /* @__PURE__ */ new Map();
-  const buildIndices = () => {
-    const relDecomposes = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELAGGREGATES);
-    for (let i = 0; i < relDecomposes.size(); i++) {
-      const rel = ifcApi.GetLine(modelID, relDecomposes.get(i));
-      const parentID = rel.RelatingObject.value;
-      const children = rel.RelatedObjects.map((obj) => obj.value);
-      if (!aggregatesMap.has(parentID)) aggregatesMap.set(parentID, []);
-      aggregatesMap.get(parentID).push(...children);
-    }
-    const relContained = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELCONTAINEDINSPATIALSTRUCTURE);
-    for (let i = 0; i < relContained.size(); i++) {
-      const rel = ifcApi.GetLine(modelID, relContained.get(i));
-      const containerID = rel.RelatingStructure.value;
-      const elements = rel.RelatedElements.map((el) => el.value);
-      if (!containmentMap.has(containerID)) containmentMap.set(containerID, []);
-      containmentMap.get(containerID).push(...elements);
-    }
-  };
-  const parseSpatialRecursive = (expressID, parent) => {
-    const props = ifcApi.GetLine(modelID, expressID);
-    if (!props) return;
-    let currentParent = parent;
-    const spatialTypes = [
-      "IFCPROJECT",
-      "IFCSITE",
-      "IFCBUILDING",
-      "IFCBUILDINGSTOREY",
-      "IFCSPACE",
-      "IFCZONE"
-    ];
-    const isSpatialContainer = spatialTypes.includes(props.is_a);
-    if (isSpatialContainer) {
-      const name = props.Name?.value || props.LongName?.value || `${props.is_a} [${expressID}]`;
-      const group = new THREE.Group();
-      group.name = name;
-      group.userData = { expressID, isSpatial: true, type: props.is_a };
-      parent.add(group);
-      currentParent = group;
-      nodesMap.set(expressID, group);
-    } else {
-      nodesMap.set(expressID, parent);
-    }
-    const children = aggregatesMap.get(expressID);
-    if (children) {
-      for (const childID of children) {
-        parseSpatialRecursive(childID, currentParent);
-      }
-    }
-    const elements = containmentMap.get(expressID);
-    if (elements) {
-      for (const elementID of elements) {
-        parseSpatialRecursive(elementID, currentParent);
-      }
-    }
-  };
-  const loadSpatialStructure = () => {
-    try {
-      buildIndices();
-      const projects = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCPROJECT);
-      if (projects.size() > 0) {
-        for (let i = 0; i < projects.size(); i++) {
-          parseSpatialRecursive(projects.get(i), rootGroup);
-        }
-      } else {
-        const sites = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCSITE);
-        for (let i = 0; i < sites.size(); i++) {
-          parseSpatialRecursive(sites.get(i), rootGroup);
-        }
-      }
-    } catch (e) {
-      console.error("解析 IFC 完整空间结构失败:", e);
-    }
-  };
-  loadSpatialStructure();
-  const getFriendlyName = (name) => {
-    let cleanName = name.replace(/^(is|has|are)_/i, "");
-    const camelToWords = (str) => {
-      return str.replace(/([A-Z])/g, " $1").replace(/^ /, "");
-    };
-    return camelToWords(cleanName);
-  };
-  const formatDisplayValue = (value) => {
-    if (value === null || value === void 0) return "";
-    if (value === "") return "";
-    if (typeof value === "object" && value !== null) {
-      if (value.value !== void 0) {
-        return formatDisplayValue(value.value);
-      }
-      if (Array.isArray(value)) {
-        return value.map((item) => formatDisplayValue(item)).filter((v) => v !== null && v !== void 0 && v !== "").join(", ");
-      }
-      if (Object.keys(value).length <= 3) {
-        return Object.entries(value).map(([k, v]) => `${k}: ${formatDisplayValue(v)}`).join(", ");
-      }
-      try {
-        return JSON.stringify(value, null, 2);
-      } catch {
-        return String(value);
-      }
-    }
-    if (typeof value === "boolean") {
-      return value ? "是" : "否";
-    }
-    if (typeof value === "number") {
-      if (Number.isInteger(value)) {
-        return value.toString();
-      }
-      return parseFloat(value.toFixed(3)).toString();
-    }
-    if (typeof value === "string") {
-      const cleaned = value.trim();
-      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleaned)) {
-        return cleaned;
-      }
-      return cleaned;
-    }
-    return String(value);
-  };
-  rootGroup.userData.ifcManager = {
-    getItemProperties: async (_id, expressID) => {
-      const result = {};
-      try {
-        const entity = ifcApi.GetLine(modelID, expressID);
-        if (entity) {
-          result["ExpressID"] = expressID;
-          result["类型"] = entity.is_a || "Unknown";
-          result["全局ID"] = entity.GlobalId?.value || "";
-          result["名称"] = entity.Name?.value || "";
-          result["描述"] = entity.Description?.value || "";
-          result["标签"] = entity.Tag?.value || "";
-          Object.keys(entity).forEach((key) => {
-            if (["expressID", "is_a", "type", "ID", "GlobalId", "Name", "Description", "Tag"].includes(key)) return;
-            const value = formatDisplayValue(entity[key]);
-            if (value !== "" && value !== null && value !== void 0) {
-              result[getFriendlyName(key)] = value;
-            }
-          });
-        }
-      } catch (e) {
-        console.warn("获取实体属性失败", e);
-      }
-      const psetIDs = propertyMap.get(expressID);
-      if (psetIDs) {
-        for (const psetID of psetIDs) {
-          try {
-            const pset = ifcApi.GetLine(modelID, psetID);
-            if (pset && pset.HasProperties) {
-              const psetName = getFriendlyName(pset.Name?.value || `属性集_${psetID}`);
-              result[`${psetName}.类型`] = pset.is_a;
-              if (pset.Description?.value) {
-                result[`${psetName}.描述`] = formatDisplayValue(pset.Description.value);
-              }
-              for (const propRef of pset.HasProperties) {
-                const propID = propRef.value;
-                const prop = ifcApi.GetLine(modelID, propID);
-                if (prop && prop.Name && prop.NominalValue) {
-                  const key = getFriendlyName(prop.Name.value);
-                  let val = prop.NominalValue.value;
-                  if (typeof val === "object" && val !== null) {
-                    if (val.value !== void 0) {
-                      val = val.value;
-                    } else {
-                      if (Array.isArray(val)) {
-                        val = val.map((v) => v?.value || v).join(", ");
-                      } else {
-                        val = formatDisplayValue(val);
-                      }
-                    }
-                  } else {
-                    val = formatDisplayValue(val);
-                  }
-                  result[`${psetName}.${key}`] = val;
-                }
-              }
-            }
-            if (pset && pset.Quantities) {
-              const psetName = getFriendlyName(pset.Name?.value || `属性集_${psetID}`);
-              pset.Quantities.forEach((quant) => {
-                if (quant.Name) {
-                  const quantName = getFriendlyName(quant.Name.value);
-                  const valueTypes = [
-                    { key: "LengthValue", name: "长度" },
-                    { key: "AreaValue", name: "面积" },
-                    { key: "VolumeValue", name: "体积" },
-                    { key: "CountValue", name: "数量" },
-                    { key: "WeightValue", name: "重量" },
-                    { key: "TimeValue", name: "时间" }
-                  ];
-                  for (const valType of valueTypes) {
-                    if (quant[valType.key] && quant[valType.key].value !== void 0) {
-                      result[`${psetName}.数量.${quantName}.${valType.name}`] = formatDisplayValue(quant[valType.key].value);
-                    }
-                  }
-                  if (quant.Description?.value) {
-                    result[`${psetName}.数量.${quantName}.描述`] = formatDisplayValue(quant.Description.value);
-                  }
-                }
-              });
-            }
-          } catch (e) {
-            console.warn(`解析属性集${psetID}失败`, e);
-          }
-        }
-      }
-      return result;
-    },
-    getExpressId: (geo, _faceIndex) => {
-      return geo.userData?.expressID;
-    }
-  };
-  onProgress(50, t("building_geometry"));
-  let meshCount = 0;
-  let expectedTotal = 0;
-  const materials = {};
-  const getMaterial = (color, opacity = 1) => {
-    const key = `${color}-${opacity}`;
-    if (!materials[key]) {
-      materials[key] = new THREE.MeshStandardMaterial({
-        color,
-        transparent: opacity < 1,
-        opacity,
-        side: THREE.DoubleSide
-      });
-    }
-    return materials[key];
-  };
-  const dummyMatrix = new THREE.Matrix4();
-  ifcApi.StreamAllMeshes(modelID, (flatMesh) => {
-    const size = flatMesh.geometries.size();
-    expectedTotal += size;
-    for (let i = 0; i < size; i++) {
-      const placedGeom = flatMesh.geometries.get(i);
-      const expressID = flatMesh.expressID;
-      const geomID = placedGeom.geometryExpressID;
-      const meshData = ifcApi.GetGeometry(modelID, geomID);
-      const verts = ifcApi.GetVertexArray(meshData.GetVertexData(), meshData.GetVertexDataSize());
-      const indices = ifcApi.GetIndexArray(meshData.GetIndexData(), meshData.GetIndexDataSize());
-      const geometry = new THREE.BufferGeometry();
-      const posFloats = new Float32Array(verts.length / 2);
-      const normFloats = new Float32Array(verts.length / 2);
-      for (let k = 0; k < verts.length; k += 6) {
-        posFloats[k / 2] = verts[k];
-        posFloats[k / 2 + 1] = verts[k + 1];
-        posFloats[k / 2 + 2] = verts[k + 2];
-        normFloats[k / 2] = verts[k + 3];
-        normFloats[k / 2 + 1] = verts[k + 4];
-        normFloats[k / 2 + 2] = verts[k + 5];
-      }
-      geometry.setAttribute("position", new THREE.BufferAttribute(posFloats, 3));
-      geometry.setAttribute("normal", new THREE.BufferAttribute(normFloats, 3));
-      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-      geometry.userData = { expressID, bimId: String(expressID) };
-      const transform = placedGeom.flatTransformation;
-      dummyMatrix.fromArray(transform);
-      const color = placedGeom.color;
-      let material;
-      if (color) {
-        const hex = new THREE.Color(color.x, color.y, color.z).getHex();
-        material = getMaterial(hex, color.w);
-      } else {
-        material = getMaterial(13421772);
-      }
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.matrixAutoUpdate = false;
-      mesh.matrix.fromArray(transform);
-      mesh.matrixWorldNeedsUpdate = true;
-      mesh.userData.expressID = expressID;
-      mesh.userData.bimId = String(expressID);
-      if (layerMap.has(expressID)) {
-        mesh.userData.layer = layerMap.get(expressID);
-      }
-      try {
-        const props = ifcApi.GetLine(modelID, expressID);
-        const ifcType = props.is_a || "Item";
-        const ifcName = props.Name?.value || "";
-        mesh.name = ifcName ? `${ifcType}: ${ifcName}` : `${ifcType} [${expressID}]`;
-      } catch (e) {
-        mesh.name = `IFC Item ${expressID}`;
-      }
-      const parentGroup = nodesMap.get(expressID) || rootGroup;
-      parentGroup.add(mesh);
-      meshCount++;
-      if (expectedTotal > 0) {
-        const ratio = Math.min(1, meshCount / expectedTotal);
-        const p = 50 + Math.floor(ratio * 45);
-        onProgress(p, t("building_geometry"));
-      }
-    }
-  });
-  console.log(`Loaded ${meshCount} meshes from IFC.`);
-  onProgress(100, t("success"));
-  rootGroup.rotateX(Math.PI / 2);
-  return rootGroup;
-};
-
-class OCCTLoader {
-  constructor(wasmUrl = "/libs/occt-import-js/occt-import-js.wasm") {
-    this.wasmUrl = wasmUrl;
-    this.readParameters = {
-      productContext: 1,
-      assemblyLevel: 1,
-      shapeRepr: 1,
-      shapeAspect: 1,
-      subShapesNames: 0,
-      codePage: "UTF8",
-      linearDeflection: 0.1,
-      angularDeflection: 0.5
-    };
-  }
-  async load(buffer, t, onProgress) {
-    if (!buffer || buffer.byteLength === 0) {
-      throw new Error(t("error_empty_file"));
-    }
-    if (onProgress) onProgress(10, t("loading_cad_engine"));
-    let occt;
-    try {
-      const initOCCT = (await import('occt-import-js')).default;
-      occt = await initOCCT({
-        locateFile: (name) => {
-          if (name.endsWith(".wasm")) return this.wasmUrl;
-          return name;
-        }
-      });
-    } catch (e) {
-      console.error("初始化 OCCT 引擎失败:", e);
-      throw new Error(t("error_cad_engine_init_failed"));
-    }
-    if (onProgress) onProgress(30, t("parsing_cad_data"));
-    const fileContent = new Uint8Array(buffer);
-    let result;
-    let stepError = null;
-    let igesError = null;
-    try {
-      const params = {
-        linearDeflection: this.readParameters.linearDeflection,
-        angularDeflection: this.readParameters.angularDeflection,
-        productContext: this.readParameters.productContext,
-        assemblyLevel: this.readParameters.assemblyLevel,
-        shapeRepr: this.readParameters.shapeRepr,
-        shapeAspect: this.readParameters.shapeAspect,
-        subShapesNames: this.readParameters.subShapesNames,
-        codePage: this.readParameters.codePage
-      };
-      result = occt.ReadStepFile(fileContent, params);
-    } catch (e) {
-      stepError = e;
-      console.warn("STEP 解析失败，正在尝试 IGES...", e);
-    }
-    if (!result || !result.success) {
-      try {
-        const params = {
-          linearDeflection: this.readParameters.linearDeflection,
-          angularDeflection: this.readParameters.angularDeflection
-        };
-        result = occt.ReadIgesFile(fileContent, params);
-      } catch (e) {
-        igesError = e;
-        console.error("IGES 解析失败", e);
-      }
-    }
-    if (!result) {
-      throw new Error(t("error_cad_parse_failed") + " - " + t("error_no_parser_result"));
-    }
-    if (!result.success) {
-      let errorMsg = t("error_cad_parse_failed");
-      if (result.error) {
-        errorMsg += ` - ${result.error}`;
-      } else if (stepError && igesError) {
-        errorMsg += ` - STEP: ${stepError.message || "未知错误"}, IGES: ${igesError.message || "未知错误"}`;
-      }
-      throw new Error(errorMsg);
-    }
-    if (!result.meshes || !Array.isArray(result.meshes) || result.meshes.length === 0) {
-      throw new Error(t("error_cad_no_meshes"));
-    }
-    if (onProgress) onProgress(70, t("creating_geometry"));
-    const group = new THREE.Group();
-    const materialCache = /* @__PURE__ */ new Map();
-    const defaultMaterial = new THREE.MeshPhongMaterial({
-      color: 13421772,
-      side: THREE.DoubleSide,
-      flatShading: false,
-      shininess: 30,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1
-    });
-    materialCache.set("default", defaultMaterial);
-    const meshMap = /* @__PURE__ */ new Map();
-    const groupMap = /* @__PURE__ */ new Map();
-    const meshesWithParent = /* @__PURE__ */ new Map();
-    for (const mesh of result.meshes) {
-      let geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3));
-      if (mesh.attributes.normal && mesh.attributes.normal.array) {
-        geometry.setAttribute("normal", new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3));
-      } else {
-        geometry.computeVertexNormals();
-      }
-      if (mesh.index && mesh.index.array) {
-        geometry.setIndex(new THREE.Uint32BufferAttribute(mesh.index.array, 1));
-      }
-      geometry = mergeVertices(geometry);
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
-      const threeMaterial = defaultMaterial.clone();
-      const threeMesh = new THREE.Mesh(geometry, threeMaterial);
-      let baseColor = new THREE.Color(13421772);
-      if (mesh.color && Array.isArray(mesh.color) && mesh.color.length >= 3) {
-        baseColor = new THREE.Color(mesh.color[0], mesh.color[1], mesh.color[2]);
-      }
-      threeMesh.material.color = baseColor;
-      threeMesh.userData.color = baseColor.getHex();
-      const brepFaces = mesh.brep_faces;
-      if (Array.isArray(brepFaces) && brepFaces.length > 0) {
-        const hasValidFaceColors = brepFaces.some(
-          (face) => face && Array.isArray(face.color) && face.color.length >= 3 && face.first !== void 0 && face.last !== void 0
-        );
-        if (hasValidFaceColors) {
-          geometry = geometry.toNonIndexed();
-          const posAttr = geometry.getAttribute("position");
-          const vertexCount = posAttr.count;
-          const triCount = Math.floor(vertexCount / 3);
-          const colors = new Float32Array(vertexCount * 3);
-          for (let i = 0; i < vertexCount; i++) {
-            const ci = i * 3;
-            colors[ci + 0] = baseColor.r;
-            colors[ci + 1] = baseColor.g;
-            colors[ci + 2] = baseColor.b;
-          }
-          for (const face of brepFaces) {
-            if (!face || !Array.isArray(face.color) || face.color.length < 3) {
-              continue;
-            }
-            const first = Number(face.first);
-            const last = Number(face.last);
-            if (!Number.isFinite(first) || !Number.isFinite(last) || first < 0 || last < first) {
-              continue;
-            }
-            const faceColor = new THREE.Color(
-              face.color[0],
-              face.color[1],
-              face.color[2]
-            );
-            const startTri = Math.max(0, Math.min(triCount - 1, first));
-            const endTri = Math.max(0, Math.min(triCount - 1, last));
-            for (let tIdx = startTri; tIdx <= endTri; tIdx++) {
-              for (let v = 0; v < 3; v++) {
-                const vi = tIdx * 3 + v;
-                const ci = vi * 3;
-                colors[ci + 0] = faceColor.r;
-                colors[ci + 1] = faceColor.g;
-                colors[ci + 2] = faceColor.b;
-              }
-            }
-          }
-          geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-          threeMesh.geometry = geometry;
-          threeMesh.material.vertexColors = true;
-        }
-      }
-      threeMesh.name = mesh.name || "CAD Part";
-      threeMesh.userData = {
-        ...mesh.userData,
-        ...threeMesh.userData,
-        source: "OCCT",
-        meshId: mesh.id,
-        shapeName: mesh.name,
-        isAssembly: !!mesh.isAssembly,
-        isComponent: !!mesh.isComponent
-      };
-      threeMesh.frustumCulled = true;
-      const parentId = mesh.parentId || mesh.parent;
-      if (parentId) {
-        meshesWithParent.set(threeMesh, parentId);
-      } else {
-        group.add(threeMesh);
-      }
-      meshMap.set(mesh.id || mesh.name || `mesh_${meshMap.size}`, threeMesh);
-    }
-    for (const [threeMesh, parentId] of meshesWithParent.entries()) {
-      let parent;
-      if (meshMap.has(parentId)) {
-        parent = meshMap.get(parentId);
-      } else {
-        if (!groupMap.has(parentId)) {
-          const newGroup = new THREE.Group();
-          newGroup.name = `Group_${parentId}`;
-          groupMap.set(parentId, newGroup);
-          group.add(newGroup);
-        }
-        parent = groupMap.get(parentId);
-      }
-      parent.add(threeMesh);
-    }
-    group.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        obj.geometry.computeBoundingBox();
-        obj.geometry.computeBoundingSphere();
-      }
-    });
-    group.updateMatrixWorld(true);
-    if (onProgress) onProgress(100, t("model_loaded"));
-    return group;
-  }
-}
-
 function normalizePath(path) {
   return path.replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/^\/+/, "").toLowerCase();
 }
@@ -4914,39 +3779,65 @@ const STAGE_WEIGHTS = {
   optimize: [72, 92],
   addToScene: [92, 100]
 };
-function createLoadingManager(files, libPath, settings, renderer) {
+const libPathCache = /* @__PURE__ */ new Map();
+function normalizeLibPath(libPath) {
+  if (!libPathCache.has(libPath)) {
+    libPathCache.set(libPath, libPath.replace(/\/$/, ""));
+  }
+  return libPathCache.get(libPath);
+}
+function createLoadingManager(files, _libPath, _settings) {
   const resourceResolver = createResourceResolver(files);
   const manager = new THREE.LoadingManager();
   if (resourceResolver) {
     manager.setURLModifier((url) => resourceResolver.resolve(url));
   }
-  const dracoLoader = new DRACOLoader(manager);
-  dracoLoader.setDecoderPath(`${libPath.replace(/\/$/, "")}/draco/gltf/`);
-  const ktx2Loader = new KTX2Loader(manager);
-  ktx2Loader.setTranscoderPath(`${libPath.replace(/\/$/, "")}/basis/`);
+  const cleanup = () => {
+    resourceResolver?.dispose();
+  };
+  return { manager, cleanup, resourceResolver };
+}
+async function createGltfLoaderRuntime(manager, libPath) {
+  const [
+    { GLTFLoader },
+    { DRACOLoader },
+    { KTX2Loader },
+    { MeshoptDecoder }
+  ] = await Promise.all([
+    import('./loaders-MBHA5ASo.js').then(n => n.a),
+    import('./loaders-MBHA5ASo.js').then(n => n.D),
+    import('./loaders-MBHA5ASo.js').then(n => n.K),
+    import('./meshopt_decoder.module-C_9D6xwu.js')
+  ]);
+  const normalizedLibPath = normalizeLibPath(libPath);
+  const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
   let probeRenderer = null;
-  if (!renderer && typeof document !== "undefined") {
+  const dracoLoader = new DRACOLoader(manager);
+  dracoLoader.setDecoderPath(`${normalizedLibPath}/draco/gltf/`);
+  const ktx2Loader = new KTX2Loader(manager);
+  ktx2Loader.setTranscoderPath(`${normalizedLibPath}/basis/`);
+  if (typeof document !== "undefined") {
     try {
       probeRenderer = new THREE.WebGLRenderer({ canvas: document.createElement("canvas") });
-      renderer = probeRenderer;
-    } catch (error) {
-      console.warn("[LoaderUtils] Unable to create probe renderer for KTX2", error);
-    }
-  }
-  if (renderer) {
-    try {
-      ktx2Loader.detectSupport(renderer);
+      ktx2Loader.detectSupport(probeRenderer);
     } catch (error) {
       console.warn("[LoaderUtils] KTX2 detectSupport failed", error);
     }
   }
-  const cleanup = () => {
-    resourceResolver?.dispose();
-    dracoLoader.dispose();
-    ktx2Loader.dispose();
-    probeRenderer?.dispose();
+  const loader = new GLTFLoader(manager);
+  loader.setDRACOLoader(dracoLoader);
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  if (supportsCompressedTextures) {
+    loader.setKTX2Loader(ktx2Loader);
+  }
+  return {
+    loader,
+    cleanup: () => {
+      dracoLoader.dispose();
+      ktx2Loader.dispose();
+      probeRenderer?.dispose();
+    }
   };
-  return { manager, dracoLoader, ktx2Loader, cleanup, settings, resourceResolver };
 }
 function createStageProgressReporter(onProgress, t, fileName, fileBaseProgress, fileWeight) {
   return (stage, progress, msg) => {
@@ -4959,37 +3850,37 @@ function createStageProgressReporter(onProgress, t, fileName, fileBaseProgress, 
   };
 }
 async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t, settings, libPath) {
-  const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
-  const loaderContext = createLoadingManager(files, libPath, settings);
-  const { manager, dracoLoader, ktx2Loader, cleanup, resourceResolver } = loaderContext;
+  const loaderContext = createLoadingManager(files);
+  const { manager, cleanup, resourceResolver } = loaderContext;
   try {
     if (ext === "lmb") {
+      const { LMBLoader } = await import('./lmbLoader-DKeiizRf.js');
       const loader = new LMBLoader();
       reportStage("parse", 0);
       return await loader.loadAsync(url, (p) => reportStage("parse", p * 100));
     }
     if (ext === "glb" || ext === "gltf") {
-      const loader = new GLTFLoader(manager);
-      loader.setDRACOLoader(dracoLoader);
-      loader.setMeshoptDecoder(MeshoptDecoder);
-      if (supportsCompressedTextures) {
-        loader.setKTX2Loader(ktx2Loader);
-      }
+      const { loader, cleanup: cleanupGltf } = await createGltfLoaderRuntime(manager, libPath);
       reportStage("parse", 0);
-      const gltf = await new Promise((resolve, reject) => {
-        loader.load(
-          url,
-          resolve,
-          (e) => {
-            if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
-            else reportStage("parse", 50);
-          },
-          reject
-        );
-      });
-      return gltf.scene;
+      try {
+        const gltf = await new Promise((resolve, reject) => {
+          loader.load(
+            url,
+            resolve,
+            (e) => {
+              if (e.total && e.total > 0) reportStage("parse", e.loaded / e.total * 100);
+              else reportStage("parse", 50);
+            },
+            reject
+          );
+        });
+        return gltf.scene;
+      } finally {
+        cleanupGltf();
+      }
     }
     if (ext === "fbx") {
+      const { FBXLoader } = await import('./loaders-MBHA5ASo.js').then(n => n.F);
       const loader = new FBXLoader(manager);
       reportStage("parse", 0);
       return await new Promise((resolve, reject) => {
@@ -5005,10 +3896,15 @@ async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t,
       });
     }
     if (ext === "ifc") {
+      const { loadIFC } = await import('./IFCLoader-DzrJ7JNi.js');
       reportStage("parse", 0);
       return await loadIFC(typeof fileOrUrl === "string" ? url : fileOrUrl, (p, msg) => reportStage("parse", p, msg), t, libPath);
     }
     if (ext === "obj") {
+      const [{ OBJLoader }, { MTLLoader }] = await Promise.all([
+        import('./loaders-MBHA5ASo.js').then(n => n.b),
+        import('./loaders-MBHA5ASo.js').then(n => n.M)
+      ]);
       const objLoader = new OBJLoader(manager);
       const mtlName = url.replace(/\.[^.]+$/i, ".mtl");
       if (resourceResolver?.has(mtlName)) {
@@ -5030,6 +3926,7 @@ async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t,
       });
     }
     if (ext === "stl") {
+      const { STLLoader } = await import('./loaders-MBHA5ASo.js').then(n => n.S);
       const loader = new STLLoader(manager);
       reportStage("parse", 0);
       const geometry = await loader.loadAsync(url, (e) => {
@@ -5038,6 +3935,7 @@ async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t,
       return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 8947848 }));
     }
     if (ext === "ply") {
+      const { PLYLoader } = await import('./loaders-MBHA5ASo.js').then(n => n.P);
       const loader = new PLYLoader(manager);
       reportStage("parse", 0);
       const geometry = await loader.loadAsync(url, (e) => {
@@ -5049,6 +3947,7 @@ async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t,
       }));
     }
     if (ext === "3mf") {
+      const { ThreeMFLoader } = await import('./loaders-MBHA5ASo.js').then(n => n._);
       const loader = new ThreeMFLoader(manager);
       reportStage("parse", 0);
       return await loader.loadAsync(url, (e) => {
@@ -5059,6 +3958,7 @@ async function loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t,
       reportStage("fetch", 0);
       const buffer = typeof fileOrUrl === "string" ? await fetch(url).then((r) => r.arrayBuffer()) : await fileOrUrl.arrayBuffer();
       const wasmUrl = `${libPath}/occt-import-js/occt-import-js.wasm`;
+      const { OCCTLoader } = await import('./OCCTLoader-CEso80J0.js');
       const loader = new OCCTLoader(wasmUrl);
       reportStage("parse", 0);
       return await loader.load(buffer, t, (p, msg) => reportStage("parse", p, msg));
