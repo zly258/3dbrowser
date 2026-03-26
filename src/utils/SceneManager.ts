@@ -3545,7 +3545,7 @@ export class SceneManager {
         this.sceneSphereValid = false;
     }
 
-    fitView(keepOrientation = false) {
+    fitView(keepOrientation = true) {
         this.contentGroup.updateMatrixWorld(true);
         let box = this.computeTotalBounds(true);
         
@@ -3567,7 +3567,7 @@ export class SceneManager {
         } else {
             box.setFromObject(obj);
         }
-        if(!box.isEmpty()) this.fitBox(box);
+        if(!box.isEmpty()) this.fitBox(box, false);
     }
 
     fitBox(box: THREE.Box3, updateCameraPosition: boolean = true) {
