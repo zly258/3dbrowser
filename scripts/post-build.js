@@ -7,69 +7,62 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
 const distDir = path.join(rootDir, 'dist');
-const destDir = path.resolve(rootDir, 'example/3dbrowser-lib');
 
 console.log('Starting post-build script...');
 
-// 1. Clean and recreate destination directory
-if (fs.existsSync(destDir)) {
-  console.log(`Cleaning existing directory: ${destDir}`);
-  fs.rmSync(destDir, { recursive: true, force: true });
-}
-fs.mkdirSync(destDir, { recursive: true });
-
-// 2. Copy dist content to destination
-if (fs.existsSync(distDir)) {
-  console.log(`Copying dist content from ${distDir} to ${destDir}`);
-  fs.cpSync(distDir, destDir, { recursive: true });
-} else {
+if (!fs.existsSync(distDir)) {
   console.error(`Dist directory not found: ${distDir}`);
   process.exit(1);
 }
 
-// 3. Modify and write package.json to destination
 const pkgPath = path.join(rootDir, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
-console.log('Updating package.json for distribution...');
+console.log('Writing distribution package metadata...');
 
-// Update paths for the example-local lib version
-pkg.main = './3dbrowser.js';
-pkg.module = './3dbrowser.js';
-pkg.types = './ThreeViewer.d.ts';
+const distPkg = {
+  name: pkg.name,
+  version: pkg.version,
+  description: pkg.description,
+  keywords: pkg.keywords,
+  license: pkg.license,
+  author: pkg.author,
+  type: pkg.type,
+  main: './3dbrowser.js',
+  module: './3dbrowser.js',
+  types: './ThreeViewer.d.ts',
+  exports: {
+    '.': {
+      types: './ThreeViewer.d.ts',
+      import: './3dbrowser.js',
+      require: './3dbrowser.js'
+    }
+  },
+  files: [
+    '3dbrowser.css',
+    '3dbrowser.js',
+    'IFCLoader-*.js',
+    'OCCTLoader-*.js',
+    'lmbLoader-*.js',
+    'loaders-*.js',
+    'meshopt_decoder.module-*.js',
+    'utils-*.js',
+    'ThreeViewer.d.ts',
+    'assets',
+    'libs',
+    'src',
+    'README.md',
+    'LICENSE'
+  ]
+};
 
-if (pkg.exports) {
-  pkg.exports['.'] = {
-    types: './ThreeViewer.d.ts',
-    import: './3dbrowser.js',
-    require: './3dbrowser.js'
-  };
-}
+fs.writeFileSync(path.join(distDir, 'package.json'), JSON.stringify(distPkg, null, 2));
 
-pkg.files = [
-  '3dbrowser.css',
-  '3dbrowser.js',
-  'loaders-*.js',
-  'utils-*.js',
-  'ThreeViewer.d.ts',
-  'assets',
-  'libs',
-  'src',
-  'README.md',
-  'LICENSE'
-];
-
-// Write the modified package.json
-const destPkgPath = path.join(destDir, 'package.json');
-fs.writeFileSync(destPkgPath, JSON.stringify(pkg, null, 2));
-
-// 4. Copy README and LICENSE if they exist
-['README.md', 'LICENSE'].forEach(file => {
+for (const file of ['README.md', 'LICENSE']) {
   const filePath = path.join(rootDir, file);
-  if (fs.existsSync(filePath)) {
-    console.log(`Copying ${file}...`);
-    fs.copyFileSync(filePath, path.join(destDir, file));
-  }
-});
+  if (!fs.existsSync(filePath)) continue;
+  console.log(`Copying ${file}...`);
+  fs.copyFileSync(filePath, path.join(distDir, file));
+}
 
 console.log('Post-build script completed successfully!');
