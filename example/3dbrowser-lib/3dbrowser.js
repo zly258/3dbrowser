@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { Loader, FileLoader } from 'three';
 import { O as OrbitControls, m as mergeVertices, a as GLTFLoader, F as FBXLoader, b as OBJLoader, M as MTLLoader, S as STLLoader, P as PLYLoader, T as ThreeMFLoader, D as DRACOLoader, K as KTX2Loader } from './loaders-CEnCNUVm.js';
 import { TilesRenderer } from '3d-tiles-renderer';
-import { b as buildOctree, c as collectLeafNodes, a as createBatchedMeshFromItemsAsync, d as collectItemsBatched, e as collectItems, f as calculateGeometryMemory, g as convertLMBTo3DTiles, h as exportGLB, i as exportLMB } from './utils-B2k52XGV.js';
+import { c as calculateGeometryMemory, b as buildOctree, a as collectLeafNodes, d as createBatchedMeshFromItemsAsync, e as collectItemsBatched, f as collectItems, g as convertLMBTo3DTiles, h as exportGLB, i as exportLMB } from './utils-BgwjYSL5.js';
 import * as WebIFC from 'web-ifc';
 
 class SceneManager {
@@ -79,9 +79,14 @@ class SceneManager {
     this.maxConcurrentChunkLoads = 128;
     this.maxChunkLoadsPerFrame = 64;
     this.maxLoadedChunks = 512;
+    this.maxCachedChunks = 48;
     this.chunkLoadingEnabled = true;
     this.maxRenderDistance = 1e6;
     this._lastCullingTime = 0;
+    this.chunkMeshCache = /* @__PURE__ */ new Map();
+    this.chunkCacheOrder = [];
+    this.originalStats = { meshes: 0, faces: 0, memory: 0 };
+    this.originalStatsByModel = /* @__PURE__ */ new Map();
     this.workers = [];
     this.workerQueue = [];
     this.activeWorkerCount = 0;
@@ -370,7 +375,7 @@ class SceneManager {
     const targetFps = this.settings.targetFps ?? 50;
     let desiredRatio = maxRatio;
     if (this.isCameraMoving) {
-      desiredRatio = Math.max(minRatio, maxRatio * 0.75);
+      desiredRatio = Math.max(minRatio, maxRatio * 0.65);
     } else if (this.fps > 0 && this.fps < targetFps - 5) {
       desiredRatio = Math.max(minRatio, this.activePixelRatio - 0.1);
     } else if (this.fps > targetFps + 8) {
@@ -391,6 +396,129 @@ class SceneManager {
     this.maxConcurrentChunkLoads = Math.max(16, Math.min(96, cpuCount * 8));
     this.maxChunkLoadsPerFrame = Math.max(8, Math.min(32, cpuCount * 2));
     this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
+    this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
+  }
+  analyzeObjectStats(object) {
+    let meshes = 0;
+    let faces = 0;
+    let memory = 0;
+    object.traverse((child) => {
+      const mesh = child;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      meshes++;
+      if (mesh.geometry.index) {
+        faces += mesh.geometry.index.count / 3;
+      } else if (mesh.geometry.attributes.position) {
+        faces += mesh.geometry.attributes.position.count / 3;
+      }
+      memory += calculateGeometryMemory(mesh.geometry);
+    });
+    return {
+      meshes,
+      faces: Math.floor(faces),
+      memory: parseFloat(memory.toFixed(2))
+    };
+  }
+  registerOriginalStats(originalUuid, stats) {
+    this.originalStatsByModel.set(originalUuid, stats);
+    this.originalStats.meshes += stats.meshes;
+    this.originalStats.faces += stats.faces;
+    this.originalStats.memory = parseFloat((this.originalStats.memory + stats.memory).toFixed(2));
+  }
+  unregisterOriginalStats(originalUuid) {
+    const stats = this.originalStatsByModel.get(originalUuid);
+    if (!stats) return;
+    this.originalStats.meshes = Math.max(0, this.originalStats.meshes - stats.meshes);
+    this.originalStats.faces = Math.max(0, this.originalStats.faces - stats.faces);
+    this.originalStats.memory = parseFloat(Math.max(0, this.originalStats.memory - stats.memory).toFixed(2));
+    this.originalStatsByModel.delete(originalUuid);
+  }
+  disposeChunkMesh(mesh) {
+    if (mesh.geometry) mesh.geometry.dispose();
+    if (mesh.material && mesh.material !== this.sharedMaterial) {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((m) => m.dispose && m.dispose());
+    }
+  }
+  touchChunkCache(chunkId) {
+    this.chunkCacheOrder = this.chunkCacheOrder.filter((id) => id !== chunkId);
+    this.chunkCacheOrder.push(chunkId);
+  }
+  cacheChunkMesh(chunk, mesh) {
+    if (this.chunkMeshCache.has(chunk.id)) {
+      const oldMesh = this.chunkMeshCache.get(chunk.id);
+      if (oldMesh !== mesh) this.disposeChunkMesh(oldMesh);
+    }
+    this.chunkMeshCache.set(chunk.id, mesh);
+    this.touchChunkCache(chunk.id);
+    while (this.chunkCacheOrder.length > this.maxCachedChunks) {
+      const evictId = this.chunkCacheOrder.shift();
+      if (!evictId) break;
+      const cached = this.chunkMeshCache.get(evictId);
+      if (!cached) continue;
+      this.chunkMeshCache.delete(evictId);
+      this.disposeChunkMesh(cached);
+    }
+  }
+  takeCachedChunkMesh(chunkId) {
+    const mesh = this.chunkMeshCache.get(chunkId) || null;
+    if (!mesh) return null;
+    this.chunkMeshCache.delete(chunkId);
+    this.chunkCacheOrder = this.chunkCacheOrder.filter((id) => id !== chunkId);
+    return mesh;
+  }
+  clearChunkCache(filter) {
+    for (const [chunkId, mesh] of this.chunkMeshCache.entries()) {
+      if (filter && !filter(chunkId, mesh)) continue;
+      this.disposeChunkMesh(mesh);
+      this.chunkMeshCache.delete(chunkId);
+    }
+    this.chunkCacheOrder = this.chunkCacheOrder.filter((chunkId) => this.chunkMeshCache.has(chunkId));
+  }
+  unregisterOptimizedMeshMapping(bm) {
+    const batchIdToUuid = bm.userData.batchIdToUuid;
+    if (!batchIdToUuid) return;
+    for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
+      const mapping = this.optimizedMapping.get(originalUuid);
+      if (!mapping) continue;
+      const index = mapping.findIndex((m) => m.mesh === bm && m.instanceId === batchId);
+      if (index !== -1) mapping.splice(index, 1);
+      if (mapping.length === 0) this.optimizedMapping.delete(originalUuid);
+    }
+  }
+  registerOptimizedMeshMapping(bm) {
+    const batchIdToUuid = bm.userData.batchIdToUuid;
+    const batchIdToColor = bm.userData.batchIdToColor;
+    const batchIdToGeometry = bm.userData.batchIdToGeometry;
+    if (!batchIdToUuid) return;
+    for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
+      if (!this.optimizedMapping.has(originalUuid)) {
+        this.optimizedMapping.set(originalUuid, []);
+      }
+      const originalColor = batchIdToColor?.get(batchId) ?? 16777215;
+      const geometry = batchIdToGeometry?.get(batchId);
+      this.optimizedMapping.get(originalUuid).push({
+        mesh: bm,
+        instanceId: batchId,
+        originalColor,
+        geometry
+      });
+    }
+  }
+  ensureChunkGhost(chunk) {
+    if (this.ghostGroup.getObjectByName(`ghost_${chunk.id}`)) return;
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    chunk.bounds.getSize(size);
+    chunk.bounds.getCenter(center);
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+      new THREE.LineBasicMaterial({ color: 4674921, transparent: true, opacity: 0.3 })
+    );
+    edges.name = `ghost_${chunk.id}`;
+    edges.scale.copy(size);
+    edges.position.copy(center);
+    this.ghostGroup.add(edges);
   }
   countRenderableMeshes(object) {
     let count = 0;
@@ -630,7 +758,7 @@ class SceneManager {
         toLoad.push(c);
       }
     });
-    if (loadedChunks.length > this.maxLoadedChunks) {
+    if (!this.isCameraMoving && loadedChunks.length > this.maxLoadedChunks) {
       loadedChunks.sort((a, b) => b.center.distanceToSquared(cameraPos) - a.center.distanceToSquared(cameraPos));
       let unloadedCount = 0;
       const targetUnload = loadedChunks.length - this.maxLoadedChunks;
@@ -695,21 +823,10 @@ class SceneManager {
   unloadChunk(chunk) {
     if (!chunk.loaded || !chunk.mesh) return;
     const bm = chunk.mesh;
-    const batchIdToUuid = bm.userData.batchIdToUuid;
-    if (batchIdToUuid) {
-      for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-        const mapping = this.optimizedMapping.get(originalUuid);
-        if (mapping) {
-          const index = mapping.findIndex((m) => m.mesh === bm && m.instanceId === batchId);
-          if (index !== -1) {
-            mapping.splice(index, 1);
-            if (mapping.length === 0) this.optimizedMapping.delete(originalUuid);
-          }
-        }
-      }
-    }
-    if (bm.geometry) bm.geometry.dispose();
+    this.unregisterOptimizedMeshMapping(bm);
     if (bm.parent) bm.parent.remove(bm);
+    this.cacheChunkMesh(chunk, bm);
+    this.ensureChunkGhost(chunk);
     chunk.mesh = null;
     chunk.loaded = false;
     this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - 1);
@@ -721,7 +838,10 @@ class SceneManager {
     try {
       let bm = null;
       let loadedNow = false;
-      if (chunk.node) {
+      const cachedMesh = this.takeCachedChunkMesh(chunk.id);
+      if (cachedMesh) {
+        bm = cachedMesh;
+      } else if (chunk.node) {
         bm = await createBatchedMeshFromItemsAsync(chunk.node.items, this.sharedMaterial, {
           batchSize: 1200,
           yieldControl: () => this.yieldToMainThread()
@@ -741,15 +861,12 @@ class SceneManager {
       }
       if (bm) {
         if (this.cancelledChunkIds.has(chunk.id) || !this.chunks.some((c) => c.id === chunk.id)) {
-          if (bm.geometry) bm.geometry.dispose();
-          if (bm.material) {
-            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-            materials.forEach((m) => m.dispose && m.dispose());
-          }
+          this.disposeChunkMesh(bm);
           return;
         }
         bm.name = chunk.id;
         bm.userData.chunkId = chunk.id;
+        bm.userData.originalUuid = chunk.originalUuid;
         if (chunk.nbimFileId) {
           bm.position.sub(this.globalOffset);
           bm.updateMatrixWorld(true);
@@ -767,24 +884,7 @@ class SceneManager {
         loadedNow = true;
         this.interactableListValid = false;
         this._needsBoundsUpdate = true;
-        const batchIdToUuid = bm.userData.batchIdToUuid;
-        const batchIdToColor = bm.userData.batchIdToColor;
-        const batchIdToGeometry = bm.userData.batchIdToGeometry;
-        if (batchIdToUuid) {
-          for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-            if (!this.optimizedMapping.has(originalUuid)) {
-              this.optimizedMapping.set(originalUuid, []);
-            }
-            const originalColor = batchIdToColor?.get(batchId) ?? 16777215;
-            const geometry = batchIdToGeometry?.get(batchId);
-            this.optimizedMapping.get(originalUuid).push({
-              mesh: bm,
-              instanceId: batchId,
-              originalColor,
-              geometry
-            });
-          }
-        }
+        this.registerOptimizedMeshMapping(bm);
       }
       if (loadedNow && !chunk.loaded) {
         chunk.loaded = true;
@@ -928,6 +1028,7 @@ class SceneManager {
     let deferredPlaceholderId = null;
     this.chunkWarmupActive = true;
     this.initialChunkLoadTarget = meshCount > 1e5 ? 24 : meshCount > 3e4 ? 18 : 12;
+    this.registerOriginalStats(object.uuid, this.analyzeObjectStats(object));
     if (onProgress) onProgress(5, shouldDeferStructure ? "正在准备轻量预览..." : "正在构建场景树...");
     if (shouldDeferStructure) {
       deferredPlaceholderId = `deferred_${object.uuid}`;
@@ -1140,11 +1241,7 @@ class SceneManager {
       group.traverse((child) => {
         if (child.isBatchedMesh) {
           const bm = child;
-          if (bm.geometry) bm.geometry.dispose();
-          if (bm.material) {
-            const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-            materials.forEach((m) => m.dispose && m.dispose());
-          }
+          this.disposeChunkMesh(bm);
         }
       });
       group.removeFromParent();
@@ -1168,11 +1265,7 @@ class SceneManager {
         }
       } else if (o.isBatchedMesh) {
         const bm = o;
-        if (bm.geometry) bm.geometry.dispose();
-        if (bm.material) {
-          const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-          materials.forEach((m) => m.dispose && m.dispose());
-        }
+        this.disposeChunkMesh(bm);
       }
       this.componentMap.delete(id);
       if (o instanceof THREE.Object3D && o.userData.expressID !== void 0) {
@@ -1199,6 +1292,11 @@ class SceneManager {
       traverseNode(nodes[0]);
     }
     this.interactableListValid = false;
+    this.unregisterOriginalStats(originalUuid);
+    this.clearChunkCache((chunkId, mesh) => {
+      const owner = mesh.userData.originalUuid || "";
+      return owner === uuid || owner === originalUuid || chunkId.startsWith(uuid) || chunkId.startsWith(originalUuid);
+    });
     if (this.currentMeasureModelUuid === uuid || this.currentMeasureModelUuid === originalUuid) {
       this.currentMeasureModelUuid = null;
     }
@@ -1897,6 +1995,9 @@ class SceneManager {
       this.chunkLoadedCount = 0;
       this.reportChunkProgress();
       this.componentMap.clear();
+      this.clearChunkCache();
+      this.originalStats = { meshes: 0, faces: 0, memory: 0 };
+      this.originalStatsByModel.clear();
       this.chunkLoadingEnabled = true;
       this.contentGroup.visible = true;
       this.ghostGroup.visible = true;
@@ -3266,35 +3367,12 @@ class SceneManager {
     return false;
   }
   getStats() {
-    let meshes = 0;
-    let faces = 0;
-    let memory = 0;
     let textureMemory = 0;
     const textures = /* @__PURE__ */ new Set();
     this.contentGroup.traverse((obj) => {
       if (obj.name === "__EdgesHelper") return;
       if (obj.isMesh || obj.isBatchedMesh) {
-        meshes++;
         const mesh = obj;
-        if (mesh.isBatchedMesh) {
-          const mapping = mesh.userData.batchIdToExpressId;
-          if (mapping) {
-            meshes += mapping.size - 1;
-          }
-        }
-        if (mesh.geometry) {
-          let meshFaces = 0;
-          if (mesh.geometry.index) {
-            meshFaces = mesh.geometry.index.count / 3;
-          } else if (mesh.geometry.attributes.position) {
-            meshFaces = mesh.geometry.attributes.position.count / 3;
-          }
-          if (mesh.isInstancedMesh) {
-            meshFaces *= mesh.count;
-          }
-          faces += meshFaces;
-          memory += calculateGeometryMemory(mesh.geometry);
-        }
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         materials.forEach((material) => {
           if (!material) return;
@@ -3314,9 +3392,9 @@ class SceneManager {
     });
     const drawCalls = this.renderer.info.render.calls;
     return {
-      meshes,
-      faces: Math.floor(faces),
-      memory: parseFloat(memory.toFixed(2)),
+      meshes: this.originalStats.meshes,
+      faces: this.originalStats.faces,
+      memory: parseFloat(this.originalStats.memory.toFixed(2)),
       textureMemory: parseFloat(textureMemory.toFixed(2)),
       drawCalls,
       fps: Math.round(this.fps),
@@ -7703,7 +7781,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, t, theme })
       title,
       onClose: onCancel,
       width: 360,
-      height: 220,
+      height: 188,
       modal: true,
       movable: false,
       theme,
@@ -7724,6 +7802,8 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, t, theme })
                 className: "text-base",
                 style: {
                   flex: 1,
+                  display: "flex",
+                  alignItems: "center",
                   color: "var(--text-primary)",
                   lineHeight: 1.6
                 },
@@ -8578,6 +8658,11 @@ const ThreeViewer = ({
       window.removeEventListener("mouseup", handleUp);
     };
   }, []);
+  const formatNumber = (num) => {
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + "K";
+    return num.toString();
+  };
   const formatMemory = (mb) => {
     if (mb >= 1024) return (mb / 1024).toFixed(2) + " GB";
     return mb.toFixed(1) + " MB";
@@ -9916,6 +10001,14 @@ const ThreeViewer = ({
               paddingLeft: "12px",
               borderLeft: `1px solid ${theme.border}`
             }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { opacity: 0.75, fontVariantNumeric: "tabular-nums" }, title: "Original Meshes", children: [
+                "M ",
+                formatNumber(stats.meshes)
+              ] }),
+              /* @__PURE__ */ jsxs("div", { style: { opacity: 0.75, fontVariantNumeric: "tabular-nums" }, title: "Triangles", children: [
+                "F ",
+                formatNumber(stats.faces)
+              ] }),
               /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, children: [
                 /* @__PURE__ */ jsx(IconActivity, { width: 14, height: 14 }),
                 /* @__PURE__ */ jsx("span", { children: formatMemory(stats.memory) })

@@ -1940,6 +1940,12 @@ export const ThreeViewer = ({
                             paddingLeft: '12px',
                             borderLeft: `1px solid ${theme.border}`
                         }}>
+                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Original Meshes">
+                                M {formatNumber(stats.meshes)}
+                            </div>
+                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Triangles">
+                                F {formatNumber(stats.faces)}
+                            </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
                                 <IconActivity width={14} height={14} />
                                 <span>{formatMemory(stats.memory)}</span>

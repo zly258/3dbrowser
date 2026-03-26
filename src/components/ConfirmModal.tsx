@@ -20,7 +20,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
             title={title}
             onClose={onCancel}
             width={360}
-            height={220}
+            height={188}
             modal={true}
             movable={false}
             theme={theme}
@@ -38,6 +38,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                     className="text-base"
                     style={{
                         flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
                         color: 'var(--text-primary)',
                         lineHeight: 1.6
                     }}

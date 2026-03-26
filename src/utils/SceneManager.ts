@@ -186,9 +186,14 @@ export class SceneManager {
     private maxConcurrentChunkLoads = 128; // 提高并发
     private maxChunkLoadsPerFrame = 64;   // 提高并发
     private maxLoadedChunks = 512;        // 最大已加载分块数，超过则卸载最远的
+    private maxCachedChunks = 48;
     private chunkLoadingEnabled = true;
     private maxRenderDistance = 1000000; // 最大渲染距离
     private _lastCullingTime: number = 0;
+    private chunkMeshCache = new Map<string, THREE.BatchedMesh>();
+    private chunkCacheOrder: string[] = [];
+    private originalStats = { meshes: 0, faces: 0, memory: 0 };
+    private originalStatsByModel = new Map<string, { meshes: number; faces: number; memory: number }>();
 
     // Worker 池
     private workers: Worker[] = [];
@@ -598,7 +603,7 @@ export class SceneManager {
 
         let desiredRatio = maxRatio;
         if (this.isCameraMoving) {
-            desiredRatio = Math.max(minRatio, maxRatio * 0.75);
+            desiredRatio = Math.max(minRatio, maxRatio * 0.65);
         } else if (this.fps > 0 && this.fps < targetFps - 5) {
             desiredRatio = Math.max(minRatio, this.activePixelRatio - 0.1);
         } else if (this.fps > targetFps + 8) {
@@ -623,6 +628,149 @@ export class SceneManager {
         this.maxConcurrentChunkLoads = Math.max(16, Math.min(96, cpuCount * 8));
         this.maxChunkLoadsPerFrame = Math.max(8, Math.min(32, cpuCount * 2));
         this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
+        this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
+    }
+
+    private analyzeObjectStats(object: THREE.Object3D) {
+        let meshes = 0;
+        let faces = 0;
+        let memory = 0;
+
+        object.traverse((child) => {
+            const mesh = child as THREE.Mesh;
+            if (!mesh.isMesh || !mesh.geometry) return;
+
+            meshes++;
+            if (mesh.geometry.index) {
+                faces += mesh.geometry.index.count / 3;
+            } else if (mesh.geometry.attributes.position) {
+                faces += mesh.geometry.attributes.position.count / 3;
+            }
+            memory += calculateGeometryMemory(mesh.geometry);
+        });
+
+        return {
+            meshes,
+            faces: Math.floor(faces),
+            memory: parseFloat(memory.toFixed(2))
+        };
+    }
+
+    private registerOriginalStats(originalUuid: string, stats: { meshes: number; faces: number; memory: number }) {
+        this.originalStatsByModel.set(originalUuid, stats);
+        this.originalStats.meshes += stats.meshes;
+        this.originalStats.faces += stats.faces;
+        this.originalStats.memory = parseFloat((this.originalStats.memory + stats.memory).toFixed(2));
+    }
+
+    private unregisterOriginalStats(originalUuid: string) {
+        const stats = this.originalStatsByModel.get(originalUuid);
+        if (!stats) return;
+        this.originalStats.meshes = Math.max(0, this.originalStats.meshes - stats.meshes);
+        this.originalStats.faces = Math.max(0, this.originalStats.faces - stats.faces);
+        this.originalStats.memory = parseFloat(Math.max(0, this.originalStats.memory - stats.memory).toFixed(2));
+        this.originalStatsByModel.delete(originalUuid);
+    }
+
+    private disposeChunkMesh(mesh: THREE.BatchedMesh) {
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material && mesh.material !== this.sharedMaterial) {
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach((m: any) => m.dispose && m.dispose());
+        }
+    }
+
+    private touchChunkCache(chunkId: string) {
+        this.chunkCacheOrder = this.chunkCacheOrder.filter((id) => id !== chunkId);
+        this.chunkCacheOrder.push(chunkId);
+    }
+
+    private cacheChunkMesh(chunk: any, mesh: THREE.BatchedMesh) {
+        if (this.chunkMeshCache.has(chunk.id)) {
+            const oldMesh = this.chunkMeshCache.get(chunk.id)!;
+            if (oldMesh !== mesh) this.disposeChunkMesh(oldMesh);
+        }
+        this.chunkMeshCache.set(chunk.id, mesh);
+        this.touchChunkCache(chunk.id);
+
+        while (this.chunkCacheOrder.length > this.maxCachedChunks) {
+            const evictId = this.chunkCacheOrder.shift();
+            if (!evictId) break;
+            const cached = this.chunkMeshCache.get(evictId);
+            if (!cached) continue;
+            this.chunkMeshCache.delete(evictId);
+            this.disposeChunkMesh(cached);
+        }
+    }
+
+    private takeCachedChunkMesh(chunkId: string) {
+        const mesh = this.chunkMeshCache.get(chunkId) || null;
+        if (!mesh) return null;
+        this.chunkMeshCache.delete(chunkId);
+        this.chunkCacheOrder = this.chunkCacheOrder.filter((id) => id !== chunkId);
+        return mesh;
+    }
+
+    private clearChunkCache(filter?: (chunkId: string, mesh: THREE.BatchedMesh) => boolean) {
+        for (const [chunkId, mesh] of this.chunkMeshCache.entries()) {
+            if (filter && !filter(chunkId, mesh)) continue;
+            this.disposeChunkMesh(mesh);
+            this.chunkMeshCache.delete(chunkId);
+        }
+        this.chunkCacheOrder = this.chunkCacheOrder.filter((chunkId) => this.chunkMeshCache.has(chunkId));
+    }
+
+    private unregisterOptimizedMeshMapping(bm: THREE.BatchedMesh) {
+        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
+        if (!batchIdToUuid) return;
+
+        for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
+            const mapping = this.optimizedMapping.get(originalUuid);
+            if (!mapping) continue;
+            const index = mapping.findIndex((m) => m.mesh === bm && m.instanceId === batchId);
+            if (index !== -1) mapping.splice(index, 1);
+            if (mapping.length === 0) this.optimizedMapping.delete(originalUuid);
+        }
+    }
+
+    private registerOptimizedMeshMapping(bm: THREE.BatchedMesh) {
+        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
+        const batchIdToColor = bm.userData.batchIdToColor as Map<number, number>;
+        const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry>;
+
+        if (!batchIdToUuid) return;
+
+        for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
+            if (!this.optimizedMapping.has(originalUuid)) {
+                this.optimizedMapping.set(originalUuid, []);
+            }
+            const originalColor = batchIdToColor?.get(batchId) ?? 0xffffff;
+            const geometry = batchIdToGeometry?.get(batchId);
+            this.optimizedMapping.get(originalUuid)!.push({
+                mesh: bm,
+                instanceId: batchId,
+                originalColor,
+                geometry
+            });
+        }
+    }
+
+    private ensureChunkGhost(chunk: any) {
+        if (this.ghostGroup.getObjectByName(`ghost_${chunk.id}`)) return;
+
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        chunk.bounds.getSize(size);
+        chunk.bounds.getCenter(center);
+
+        const edges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+            new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 })
+        );
+        edges.name = `ghost_${chunk.id}`;
+        edges.scale.copy(size);
+        edges.position.copy(center);
+        this.ghostGroup.add(edges);
     }
 
     private countRenderableMeshes(object: THREE.Object3D) {
@@ -929,7 +1077,7 @@ export class SceneManager {
         });
         
         // 卸载策略
-        if (loadedChunks.length > this.maxLoadedChunks) {
+        if (!this.isCameraMoving && loadedChunks.length > this.maxLoadedChunks) {
             loadedChunks.sort((a, b) => b.center.distanceToSquared(cameraPos) - a.center.distanceToSquared(cameraPos));
             
             let unloadedCount = 0;
@@ -1015,30 +1163,12 @@ export class SceneManager {
         if (!chunk.loaded || !chunk.mesh) return;
 
         const bm = chunk.mesh as THREE.BatchedMesh;
-        
-        // 1. 从优化映射中移除
-        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
-        if (batchIdToUuid) {
-            for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-                const mapping = this.optimizedMapping.get(originalUuid);
-                if (mapping) {
-                    const index = mapping.findIndex(m => m.mesh === bm && m.instanceId === batchId);
-                    if (index !== -1) {
-                        mapping.splice(index, 1);
-                        if (mapping.length === 0) this.optimizedMapping.delete(originalUuid);
-                    }
-                }
-            }
-        }
+        this.unregisterOptimizedMeshMapping(bm);
 
-        // 2. 释放资源
-        if (bm.geometry) bm.geometry.dispose();
-        // 材质通常是共享的 (this.sharedMaterial)，不在这里释放
-        
-        // 3. 从场景中移除
         if (bm.parent) bm.parent.remove(bm);
-        
-        // 4. 重置状态
+        this.cacheChunkMesh(chunk, bm);
+        this.ensureChunkGhost(chunk);
+
         chunk.mesh = null;
         chunk.loaded = false;
         this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - 1);
@@ -1051,8 +1181,11 @@ export class SceneManager {
         try {
             let bm: THREE.BatchedMesh | null = null;
             let loadedNow = false;
-            
-            if (chunk.node) {
+            const cachedMesh = this.takeCachedChunkMesh(chunk.id);
+
+            if (cachedMesh) {
+                bm = cachedMesh;
+            } else if (chunk.node) {
                 // 来自 addModel 的本地分块
                 bm = await createBatchedMeshFromItemsAsync(chunk.node.items, this.sharedMaterial, {
                     batchSize: 1200,
@@ -1078,15 +1211,12 @@ export class SceneManager {
 
             if (bm) {
                 if (this.cancelledChunkIds.has(chunk.id) || !this.chunks.some(c => c.id === chunk.id)) {
-                    if ((bm as any).geometry) (bm as any).geometry.dispose();
-                    if ((bm as any).material) {
-                        const materials = Array.isArray((bm as any).material) ? (bm as any).material : [(bm as any).material];
-                        materials.forEach((m: any) => m.dispose && m.dispose());
-                    }
+                    this.disposeChunkMesh(bm);
                     return;
                 }
                 bm.name = chunk.id;
                 bm.userData.chunkId = chunk.id;
+                bm.userData.originalUuid = chunk.originalUuid;
                 
                 // 抵消全局偏移 (解决大坐标导致的精度问题)
                 // 只有远程 NBIM 分块需要手动抵消，因为其二进制数据是大坐标
@@ -1112,26 +1242,7 @@ export class SceneManager {
                 this.interactableListValid = false;
                 this._needsBoundsUpdate = true; // 标记需要更新场景范围
 
-                // 建立映射 (对齐 refs，记录原始颜色以便高亮恢复)
-                const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
-                const batchIdToColor = bm.userData.batchIdToColor as Map<number, number>; // 记录颜色
-                const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry>; // 记录几何体
-                
-                if (batchIdToUuid) {
-                    for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-                        if (!this.optimizedMapping.has(originalUuid)) {
-                            this.optimizedMapping.set(originalUuid, []);
-                        }
-                        const originalColor = batchIdToColor?.get(batchId) ?? 0xffffff;
-                        const geometry = batchIdToGeometry?.get(batchId);
-                        this.optimizedMapping.get(originalUuid)!.push({ 
-                            mesh: bm, 
-                            instanceId: batchId,
-                            originalColor: originalColor,
-                            geometry: geometry
-                        });
-                    }
-                }
+                this.registerOptimizedMeshMapping(bm);
             }
 
             if (loadedNow && !chunk.loaded) {
@@ -1308,6 +1419,7 @@ export class SceneManager {
         let deferredPlaceholderId: string | null = null;
         this.chunkWarmupActive = true;
         this.initialChunkLoadTarget = meshCount > 100000 ? 24 : meshCount > 30000 ? 18 : 12;
+        this.registerOriginalStats(object.uuid, this.analyzeObjectStats(object));
 
         if (onProgress) onProgress(5, shouldDeferStructure ? "正在准备轻量预览..." : "正在构建场景树...");
 
@@ -1570,11 +1682,7 @@ export class SceneManager {
             group.traverse(child => {
                 if ((child as any).isBatchedMesh) {
                     const bm = child as THREE.BatchedMesh;
-                    if (bm.geometry) bm.geometry.dispose();
-                    if (bm.material) {
-                        const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                        materials.forEach((m: any) => m.dispose && m.dispose());
-                    }
+                    this.disposeChunkMesh(bm);
                 }
             });
             group.removeFromParent();
@@ -1606,11 +1714,7 @@ export class SceneManager {
                 }
             } else if ((o as any).isBatchedMesh) {
                 const bm = o as any;
-                if (bm.geometry) bm.geometry.dispose();
-                if (bm.material) {
-                    const materials = Array.isArray(bm.material) ? bm.material : [bm.material];
-                    materials.forEach((m: any) => m.dispose && m.dispose());
-                }
+                this.disposeChunkMesh(bm);
             }
 
             // 清理相关的组件映射
@@ -1641,6 +1745,11 @@ export class SceneManager {
             traverseNode(nodes[0]);
         }
         this.interactableListValid = false;
+        this.unregisterOriginalStats(originalUuid);
+        this.clearChunkCache((chunkId, mesh) => {
+            const owner = (mesh.userData.originalUuid || "") as string;
+            return owner === uuid || owner === originalUuid || chunkId.startsWith(uuid) || chunkId.startsWith(originalUuid);
+        });
 
         if (this.currentMeasureModelUuid === uuid || this.currentMeasureModelUuid === originalUuid) {
             this.currentMeasureModelUuid = null;
@@ -2438,6 +2547,9 @@ export class SceneManager {
             this.chunkLoadedCount = 0;
             this.reportChunkProgress(); // 通知前端分片进度已重置
             this.componentMap.clear();
+            this.clearChunkCache();
+            this.originalStats = { meshes: 0, faces: 0, memory: 0 };
+            this.originalStatsByModel.clear();
             this.chunkLoadingEnabled = true;
             this.contentGroup.visible = true;
             this.ghostGroup.visible = true;
@@ -4085,9 +4197,6 @@ export class SceneManager {
     }
 
     getStats() {
-        let meshes = 0;
-        let faces = 0;
-        let memory = 0;
         let textureMemory = 0;
         const textures = new Set<THREE.Texture>();
 
@@ -4095,38 +4204,7 @@ export class SceneManager {
             if (obj.name === "__EdgesHelper") return;
             
             if ((obj as THREE.Mesh).isMesh || (obj as any).isBatchedMesh) {
-                meshes++;
                 const mesh = obj as any;
-                
-                if (mesh.isBatchedMesh) {
-                    // BatchedMesh 统计
-                    // faces += mesh.indexCount / 3; // 这是一个粗略估算
-                    // 准确做法是累加所有已添加几何体的面数
-                    // 但这里我们可以简单使用渲染器提供的信息或者直接从几何体计算
-                    // 由于 BatchedMesh 内部存储，我们假设它已经被包含在 memory 计算中
-                    const mapping = mesh.userData.batchIdToExpressId as Map<number, number>;
-                    if (mapping) {
-                        // 如果有映射，说明每个实例都代表一个原始对象
-                        // 这里的 meshes 增加量应该是实例数量
-                        meshes += (mapping.size - 1); 
-                    }
-                }
-
-                if (mesh.geometry) {
-                    let meshFaces = 0;
-                    if (mesh.geometry.index) {
-                        meshFaces = mesh.geometry.index.count / 3;
-                    } else if (mesh.geometry.attributes.position) {
-                        meshFaces = mesh.geometry.attributes.position.count / 3;
-                    }
-                    
-                    if (mesh.isInstancedMesh) {
-                        meshFaces *= mesh.count;
-                    }
-                    
-                    faces += meshFaces;
-                    memory += calculateGeometryMemory(mesh.geometry);
-                }
 
                 const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
                 materials.forEach((material: any) => {
@@ -4148,9 +4226,9 @@ export class SceneManager {
         
         const drawCalls = this.renderer.info.render.calls;
         return { 
-            meshes, 
-            faces: Math.floor(faces), 
-            memory: parseFloat(memory.toFixed(2)),
+            meshes: this.originalStats.meshes,
+            faces: this.originalStats.faces,
+            memory: parseFloat(this.originalStats.memory.toFixed(2)),
             textureMemory: parseFloat(textureMemory.toFixed(2)),
             drawCalls,
             fps: Math.round(this.fps),
