@@ -1879,31 +1879,36 @@ export class SceneManager {
         }
     }
 
-    async addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
-        object.updateMatrixWorld(true);
-
-        // 1. 处理大坐标偏移
+    private applyGlobalOffsetForModel(object: THREE.Object3D) {
         const modelBox = new THREE.Box3().setFromObject(object);
-        if (!modelBox.isEmpty()) {
-            if (this.globalOffset.length() === 0) {
-                modelBox.getCenter(this.globalOffset);
-                console.log("初始化全局偏移以解决大坐标问题:", this.globalOffset);
-            }
-            // 抵消大坐标
-            object.position.sub(this.globalOffset);
-            object.updateMatrixWorld(true);
+        if (modelBox.isEmpty()) return modelBox;
+
+        if (this.globalOffset.length() === 0) {
+            modelBox.getCenter(this.globalOffset);
+            console.log("初始化全局偏移以解决大坐标问题:", this.globalOffset);
         }
 
-        // 1. 结构树采用延迟构建策略，降低大模型首屏阻塞
-        const objectOverview = this.collectObjectOverview(object);
-        const meshCount = objectOverview.meshes;
-        const shouldDeferStructure = meshCount >= this.deferredStructureThreshold;
-        let deferredPlaceholderId: string | null = null;
+        object.position.sub(this.globalOffset);
+        object.updateMatrixWorld(true);
+        return new THREE.Box3().setFromObject(object);
+    }
+
+    private configureModelWarmup(meshCount: number) {
         this.chunkWarmupActive = true;
         this.initialChunkLoadTarget = meshCount > 100000 ? 24 : meshCount > 30000 ? 18 : 12;
-        this.registerOriginalStats(object.uuid, objectOverview);
+    }
 
-        if (onProgress) onProgress(5, shouldDeferStructure ? "正在准备轻量预览..." : "正在构建场景树...");
+    private prepareStructureStage(
+        object: THREE.Object3D,
+        meshCount: number,
+        onProgress?: (p: number, msg: string) => void
+    ) {
+        const shouldDeferStructure = meshCount >= this.deferredStructureThreshold;
+        let deferredPlaceholderId: string | null = null;
+
+        if (onProgress) {
+            onProgress(5, shouldDeferStructure ? "正在准备轻量预览..." : "正在构建场景树...");
+        }
 
         if (shouldDeferStructure) {
             deferredPlaceholderId = `deferred_${object.uuid}`;
@@ -1925,17 +1930,21 @@ export class SceneManager {
             this.attachStructureRoot(modelRoot);
         }
 
-        // 预计算包围盒
-        modelBox.setFromObject(object);
+        return { shouldDeferStructure, deferredPlaceholderId };
+    }
+
+    private prepareModelBoundsStage(object: THREE.Object3D, modelBox: THREE.Box3) {
         if (!modelBox.isEmpty()) {
             this.precomputedBounds.union(modelBox);
             this.sceneBounds.copy(this.precomputedBounds);
         }
-        const previewGhost = !modelBox.isEmpty()
+
+        return !modelBox.isEmpty()
             ? this.createPreviewGhost(modelBox.clone(), `preview_${object.uuid}`)
             : null;
+    }
 
-        // 2. 纹理优化 & 组件映射
+    private async prepareModelRuntimeStage(object: THREE.Object3D, meshCount: number) {
         const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
         const shouldDeferRuntimeData = meshCount > 30000;
         if (shouldDeferRuntimeData) {
@@ -1943,9 +1952,9 @@ export class SceneManager {
         } else {
             await this.prepareObjectRuntimeData(object, maxAnisotropy, 6000);
         }
+    }
 
-        // 2. 将原始模型加入场景
-        // 为每个加载的文件创建一个容器组，方便统一管理
+    private attachModelToContentGroup(object: THREE.Object3D) {
         const fileGroup = new THREE.Group();
         fileGroup.name = `file_${object.uuid}`;
         fileGroup.userData.originalUuid = object.uuid;
@@ -1955,9 +1964,15 @@ export class SceneManager {
         object.visible = false;
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
+    }
 
+    private async prepareModelChunkStage(
+        object: THREE.Object3D,
+        meshCount: number,
+        onProgress?: (p: number, msg: string) => void
+    ) {
         if (onProgress) onProgress(10, "正在收集构件...");
-        
+
         const items = meshCount >= this.octreeWorkerThreshold
             ? await collectItemsBatched(object, {
                 batchSize: 3000,
@@ -1968,44 +1983,44 @@ export class SceneManager {
                 }
             })
             : collectItems(object);
-        if (items.length > 0) {
-            if (onProgress) onProgress(20, `已收集 ${items.length} 个构件，正在计算八叉树...`);
-            const bounds = await this.computeItemBoundsProgressively(items, onProgress);
 
-            if (onProgress) onProgress(35, "正在计算八叉树...");
+        if (items.length === 0) return;
 
-            const maxItemsPerNode = 3000;
-            const maxDepth = 6;
-            const leafNodes = await this.buildLeafPlans(items, bounds, maxItemsPerNode, maxDepth);
+        if (onProgress) onProgress(20, `已收集 ${items.length} 个构件，正在计算八叉树...`);
+        const bounds = await this.computeItemBoundsProgressively(items, onProgress);
 
-            const ghostSpecs = await this.registerLeafChunksProgressively(object, leafNodes, onProgress);
+        if (onProgress) onProgress(35, "正在计算八叉树...");
 
-            this.reportChunkProgress();
-            this.checkCullingAndLoad();
-            void this.createChunkGhostsProgressively(ghostSpecs);
+        const maxItemsPerNode = 3000;
+        const maxDepth = 6;
+        const leafNodes = await this.buildLeafPlans(items, bounds, maxItemsPerNode, maxDepth);
 
-            // 隐藏原始网格中的 Mesh 标记优化
-            const meshesToHide: THREE.Object3D[] = [];
-            object.traverse((child) => {
-                if ((child as THREE.Mesh).isMesh) {
-                    meshesToHide.push(child);
-                }
-            });
-            for (let i = 0; i < meshesToHide.length; i++) {
-                const child = meshesToHide[i] as THREE.Mesh;
-                child.visible = false;
-                child.userData.isOptimized = true;
-                if (i > 0 && i % 6000 === 0) {
-                    await this.yieldToMainThread();
-                }
+        const ghostSpecs = await this.registerLeafChunksProgressively(object, leafNodes, onProgress);
+        this.reportChunkProgress();
+        this.checkCullingAndLoad();
+        void this.createChunkGhostsProgressively(ghostSpecs);
+
+        const meshesToHide: THREE.Object3D[] = [];
+        object.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+                meshesToHide.push(child);
             }
-            if (onProgress) onProgress(95, "分块准备完成");
+        });
+        for (let i = 0; i < meshesToHide.length; i++) {
+            const child = meshesToHide[i] as THREE.Mesh;
+            child.visible = false;
+            child.userData.isOptimized = true;
+            if (i > 0 && i % 6000 === 0) {
+                await this.yieldToMainThread();
+            }
         }
 
+        if (onProgress) onProgress(95, "分块准备完成");
+    }
+
+    private finalizeModelStage(previewGhost: THREE.Object3D | null, onProgress?: (p: number, msg: string) => void) {
         this.sceneBounds = this.computeTotalBounds(false);
-        // 缓存完整包围盒，确保剖切等功能使用稳定的范围
         this.precomputedBounds = this.sceneBounds.clone();
-        // 如果有 globalOffset，precomputedBounds 存储的是原始坐标，需要把 offset 加回去
         if (this.globalOffset.length() > 0) {
             this.precomputedBounds.translate(this.globalOffset);
         }
@@ -2013,15 +2028,23 @@ export class SceneManager {
         this.updateSettings(this.settings);
         if (onProgress) onProgress(100, "模型已加入加载队列");
         this.checkCullingAndLoad();
-        if (previewGhost) {
-            this.ghostGroup.remove(previewGhost);
-            if ((previewGhost as any).geometry) (previewGhost as any).geometry.dispose();
-            if ((previewGhost as any).material) {
-                const materials = Array.isArray((previewGhost as any).material) ? (previewGhost as any).material : [(previewGhost as any).material];
-                materials.forEach((m: any) => m.dispose && m.dispose());
-            }
-        }
 
+        if (!previewGhost) return;
+        this.ghostGroup.remove(previewGhost);
+        if ((previewGhost as any).geometry) (previewGhost as any).geometry.dispose();
+        if ((previewGhost as any).material) {
+            const materials = Array.isArray((previewGhost as any).material)
+                ? (previewGhost as any).material
+                : [(previewGhost as any).material];
+            materials.forEach((m: any) => m.dispose && m.dispose());
+        }
+    }
+
+    private scheduleDeferredStructureReplacement(
+        object: THREE.Object3D,
+        shouldDeferStructure: boolean,
+        deferredPlaceholderId: string | null
+    ) {
         if (shouldDeferStructure && deferredPlaceholderId) {
             setTimeout(() => {
                 try {
@@ -2032,9 +2055,31 @@ export class SceneManager {
                     console.warn("延迟构建结构树失败:", error);
                 }
             }, 0);
-        } else if (this.onStructureUpdate) {
+            return;
+        }
+
+        if (this.onStructureUpdate) {
             this.onStructureUpdate();
         }
+    }
+
+    async addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
+        object.updateMatrixWorld(true);
+
+        const modelBox = this.applyGlobalOffsetForModel(object);
+        const objectOverview = this.collectObjectOverview(object);
+        const meshCount = objectOverview.meshes;
+        this.configureModelWarmup(meshCount);
+        this.registerOriginalStats(object.uuid, objectOverview);
+
+        const { shouldDeferStructure, deferredPlaceholderId } = this.prepareStructureStage(object, meshCount, onProgress);
+        const previewGhost = this.prepareModelBoundsStage(object, modelBox);
+
+        await this.prepareModelRuntimeStage(object, meshCount);
+        this.attachModelToContentGroup(object);
+        await this.prepareModelChunkStage(object, meshCount, onProgress);
+        this.finalizeModelStage(previewGhost, onProgress);
+        this.scheduleDeferredStructureReplacement(object, shouldDeferStructure, deferredPlaceholderId);
     }
 
     removeObject(uuid: string) {
