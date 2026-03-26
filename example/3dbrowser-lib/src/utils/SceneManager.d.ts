@@ -144,6 +144,10 @@ export declare class SceneManager {
     private movingPeripheralCursor;
     private movingPeripheralLastRefreshAt;
     private postMoveRecoveryUntil;
+    private readonly chunkCullingTempSize;
+    private readonly chunkCullingTempDirection;
+    private readonly chunkCullingTempForward;
+    private readonly chunkCullingTempCenterNdc;
     private boundsScanBatchSize;
     private chunkRegistrationBatchSize;
     private chunkGhostBatchSize;
