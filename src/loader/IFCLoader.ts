@@ -1,6 +1,46 @@
 import * as THREE from "three";
-import * as WebIFC from "web-ifc";
 import { ProgressCallback, TFunc } from "../theme/Locales";
+
+type IfcRuntime = {
+    ifcApi: any;
+    WebIFC: any;
+    wasmPath: string;
+};
+
+let cachedIfcRuntimePromise: Promise<IfcRuntime> | null = null;
+let cachedIfcRuntimePath = "";
+const ifcTypeCodeCache = new Map<string, number>();
+
+function getIfcWasmPath(libPath: string) {
+    return libPath.endsWith("/") ? `${libPath}web-ifc/` : `${libPath}/web-ifc/`;
+}
+
+async function getIfcRuntime(libPath: string): Promise<IfcRuntime> {
+    const wasmPath = getIfcWasmPath(libPath);
+    if (cachedIfcRuntimePromise && cachedIfcRuntimePath === wasmPath) {
+        return cachedIfcRuntimePromise;
+    }
+
+    cachedIfcRuntimePath = wasmPath;
+    cachedIfcRuntimePromise = (async () => {
+        const WebIFC = await import("web-ifc");
+        const ifcApi = new WebIFC.IfcAPI();
+        ifcApi.SetWasmPath(wasmPath);
+        await ifcApi.Init();
+        ifcTypeCodeCache.clear();
+        return { ifcApi, WebIFC, wasmPath };
+    })();
+
+    return cachedIfcRuntimePromise;
+}
+
+function getIfcTypeCode(ifcApi: any, typeName: string) {
+    const cached = ifcTypeCodeCache.get(typeName);
+    if (cached !== undefined) return cached;
+    const typeCode = ifcApi.GetTypeCodeFromName(typeName);
+    ifcTypeCodeCache.set(typeName, typeCode);
+    return typeCode;
+}
 
 export const loadIFC = async (
     input: string | File | ArrayBuffer,
@@ -8,14 +48,8 @@ export const loadIFC = async (
     t: TFunc,
     libPath: string = './libs'
 ): Promise<THREE.Group> => {
-    // 初始化 web-ifc API
-    const ifcApi = new WebIFC.IfcAPI();
-    
-    // 设置WASM路径，使用相对路径以适配打包后的环境
-    const wasmPath = libPath.endsWith('/') ? `${libPath}web-ifc/` : `${libPath}/web-ifc/`;
-    ifcApi.SetWasmPath(wasmPath);
-    
-    await ifcApi.Init();
+    // web-ifc 运行时按 wasmPath 懒加载并复用，避免重复 Init 开销
+    const { ifcApi, WebIFC } = await getIfcRuntime(libPath);
     
     let buffer: ArrayBuffer;
     if (typeof input !== "string") {
@@ -69,7 +103,7 @@ export const loadIFC = async (
     try {
         // 获取所有IFCRELDEFINESBYPROPERTIES类型的行
         // 由于我们没有导入完整的枚举，直接使用GetLineIDsWithType
-        const relID = ifcApi.GetTypeCodeFromName('IFCRELDEFINESBYPROPERTIES');
+        const relID = getIfcTypeCode(ifcApi, 'IFCRELDEFINESBYPROPERTIES');
         const lines = ifcApi.GetLineIDsWithType(modelID, relID);
         const size = lines.size();
         
@@ -103,7 +137,7 @@ export const loadIFC = async (
     // --- 图层解析 ---
     const layerMap = new Map<number, string>();
     try {
-        const layerType = ifcApi.GetTypeCodeFromName('IFCPRESENTATIONLAYERASSIGNMENT');
+        const layerType = getIfcTypeCode(ifcApi, 'IFCPRESENTATIONLAYERASSIGNMENT');
         const layers = ifcApi.GetLineIDsWithType(modelID, layerType);
         for (let i = 0; i < layers.size(); i++) {
             const id = layers.get(i);
@@ -468,7 +502,7 @@ export const loadIFC = async (
 
     const dummyMatrix = new THREE.Matrix4();
 
-    ifcApi.StreamAllMeshes(modelID, (flatMesh: WebIFC.FlatMesh) => {
+    ifcApi.StreamAllMeshes(modelID, (flatMesh: any) => {
         const size = flatMesh.geometries.size();
         expectedTotal += size;
         for (let i = 0; i < size; i++) {
