@@ -658,6 +658,64 @@ export class SceneManager {
         };
     }
 
+    private countStructureRenderableNodes(node: StructureTreeNode | undefined): number {
+        if (!node) return 0;
+        let count = node.type === 'Mesh' ? 1 : 0;
+        if (node.children) {
+            for (const child of node.children) {
+                count += this.countStructureRenderableNodes(child);
+            }
+        }
+        return count;
+    }
+
+    private async estimateNbimStats(file: File, chunks: any[], version: number) {
+        let meshes = 0;
+        let faces = 0;
+        let memory = 0;
+
+        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+            const chunk = chunks[chunkIndex];
+            const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+            const dv = new DataView(buffer);
+            let offset = 0;
+            const geoCount = dv.getUint32(offset, true); offset += 4;
+            const geometryFaces: number[] = [];
+
+            for (let i = 0; i < geoCount; i++) {
+                const vertCount = dv.getUint32(offset, true); offset += 4;
+                const indexCount = dv.getUint32(offset, true); offset += 4;
+                offset += vertCount * 12;
+                offset += vertCount * 12;
+                if (indexCount > 0) offset += indexCount * 4;
+                geometryFaces.push(indexCount > 0 ? indexCount / 3 : vertCount / 3);
+            }
+
+            const instanceCount = dv.getUint32(offset, true); offset += 4;
+            meshes += instanceCount;
+            memory += chunk.byteLength / (1024 * 1024);
+
+            for (let i = 0; i < instanceCount; i++) {
+                offset += 4; // bimId / bimIdIndex
+                offset += 4; // typeIndex
+                offset += 4; // color
+                offset += 64; // matrix
+                const geoIdx = dv.getUint32(offset, true); offset += 4;
+                faces += geometryFaces[geoIdx] || 0;
+            }
+
+            if (chunkIndex > 0 && chunkIndex % 8 === 0) {
+                await this.yieldToMainThread();
+            }
+        }
+
+        return {
+            meshes,
+            faces: Math.floor(faces),
+            memory: parseFloat(memory.toFixed(2))
+        };
+    }
+
     private registerOriginalStats(originalUuid: string, stats: { meshes: number; faces: number; memory: number }) {
         this.originalStatsByModel.set(originalUuid, stats);
         this.originalStats.meshes += stats.meshes;
@@ -2275,6 +2333,7 @@ export class SceneManager {
                 max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
             },
             chunks: exportChunks,
+            stats: this.originalStats,
             structureTree: (() => {
                 const sanitizeUserData = (ud: any) => {
                     if (!ud || typeof ud !== 'object') return undefined;
@@ -2416,6 +2475,12 @@ export class SceneManager {
 
         const rootId = modelRoot?.id || fileId;
         this.nbimPropsByOriginalUuid.set(rootId, manifest.bimProperties || {});
+        const quickStats = manifest.stats || {
+            meshes: this.countStructureRenderableNodes(modelRoot),
+            faces: 0,
+            memory: parseFloat(((manifest.chunks || []).reduce((sum: number, chunk: any) => sum + (chunk.byteLength || 0), 0) / (1024 * 1024)).toFixed(2))
+        };
+        this.registerOriginalStats(rootId, quickStats);
 
         // 为 NBIM 创建一个容器组
         const fileGroup = new THREE.Group();
@@ -2497,6 +2562,14 @@ export class SceneManager {
         this.initialChunkLoadTarget = this.chunks.length > 200 ? 24 : this.chunks.length > 80 ? 16 : 10;
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
         this.checkCullingAndLoad();
+        if (!manifest.stats && manifest.chunks?.length) {
+            void this.estimateNbimStats(file, manifest.chunks, version).then((stats) => {
+                this.unregisterOriginalStats(rootId);
+                this.registerOriginalStats(rootId, stats);
+            }).catch((error) => {
+                console.warn("NBIM 统计估算失败:", error);
+            });
+        }
     }
 
     async clear() {
