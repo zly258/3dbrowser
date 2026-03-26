@@ -206,6 +206,7 @@ export class SceneManager {
     private isCameraMoving = false;
     private activePixelRatio = 1;
     private chunkLoadResumeAt = 0;
+    private cullingDirty = true;
     private deferredStructureThreshold = 20000;
     private octreeWorkerThreshold = 25000;
     private initialChunkLoadTarget = 18;
@@ -213,6 +214,8 @@ export class SceneManager {
     private chunkWarmupActive = false;
     private movingFocusCentralityThreshold = 0.18;
     private movingFocusPixelThreshold = 28;
+    private chunkVisibilityHoldMs = 220;
+    private chunkResidencyMs = 1800;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -294,14 +297,17 @@ export class SceneManager {
         this.controls.addEventListener('start', () => {
             this.isCameraMoving = true;
             this.chunkLoadResumeAt = performance.now() + 150;
+            this.cullingDirty = true;
         });
         this.controls.addEventListener('change', () => {
             this.isCameraMoving = true;
             this.chunkLoadResumeAt = performance.now() + 150;
+            this.cullingDirty = true;
         });
         this.controls.addEventListener('end', () => {
             this.isCameraMoving = false;
             this.chunkLoadResumeAt = performance.now() + 80;
+            this.cullingDirty = true;
         });
         
         // 灯光
@@ -579,12 +585,15 @@ export class SceneManager {
         // 先更新相机裁剪面，确保后续的视锥剔除和渲染使用正确的参数
         this.updateCameraClipping();
 
-        // 限制 checkCullingAndLoad 的频率，避免在大场景下每帧执行昂贵的计算
+        // 优先在相机变化或加载状态变化后做一次剔除，平时退回到更稀疏的兜底检查
         const now = performance.now();
-        const cullingInterval = this.chunks.length > 2000 ? 180 : this.chunks.length > 800 ? 130 : 100;
+        const cullingInterval = this.cullingDirty
+            ? (this.isCameraMoving ? 40 : 70)
+            : (this.chunks.length > 2000 ? 260 : this.chunks.length > 800 ? 180 : 130);
         if (!this._lastCullingTime || now - this._lastCullingTime > cullingInterval) {
-            this.checkCullingAndLoad();
+            this.checkCullingAndLoad(now);
             this._lastCullingTime = now;
+            this.cullingDirty = false;
         }
 
         if (this.tilesRenderer) {
@@ -1057,7 +1066,7 @@ export class SceneManager {
         }
     }
 
-    private checkCullingAndLoad() {
+    private checkCullingAndLoad(now = performance.now()) {
         if (!this.chunkLoadingEnabled) return;
         if (this.chunks.length === 0) return;
         this.reportChunkProgress();
@@ -1070,14 +1079,15 @@ export class SceneManager {
 
         const padding = this.chunkPadding;
         const cameraPos = this.camera.position;
+        const cameraForward = new THREE.Vector3();
+        this.camera.getWorldDirection(cameraForward);
+        const toChunkDirection = new THREE.Vector3();
         const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
         const canvasHeight = this.renderer.domElement.clientHeight;
 
         const toLoad: any[] = [];
         const loadedChunks: any[] = [];
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
-
-        let anyNewLoaded = false;
 
         this.chunks.forEach(c => {
             if (!c.paddedBounds || c._padding !== padding) {
@@ -1092,7 +1102,8 @@ export class SceneManager {
             const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
             
-            const dist = c.center.distanceTo(cameraPos);
+            toChunkDirection.copy(c.center).sub(cameraPos);
+            const dist = toChunkDirection.length();
             const inRange = dist < this.maxRenderDistance;
             
             // 计算屏幕空间占用大小 (SSE 优化)
@@ -1102,6 +1113,9 @@ export class SceneManager {
             const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
             const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
             const centrality = 1.0 - Math.min(1.0, ndcDistance);
+            const forwardness = dist > 1e-5
+                ? Math.max(0, cameraForward.dot(toChunkDirection.divideScalar(dist)))
+                : 1;
             
             // 如果屏幕占比太小（例如小于 4 像素），则视为不可见 (LOD 优化)
             const isTooSmall = pixelSize < 4;
@@ -1110,19 +1124,34 @@ export class SceneManager {
                 && pixelSize < this.movingFocusPixelThreshold;
 
             const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
+            const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
+            const shouldKeepVisibleWhileMoving = this.isCameraMoving
+                && inFrustum
+                && !isClipped
+                && inRange
+                && !isTooSmall
+                && (now - lastTouchedAt) < this.chunkVisibilityHoldMs;
+            const effectiveVisible = shouldBeVisible || shouldKeepVisibleWhileMoving;
+
+            if (effectiveVisible) {
+                c.lastVisibleAt = now;
+            }
+            if (centrality > 0.42 || forwardness > 0.55) {
+                c.lastFocusAt = now;
+            }
 
             if (c.loaded) {
                 loadedChunks.push(c);
                 if (c.mesh) {
-                    if (c.mesh.visible !== shouldBeVisible) {
-                        c.mesh.visible = shouldBeVisible;
+                    if (c.mesh.visible !== effectiveVisible) {
+                        c.mesh.visible = effectiveVisible;
                     }
                 } else {
                     const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
                     const bm = optimizedGroup?.getObjectByName(c.id);
                     if (bm) {
                         c.mesh = bm;
-                        bm.visible = shouldBeVisible;
+                        bm.visible = effectiveVisible;
                     }
                 }
             } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
@@ -1130,18 +1159,20 @@ export class SceneManager {
                 const viewportBoost = centrality > 0.8 ? 4.5 : centrality > 0.62 ? 2.8 : 1.0;
                 const sizeScore = Math.min(8, pixelSize / 120);
                 const distanceScore = 1000 / (dist + 1);
+                const forwardScore = forwardness * 550;
+                const cacheBoost = this.chunkMeshCache.has(c.id) ? 420 : 0;
                 const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget
                     ? (centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0)
                     : 0;
                 const movingPriorityBoost = this.isCameraMoving
-                    ? (centrality > 0.65 ? 900 : centrality > 0.4 ? 250 : -250)
+                    ? (centrality > 0.65 || forwardness > 0.7 ? 900 : centrality > 0.4 ? 250 : -250)
                     : 0;
 
                 if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
                     return;
                 }
 
-                c.priority = movingPriorityBoost + warmupBoost + (viewportBoost * 1000) + (sizeScore * 120) + distanceScore + (centrality * 300);
+                c.priority = movingPriorityBoost + cacheBoost + warmupBoost + forwardScore + (viewportBoost * 1000) + (sizeScore * 120) + distanceScore + (centrality * 300);
                 toLoad.push(c);
             }
         });
@@ -1155,6 +1186,8 @@ export class SceneManager {
             
             for (const c of loadedChunks) {
                 if (unloadedCount >= targetUnload) break;
+                const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
+                if (now - lastTouchedAt < this.chunkResidencyMs) continue;
                 if (!c.mesh || !c.mesh.visible) {
                     this.unloadChunk(c);
                     unloadedCount++;
@@ -1176,7 +1209,6 @@ export class SceneManager {
             const count = Math.min(available, movingBudget, toLoad.length);
             for (let i = 0; i < count; i++) {
                 this.loadChunk(toLoad[i]);
-                anyNewLoaded = true;
             }
         }
 
@@ -1247,6 +1279,7 @@ export class SceneManager {
         this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - 1);
         this.interactableListValid = false;
         this._needsBoundsUpdate = true;
+        this.cullingDirty = true;
     }
 
     private async loadChunk(chunk: any) {
@@ -1321,10 +1354,13 @@ export class SceneManager {
             if (loadedNow && !chunk.loaded) {
                 chunk.loaded = true;
                 this.chunkLoadedCount++; // 增加计数
+                chunk.lastVisibleAt = performance.now();
+                chunk.lastFocusAt = chunk.lastVisibleAt;
                 if (this.chunkWarmupActive && this.chunkLoadedCount >= this.initialChunkLoadTarget) {
                     this.chunkWarmupActive = false;
                 }
                 this.reportChunkProgress();
+                this.cullingDirty = true;
             }
             this.cancelledChunkIds.delete(chunk.id);
 
@@ -1343,6 +1379,7 @@ export class SceneManager {
 
     setChunkLoadingEnabled(enabled: boolean) {
         this.chunkLoadingEnabled = enabled;
+        this.cullingDirty = true;
         if (enabled) this.checkCullingAndLoad();
     }
 

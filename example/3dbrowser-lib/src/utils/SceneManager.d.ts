@@ -133,6 +133,7 @@ export declare class SceneManager {
     private isCameraMoving;
     private activePixelRatio;
     private chunkLoadResumeAt;
+    private cullingDirty;
     private deferredStructureThreshold;
     private octreeWorkerThreshold;
     private initialChunkLoadTarget;
@@ -140,6 +141,8 @@ export declare class SceneManager {
     private chunkWarmupActive;
     private movingFocusCentralityThreshold;
     private movingFocusPixelThreshold;
+    private chunkVisibilityHoldMs;
+    private chunkResidencyMs;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
     private updateSunPosition;

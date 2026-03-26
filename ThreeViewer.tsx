@@ -217,6 +217,7 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
+    const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
     
     // 是否加载了模型（基于treeRoot判断）
     const hasModels = treeRoot.length > 0;
@@ -893,8 +894,25 @@ export const ThreeViewer = ({
         
         const canvas = canvasRef.current;
         if (!canvas) return;
+        const clickMoveThreshold = 6;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            pointerDownRef.current = {
+                x: e.clientX,
+                y: e.clientY,
+                moved: false,
+                button: e.button
+            };
+        };
 
         const handleClick = (e: MouseEvent) => {
+            const pointerState = pointerDownRef.current;
+            if (!pointerState || pointerState.button !== 0 || pointerState.moved) {
+                pointerDownRef.current = null;
+                return;
+            }
+            pointerDownRef.current = null;
+
             // 框选模式下不处理 click（由 pointer 事件处理）
             if (activeTool === 'boxSelect') return;
 
@@ -931,6 +949,13 @@ export const ThreeViewer = ({
         };
 
         const handleMouseMove = (e: MouseEvent) => {
+            if (pointerDownRef.current && !pointerDownRef.current.moved) {
+                const dx = e.clientX - pointerDownRef.current.x;
+                const dy = e.clientY - pointerDownRef.current.y;
+                if ((dx * dx + dy * dy) > (clickMoveThreshold * clickMoveThreshold)) {
+                    pointerDownRef.current.moved = true;
+                }
+            }
             if (activeTool === 'measure') {
                 mgr.updateMeasureHover(e.clientX, e.clientY);
                 setMousePos(null);
@@ -994,12 +1019,14 @@ export const ThreeViewer = ({
             }
         };
 
+        canvas.addEventListener("mousedown", handleMouseDown);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("contextmenu", handleContextMenu);
         window.addEventListener("keydown", handleKeyDown);
 
         return () => {
+            canvas.removeEventListener("mousedown", handleMouseDown);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
             canvas.removeEventListener("contextmenu", handleContextMenu);
