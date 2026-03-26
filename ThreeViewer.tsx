@@ -59,6 +59,8 @@ export const ThreeViewer = ({
      onLoad,
      hideDeleteModel = false
  }: ThreeViewerProps) => {
+    const sceneBgFollowsTheme = initialSettings?.bgColor === undefined;
+
     // 主题状态 - 从localStorage恢复或使用prop
     const [themeMode, setThemeMode] = usePersistentState<'dark' | 'light'>(
         '3dbrowser_themeMode',
@@ -175,7 +177,10 @@ export const ThreeViewer = ({
             sunTime: 12,
             sunShadow: false,
         };
-        return initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
+        const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
+        return sceneBgFollowsTheme
+            ? { ...merged, bgColor: theme.canvasBg }
+            : merged;
     });
 
     useEffect(() => {
@@ -216,26 +221,37 @@ export const ThreeViewer = ({
     const handleThemeModeChange = useCallback((nextThemeMode: 'dark' | 'light') => {
         setThemeMode(nextThemeMode);
         const nextTheme = themes[nextThemeMode];
-        const prevTheme = themes[nextThemeMode === 'light' ? 'dark' : 'light'];
 
         setSceneSettings((prevSettings) => {
-            const shouldFollowThemeBg = !prevSettings.bgColor || prevSettings.bgColor === prevTheme.canvasBg;
-            const merged = shouldFollowThemeBg
+            const merged = sceneBgFollowsTheme
                 ? { ...prevSettings, bgColor: nextTheme.canvasBg }
                 : prevSettings;
 
-            if (sceneMgr.current && shouldFollowThemeBg) {
+            if (sceneMgr.current && sceneBgFollowsTheme) {
                 sceneMgr.current.updateSettings(merged);
             }
             return merged;
         });
-    }, [setSceneSettings, setThemeMode]);
+    }, [sceneBgFollowsTheme, setSceneSettings, setThemeMode]);
 
     useEffect(() => {
         if (defaultTheme && defaultTheme !== themeMode) {
             handleThemeModeChange(defaultTheme);
         }
     }, [defaultTheme, themeMode, handleThemeModeChange]);
+
+    useEffect(() => {
+        if (!sceneBgFollowsTheme) return;
+
+        setSceneSettings((prevSettings) => {
+            if (prevSettings.bgColor === theme.canvasBg) return prevSettings;
+            const merged = { ...prevSettings, bgColor: theme.canvasBg };
+            if (sceneMgr.current) {
+                sceneMgr.current.updateSettings(merged);
+            }
+            return merged;
+        });
+    }, [sceneBgFollowsTheme, setSceneSettings, theme.canvasBg]);
     
     // 是否加载了模型（基于treeRoot判断）
     const hasModels = treeRoot.length > 0;
@@ -1112,7 +1128,11 @@ export const ThreeViewer = ({
 
     // 设置同步
     const handleSettingsUpdate = (newSettings: Partial<SceneSettings>) => {
-        const merged = { ...sceneSettings, ...newSettings };
+        const merged = {
+            ...sceneSettings,
+            ...newSettings,
+            ...(sceneBgFollowsTheme && newSettings.bgColor === undefined ? { bgColor: theme.canvasBg } : {})
+        };
         setSceneSettings(merged);
         if (sceneMgr.current) {
             sceneMgr.current.updateSettings(merged);
