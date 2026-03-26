@@ -1,4 +1,5 @@
 import { ThreeViewer } from "@zhangly1403/3dbrowser";
+import "../3dbrowser-lib/3dbrowser.css";
 
 export default function App() {
   return (
