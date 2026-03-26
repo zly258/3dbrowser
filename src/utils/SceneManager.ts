@@ -3789,9 +3789,43 @@ export class SceneManager {
             const targetPosition = center.clone().add(direction.multiplyScalar(-dist));
             const targetLookAt = center.clone();
 
+            // 在保持当前视角方向的前提下，按相机朝向投影模型范围并计算充满视口所需 zoom
+            const paddingForOrientationFit = 1.08;
+            const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+            const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
+            const halfBaseWidth = Math.max(1e-6, (this.camera.right - this.camera.left) * 0.5);
+            const halfBaseHeight = Math.max(1e-6, (this.camera.top - this.camera.bottom) * 0.5);
+
+            const corners = [
+                new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+                new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+                new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+                new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+                new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+                new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+                new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+                new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+            ];
+
+            let maxProjX = 0;
+            let maxProjY = 0;
+            for (let i = 0; i < corners.length; i++) {
+                const delta = corners[i].clone().sub(center);
+                maxProjX = Math.max(maxProjX, Math.abs(delta.dot(camRight)));
+                maxProjY = Math.max(maxProjY, Math.abs(delta.dot(camUp)));
+            }
+
+            const safeHalfX = Math.max(1e-3, maxProjX * paddingForOrientationFit);
+            const safeHalfY = Math.max(1e-3, maxProjY * paddingForOrientationFit);
+            const targetZoom = Math.max(
+                1e-4,
+                Math.min(1e6, Math.min(halfBaseWidth / safeHalfX, halfBaseHeight / safeHalfY))
+            );
+
             // 动画过渡
             const startPosition = this.camera.position.clone();
             const startTarget = this.controls.target.clone();
+            const startZoom = this.camera.zoom;
             const startTime = performance.now();
             const duration = 600;
 
@@ -3803,11 +3837,7 @@ export class SceneManager {
                 this.camera.position.lerpVectors(startPosition, targetPosition, eased);
                 this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
                 this.camera.lookAt(this.controls.target);
-
-                this.camera.left = this.camera.left + (targetLeft - this.camera.left) * eased;
-                this.camera.right = this.camera.right + (targetRight - this.camera.right) * eased;
-                this.camera.top = this.camera.top + (targetTop - this.camera.top) * eased;
-                this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
+                this.camera.zoom = startZoom + (targetZoom - startZoom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
 
