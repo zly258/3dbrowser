@@ -57,6 +57,32 @@ export interface StructureTreeNode {
     userData?: any;
 }
 
+interface ChunkRuntimeProfile {
+    name: 'compact' | 'balanced' | 'massive';
+    movingFocusCentralityThreshold: number;
+    movingFocusPixelThreshold: number;
+    chunkVisibilityHoldMs: number;
+    centerPriorityThreshold: number;
+    forwardPriorityThreshold: number;
+    movingCoreCentralityThreshold: number;
+    movingCorePixelThreshold: number;
+    movingCoreForwardThreshold: number;
+    movingPeripheralRefreshMs: number;
+    movingPeripheralBatchRatio: number;
+    movingPeripheralMinBatchSize: number;
+    movingCullingIntervalMs: number;
+    recoveryCullingIntervalMs: number;
+    idleCullingIntervalMs: number;
+    resumeAfterMoveMs: number;
+    postMoveRecoveryMs: number;
+    centerPriorityWindowMs: number;
+    movingLoadBudgetMin: number;
+    movingLoadBudgetMax: number;
+    recoveryLoadBudgetMin: number;
+    recoveryLoadBudgetMax: number;
+    recoveryLoadBudgetRatio: number;
+}
+
 export class SceneManager {
     canvas: HTMLCanvasElement;
     renderer: THREE.WebGLRenderer;
@@ -212,20 +238,87 @@ export class SceneManager {
     private initialChunkLoadTarget = 18;
     private warmupChunkBoost = 8;
     private chunkWarmupActive = false;
-    private movingFocusCentralityThreshold = 0.18;
-    private movingFocusPixelThreshold = 28;
-    private chunkVisibilityHoldMs = 220;
     private chunkResidencyMs = 1800;
-    private centerPriorityThreshold = 0.58;
-    private forwardPriorityThreshold = 0.68;
-    private movingCoreCentralityThreshold = 0.54;
-    private movingCorePixelThreshold = 42;
-    private movingCoreForwardThreshold = 0.62;
-    private movingPeripheralRefreshMs = 180;
-    private movingPeripheralBatchRatio = 0.18;
-    private movingPeripheralMinBatchSize = 64;
+    private readonly chunkRuntimeProfiles: Record<ChunkRuntimeProfile['name'], ChunkRuntimeProfile> = {
+        compact: {
+            name: 'compact',
+            movingFocusCentralityThreshold: 0.16,
+            movingFocusPixelThreshold: 24,
+            chunkVisibilityHoldMs: 180,
+            centerPriorityThreshold: 0.52,
+            forwardPriorityThreshold: 0.64,
+            movingCoreCentralityThreshold: 0.5,
+            movingCorePixelThreshold: 36,
+            movingCoreForwardThreshold: 0.58,
+            movingPeripheralRefreshMs: 140,
+            movingPeripheralBatchRatio: 0.24,
+            movingPeripheralMinBatchSize: 40,
+            movingCullingIntervalMs: 34,
+            recoveryCullingIntervalMs: 58,
+            idleCullingIntervalMs: 120,
+            resumeAfterMoveMs: 90,
+            postMoveRecoveryMs: 320,
+            centerPriorityWindowMs: 180,
+            movingLoadBudgetMin: 2,
+            movingLoadBudgetMax: 8,
+            recoveryLoadBudgetMin: 4,
+            recoveryLoadBudgetMax: 12,
+            recoveryLoadBudgetRatio: 0.45
+        },
+        balanced: {
+            name: 'balanced',
+            movingFocusCentralityThreshold: 0.18,
+            movingFocusPixelThreshold: 28,
+            chunkVisibilityHoldMs: 220,
+            centerPriorityThreshold: 0.58,
+            forwardPriorityThreshold: 0.68,
+            movingCoreCentralityThreshold: 0.54,
+            movingCorePixelThreshold: 42,
+            movingCoreForwardThreshold: 0.62,
+            movingPeripheralRefreshMs: 180,
+            movingPeripheralBatchRatio: 0.18,
+            movingPeripheralMinBatchSize: 64,
+            movingCullingIntervalMs: 40,
+            recoveryCullingIntervalMs: 72,
+            idleCullingIntervalMs: 140,
+            resumeAfterMoveMs: 110,
+            postMoveRecoveryMs: 480,
+            centerPriorityWindowMs: 240,
+            movingLoadBudgetMin: 2,
+            movingLoadBudgetMax: 6,
+            recoveryLoadBudgetMin: 4,
+            recoveryLoadBudgetMax: 10,
+            recoveryLoadBudgetRatio: 0.36
+        },
+        massive: {
+            name: 'massive',
+            movingFocusCentralityThreshold: 0.2,
+            movingFocusPixelThreshold: 32,
+            chunkVisibilityHoldMs: 260,
+            centerPriorityThreshold: 0.62,
+            forwardPriorityThreshold: 0.72,
+            movingCoreCentralityThreshold: 0.58,
+            movingCorePixelThreshold: 48,
+            movingCoreForwardThreshold: 0.66,
+            movingPeripheralRefreshMs: 220,
+            movingPeripheralBatchRatio: 0.12,
+            movingPeripheralMinBatchSize: 96,
+            movingCullingIntervalMs: 46,
+            recoveryCullingIntervalMs: 88,
+            idleCullingIntervalMs: 180,
+            resumeAfterMoveMs: 130,
+            postMoveRecoveryMs: 620,
+            centerPriorityWindowMs: 300,
+            movingLoadBudgetMin: 2,
+            movingLoadBudgetMax: 5,
+            recoveryLoadBudgetMin: 3,
+            recoveryLoadBudgetMax: 8,
+            recoveryLoadBudgetRatio: 0.28
+        }
+    };
     private movingPeripheralCursor = 0;
     private movingPeripheralLastRefreshAt = 0;
+    private postMoveRecoveryUntil = 0;
     private boundsScanBatchSize = 2400;
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
@@ -308,20 +401,27 @@ export class SceneManager {
             RIGHT: undefined as any
         };
         this.controls.addEventListener('start', () => {
+            const profile = this.getChunkRuntimeProfile();
             this.isCameraMoving = true;
-            this.chunkLoadResumeAt = performance.now() + 150;
+            this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
+            this.postMoveRecoveryUntil = 0;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
         });
         this.controls.addEventListener('change', () => {
+            const profile = this.getChunkRuntimeProfile();
             this.isCameraMoving = true;
-            this.chunkLoadResumeAt = performance.now() + 150;
+            this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
+            this.postMoveRecoveryUntil = 0;
             this.cullingDirty = true;
         });
         this.controls.addEventListener('end', () => {
+            const now = performance.now();
+            const profile = this.getChunkRuntimeProfile();
             this.isCameraMoving = false;
-            this.chunkLoadResumeAt = performance.now() + 80;
+            this.chunkLoadResumeAt = now + Math.max(24, Math.floor(profile.resumeAfterMoveMs * 0.75));
+            this.postMoveRecoveryUntil = now + profile.postMoveRecoveryMs;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
@@ -604,9 +704,14 @@ export class SceneManager {
 
         // 优先在相机变化或加载状态变化后做一次剔除，平时退回到更稀疏的兜底检查
         const now = performance.now();
+        const profile = this.getChunkRuntimeProfile();
         const cullingInterval = this.cullingDirty
-            ? (this.isCameraMoving ? 40 : 70)
-            : (this.chunks.length > 2000 ? 260 : this.chunks.length > 800 ? 180 : 130);
+            ? (this.isCameraMoving
+                ? profile.movingCullingIntervalMs
+                : this.isInPostMoveRecovery(now)
+                    ? profile.recoveryCullingIntervalMs
+                    : Math.min(profile.recoveryCullingIntervalMs, 70))
+            : profile.idleCullingIntervalMs;
         if (!this._lastCullingTime || now - this._lastCullingTime > cullingInterval) {
             this.checkCullingAndLoad(now);
             this._lastCullingTime = now;
@@ -1214,18 +1319,38 @@ export class SceneManager {
         }
     }
 
-    private isMovingPeripheralChunk(centrality: number, pixelSize: number, forwardness: number) {
-        return centrality < this.movingCoreCentralityThreshold
-            && pixelSize < this.movingCorePixelThreshold
-            && forwardness < this.movingCoreForwardThreshold;
+    private getChunkRuntimeProfile(chunkCount = this.chunks.length): ChunkRuntimeProfile {
+        if (chunkCount > 2000) return this.chunkRuntimeProfiles.massive;
+        if (chunkCount > 600) return this.chunkRuntimeProfiles.balanced;
+        return this.chunkRuntimeProfiles.compact;
     }
 
-    private shouldRefreshPeripheralChunk(now: number, chunkIndex: number, totalChunks: number) {
+    private isInPostMoveRecovery(now: number) {
+        return !this.isCameraMoving && now < this.postMoveRecoveryUntil;
+    }
+
+    private isMovingPeripheralChunk(
+        centrality: number,
+        pixelSize: number,
+        forwardness: number,
+        profile: ChunkRuntimeProfile
+    ) {
+        return centrality < profile.movingCoreCentralityThreshold
+            && pixelSize < profile.movingCorePixelThreshold
+            && forwardness < profile.movingCoreForwardThreshold;
+    }
+
+    private shouldRefreshPeripheralChunk(
+        now: number,
+        chunkIndex: number,
+        totalChunks: number,
+        profile: ChunkRuntimeProfile
+    ) {
         if (!this.isCameraMoving || totalChunks === 0) return true;
-        if (now - this.movingPeripheralLastRefreshAt >= this.movingPeripheralRefreshMs) {
+        if (now - this.movingPeripheralLastRefreshAt >= profile.movingPeripheralRefreshMs) {
             const batchSize = Math.min(
                 totalChunks,
-                Math.max(this.movingPeripheralMinBatchSize, Math.ceil(totalChunks * this.movingPeripheralBatchRatio))
+                Math.max(profile.movingPeripheralMinBatchSize, Math.ceil(totalChunks * profile.movingPeripheralBatchRatio))
             );
             this.movingPeripheralCursor = (this.movingPeripheralCursor + batchSize) % totalChunks;
             this.movingPeripheralLastRefreshAt = now;
@@ -1233,7 +1358,7 @@ export class SceneManager {
 
         const batchSize = Math.min(
             totalChunks,
-            Math.max(this.movingPeripheralMinBatchSize, Math.ceil(totalChunks * this.movingPeripheralBatchRatio))
+            Math.max(profile.movingPeripheralMinBatchSize, Math.ceil(totalChunks * profile.movingPeripheralBatchRatio))
         );
         const start = this.movingPeripheralCursor;
         const end = start + batchSize;
@@ -1249,6 +1374,7 @@ export class SceneManager {
         this.reportChunkProgress();
 
         if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
+        const profile = this.getChunkRuntimeProfile();
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
@@ -1298,8 +1424,8 @@ export class SceneManager {
             // 如果屏幕占比太小（例如小于 4 像素），则视为不可见 (LOD 优化)
             const isTooSmall = pixelSize < 4;
             const shouldHidePeripheralWhileMoving = this.isCameraMoving
-                && centrality < this.movingFocusCentralityThreshold
-                && pixelSize < this.movingFocusPixelThreshold;
+                && centrality < profile.movingFocusCentralityThreshold
+                && pixelSize < profile.movingFocusPixelThreshold;
 
             const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
             const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
@@ -1308,15 +1434,15 @@ export class SceneManager {
                 && !isClipped
                 && inRange
                 && !isTooSmall
-                && (now - lastTouchedAt) < this.chunkVisibilityHoldMs;
-            const isPeripheralWhileMoving = this.isMovingPeripheralChunk(centrality, pixelSize, forwardness);
-            const shouldRefreshPeripheral = !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks);
+                && (now - lastTouchedAt) < profile.chunkVisibilityHoldMs;
+            const isPeripheralWhileMoving = this.isMovingPeripheralChunk(centrality, pixelSize, forwardness, profile);
+            const shouldRefreshPeripheral = !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks, profile);
             const effectiveVisible = this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral
                 ? (c.lastEffectiveVisible ?? c.mesh?.visible ?? false)
                 : (shouldBeVisible || shouldKeepVisibleWhileMoving);
-            const centerPriorityWindow = this.chunkWarmupActive || now < (this.chunkLoadResumeAt + 260);
-            const isPeripheralCandidate = centrality < this.centerPriorityThreshold
-                && forwardness < this.forwardPriorityThreshold
+            const centerPriorityWindow = this.chunkWarmupActive || now < (this.chunkLoadResumeAt + profile.centerPriorityWindowMs);
+            const isPeripheralCandidate = centrality < profile.centerPriorityThreshold
+                && forwardness < profile.forwardPriorityThreshold
                 && pixelSize < 96;
 
             if (effectiveVisible) {
@@ -1396,10 +1522,23 @@ export class SceneManager {
             const warmupExtra = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget
                 ? this.warmupChunkBoost
                 : 0;
-            const movingBudget = this.isCameraMoving
-                ? Math.max(2, Math.min(6, Math.floor(this.maxChunkLoadsPerFrame / 4)))
-                : this.maxChunkLoadsPerFrame + warmupExtra;
-            const count = Math.min(available, movingBudget, toLoad.length);
+            const movingBudget = Math.max(
+                profile.movingLoadBudgetMin,
+                Math.min(profile.movingLoadBudgetMax, Math.floor(this.maxChunkLoadsPerFrame / 4))
+            );
+            const recoveryBudget = Math.max(
+                profile.recoveryLoadBudgetMin,
+                Math.min(
+                    profile.recoveryLoadBudgetMax,
+                    Math.floor(this.maxChunkLoadsPerFrame * profile.recoveryLoadBudgetRatio)
+                )
+            );
+            const frameBudget = this.isCameraMoving
+                ? movingBudget
+                : this.isInPostMoveRecovery(now)
+                    ? recoveryBudget + warmupExtra
+                    : this.maxChunkLoadsPerFrame + warmupExtra;
+            const count = Math.min(available, frameBudget, toLoad.length);
             for (let i = 0; i < count; i++) {
                 this.loadChunk(toLoad[i]);
             }
