@@ -6,7 +6,7 @@ import {
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
-    IconLayers
+    IconLayers, IconImage
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -168,16 +168,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         {t('op_clear')}
-                                    </div>
-                                )}
-                                {!isHidden('screenshot') && (
-                                    <div
-                                        style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                        onClick={() => { props.openScreenshotPanel?.(); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        {t('op_screenshot') || '截图'}
                                     </div>
                                 )}
                             </>
@@ -403,6 +393,15 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_view')}
                             active={props.activeTool === 'viewpoint'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'viewpoint' ? 'none' : 'viewpoint')}
+                            theme={theme}
+                        />
+                    )}
+                    {!isHidden('screenshot') && (
+                        <ImageButton
+                            icon={<IconImage />}
+                            label={t('tb_screenshot') || '截图'}
+                            active={props.activeTool === 'screenshot'}
+                            onClick={() => props.openScreenshotPanel?.()}
                             theme={theme}
                         />
                     )}

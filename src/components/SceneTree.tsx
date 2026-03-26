@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
-import { Checkbox } from "./common";
+import { Button, Checkbox, Select } from "./common";
 import { ContextMenu } from "./ContextMenu";
 
 interface TreeNode {
@@ -15,6 +15,20 @@ interface TreeNode {
     isFileNode?: boolean;
     isLastChild?: boolean;
     parentIsLast?: boolean[];
+}
+
+interface IfcMetadata {
+    storey?: string;
+    systems?: string[];
+    category?: string;
+    materials?: string[];
+}
+
+interface IfcFilterState {
+    storey: string;
+    system: string;
+    category: string;
+    material: string;
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
@@ -110,6 +124,7 @@ interface SceneTreeProps {
     onIsolate?: (uuid: string) => void;
     onHide?: (uuid: string) => void;
     onShowAll?: () => void;
+    onApplyIfcFiltersToViewport?: (filters: IfcFilterState) => void;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
@@ -123,15 +138,68 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onFocus,
     onIsolate,
     onHide,
-    onShowAll
+    onShowAll,
+    onApplyIfcFiltersToViewport
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
+    const [filters, setFilters] = useState<IfcFilterState>({
+        storey: "",
+        system: "",
+        category: "",
+        material: ""
+    });
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(400);
     const containerRef = useRef<HTMLDivElement>(null);
     const searchExpandedStateRef = useRef<Map<string, boolean> | null>(null);
     const previousSearchQueryRef = useRef("");
+
+    const collectIfcOptions = (nodes: TreeNode[]) => {
+        const storeys = new Set<string>();
+        const systems = new Set<string>();
+        const categories = new Set<string>();
+        const materials = new Set<string>();
+
+        const walk = (list: TreeNode[]) => {
+            list.forEach((node) => {
+                const meta = node.object?.userData?.ifcMetadata as IfcMetadata | undefined;
+                if (meta?.storey) storeys.add(meta.storey);
+                if (meta?.category) categories.add(meta.category);
+                meta?.systems?.forEach((item) => systems.add(item));
+                meta?.materials?.forEach((item) => materials.add(item));
+                if (node.children.length > 0) walk(node.children);
+            });
+        };
+
+        walk(nodes);
+
+        const sort = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+        return {
+            storeys: sort(storeys),
+            systems: sort(systems),
+            categories: sort(categories),
+            materials: sort(materials)
+        };
+    };
+
+    const ifcOptions = useMemo(() => collectIfcOptions(treeRoot), [treeRoot]);
+    const hasIfcFilters =
+        ifcOptions.storeys.length > 0 ||
+        ifcOptions.systems.length > 0 ||
+        ifcOptions.categories.length > 0 ||
+        ifcOptions.materials.length > 0;
+    const hasActiveFilters = Object.values(filters).some(Boolean);
+
+    const matchesIfcFilters = (meta?: IfcMetadata) => {
+        if (!hasActiveFilters) return true;
+        if (!meta) return false;
+        if (filters.storey && meta.storey !== filters.storey) return false;
+        if (filters.category && meta.category !== filters.category) return false;
+        if (filters.system && !(meta.systems || []).includes(filters.system)) return false;
+        if (filters.material && !(meta.materials || []).includes(filters.material)) return false;
+        return true;
+    };
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -164,15 +232,16 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     }, [selectedUuid, setTreeRoot]);
 
     const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
-        if (!query) return nodes;
         const lowercaseQuery = query.toLowerCase();
         return nodes.reduce((acc: TreeNode[], node) => {
-            const matches = node.name.toLowerCase().includes(lowercaseQuery);
+            const meta = node.object?.userData?.ifcMetadata as IfcMetadata | undefined;
+            const matchesQuery = !query || node.name.toLowerCase().includes(lowercaseQuery);
+            const matchesFilter = matchesIfcFilters(meta);
             const filteredChildren = filterTree(node.children, query);
-            if (matches || filteredChildren.length > 0) {
+            if ((matchesQuery && matchesFilter) || filteredChildren.length > 0) {
                 acc.push({
                     ...node,
-                    expanded: true,
+                    expanded: query || hasActiveFilters ? true : node.expanded,
                     children: filteredChildren
                 });
             }
@@ -180,9 +249,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }, []);
     };
 
-    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery, filters, hasActiveFilters]);
     const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
-    const resultCount = flatData.length;
     const rowHeight = 24;
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
@@ -254,12 +322,75 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         </button>
                     )}
                 </div>
-                <div className="ui-search-meta">
-                    {searchQuery
-                        ? `${t("search_results") || "结果"}: ${resultCount}`
-                        : `${t("selected_count") || "已选择"}: ${selectedUuid ? 1 : 0}`}
-                </div>
             </div>
+
+            {hasIfcFilters && (
+                <div className="ui-tree-filters">
+                    <div className="ui-tree-filter-grid">
+                        <Select
+                            value={filters.storey}
+                            onChange={(value) => setFilters((prev) => ({ ...prev, storey: value }))}
+                            options={[
+                                { value: "", label: t("ifc_filter_storey") || "全部楼层" },
+                                ...ifcOptions.storeys.map((item) => ({ value: item, label: item }))
+                            ]}
+                            className="ui-input-compact"
+                        />
+                        <Select
+                            value={filters.system}
+                            onChange={(value) => setFilters((prev) => ({ ...prev, system: value }))}
+                            options={[
+                                { value: "", label: t("ifc_filter_system") || "全部系统" },
+                                ...ifcOptions.systems.map((item) => ({ value: item, label: item }))
+                            ]}
+                            className="ui-input-compact"
+                        />
+                        <Select
+                            value={filters.category}
+                            onChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}
+                            options={[
+                                { value: "", label: t("ifc_filter_category") || "全部类别" },
+                                ...ifcOptions.categories.map((item) => ({ value: item, label: item }))
+                            ]}
+                            className="ui-input-compact"
+                        />
+                        <Select
+                            value={filters.material}
+                            onChange={(value) => setFilters((prev) => ({ ...prev, material: value }))}
+                            options={[
+                                { value: "", label: t("ifc_filter_material") || "全部材质" },
+                                ...ifcOptions.materials.map((item) => ({ value: item, label: item }))
+                            ]}
+                            className="ui-input-compact"
+                        />
+                    </div>
+                    {hasActiveFilters && (
+                        <div className="ui-tree-filter-actions">
+                            <Button
+                                variant="ghost"
+                                className="ui-properties-action"
+                                onClick={() => onApplyIfcFiltersToViewport?.(filters)}
+                            >
+                                {t("ifc_filter_apply_viewport") || "应用到视口"}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                className="ui-properties-action"
+                                onClick={() =>
+                                    setFilters({
+                                        storey: "",
+                                        system: "",
+                                        category: "",
+                                        material: ""
+                                    })
+                                }
+                            >
+                                {t("ifc_filter_clear") || "清除筛选"}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div
                 ref={containerRef}
