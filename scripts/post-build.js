@@ -37,6 +37,9 @@ console.log('Updating package.json for distribution...');
 pkg.main = './3dbrowser.js';
 pkg.module = './3dbrowser.js';
 pkg.types = './ThreeViewer.d.ts';
+delete pkg.devDependencies;
+delete pkg.scripts;
+delete pkg.private;
 
 if (pkg.exports) {
   pkg.exports['.'] = {

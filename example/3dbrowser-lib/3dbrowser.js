@@ -38,7 +38,7 @@ class SceneManager {
     this.settings = {
       ambientInt: 2,
       dirInt: 1,
-      bgColor: "#1e1e1e",
+      bgColor: "#edf0f3",
       viewCubeSize: 100,
       colorSpace: "srgb",
       toneMapping: "aces",
@@ -65,9 +65,9 @@ class SceneManager {
     this.nbimMeta = /* @__PURE__ */ new Map();
     this.nbimPropsByOriginalUuid = /* @__PURE__ */ new Map();
     this.sharedMaterial = new THREE.MeshStandardMaterial({
-      color: 16777215,
-      roughness: 0.6,
-      metalness: 0.1,
+      color: 14277857,
+      roughness: 0.82,
+      metalness: 0.03,
       side: THREE.DoubleSide
     });
     this.interactableList = [];
@@ -107,6 +107,11 @@ class SceneManager {
     this.movingFocusPixelThreshold = 28;
     this.chunkVisibilityHoldMs = 220;
     this.chunkResidencyMs = 1800;
+    this.centerPriorityThreshold = 0.58;
+    this.forwardPriorityThreshold = 0.68;
+    this.boundsScanBatchSize = 2400;
+    this.chunkRegistrationBatchSize = 18;
+    this.chunkGhostBatchSize = 24;
     this.canvas = canvas;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -128,7 +133,7 @@ class SceneManager {
     this.renderer.localClippingEnabled = true;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1;
+    this.renderer.toneMappingExposure = 1.04;
     this.activePixelRatio = this.renderer.getPixelRatio();
     this.scene = new THREE.Scene();
     this.contentGroup = new THREE.Group();
@@ -183,13 +188,13 @@ class SceneManager {
       this.chunkLoadResumeAt = performance.now() + 80;
       this.cullingDirty = true;
     });
-    this.ambientLight = new THREE.AmbientLight(16777215, this.settings.ambientInt);
+    this.ambientLight = new THREE.AmbientLight(16251131, this.settings.ambientInt);
     this.scene.add(this.ambientLight);
-    this.dirLight = new THREE.DirectionalLight(16777215, this.settings.dirInt);
-    this.dirLight.position.set(50, 50, 100);
+    this.dirLight = new THREE.DirectionalLight(16776438, this.settings.dirInt);
+    this.dirLight.position.set(60, 45, 110);
     this.scene.add(this.dirLight);
-    this.backLight = new THREE.DirectionalLight(16777215, 0.8);
-    this.backLight.position.set(-50, -50, -10);
+    this.backLight = new THREE.DirectionalLight(15331062, 0.5);
+    this.backLight.position.set(-40, -35, 30);
     this.scene.add(this.backLight);
     this.sunLight = new THREE.DirectionalLight(16774373, 1.5);
     this.sunLight.position.set(100, 100, 50);
@@ -657,6 +662,111 @@ class SceneManager {
     this.ghostGroup.add(edges);
     return edges;
   }
+  async computeItemBoundsProgressively(items, onProgress) {
+    const bounds = new THREE.Box3();
+    const tmpMin = new THREE.Vector3();
+    const tmpMax = new THREE.Vector3();
+    const tmpScale = new THREE.Vector3();
+    for (let start = 0; start < items.length; start += this.boundsScanBatchSize) {
+      const end = Math.min(items.length, start + this.boundsScanBatchSize);
+      for (let itemIndex = start; itemIndex < end; itemIndex++) {
+        const item = items[itemIndex];
+        const center = item.center;
+        let r = 0;
+        const geo = item.geometry;
+        if (!geo.boundingSphere) geo.computeBoundingSphere();
+        if (geo.boundingSphere) {
+          tmpScale.setFromMatrixScale(item.matrix);
+          const maxScale = Math.max(tmpScale.x, tmpScale.y, tmpScale.z);
+          r = geo.boundingSphere.radius * maxScale;
+        }
+        tmpMin.set(center.x - r, center.y - r, center.z - r);
+        tmpMax.set(center.x + r, center.y + r, center.z + r);
+        bounds.expandByPoint(tmpMin);
+        bounds.expandByPoint(tmpMax);
+      }
+      if (onProgress && items.length > 0) {
+        onProgress(20 + Math.min(12, Math.floor(end / items.length * 12)), "正在统计大模型范围...");
+      }
+      if (end < items.length) {
+        await this.yieldToMainThread();
+      }
+    }
+    bounds.min.subScalar(0.1);
+    bounds.max.addScalar(0.1);
+    return bounds;
+  }
+  async createChunkGhostsProgressively(ghostSpecs) {
+    if (ghostSpecs.length === 0) return;
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+    const boxMat = new THREE.LineBasicMaterial({ color: 4674921, transparent: true, opacity: 0.3 });
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    for (let start = 0; start < ghostSpecs.length; start += this.chunkGhostBatchSize) {
+      const end = Math.min(ghostSpecs.length, start + this.chunkGhostBatchSize);
+      for (let index = start; index < end; index++) {
+        const spec = ghostSpecs[index];
+        const chunk = this.chunks.find((c) => c.id === spec.chunkId);
+        if (!chunk || chunk.loaded || this.cancelledChunkIds.has(spec.chunkId)) continue;
+        if (this.ghostGroup.getObjectByName(`ghost_${spec.chunkId}`)) continue;
+        spec.bounds.getSize(size);
+        spec.bounds.getCenter(center);
+        const edges = new THREE.LineSegments(edgesGeo, boxMat);
+        edges.name = `ghost_${spec.chunkId}`;
+        edges.scale.copy(size);
+        edges.position.copy(center);
+        this.ghostGroup.add(edges);
+      }
+      if (end < ghostSpecs.length) {
+        await this.yieldToMainThread();
+      }
+    }
+  }
+  async registerLeafChunksProgressively(object, leafNodes, onProgress) {
+    const ghostSpecs = [];
+    for (let start = 0; start < leafNodes.length; start += this.chunkRegistrationBatchSize) {
+      const end = Math.min(leafNodes.length, start + this.chunkRegistrationBatchSize);
+      for (let index = start; index < end; index++) {
+        const node = leafNodes[index];
+        const chunkId = `${object.uuid}_chunk_${index}`;
+        const chunkBounds = node.bounds.clone();
+        node.items.forEach((item) => {
+          const treeNodes = this.nodeMap.get(item.uuid);
+          if (treeNodes) {
+            treeNodes.forEach((treeNode) => {
+              if (treeNode.bimId === void 0) {
+                treeNode.bimId = treeNode.id;
+              }
+              treeNode.chunkId = chunkId;
+            });
+          }
+        });
+        const paddedBounds = chunkBounds.clone();
+        const padSize = chunkBounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
+        paddedBounds.expandByVector(padSize);
+        this.chunks.push({
+          id: chunkId,
+          bounds: chunkBounds,
+          paddedBounds,
+          _padding: this.chunkPadding,
+          center: chunkBounds.getCenter(new THREE.Vector3()),
+          loaded: false,
+          node,
+          groupName: `optimized_${object.uuid}`,
+          originalUuid: object.uuid
+        });
+        ghostSpecs.push({ chunkId, bounds: chunkBounds });
+      }
+      if (onProgress && leafNodes.length > 0) {
+        onProgress(40 + Math.floor(end / leafNodes.length * 50), `正在生成分块... (${end}/${leafNodes.length})`);
+      }
+      if (end < leafNodes.length) {
+        await this.yieldToMainThread();
+      }
+    }
+    return ghostSpecs;
+  }
   async buildLeafPlans(items, bounds, maxItemsPerNode, maxDepth) {
     if (items.length < this.octreeWorkerThreshold) {
       const octree = buildOctree(items, bounds, { maxItemsPerNode, maxDepth });
@@ -808,6 +918,8 @@ class SceneManager {
       const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
       const shouldKeepVisibleWhileMoving = this.isCameraMoving && inFrustum && !isClipped && inRange && !isTooSmall && now - lastTouchedAt < this.chunkVisibilityHoldMs;
       const effectiveVisible = shouldBeVisible || shouldKeepVisibleWhileMoving;
+      const centerPriorityWindow = this.chunkWarmupActive || now < this.chunkLoadResumeAt + 260;
+      const isPeripheralCandidate = centrality < this.centerPriorityThreshold && forwardness < this.forwardPriorityThreshold && pixelSize < 96;
       if (effectiveVisible) {
         c.lastVisibleAt = now;
       }
@@ -837,6 +949,9 @@ class SceneManager {
         const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget ? centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0 : 0;
         const movingPriorityBoost = this.isCameraMoving ? centrality > 0.65 || forwardness > 0.7 ? 900 : centrality > 0.4 ? 250 : -250 : 0;
         if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
+          return;
+        }
+        if (!this.isCameraMoving && centerPriorityWindow && isPeripheralCandidate) {
           return;
         }
         c.priority = movingPriorityBoost + cacheBoost + warmupBoost + forwardScore + viewportBoost * 1e3 + sizeScore * 120 + distanceScore + centrality * 300;
@@ -1105,6 +1220,39 @@ class SceneManager {
     }
     return spatialRoot;
   }
+  async prepareObjectRuntimeData(object, maxAnisotropy, batchSize = 6e3) {
+    const stack = [object];
+    let traverseIndex = 0;
+    while (stack.length > 0) {
+      const child = stack.pop();
+      if (child.isMesh) {
+        const mesh = child;
+        this.componentMap.set(mesh.uuid, mesh);
+        if (mesh.userData.expressID !== void 0) {
+          this.componentMap.set(mesh.userData.expressID, mesh);
+        }
+        if (!mesh.userData.bimId) {
+          if (mesh.userData.expressID !== void 0) mesh.userData.bimId = String(mesh.userData.expressID);
+          else mesh.userData.bimId = mesh.uuid;
+        }
+        if (mesh.material) {
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          materials.forEach((mat) => {
+            if (mat.map) {
+              mat.map.anisotropy = maxAnisotropy;
+            }
+          });
+        }
+      }
+      traverseIndex++;
+      for (let i = child.children.length - 1; i >= 0; i--) {
+        stack.push(child.children[i]);
+      }
+      if (traverseIndex > 0 && traverseIndex % batchSize === 0) {
+        await this.yieldToMainThread();
+      }
+    }
+  }
   async addModel(object, onProgress) {
     object.updateMatrixWorld(true);
     const modelBox = new THREE.Box3().setFromObject(object);
@@ -1149,28 +1297,12 @@ class SceneManager {
     }
     const previewGhost = !modelBox.isEmpty() ? this.createPreviewGhost(modelBox.clone(), `preview_${object.uuid}`) : null;
     const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    let traverseIndex = 0;
-    object.traverse((child) => {
-      if (child.isMesh) {
-        const mesh = child;
-        this.componentMap.set(mesh.uuid, mesh);
-        if (mesh.userData.expressID !== void 0) {
-          this.componentMap.set(mesh.userData.expressID, mesh);
-        }
-        if (!mesh.userData.bimId) {
-          if (mesh.userData.expressID !== void 0) mesh.userData.bimId = String(mesh.userData.expressID);
-          else mesh.userData.bimId = mesh.uuid;
-        }
-        if (mesh.material) {
-          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          materials.forEach((mat) => {
-            if (mat.map) mat.map.anisotropy = maxAnisotropy;
-          });
-        }
-      }
-      traverseIndex++;
-    });
-    if (traverseIndex > 2e4) await this.yieldToMainThread();
+    const shouldDeferRuntimeData = meshCount > 3e4;
+    if (shouldDeferRuntimeData) {
+      void this.prepareObjectRuntimeData(object, maxAnisotropy, 8e3);
+    } else {
+      await this.prepareObjectRuntimeData(object, maxAnisotropy, 6e3);
+    }
     const fileGroup = new THREE.Group();
     fileGroup.name = `file_${object.uuid}`;
     fileGroup.userData.originalUuid = object.uuid;
@@ -1190,90 +1322,15 @@ class SceneManager {
     }) : collectItems(object);
     if (items.length > 0) {
       if (onProgress) onProgress(20, `已收集 ${items.length} 个构件，正在计算八叉树...`);
-      const bounds = new THREE.Box3();
-      const tmpMin = new THREE.Vector3();
-      const tmpMax = new THREE.Vector3();
-      const tmpScale = new THREE.Vector3();
-      for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-        const item = items[itemIndex];
-        const center = item.center;
-        let r = 0;
-        const geo = item.geometry;
-        if (!geo.boundingSphere) geo.computeBoundingSphere();
-        if (geo.boundingSphere) {
-          tmpScale.setFromMatrixScale(item.matrix);
-          const maxScale = Math.max(tmpScale.x, tmpScale.y, tmpScale.z);
-          r = geo.boundingSphere.radius * maxScale;
-        }
-        tmpMin.set(center.x - r, center.y - r, center.z - r);
-        tmpMax.set(center.x + r, center.y + r, center.z + r);
-        bounds.expandByPoint(tmpMin);
-        bounds.expandByPoint(tmpMax);
-        if (itemIndex > 0 && itemIndex % 12e3 === 0) {
-          if (onProgress) onProgress(20 + Math.min(12, Math.floor(itemIndex / items.length * 12)), "正在统计大模型范围...");
-          await this.yieldToMainThread();
-        }
-      }
-      bounds.min.subScalar(0.1);
-      bounds.max.addScalar(0.1);
+      const bounds = await this.computeItemBoundsProgressively(items, onProgress);
       if (onProgress) onProgress(35, "正在计算八叉树...");
       const maxItemsPerNode = 3e3;
       const maxDepth = 6;
       const leafNodes = await this.buildLeafPlans(items, bounds, maxItemsPerNode, maxDepth);
-      const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-      const edgesGeo = new THREE.EdgesGeometry(boxGeo);
-      const boxMat = new THREE.LineBasicMaterial({ color: 4674921, transparent: true, opacity: 0.3 });
-      for (let index = 0; index < leafNodes.length; index++) {
-        const node = leafNodes[index];
-        if (onProgress && leafNodes.length > 0) {
-          const step = Math.max(1, Math.floor(leafNodes.length / 20));
-          if (index % step === 0) onProgress(40 + Math.floor(index / leafNodes.length * 50), `正在生成分块... (${index + 1}/${leafNodes.length})`);
-        }
-        const chunkId = `${object.uuid}_chunk_${index}`;
-        const chunkBounds = node.bounds.clone();
-        node.items.forEach((item) => {
-          const treeNodes = this.nodeMap.get(item.uuid);
-          if (treeNodes) {
-            treeNodes.forEach((treeNode) => {
-              if (treeNode.bimId === void 0) {
-                treeNode.bimId = treeNode.id;
-              }
-              treeNode.chunkId = chunkId;
-            });
-          }
-        });
-        const paddedBounds = chunkBounds.clone();
-        const padSize = chunkBounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
-        paddedBounds.expandByVector(padSize);
-        this.chunks.push({
-          id: chunkId,
-          bounds: chunkBounds,
-          paddedBounds,
-          _padding: this.chunkPadding,
-          center: chunkBounds.getCenter(new THREE.Vector3()),
-          loaded: false,
-          node,
-          // 存储节点数据以便后续加载
-          groupName: `optimized_${object.uuid}`,
-          originalUuid: object.uuid
-        });
-        const size = new THREE.Vector3();
-        chunkBounds.getSize(size);
-        const center = new THREE.Vector3();
-        chunkBounds.getCenter(center);
-        const edges = new THREE.LineSegments(
-          edgesGeo,
-          boxMat
-        );
-        edges.name = `ghost_${chunkId}`;
-        edges.scale.copy(size);
-        edges.position.copy(center);
-        this.ghostGroup.add(edges);
-        if (index > 0 && index % 200 === 0) {
-          await this.yieldToMainThread();
-        }
-      }
+      const ghostSpecs = await this.registerLeafChunksProgressively(object, leafNodes, onProgress);
       this.reportChunkProgress();
+      this.checkCullingAndLoad();
+      void this.createChunkGhostsProgressively(ghostSpecs);
       const meshesToHide = [];
       object.traverse((child) => {
         if (child.isMesh) {
@@ -4969,10 +5026,10 @@ const parseTilesetFromFolder = async (files, onProgress, t) => {
 
 const themes = {
   dark: {
-    bg: "#1b1b1c",
-    panelBg: "#252526",
-    headerBg: "#2d2d30",
-    border: "#3f3f46",
+    bg: "#1f2227",
+    panelBg: "#282c31",
+    headerBg: "#32363d",
+    border: "#444b55",
     text: "#f1f1f1",
     textLight: "#ffffff",
     textMuted: "#999999",
@@ -4982,14 +5039,14 @@ const themes = {
     success: "#4ec9b0",
     warning: "#ce9178",
     danger: "#f48771",
-    canvasBg: "#1e1e1e",
+    canvasBg: "#2a2f36",
     shadow: "rgba(0, 0, 0, 0.5)"
   },
   light: {
     bg: "#ffffff",
     // 办公风格白色
     panelBg: "#ffffff",
-    headerBg: "#f3f3f3",
+    headerBg: "#f4f5f7",
     // 标签区域浅灰
     border: "#d2d2d2",
     // 办公风格边框色
@@ -5005,7 +5062,7 @@ const themes = {
     warning: "#d24726",
     // 警告橙
     danger: "#a4262c",
-    canvasBg: "#ffffff",
+    canvasBg: "#eef1f4",
     shadow: "rgba(0, 0, 0, 0.15)"
   }
 };

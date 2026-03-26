@@ -19,10 +19,10 @@ export interface ThemeColors {
 
 export const themes: Record<'dark' | 'light', ThemeColors> = {
     dark: {
-        bg: "#1b1b1c",
-        panelBg: "#252526",
-        headerBg: "#2d2d30",
-        border: "#3f3f46",
+        bg: "#1f2227",
+        panelBg: "#282c31",
+        headerBg: "#32363d",
+        border: "#444b55",
         text: "#f1f1f1",
         textLight: "#ffffff",
         textMuted: "#999999",
@@ -32,13 +32,13 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
         success: "#4ec9b0",
         warning: "#ce9178",
         danger: "#f48771",
-        canvasBg: "#1e1e1e",
+        canvasBg: "#2a2f36",
         shadow: "rgba(0, 0, 0, 0.5)"
     },
     light: {
         bg: "#ffffff", // 办公风格白色
         panelBg: "#ffffff",
-        headerBg: "#f3f3f3", // 标签区域浅灰
+        headerBg: "#f4f5f7", // 标签区域浅灰
         border: "#d2d2d2", // 办公风格边框色
         text: "#444444",
         textLight: "#000000",
@@ -49,7 +49,7 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
         success: "#217346", // 成功绿
         warning: "#d24726", // 警告橙
         danger: "#a4262c",
-        canvasBg: "#ffffff",
+        canvasBg: "#eef1f4",
         shadow: "rgba(0, 0, 0, 0.15)"
     }
 };
