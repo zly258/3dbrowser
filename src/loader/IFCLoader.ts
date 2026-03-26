@@ -96,68 +96,72 @@ export const loadIFC = async (
     const rootGroup = new THREE.Group();
     rootGroup.name = "IFC模型";
     
-    // 1. 构建属性映射表（对象 ID -> 属性集 ID 列表）
-    // 这样可以在点击时快速查找属性，无需每次遍历所有关系
     const propertyMap = new Map<number, number[]>();
-    
-    try {
-        // 获取所有IFCRELDEFINESBYPROPERTIES类型的行
-        // 由于我们没有导入完整的枚举，直接使用GetLineIDsWithType
-        const relID = getIfcTypeCode(ifcApi, 'IFCRELDEFINESBYPROPERTIES');
-        const lines = ifcApi.GetLineIDsWithType(modelID, relID);
-        const size = lines.size();
-        
-        for (let i = 0; i < size; i++) {
-            const id = lines.get(i);
-            const rel = ifcApi.GetLine(modelID, id);
+    const layerMap = new Map<number, string>();
+    const lineCache = new Map<number, any>();
+    const getLineCached = (expressID: number) => {
+        if (lineCache.has(expressID)) return lineCache.get(expressID);
+        const line = ifcApi.GetLine(modelID, expressID);
+        lineCache.set(expressID, line);
+        return line;
+    };
+
+    const buildPropertyMap = () => {
+        try {
+            const relID = getIfcTypeCode(ifcApi, 'IFCRELDEFINESBYPROPERTIES');
+            const lines = ifcApi.GetLineIDsWithType(modelID, relID);
+            const size = lines.size();
             
-            // rel.RelatedObjects：对象 ID 数组（有时为单个引用，但通常是数组）
-            // rel.RelatingPropertyDefinition：属性集 ID
-            
-            if (rel.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
-                const psetID = rel.RelatingPropertyDefinition?.value;
-                if (psetID) {
-                    rel.RelatedObjects.forEach((objRef: any) => {
-                        const objID = objRef.value;
-                        if (!propertyMap.has(objID)) propertyMap.set(objID, []);
-                        propertyMap.get(objID)!.push(psetID);
+            for (let i = 0; i < size; i++) {
+                const id = lines.get(i);
+                const rel = getLineCached(id);
+                
+                if (rel?.RelatedObjects && Array.isArray(rel.RelatedObjects)) {
+                    const psetID = rel.RelatingPropertyDefinition?.value;
+                    if (psetID) {
+                        rel.RelatedObjects.forEach((objRef: any) => {
+                            const objID = objRef.value;
+                            if (!propertyMap.has(objID)) propertyMap.set(objID, []);
+                            propertyMap.get(objID)!.push(psetID);
+                        });
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn("无法构建属性映射表", e);
+        }
+    };
+
+    const buildLayerMap = () => {
+        try {
+            const layerType = getIfcTypeCode(ifcApi, 'IFCPRESENTATIONLAYERASSIGNMENT');
+            const layers = ifcApi.GetLineIDsWithType(modelID, layerType);
+            for (let i = 0; i < layers.size(); i++) {
+                const id = layers.get(i);
+                const layer = getLineCached(id);
+                const layerName = layer?.Name?.value || `Layer_${id}`;
+                if (layer?.AssignedItems && Array.isArray(layer.AssignedItems)) {
+                    layer.AssignedItems.forEach((itemRef: any) => {
+                        const itemID = itemRef.value;
+                        layerMap.set(itemID, layerName);
                     });
                 }
             }
+        } catch (e) {
+            console.warn("无法构建图层映射表", e);
         }
-    } catch(e) {
-        console.warn("无法构建属性映射表", e);
-    }
+    };
     
     // 附加IFC相关的元数据
     rootGroup.userData.isIFC = true;
     rootGroup.userData.ifcAPI = ifcApi;
     rootGroup.userData.modelID = modelID;
-    
-    // --- 图层解析 ---
-    const layerMap = new Map<number, string>();
-    try {
-        const layerType = getIfcTypeCode(ifcApi, 'IFCPRESENTATIONLAYERASSIGNMENT');
-        const layers = ifcApi.GetLineIDsWithType(modelID, layerType);
-        for (let i = 0; i < layers.size(); i++) {
-            const id = layers.get(i);
-            const layer = ifcApi.GetLine(modelID, id);
-            const layerName = layer.Name?.value || `Layer_${id}`;
-            if (layer.AssignedItems && Array.isArray(layer.AssignedItems)) {
-                layer.AssignedItems.forEach((itemRef: any) => {
-                    const itemID = itemRef.value;
-                    layerMap.set(itemID, layerName);
-                });
-            }
-        }
-    } catch (e) {
-        console.warn("无法构建图层映射表", e);
-    }
     rootGroup.userData.layerMap = layerMap;
 
     // --- 空间结构解析优化 ---
     const nodesMap = new Map<number, THREE.Object3D>();
     nodesMap.set(0, rootGroup);
+    const meshesByExpressId = new Map<number, THREE.Mesh[]>();
 
     // 预索引关系映射表，避免在递归中频繁查询 API 提升性能和准确性
     const aggregatesMap = new Map<number, number[]>(); // RelatingObject -> RelatedObjects[]
@@ -167,7 +171,7 @@ export const loadIFC = async (
         // 1. 索引分解关系 (IfcRelAggregates)
         const relDecomposes = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELAGGREGATES);
         for (let i = 0; i < relDecomposes.size(); i++) {
-            const rel = ifcApi.GetLine(modelID, relDecomposes.get(i));
+            const rel = getLineCached(relDecomposes.get(i));
             const parentID = rel.RelatingObject.value;
             const children = rel.RelatedObjects.map((obj: any) => obj.value);
             
@@ -178,7 +182,7 @@ export const loadIFC = async (
         // 2. 索引包含关系 (IfcRelContainedInSpatialStructure)
         const relContained = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELCONTAINEDINSPATIALSTRUCTURE);
         for (let i = 0; i < relContained.size(); i++) {
-            const rel = ifcApi.GetLine(modelID, relContained.get(i));
+            const rel = getLineCached(relContained.get(i));
             const containerID = rel.RelatingStructure.value;
             const elements = rel.RelatedElements.map((el: any) => el.value);
             
@@ -189,7 +193,7 @@ export const loadIFC = async (
 
     // 递归解析空间层级
     const parseSpatialRecursive = (expressID: number, parent: THREE.Object3D) => {
-        const props = ifcApi.GetLine(modelID, expressID);
+        const props = getLineCached(expressID);
         if (!props) return;
 
         let currentParent = parent;
@@ -262,6 +266,28 @@ export const loadIFC = async (
     };
 
     loadSpatialStructure();
+    const shouldDeferMetadata = buffer.byteLength > 20 * 1024 * 1024;
+    const applyLayerMetadata = () => {
+        for (const [expressID, meshes] of meshesByExpressId.entries()) {
+            const layerName = layerMap.get(expressID);
+            if (!layerName) continue;
+            for (const mesh of meshes) {
+                mesh.userData.layer = layerName;
+            }
+        }
+    };
+    if (shouldDeferMetadata) {
+        onProgress(42, `${t("analyzing")}...`);
+        setTimeout(() => {
+            buildLayerMap();
+            buildPropertyMap();
+            applyLayerMetadata();
+        }, 0);
+    } else {
+        buildLayerMap();
+        buildPropertyMap();
+        applyLayerMetadata();
+    }
     // --- 空间结构解析结束 ---
 
     // 获取友好的属性名称
@@ -370,7 +396,7 @@ export const loadIFC = async (
             
             // 1. 获取直接属性
             try {
-                const entity = ifcApi.GetLine(modelID, expressID);
+                const entity = getLineCached(expressID);
                 if (entity) {
                     result["ExpressID"] = expressID;
                     result["类型"] = entity.is_a || 'Unknown';
@@ -397,7 +423,7 @@ export const loadIFC = async (
             if (psetIDs) {
                 for (const psetID of psetIDs) {
                     try {
-                        const pset = ifcApi.GetLine(modelID, psetID);
+                        const pset = getLineCached(psetID);
                         if (pset && pset.HasProperties) {
                             const psetName = getFriendlyName(pset.Name?.value || `属性集_${psetID}`);
                             result[`${psetName}.类型`] = pset.is_a;
@@ -409,7 +435,7 @@ export const loadIFC = async (
                             // pset.HasProperties是属性ID数组
                             for (const propRef of pset.HasProperties) {
                                 const propID = propRef.value;
-                                const prop = ifcApi.GetLine(modelID, propID);
+                                const prop = getLineCached(propID);
                                 
                                 // 处理IfcPropertySingleValue
                                 if (prop && prop.Name && prop.NominalValue) {
@@ -557,6 +583,8 @@ export const loadIFC = async (
             
             mesh.userData.expressID = expressID;
             mesh.userData.bimId = String(expressID);
+            if (!meshesByExpressId.has(expressID)) meshesByExpressId.set(expressID, []);
+            meshesByExpressId.get(expressID)!.push(mesh);
             
             // 附加图层信息
             if (layerMap.has(expressID)) {
@@ -565,7 +593,7 @@ export const loadIFC = async (
             
             // 优化构件名称：获取真实的 IFC 类型作为名称前缀
             try {
-                const props = ifcApi.GetLine(modelID, expressID);
+                const props = getLineCached(expressID);
                 const ifcType = props.is_a || 'Item';
                 const ifcName = props.Name?.value || '';
                 mesh.name = ifcName ? `${ifcType}: ${ifcName}` : `${ifcType} [${expressID}]`;

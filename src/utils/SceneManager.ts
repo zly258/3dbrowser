@@ -36,6 +36,7 @@ export interface SceneSettings {
     minPixelRatio?: number;
     maxPixelRatio?: number;
     targetFps?: number;
+    performanceMode?: 'balanced' | 'smooth';
     // 光照模拟参数
     sunLatitude?: number;   // 纬度 (-90 ~ 90)
     sunLongitude?: number;  // 经度 (-180 ~ 180)
@@ -166,6 +167,7 @@ export class SceneManager {
         minPixelRatio: 0.8,
         maxPixelRatio: 2,
         targetFps: 50,
+        performanceMode: 'balanced',
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
     };
 
@@ -320,6 +322,10 @@ export class SceneManager {
     private movingPeripheralCursor = 0;
     private movingPeripheralLastRefreshAt = 0;
     private postMoveRecoveryUntil = 0;
+    private deferredStructureTimer: ReturnType<typeof setTimeout> | null = null;
+    private deferredStructureToken = 0;
+    private fastPreviewMeshLimit = 1200;
+    private fastPreviewModels = new Set<string>();
     private readonly chunkCullingTempSize = new THREE.Vector3();
     private readonly chunkCullingTempDirection = new THREE.Vector3();
     private readonly chunkCullingTempForward = new THREE.Vector3();
@@ -722,10 +728,11 @@ export class SceneManager {
         // 优先在相机变化或加载状态变化后做一次剔除，平时退回到更稀疏的兜底检查
         const now = performance.now();
         const profile = this.getChunkRuntimeProfile();
+        const phase = this.getChunkRenderPhase(now);
         const cullingInterval = this.cullingDirty
-            ? (this.isCameraMoving
+            ? (phase === 'moving'
                 ? profile.movingCullingIntervalMs
-                : this.isInPostMoveRecovery(now)
+                : phase === 'recovery'
                     ? profile.recoveryCullingIntervalMs
                     : Math.min(profile.recoveryCullingIntervalMs, 70))
             : profile.idleCullingIntervalMs;
@@ -1338,6 +1345,52 @@ export class SceneManager {
         return !this.isCameraMoving && now < this.postMoveRecoveryUntil;
     }
 
+    private getChunkRenderPhase(now: number): 'moving' | 'recovery' | 'idle' {
+        if (this.isCameraMoving) return 'moving';
+        if (this.isInPostMoveRecovery(now)) return 'recovery';
+        return 'idle';
+    }
+
+    private getChunkFrameBudget(
+        phase: 'moving' | 'recovery' | 'idle',
+        profile: ChunkRuntimeProfile,
+        warmupExtra: number
+    ) {
+        const mode = this.settings.performanceMode ?? 'balanced';
+        const chunkCount = this.chunks.length;
+        const isHugeScene = chunkCount > 2000;
+        const isLargeScene = chunkCount > 600;
+
+        if (phase === 'moving') {
+            const baseMovingBudget = Math.max(
+                profile.movingLoadBudgetMin,
+                Math.min(profile.movingLoadBudgetMax, Math.floor(this.maxChunkLoadsPerFrame / 4))
+            );
+            if (mode === 'smooth') {
+                if (isHugeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.35));
+                if (isLargeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.5));
+                return Math.max(1, Math.floor(baseMovingBudget * 0.7));
+            }
+            if (isHugeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.55));
+            if (isLargeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.75));
+            return baseMovingBudget;
+        }
+
+        if (phase === 'recovery') {
+            const recoveryBudget = Math.max(
+                profile.recoveryLoadBudgetMin,
+                Math.min(
+                    profile.recoveryLoadBudgetMax,
+                    Math.floor(this.maxChunkLoadsPerFrame * profile.recoveryLoadBudgetRatio)
+                )
+            );
+            const recoveryBoost = mode === 'smooth' ? Math.max(2, Math.floor(recoveryBudget * 0.6)) : 0;
+            return recoveryBudget + recoveryBoost + warmupExtra;
+        }
+
+        return this.maxChunkLoadsPerFrame + warmupExtra;
+    }
+
     private isMovingPeripheralChunk(
         centrality: number,
         pixelSize: number,
@@ -1384,6 +1437,7 @@ export class SceneManager {
 
         if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
         const profile = this.getChunkRuntimeProfile();
+        const phase = this.getChunkRenderPhase(now);
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
@@ -1434,13 +1488,13 @@ export class SceneManager {
             
             // 如果屏幕占比太小（例如小于 4 像素），则视为不可见 (LOD 优化)
             const isTooSmall = pixelSize < 4;
-            const shouldHidePeripheralWhileMoving = this.isCameraMoving
+            const shouldHidePeripheralWhileMoving = phase === 'moving'
                 && centrality < profile.movingFocusCentralityThreshold
                 && pixelSize < profile.movingFocusPixelThreshold;
 
             const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
             const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
-            const shouldKeepVisibleWhileMoving = this.isCameraMoving
+            const shouldKeepVisibleWhileMoving = phase === 'moving'
                 && inFrustum
                 && !isClipped
                 && inRange
@@ -1448,7 +1502,7 @@ export class SceneManager {
                 && (now - lastTouchedAt) < profile.chunkVisibilityHoldMs;
             const isPeripheralWhileMoving = this.isMovingPeripheralChunk(centrality, pixelSize, forwardness, profile);
             const shouldRefreshPeripheral = !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks, profile);
-            const effectiveVisible = this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral
+            const effectiveVisible = phase === 'moving' && isPeripheralWhileMoving && !shouldRefreshPeripheral
                 ? (c.lastEffectiveVisible ?? c.mesh?.visible ?? false)
                 : (shouldBeVisible || shouldKeepVisibleWhileMoving);
             const centerPriorityWindow = this.chunkWarmupActive || now < (this.chunkLoadResumeAt + profile.centerPriorityWindowMs);
@@ -1488,18 +1542,23 @@ export class SceneManager {
                 const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget
                     ? (centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0)
                     : 0;
-                const movingPriorityBoost = this.isCameraMoving
+                const movingPriorityBoost = phase === 'moving'
                     ? (centrality > 0.65 || forwardness > 0.7 ? 900 : centrality > 0.4 ? 250 : -250)
                     : 0;
 
-                if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
+                if (phase === 'moving' && centrality < 0.08 && pixelSize < 18) {
                     return;
                 }
-                if (this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral) {
+                if (phase === 'moving' && isPeripheralWhileMoving && !shouldRefreshPeripheral) {
                     return;
                 }
-                if (!this.isCameraMoving && centerPriorityWindow && isPeripheralCandidate) {
+                if (phase !== 'moving' && centerPriorityWindow && isPeripheralCandidate) {
                     return;
+                }
+                if (phase === 'moving' && (this.settings.performanceMode ?? 'balanced') === 'smooth') {
+                    if (centrality < 0.3 && pixelSize < 54 && forwardness < 0.62) {
+                        return;
+                    }
                 }
 
                 c.priority = movingPriorityBoost + cacheBoost + warmupBoost + forwardScore + (viewportBoost * 1000) + (sizeScore * 120) + distanceScore + (centrality * 300);
@@ -1533,22 +1592,7 @@ export class SceneManager {
             const warmupExtra = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget
                 ? this.warmupChunkBoost
                 : 0;
-            const movingBudget = Math.max(
-                profile.movingLoadBudgetMin,
-                Math.min(profile.movingLoadBudgetMax, Math.floor(this.maxChunkLoadsPerFrame / 4))
-            );
-            const recoveryBudget = Math.max(
-                profile.recoveryLoadBudgetMin,
-                Math.min(
-                    profile.recoveryLoadBudgetMax,
-                    Math.floor(this.maxChunkLoadsPerFrame * profile.recoveryLoadBudgetRatio)
-                )
-            );
-            const frameBudget = this.isCameraMoving
-                ? movingBudget
-                : this.isInPostMoveRecovery(now)
-                    ? recoveryBudget + warmupExtra
-                    : this.maxChunkLoadsPerFrame + warmupExtra;
+            const frameBudget = this.getChunkFrameBudget(phase, profile, warmupExtra);
             const count = Math.min(available, frameBudget, toLoad.length);
             for (let i = 0; i < count; i++) {
                 this.loadChunk(toLoad[i]);
@@ -1699,6 +1743,9 @@ export class SceneManager {
                 this.chunkLoadedCount++; // 增加计数
                 chunk.lastVisibleAt = performance.now();
                 chunk.lastFocusAt = chunk.lastVisibleAt;
+                if (chunk.originalUuid) {
+                    this.deactivateFastPreviewForModel(chunk.originalUuid);
+                }
                 if (this.chunkWarmupActive && this.chunkLoadedCount >= this.initialChunkLoadTarget) {
                     this.chunkWarmupActive = false;
                 }
@@ -1967,14 +2014,44 @@ export class SceneManager {
         }
     }
 
-    private attachModelToContentGroup(object: THREE.Object3D) {
+    private prepareFastVisibleStage(
+        object: THREE.Object3D,
+        meshCount: number,
+        onProgress?: (p: number, msg: string) => void
+    ) {
+        if (meshCount < 12000) return false;
+
+        let visibleCount = 0;
+        const limit = this.fastPreviewMeshLimit;
+        object.traverse((child) => {
+            if (!(child as THREE.Mesh).isMesh) return;
+            const mesh = child as THREE.Mesh;
+            const isVisible = visibleCount < limit;
+            mesh.visible = isVisible;
+            mesh.userData.fastPreview = isVisible;
+            if (isVisible) visibleCount++;
+        });
+
+        if (onProgress) {
+            onProgress(8, `正在准备快速预览... (${visibleCount} meshes)`);
+        }
+
+        if (visibleCount > 0) {
+            object.userData.fastPreviewActive = true;
+            this.fastPreviewModels.add(object.uuid);
+        }
+
+        return visibleCount > 0;
+    }
+
+    private attachModelToContentGroup(object: THREE.Object3D, keepVisible = false) {
         const fileGroup = new THREE.Group();
         fileGroup.name = `file_${object.uuid}`;
         fileGroup.userData.originalUuid = object.uuid;
         object.userData.originalUuid = object.uuid;
         fileGroup.add(object);
 
-        object.visible = false;
+        object.visible = keepVisible;
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
     }
@@ -2034,6 +2111,9 @@ export class SceneManager {
 
         for (let i = 0; i < meshesToHide.length; i++) {
             const child = meshesToHide[i];
+            if (object.userData.fastPreviewActive && child.userData.fastPreview) {
+                continue;
+            }
             child.visible = false;
             child.userData.isOptimized = true;
             if (i > 0 && i % 6000 === 0) {
@@ -2066,21 +2146,49 @@ export class SceneManager {
         }
     }
 
+    private cancelDeferredStructureBuild() {
+        if (this.deferredStructureTimer) {
+            clearTimeout(this.deferredStructureTimer);
+            this.deferredStructureTimer = null;
+        }
+        this.deferredStructureToken++;
+    }
+
+    private deactivateFastPreviewForModel(originalUuid: string) {
+        if (!this.fastPreviewModels.has(originalUuid)) return;
+        this.fastPreviewModels.delete(originalUuid);
+        const fileGroup = this.contentGroup.getObjectByName(`file_${originalUuid}`);
+        if (!fileGroup) return;
+
+        fileGroup.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+                child.visible = false;
+                if (child.userData.fastPreview) delete child.userData.fastPreview;
+            }
+            if (child.userData?.fastPreviewActive) {
+                child.userData.fastPreviewActive = false;
+            }
+        });
+    }
+
     private scheduleDeferredStructureReplacement(
         object: THREE.Object3D,
         shouldDeferStructure: boolean,
         deferredPlaceholderId: string | null
     ) {
         if (shouldDeferStructure && deferredPlaceholderId) {
-            setTimeout(() => {
+            this.cancelDeferredStructureBuild();
+            const token = this.deferredStructureToken;
+            this.deferredStructureTimer = setTimeout(() => {
                 try {
+                    if (token !== this.deferredStructureToken) return;
                     const modelRoot = this.buildAndRegisterModelStructure(object);
                     this.replaceStructureNode(deferredPlaceholderId!, modelRoot);
                     if (this.onStructureUpdate) this.onStructureUpdate();
                 } catch (error) {
                     console.warn("延迟构建结构树失败:", error);
                 }
-            }, 0);
+            }, 80);
             return;
         }
 
@@ -2100,15 +2208,17 @@ export class SceneManager {
 
         const { shouldDeferStructure, deferredPlaceholderId } = this.prepareStructureStage(object, meshCount, onProgress);
         const previewGhost = this.prepareModelBoundsStage(object, modelBox);
+        const quickVisibleEnabled = this.prepareFastVisibleStage(object, meshCount, onProgress);
 
         await this.prepareModelRuntimeStage(object, meshCount);
-        this.attachModelToContentGroup(object);
+        this.attachModelToContentGroup(object, quickVisibleEnabled);
         await this.prepareModelChunkStage(object, meshCount, onProgress);
         this.finalizeModelStage(previewGhost, onProgress);
         this.scheduleDeferredStructureReplacement(object, shouldDeferStructure, deferredPlaceholderId);
     }
 
     removeObject(uuid: string) {
+        this.cancelDeferredStructureBuild();
         const nodes = this.nodeMap.get(uuid);
         // 尝试获取该节点所属的原始模型 UUID (用于 NBIM 分块匹配)
         const originalUuid = nodes?.[0]?.userData?.originalUuid || uuid;
@@ -2198,6 +2308,8 @@ export class SceneManager {
         }
         this.interactableListValid = false;
         this.unregisterOriginalStats(originalUuid);
+        this.fastPreviewModels.delete(uuid);
+        this.fastPreviewModels.delete(originalUuid);
         this.clearChunkCache((chunkId, mesh) => {
             const owner = (mesh.userData.originalUuid || "") as string;
             return owner === uuid || owner === originalUuid || chunkId.startsWith(uuid) || chunkId.startsWith(originalUuid);
@@ -2954,6 +3066,7 @@ export class SceneManager {
 
     async clear() {
         console.log("开始清空场景...");
+        this.cancelDeferredStructureBuild();
         
         try {
             // 1. 深度清理 contentGroup
@@ -3019,6 +3132,7 @@ export class SceneManager {
             this.clearChunkCache();
             this.originalStats = { meshes: 0, faces: 0, memory: 0 };
             this.originalStatsByModel.clear();
+            this.fastPreviewModels.clear();
             this.chunkLoadingEnabled = true;
             this.contentGroup.visible = true;
             this.ghostGroup.visible = true;
