@@ -1,0 +1,24 @@
+{
+  "name": "3dbrowser-example",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "prepare:libs": "node scripts/prepare-libs.mjs",
+    "dev": "npm run prepare:libs && vite",
+    "build": "npm run prepare:libs && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@zhangly1403/3dbrowser": "^1.5.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.4.1"
+  }
+}

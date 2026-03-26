@@ -1,0 +1,49 @@
+:root {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1e2a37;
+  background: #eef2f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  background: linear-gradient(180deg, #f6f9fd 0%, #ecf1f8 100%);
+}
+
+.app-header {
+  margin-bottom: 10px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.app-header p {
+  margin: 4px 0 0;
+  color: #516175;
+  font-size: 13px;
+}
+
+.viewer-wrap {
+  width: 100%;
+  height: calc(100% - 58px);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #d7dee8;
+  box-shadow: 0 6px 24px rgba(16, 24, 40, 0.08);
+  background: #f2f5f9;
+}
