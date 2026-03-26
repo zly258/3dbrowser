@@ -41,6 +41,20 @@ export interface ThreeViewerProps {
     hideDeleteModel?: boolean;
 }
 
+type PropertyGroups = Record<string, Record<string, string>>;
+type IfcFilterState = {
+    storey: string;
+    system: string;
+    category: string;
+    material: string;
+};
+
+type SelectedPropsState =
+    | PropertyGroups
+    | {
+          defaultView?: string;
+          views: Record<string, { label: string; groups: PropertyGroups }>;
+      };
 
 
 // --- 主应用 ---
@@ -98,7 +112,7 @@ export const ThreeViewer = ({
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
     const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
-    const [selectedProps, setSelectedProps] = useState<any>(null);
+    const [selectedProps, setSelectedProps] = useState<SelectedPropsState | null>(null);
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -360,7 +374,7 @@ export const ThreeViewer = ({
             updateTree();
         }
     }, [hiddenUuids, isolatedUuids]);
-    
+
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
     // 全局错误捕获
@@ -762,6 +776,48 @@ export const ThreeViewer = ({
         };
         setTreeRoot(prev => update(prev));
     }, []);
+
+    const handleApplyIfcFiltersToViewport = useCallback((filters: IfcFilterState) => {
+        if (!sceneMgr.current) return;
+
+        const hasActiveFilters = Object.values(filters).some(Boolean);
+        if (!hasActiveFilters) {
+            handleShowAll();
+            return;
+        }
+
+        const matches: string[] = [];
+        sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
+            if (!(obj as THREE.Mesh).isMesh) return;
+            const meta = obj.userData?.ifcMetadata;
+            if (!meta) return;
+
+            if (filters.storey && meta.storey !== filters.storey) return;
+            if (filters.category && meta.category !== filters.category) return;
+            if (filters.system && !(meta.systems || []).includes(filters.system)) return;
+            if (filters.material && !(meta.materials || []).includes(filters.material)) return;
+            matches.push(obj.uuid);
+        });
+
+        if (matches.length === 0) {
+            setToast({
+                message: `${t("failed")}: ${t("no_matching_ifc_filter") || "没有匹配当前 IFC 筛选的构件"}`,
+                type: "info"
+            });
+            return;
+        }
+
+        sceneMgr.current.isolateObjects(matches);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set(matches));
+        setSelectedUuids([]);
+        setSelectedProps(null);
+        updateTree();
+        setToast({
+            message: `${t("ifc_filter_applied") || "已按 IFC 筛选隔离显示"}: ${matches.length}`,
+            type: "success"
+        });
+    }, [handleShowAll, t, updateTree]);
 
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
@@ -1302,9 +1358,10 @@ export const ThreeViewer = ({
 
         const target = realObj || obj; // 优先使用真实对象，否则使用传入的对象（可能是 StructureTreeNode）
 
-        const basicProps: any = {};
-        const geoProps: any = {};
-        const ifcProps: any = {};
+        const basicProps: Record<string, string> = {};
+        const geoProps: Record<string, string> = {};
+        let ifcNormalizedGroups: PropertyGroups | null = null;
+        let ifcRawGroups: PropertyGroups | null = null;
 
         basicProps[t("prop_name")] = target.name || "Unnamed";
         basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
@@ -1363,9 +1420,10 @@ export const ThreeViewer = ({
                     if (expressID) {
                         try {
                             const ifcMgr = ifcTarget.userData.ifcManager;
-                            const flatProps = await ifcMgr.getItemProperties(ifcTarget.userData.modelID, expressID);
-                            if (flatProps) {
-                                Object.assign(ifcProps, flatProps);
+                            const ifcProps = await ifcMgr.getItemProperties(ifcTarget.userData.modelID, expressID);
+                            if (ifcProps?.normalizedGroups) {
+                                ifcNormalizedGroups = ifcProps.normalizedGroups;
+                                ifcRawGroups = ifcProps.rawGroups || ifcProps.normalizedGroups;
                             }
                         } catch(e) { console.error("IFC Props Error", e); }
                     }
@@ -1378,21 +1436,48 @@ export const ThreeViewer = ({
         }
 
         // 属性分组
-        const finalProps: any = {
+        const normalizedProps: PropertyGroups = {
             [t("pg_basic")]: basicProps,
             [t("pg_geo")]: geoProps
         };
 
-        if (Object.keys(ifcProps).length > 0) {
-            finalProps["IFC Properties"] = ifcProps;
+        if (ifcNormalizedGroups) {
+            Object.assign(normalizedProps, ifcNormalizedGroups);
         }
 
         const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
         if (nbimProps) {
-            finalProps["BIM 属性"] = nbimProps;
+            normalizedProps["BIM 属性"] = nbimProps;
         }
 
-        setSelectedProps(finalProps);
+        if (ifcRawGroups) {
+            const rawProps: PropertyGroups = {
+                [t("pg_basic")]: basicProps,
+                [t("pg_geo")]: geoProps,
+                ...ifcRawGroups
+            };
+
+            if (nbimProps) {
+                rawProps["BIM 属性"] = nbimProps;
+            }
+
+            setSelectedProps({
+                defaultView: "normalized",
+                views: {
+                    normalized: {
+                        label: t("ifc_view_normalized") || "规范化",
+                        groups: normalizedProps
+                    },
+                    raw: {
+                        label: t("ifc_view_raw") || "原始 IFC",
+                        groups: rawProps
+                    }
+                }
+            });
+            return;
+        }
+
+        setSelectedProps(normalizedProps);
     };
 
     const processFiles = async (items: (File | string)[]) => {
@@ -1853,6 +1938,7 @@ export const ThreeViewer = ({
                                 onHide={handleHideObject}
                                 onIsolate={handleIsolateObject}
                                 onShowAll={handleShowAll}
+                                onApplyIfcFiltersToViewport={handleApplyIfcFiltersToViewport}
                             />
                         </div>
                         {/* Resize handle */}

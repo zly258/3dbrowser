@@ -1495,9 +1495,67 @@ body.font-loose,
   border-radius: 2px;
 }
 
+.ui-tree-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ui-tree-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ui-tree-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .ui-input-compact {
   min-height: 28px;
   padding-right: 28px;
+}
+
+.ui-properties-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ui-properties-views {
+  width: 100%;
+}
+
+.ui-properties-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ui-properties-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.ui-properties-action {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.ui-properties-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 /* 数据行 - 紧凑型 */
@@ -1546,6 +1604,25 @@ body.font-loose,
 
 .ui-prop-group:hover {
   background-color: var(--bg-hover);
+}
+
+.ui-prop-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-prop-copy {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ui-prop-copy:hover {
+  color: var(--text-primary);
 }
 
 /* 树节点  */

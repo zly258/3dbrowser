@@ -1870,76 +1870,7 @@ export class SceneManager {
             return node;
         };
         
-        const spatialRoot = buildSpatialRecursive(object);
-
-        // 2. 图层结构分支
-        const layerMap = object.userData.layerMap as Map<number, string> | undefined;
-        if (layerMap && layerMap.size > 0) {
-            const layerRoot: StructureTreeNode = {
-                id: `layers_${object.uuid}`,
-                name: '图层结构 (Layers)',
-                type: 'Group',
-                children: [],
-                userData: { originalUuid: object.uuid }
-            };
-            
-            if (!this.nodeMap.has(layerRoot.id)) this.nodeMap.set(layerRoot.id, []);
-            this.nodeMap.get(layerRoot.id)!.push(layerRoot);
-
-            const layers = new Map<string, StructureTreeNode>();
-            
-            // 遍历所有网格并按图层分组
-            object.traverse((child) => {
-                if ((child as THREE.Mesh).isMesh && child.userData.expressID !== undefined) {
-                    const expressID = child.userData.expressID;
-                    const layerName = layerMap.get(expressID) || '未分类图层';
-                    
-                    if (!layers.has(layerName)) {
-                        const lNode: StructureTreeNode = {
-                            id: `layer_${layerName}_${object.uuid}`,
-                            name: layerName,
-                            type: 'Group',
-                            children: [],
-                            userData: { originalUuid: object.uuid }
-                        };
-                        layers.set(layerName, lNode);
-                        
-                        if (!this.nodeMap.has(lNode.id)) this.nodeMap.set(lNode.id, []);
-                        this.nodeMap.get(lNode.id)!.push(lNode);
-                    }
-                    
-                    const layerNode = layers.get(layerName)!;
-                    const node: StructureTreeNode = {
-                        id: child.uuid,
-                        name: child.name,
-                        type: 'Mesh',
-                        bimId: String(expressID),
-                        userData: { ...child.userData }
-                    };
-                    layerNode.children!.push(node);
-                    
-                    if (!this.nodeMap.has(child.uuid)) this.nodeMap.set(child.uuid, []);
-                    this.nodeMap.get(child.uuid)!.push(node);
-                }
-            });
-
-            layerRoot.children = Array.from(layers.values());
-            if (layerRoot.children.length > 0) {
-                // 如果有图层结构，则返回包含空间和图层的根节点
-                const compositeRoot: StructureTreeNode = {
-                    id: `composite_${object.uuid}`,
-                    name: object.name || 'IFC Model',
-                    type: 'Group',
-                    children: [spatialRoot, layerRoot],
-                    userData: { originalUuid: object.uuid }
-                };
-                if (!this.nodeMap.has(compositeRoot.id)) this.nodeMap.set(compositeRoot.id, []);
-                this.nodeMap.get(compositeRoot.id)!.push(compositeRoot);
-                return compositeRoot;
-            }
-        }
-
-        return spatialRoot;
+        return buildSpatialRecursive(object);
     }
 
     private async prepareObjectRuntimeData(
