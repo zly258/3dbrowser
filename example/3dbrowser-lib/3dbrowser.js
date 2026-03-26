@@ -109,6 +109,14 @@ class SceneManager {
     this.chunkResidencyMs = 1800;
     this.centerPriorityThreshold = 0.58;
     this.forwardPriorityThreshold = 0.68;
+    this.movingCoreCentralityThreshold = 0.54;
+    this.movingCorePixelThreshold = 42;
+    this.movingCoreForwardThreshold = 0.62;
+    this.movingPeripheralRefreshMs = 180;
+    this.movingPeripheralBatchRatio = 0.18;
+    this.movingPeripheralMinBatchSize = 64;
+    this.movingPeripheralCursor = 0;
+    this.movingPeripheralLastRefreshAt = 0;
     this.boundsScanBatchSize = 2400;
     this.chunkRegistrationBatchSize = 18;
     this.chunkGhostBatchSize = 24;
@@ -176,6 +184,8 @@ class SceneManager {
     this.controls.addEventListener("start", () => {
       this.isCameraMoving = true;
       this.chunkLoadResumeAt = performance.now() + 150;
+      this.movingPeripheralLastRefreshAt = 0;
+      this.movingPeripheralCursor = 0;
       this.cullingDirty = true;
     });
     this.controls.addEventListener("change", () => {
@@ -186,6 +196,8 @@ class SceneManager {
     this.controls.addEventListener("end", () => {
       this.isCameraMoving = false;
       this.chunkLoadResumeAt = performance.now() + 80;
+      this.movingPeripheralLastRefreshAt = 0;
+      this.movingPeripheralCursor = 0;
       this.cullingDirty = true;
     });
     this.ambientLight = new THREE.AmbientLight(16251131, this.settings.ambientInt);
@@ -874,6 +886,30 @@ class SceneManager {
       this.onChunkProgress(loaded, total);
     }
   }
+  isMovingPeripheralChunk(centrality, pixelSize, forwardness) {
+    return centrality < this.movingCoreCentralityThreshold && pixelSize < this.movingCorePixelThreshold && forwardness < this.movingCoreForwardThreshold;
+  }
+  shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks) {
+    if (!this.isCameraMoving || totalChunks === 0) return true;
+    if (now - this.movingPeripheralLastRefreshAt >= this.movingPeripheralRefreshMs) {
+      const batchSize2 = Math.min(
+        totalChunks,
+        Math.max(this.movingPeripheralMinBatchSize, Math.ceil(totalChunks * this.movingPeripheralBatchRatio))
+      );
+      this.movingPeripheralCursor = (this.movingPeripheralCursor + batchSize2) % totalChunks;
+      this.movingPeripheralLastRefreshAt = now;
+    }
+    const batchSize = Math.min(
+      totalChunks,
+      Math.max(this.movingPeripheralMinBatchSize, Math.ceil(totalChunks * this.movingPeripheralBatchRatio))
+    );
+    const start = this.movingPeripheralCursor;
+    const end = start + batchSize;
+    if (end <= totalChunks) {
+      return chunkIndex >= start && chunkIndex < end;
+    }
+    return chunkIndex >= start || chunkIndex < end % totalChunks;
+  }
   checkCullingAndLoad(now = performance.now()) {
     if (!this.chunkLoadingEnabled) return;
     if (this.chunks.length === 0) return;
@@ -892,7 +928,8 @@ class SceneManager {
     const toLoad = [];
     const loadedChunks = [];
     const isClippingActive = this.renderer.clippingPlanes.length > 0;
-    this.chunks.forEach((c) => {
+    const totalChunks = this.chunks.length;
+    this.chunks.forEach((c, chunkIndex) => {
       if (!c.paddedBounds || c._padding !== padding) {
         const size = c.bounds.getSize(new THREE.Vector3());
         const pb = c.bounds.clone();
@@ -917,7 +954,9 @@ class SceneManager {
       const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
       const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
       const shouldKeepVisibleWhileMoving = this.isCameraMoving && inFrustum && !isClipped && inRange && !isTooSmall && now - lastTouchedAt < this.chunkVisibilityHoldMs;
-      const effectiveVisible = shouldBeVisible || shouldKeepVisibleWhileMoving;
+      const isPeripheralWhileMoving = this.isMovingPeripheralChunk(centrality, pixelSize, forwardness);
+      const shouldRefreshPeripheral = !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks);
+      const effectiveVisible = this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral ? c.lastEffectiveVisible ?? c.mesh?.visible ?? false : shouldBeVisible || shouldKeepVisibleWhileMoving;
       const centerPriorityWindow = this.chunkWarmupActive || now < this.chunkLoadResumeAt + 260;
       const isPeripheralCandidate = centrality < this.centerPriorityThreshold && forwardness < this.forwardPriorityThreshold && pixelSize < 96;
       if (effectiveVisible) {
@@ -926,6 +965,7 @@ class SceneManager {
       if (centrality > 0.42 || forwardness > 0.55) {
         c.lastFocusAt = now;
       }
+      c.lastEffectiveVisible = effectiveVisible;
       if (c.loaded) {
         loadedChunks.push(c);
         if (c.mesh) {
@@ -949,6 +989,9 @@ class SceneManager {
         const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget ? centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0 : 0;
         const movingPriorityBoost = this.isCameraMoving ? centrality > 0.65 || forwardness > 0.7 ? 900 : centrality > 0.4 ? 250 : -250 : 0;
         if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
+          return;
+        }
+        if (this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral) {
           return;
         }
         if (!this.isCameraMoving && centerPriorityWindow && isPeripheralCandidate) {

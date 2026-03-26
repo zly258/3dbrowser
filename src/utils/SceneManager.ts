@@ -218,6 +218,14 @@ export class SceneManager {
     private chunkResidencyMs = 1800;
     private centerPriorityThreshold = 0.58;
     private forwardPriorityThreshold = 0.68;
+    private movingCoreCentralityThreshold = 0.54;
+    private movingCorePixelThreshold = 42;
+    private movingCoreForwardThreshold = 0.62;
+    private movingPeripheralRefreshMs = 180;
+    private movingPeripheralBatchRatio = 0.18;
+    private movingPeripheralMinBatchSize = 64;
+    private movingPeripheralCursor = 0;
+    private movingPeripheralLastRefreshAt = 0;
     private boundsScanBatchSize = 2400;
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
@@ -302,6 +310,8 @@ export class SceneManager {
         this.controls.addEventListener('start', () => {
             this.isCameraMoving = true;
             this.chunkLoadResumeAt = performance.now() + 150;
+            this.movingPeripheralLastRefreshAt = 0;
+            this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
         });
         this.controls.addEventListener('change', () => {
@@ -312,6 +322,8 @@ export class SceneManager {
         this.controls.addEventListener('end', () => {
             this.isCameraMoving = false;
             this.chunkLoadResumeAt = performance.now() + 80;
+            this.movingPeripheralLastRefreshAt = 0;
+            this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
         });
         
@@ -1202,6 +1214,35 @@ export class SceneManager {
         }
     }
 
+    private isMovingPeripheralChunk(centrality: number, pixelSize: number, forwardness: number) {
+        return centrality < this.movingCoreCentralityThreshold
+            && pixelSize < this.movingCorePixelThreshold
+            && forwardness < this.movingCoreForwardThreshold;
+    }
+
+    private shouldRefreshPeripheralChunk(now: number, chunkIndex: number, totalChunks: number) {
+        if (!this.isCameraMoving || totalChunks === 0) return true;
+        if (now - this.movingPeripheralLastRefreshAt >= this.movingPeripheralRefreshMs) {
+            const batchSize = Math.min(
+                totalChunks,
+                Math.max(this.movingPeripheralMinBatchSize, Math.ceil(totalChunks * this.movingPeripheralBatchRatio))
+            );
+            this.movingPeripheralCursor = (this.movingPeripheralCursor + batchSize) % totalChunks;
+            this.movingPeripheralLastRefreshAt = now;
+        }
+
+        const batchSize = Math.min(
+            totalChunks,
+            Math.max(this.movingPeripheralMinBatchSize, Math.ceil(totalChunks * this.movingPeripheralBatchRatio))
+        );
+        const start = this.movingPeripheralCursor;
+        const end = start + batchSize;
+        if (end <= totalChunks) {
+            return chunkIndex >= start && chunkIndex < end;
+        }
+        return chunkIndex >= start || chunkIndex < (end % totalChunks);
+    }
+
     private checkCullingAndLoad(now = performance.now()) {
         if (!this.chunkLoadingEnabled) return;
         if (this.chunks.length === 0) return;
@@ -1225,7 +1266,8 @@ export class SceneManager {
         const loadedChunks: any[] = [];
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
 
-        this.chunks.forEach(c => {
+        const totalChunks = this.chunks.length;
+        this.chunks.forEach((c, chunkIndex) => {
             if (!c.paddedBounds || c._padding !== padding) {
                 const size = c.bounds.getSize(new THREE.Vector3());
                 const pb = c.bounds.clone();
@@ -1267,7 +1309,11 @@ export class SceneManager {
                 && inRange
                 && !isTooSmall
                 && (now - lastTouchedAt) < this.chunkVisibilityHoldMs;
-            const effectiveVisible = shouldBeVisible || shouldKeepVisibleWhileMoving;
+            const isPeripheralWhileMoving = this.isMovingPeripheralChunk(centrality, pixelSize, forwardness);
+            const shouldRefreshPeripheral = !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks);
+            const effectiveVisible = this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral
+                ? (c.lastEffectiveVisible ?? c.mesh?.visible ?? false)
+                : (shouldBeVisible || shouldKeepVisibleWhileMoving);
             const centerPriorityWindow = this.chunkWarmupActive || now < (this.chunkLoadResumeAt + 260);
             const isPeripheralCandidate = centrality < this.centerPriorityThreshold
                 && forwardness < this.forwardPriorityThreshold
@@ -1279,6 +1325,7 @@ export class SceneManager {
             if (centrality > 0.42 || forwardness > 0.55) {
                 c.lastFocusAt = now;
             }
+            c.lastEffectiveVisible = effectiveVisible;
 
             if (c.loaded) {
                 loadedChunks.push(c);
@@ -1309,6 +1356,9 @@ export class SceneManager {
                     : 0;
 
                 if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
+                    return;
+                }
+                if (this.isCameraMoving && isPeripheralWhileMoving && !shouldRefreshPeripheral) {
                     return;
                 }
                 if (!this.isCameraMoving && centerPriorityWindow && isPeripheralCandidate) {

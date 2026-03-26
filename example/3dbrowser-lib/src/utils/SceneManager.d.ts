@@ -145,6 +145,14 @@ export declare class SceneManager {
     private chunkResidencyMs;
     private centerPriorityThreshold;
     private forwardPriorityThreshold;
+    private movingCoreCentralityThreshold;
+    private movingCorePixelThreshold;
+    private movingCoreForwardThreshold;
+    private movingPeripheralRefreshMs;
+    private movingPeripheralBatchRatio;
+    private movingPeripheralMinBatchSize;
+    private movingPeripheralCursor;
+    private movingPeripheralLastRefreshAt;
     private boundsScanBatchSize;
     private chunkRegistrationBatchSize;
     private chunkGhostBatchSize;
@@ -182,6 +190,8 @@ export declare class SceneManager {
     updateCameraClipping(): void;
     resize(width?: number, height?: number): void;
     private reportChunkProgress;
+    private isMovingPeripheralChunk;
+    private shouldRefreshPeripheralChunk;
     private checkCullingAndLoad;
     private runWorkerTask;
     private processWorkerQueue;
