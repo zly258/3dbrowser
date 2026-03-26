@@ -4,6 +4,7 @@ import * as THREE from "three";
 interface OctreeItem {
   id: string; // 几何体_uuid + 材质_uuid
   uuid: string; // 原始 Object3D 的 uuid
+  sourceMesh: THREE.Mesh; // 原始 mesh 引用，便于后续阶段复用
   expressID?: number; // IFC expressID
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
@@ -195,6 +196,7 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
           items.push({
             id,
             uuid: mesh.uuid,
+            sourceMesh: mesh,
             expressID: instancedMesh.userData.expressID,
             geometry,
             material: material as THREE.Material,
@@ -207,6 +209,7 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
         items.push({
             id,
             uuid: mesh.uuid,
+            sourceMesh: mesh,
             expressID: mesh.userData.expressID,
             geometry,
             material: material as THREE.Material,
@@ -274,6 +277,7 @@ async function collectItemsBatched(
           items.push({
             id,
             uuid: mesh.uuid,
+            sourceMesh: mesh,
             expressID: instancedMesh.userData.expressID,
             geometry,
             material: material as THREE.Material,
@@ -286,6 +290,7 @@ async function collectItemsBatched(
         items.push({
           id,
           uuid: mesh.uuid,
+          sourceMesh: mesh,
           expressID: mesh.userData.expressID,
           geometry,
           material: material as THREE.Material,
