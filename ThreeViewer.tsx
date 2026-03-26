@@ -92,12 +92,6 @@ export const ThreeViewer = ({
         }
     }, [defaultLang, lang, setLang]);
 
-    useEffect(() => {
-        if (defaultTheme && defaultTheme !== themeMode) {
-            setThemeMode(defaultTheme);
-        }
-    }, [defaultTheme, themeMode, setThemeMode]);
-
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
@@ -218,6 +212,30 @@ export const ThreeViewer = ({
     const sceneMgr = useRef<SceneManager | null>(null);
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
+
+    const handleThemeModeChange = useCallback((nextThemeMode: 'dark' | 'light') => {
+        setThemeMode(nextThemeMode);
+        const nextTheme = themes[nextThemeMode];
+        const prevTheme = themes[nextThemeMode === 'light' ? 'dark' : 'light'];
+
+        setSceneSettings((prevSettings) => {
+            const shouldFollowThemeBg = !prevSettings.bgColor || prevSettings.bgColor === prevTheme.canvasBg;
+            const merged = shouldFollowThemeBg
+                ? { ...prevSettings, bgColor: nextTheme.canvasBg }
+                : prevSettings;
+
+            if (sceneMgr.current && shouldFollowThemeBg) {
+                sceneMgr.current.updateSettings(merged);
+            }
+            return merged;
+        });
+    }, [setSceneSettings, setThemeMode]);
+
+    useEffect(() => {
+        if (defaultTheme && defaultTheme !== themeMode) {
+            handleThemeModeChange(defaultTheme);
+        }
+    }, [defaultTheme, themeMode, handleThemeModeChange]);
     
     // 是否加载了模型（基于treeRoot判断）
     const hasModels = treeRoot.length > 0;
@@ -571,15 +589,6 @@ export const ThreeViewer = ({
             });
         }
     }, [mgrInstance, showOutline, showProps, leftWidth, rightWidth]);
-
-    // 当主题变化时更新场景背景色
-    useEffect(() => {
-        // If user hasn't manually overridden bg, follow theme
-        if (sceneSettings.bgColor === themes[themeMode === 'light' ? 'dark' : 'light'].canvasBg) {
-             const newBg = theme.canvasBg;
-             handleSettingsUpdate({ bgColor: newBg });
-        }
-    }, [themeMode]);
 
     // 树结构更新
     useEffect(() => {
@@ -1847,7 +1856,7 @@ export const ThreeViewer = ({
                     {activeTool === 'settings' && (
                         <SettingsPanel 
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
-                            currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={setThemeMode}
+                            currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={handleThemeModeChange}
                             showStats={showStats} setShowStats={setShowStats}
                             theme={theme}
                         />
@@ -1994,7 +2003,7 @@ export const ThreeViewer = ({
                         </div>
                     )}
                     <div 
-                        onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
+                        onClick={() => handleThemeModeChange(themeMode === 'dark' ? 'light' : 'dark')}
                         style={{ 
                             cursor: 'pointer', 
                             padding: '4px', 

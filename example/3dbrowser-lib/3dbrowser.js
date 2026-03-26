@@ -7189,9 +7189,21 @@ const SettingsPanel = ({
           ) }) })
         ] }),
         /* @__PURE__ */ jsxs(Section, { title: t("st_viewport"), children: [
-          /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", children: /* @__PURE__ */ jsxs("div", { style: { color: "var(--text-secondary)", fontSize: "12px" }, children: [
-            settings.viewCubeSize || 100,
-            "px"
+          /* @__PURE__ */ jsx(Row, { label: t("st_viewcube_size"), labelWidth: "90px", stretch: true, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "12px", width: "100%" }, children: [
+            /* @__PURE__ */ jsx("div", { style: { flex: 1, minWidth: 0 }, children: /* @__PURE__ */ jsx(
+              Slider,
+              {
+                min: 60,
+                max: 180,
+                step: 5,
+                value: settings.viewCubeSize || 100,
+                onChange: (value) => onUpdate({ viewCubeSize: value })
+              }
+            ) }),
+            /* @__PURE__ */ jsxs("div", { style: { color: "var(--text-secondary)", fontSize: "12px", minWidth: "44px", textAlign: "right" }, children: [
+              settings.viewCubeSize || 100,
+              "px"
+            ] })
           ] }) }),
           /* @__PURE__ */ jsx(Row, { label: t("st_adaptive_quality") || "Adaptive", labelWidth: "90px", children: /* @__PURE__ */ jsx(
             Switch,
@@ -8678,11 +8690,6 @@ const ThreeViewer = ({
       setLang(defaultLang);
     }
   }, [defaultLang, lang, setLang]);
-  useEffect(() => {
-    if (defaultTheme && defaultTheme !== themeMode) {
-      setThemeMode(defaultTheme);
-    }
-  }, [defaultTheme, themeMode, setThemeMode]);
   const [treeRoot, setTreeRoot] = useState([]);
   const [selectedUuids, setSelectedUuids] = useState([]);
   const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
@@ -8773,6 +8780,24 @@ const ThreeViewer = ({
   const sceneMgr = useRef(null);
   const [mgrInstance, setMgrInstance] = useState(null);
   const pointerDownRef = useRef(null);
+  const handleThemeModeChange = useCallback((nextThemeMode) => {
+    setThemeMode(nextThemeMode);
+    const nextTheme = themes[nextThemeMode];
+    const prevTheme = themes[nextThemeMode === "light" ? "dark" : "light"];
+    setSceneSettings((prevSettings) => {
+      const shouldFollowThemeBg = !prevSettings.bgColor || prevSettings.bgColor === prevTheme.canvasBg;
+      const merged = shouldFollowThemeBg ? { ...prevSettings, bgColor: nextTheme.canvasBg } : prevSettings;
+      if (sceneMgr.current && shouldFollowThemeBg) {
+        sceneMgr.current.updateSettings(merged);
+      }
+      return merged;
+    });
+  }, [setSceneSettings, setThemeMode]);
+  useEffect(() => {
+    if (defaultTheme && defaultTheme !== themeMode) {
+      handleThemeModeChange(defaultTheme);
+    }
+  }, [defaultTheme, themeMode, handleThemeModeChange]);
   const hasModels = treeRoot.length > 0;
   const completedFileSetsRef = useRef(/* @__PURE__ */ new Set());
   const [errorState, setErrorState] = useState({ isOpen: false, title: "", message: "" });
@@ -9038,12 +9063,6 @@ const ThreeViewer = ({
       });
     }
   }, [mgrInstance, showOutline, showProps, leftWidth, rightWidth]);
-  useEffect(() => {
-    if (sceneSettings.bgColor === themes[themeMode === "light" ? "dark" : "light"].canvasBg) {
-      const newBg = theme.canvasBg;
-      handleSettingsUpdate({ bgColor: newBg });
-    }
-  }, [themeMode]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => {
@@ -10113,7 +10132,7 @@ const ThreeViewer = ({
                 currentLang: lang,
                 setLang,
                 themeMode,
-                setThemeMode,
+                setThemeMode: handleThemeModeChange,
                 showStats,
                 setShowStats,
                 theme
@@ -10273,7 +10292,7 @@ const ThreeViewer = ({
             /* @__PURE__ */ jsx(
               "div",
               {
-                onClick: () => setThemeMode(themeMode === "dark" ? "light" : "dark"),
+                onClick: () => handleThemeModeChange(themeMode === "dark" ? "light" : "dark"),
                 style: {
                   cursor: "pointer",
                   padding: "4px",
