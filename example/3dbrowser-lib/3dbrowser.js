@@ -421,6 +421,61 @@ class SceneManager {
       memory: parseFloat(memory.toFixed(2))
     };
   }
+  countStructureRenderableNodes(node) {
+    if (!node) return 0;
+    let count = node.type === "Mesh" ? 1 : 0;
+    if (node.children) {
+      for (const child of node.children) {
+        count += this.countStructureRenderableNodes(child);
+      }
+    }
+    return count;
+  }
+  async estimateNbimStats(file, chunks, version) {
+    let meshes = 0;
+    let faces = 0;
+    let memory = 0;
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+      const chunk = chunks[chunkIndex];
+      const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+      const dv = new DataView(buffer);
+      let offset = 0;
+      const geoCount = dv.getUint32(offset, true);
+      offset += 4;
+      const geometryFaces = [];
+      for (let i = 0; i < geoCount; i++) {
+        const vertCount = dv.getUint32(offset, true);
+        offset += 4;
+        const indexCount = dv.getUint32(offset, true);
+        offset += 4;
+        offset += vertCount * 12;
+        offset += vertCount * 12;
+        if (indexCount > 0) offset += indexCount * 4;
+        geometryFaces.push(indexCount > 0 ? indexCount / 3 : vertCount / 3);
+      }
+      const instanceCount = dv.getUint32(offset, true);
+      offset += 4;
+      meshes += instanceCount;
+      memory += chunk.byteLength / (1024 * 1024);
+      for (let i = 0; i < instanceCount; i++) {
+        offset += 4;
+        offset += 4;
+        offset += 4;
+        offset += 64;
+        const geoIdx = dv.getUint32(offset, true);
+        offset += 4;
+        faces += geometryFaces[geoIdx] || 0;
+      }
+      if (chunkIndex > 0 && chunkIndex % 8 === 0) {
+        await this.yieldToMainThread();
+      }
+    }
+    return {
+      meshes,
+      faces: Math.floor(faces),
+      memory: parseFloat(memory.toFixed(2))
+    };
+  }
   registerOriginalStats(originalUuid, stats) {
     this.originalStatsByModel.set(originalUuid, stats);
     this.originalStats.meshes += stats.meshes;
@@ -1769,6 +1824,7 @@ class SceneManager {
         max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
       },
       chunks: exportChunks,
+      stats: this.originalStats,
       structureTree: (() => {
         const sanitizeUserData = (ud) => {
           if (!ud || typeof ud !== "object") return void 0;
@@ -1887,6 +1943,12 @@ class SceneManager {
     }
     const rootId = modelRoot?.id || fileId;
     this.nbimPropsByOriginalUuid.set(rootId, manifest.bimProperties || {});
+    const quickStats = manifest.stats || {
+      meshes: this.countStructureRenderableNodes(modelRoot),
+      faces: 0,
+      memory: parseFloat(((manifest.chunks || []).reduce((sum, chunk) => sum + (chunk.byteLength || 0), 0) / (1024 * 1024)).toFixed(2))
+    };
+    this.registerOriginalStats(rootId, quickStats);
     const fileGroup = new THREE.Group();
     fileGroup.name = `file_${rootId}`;
     fileGroup.userData.originalUuid = rootId;
@@ -1953,6 +2015,14 @@ class SceneManager {
     this.initialChunkLoadTarget = this.chunks.length > 200 ? 24 : this.chunks.length > 80 ? 16 : 10;
     if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
     this.checkCullingAndLoad();
+    if (!manifest.stats && manifest.chunks?.length) {
+      void this.estimateNbimStats(file, manifest.chunks, version).then((stats) => {
+        this.unregisterOriginalStats(rootId);
+        this.registerOriginalStats(rootId, stats);
+      }).catch((error) => {
+        console.warn("NBIM 统计估算失败:", error);
+      });
+    }
   }
   async clear() {
     console.log("开始清空场景...");
@@ -5890,6 +5960,15 @@ const IconSun = (props) => createIcon(
 );
 const IconMoon = (props) => createIcon(
   /* @__PURE__ */ jsx(Fragment, { children: /* @__PURE__ */ jsx("path", { d: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" }) }),
+  props
+);
+const IconGrid = (props) => createIcon(
+  /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("rect", { x: "3", y: "3", width: "7", height: "7" }),
+    /* @__PURE__ */ jsx("rect", { x: "14", y: "3", width: "7", height: "7" }),
+    /* @__PURE__ */ jsx("rect", { x: "14", y: "14", width: "7", height: "7" }),
+    /* @__PURE__ */ jsx("rect", { x: "3", y: "14", width: "7", height: "7" })
+  ] }),
   props
 );
 const IconLayers = (props) => createIcon(
@@ -10009,13 +10088,13 @@ const ThreeViewer = ({
               paddingLeft: "12px",
               borderLeft: `1px solid ${theme.border}`
             }, children: [
-              /* @__PURE__ */ jsxs("div", { style: { opacity: 0.75, fontVariantNumeric: "tabular-nums" }, title: "Original Meshes", children: [
-                "M ",
-                formatNumber(stats.meshes)
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, title: "Original Meshes", children: [
+                /* @__PURE__ */ jsx(IconBox, { width: 14, height: 14 }),
+                /* @__PURE__ */ jsx("span", { children: formatNumber(stats.meshes) })
               ] }),
-              /* @__PURE__ */ jsxs("div", { style: { opacity: 0.75, fontVariantNumeric: "tabular-nums" }, title: "Triangles", children: [
-                "F ",
-                formatNumber(stats.faces)
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, title: "Triangles", children: [
+                /* @__PURE__ */ jsx(IconGrid, { width: 14, height: 14 }),
+                /* @__PURE__ */ jsx("span", { children: formatNumber(stats.faces) })
               ] }),
               /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: "4px", opacity: 0.85 }, children: [
                 /* @__PURE__ */ jsx(IconActivity, { width: 14, height: 14 }),
