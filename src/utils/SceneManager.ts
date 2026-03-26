@@ -768,7 +768,7 @@ export class SceneManager {
         this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
     }
 
-    private analyzeObjectStats(object: THREE.Object3D) {
+    private collectObjectOverview(object: THREE.Object3D) {
         let meshes = 0;
         let faces = 0;
         let memory = 0;
@@ -966,14 +966,6 @@ export class SceneManager {
         edges.scale.copy(size);
         edges.position.copy(center);
         this.ghostGroup.add(edges);
-    }
-
-    private countRenderableMeshes(object: THREE.Object3D) {
-        let count = 0;
-        object.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) count++;
-        });
-        return count;
     }
 
     private attachStructureRoot(modelRoot: StructureTreeNode) {
@@ -1903,12 +1895,13 @@ export class SceneManager {
         }
 
         // 1. 结构树采用延迟构建策略，降低大模型首屏阻塞
-        const meshCount = this.countRenderableMeshes(object);
+        const objectOverview = this.collectObjectOverview(object);
+        const meshCount = objectOverview.meshes;
         const shouldDeferStructure = meshCount >= this.deferredStructureThreshold;
         let deferredPlaceholderId: string | null = null;
         this.chunkWarmupActive = true;
         this.initialChunkLoadTarget = meshCount > 100000 ? 24 : meshCount > 30000 ? 18 : 12;
-        this.registerOriginalStats(object.uuid, this.analyzeObjectStats(object));
+        this.registerOriginalStats(object.uuid, objectOverview);
 
         if (onProgress) onProgress(5, shouldDeferStructure ? "正在准备轻量预览..." : "正在构建场景树...");
 

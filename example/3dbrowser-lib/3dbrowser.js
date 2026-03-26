@@ -501,7 +501,7 @@ class SceneManager {
     this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
     this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
   }
-  analyzeObjectStats(object) {
+  collectObjectOverview(object) {
     let meshes = 0;
     let faces = 0;
     let memory = 0;
@@ -677,13 +677,6 @@ class SceneManager {
     edges.scale.copy(size);
     edges.position.copy(center);
     this.ghostGroup.add(edges);
-  }
-  countRenderableMeshes(object) {
-    let count = 0;
-    object.traverse((child) => {
-      if (child.isMesh) count++;
-    });
-    return count;
   }
   attachStructureRoot(modelRoot) {
     if (modelRoot.name === "Root" && modelRoot.children && modelRoot.children.length > 0) {
@@ -1406,12 +1399,13 @@ class SceneManager {
       object.position.sub(this.globalOffset);
       object.updateMatrixWorld(true);
     }
-    const meshCount = this.countRenderableMeshes(object);
+    const objectOverview = this.collectObjectOverview(object);
+    const meshCount = objectOverview.meshes;
     const shouldDeferStructure = meshCount >= this.deferredStructureThreshold;
     let deferredPlaceholderId = null;
     this.chunkWarmupActive = true;
     this.initialChunkLoadTarget = meshCount > 1e5 ? 24 : meshCount > 3e4 ? 18 : 12;
-    this.registerOriginalStats(object.uuid, this.analyzeObjectStats(object));
+    this.registerOriginalStats(object.uuid, objectOverview);
     if (onProgress) onProgress(5, shouldDeferStructure ? "正在准备轻量预览..." : "正在构建场景树...");
     if (shouldDeferStructure) {
       deferredPlaceholderId = `deferred_${object.uuid}`;
