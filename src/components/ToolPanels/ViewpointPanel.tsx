@@ -1,169 +1,152 @@
-import React, { useState, useEffect } from "react";
-import { Button } from "../CommonUI";
-import { DEFAULT_FONT } from "../../theme/Styles";
+import React, { useEffect, useState } from "react";
+import { Button } from "../common";
 import { FloatingPanel } from "./FloatingPanel";
 
 interface ViewpointPanelProps {
     t: any;
     onClose?: () => void;
     viewpoints: any[];
-    onSave: (name: string) => void;
+    onSave: (name: string, replaceId?: string) => void;
     onUpdateName: (id: string, name: string) => void;
     onLoad: (viewpoint: any) => void;
     onDelete: (id: string) => void;
-        theme: any;
+    onOverwrite: (id: string) => void;
+    theme: any;
 }
 
 export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
-    t, onClose, viewpoints, onSave, onUpdateName, onLoad, onDelete,
+    t,
+    onClose,
+    viewpoints,
+    onSave,
+    onUpdateName,
+    onLoad,
+    onDelete,
+    onOverwrite,
     theme
 }) => {
     const [newName, setNewName] = useState("");
+    const [editingNames, setEditingNames] = useState<Record<string, string>>({});
 
     useEffect(() => {
         setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
     }, [viewpoints.length, t]);
 
+    useEffect(() => {
+        setEditingNames(
+            viewpoints.reduce((acc: Record<string, string>, vp: any) => {
+                acc[vp.id] = vp.name;
+                return acc;
+            }, {})
+        );
+    }, [viewpoints]);
+
     const handleSave = () => {
-        if (newName.trim()) {
-            onSave(newName.trim());
-            setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
-        }
+        const normalized = newName.trim();
+        if (!normalized) return;
+        onSave(normalized);
+        setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            handleSave();
+    const handleRenameCommit = (id: string) => {
+        const nextName = (editingNames[id] || "").trim();
+        if (!nextName) {
+            setEditingNames((prev) => ({
+                ...prev,
+                [id]: viewpoints.find((vp: any) => vp.id === id)?.name || ""
+            }));
+            return;
         }
+        onUpdateName(id, nextName);
     };
 
     return (
-        <FloatingPanel title={t("viewpoint_title") || "视点管理"} onClose={onClose} width={360} height={450} resizable={true} theme={theme} storageId="tool_viewpoint">
-            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <div style={{ marginBottom: 12 }}>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                        <input
-                            autoFocus
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            style={{
-                                flex: 1, height: 28, padding: '0 10px',
-                                backgroundColor: theme.bg, color: theme.text,
-                                border: `1px solid ${theme.border}`, borderRadius: 3,
-                                fontSize: 12, outline: 'none', fontFamily: DEFAULT_FONT,
-                                boxSizing: 'border-box', width: '140px'
-                            }}
-                            placeholder={t("viewpoint_title") || "视点名称"}
-                        />
-                        <Button theme={theme} onClick={handleSave} style={{ height: 28, padding: '0 12px', minWidth: '60px', whiteSpace: 'nowrap', fontSize: 12 }}>
-                            {t("btn_confirm") || "保存"}
-                        </Button>
+        <FloatingPanel
+            title={t("viewpoint_title") || "视点管理"}
+            onClose={onClose}
+            width={380}
+            height={470}
+            resizable={true}
+            theme={theme}
+            storageId="tool_viewpoint"
+        >
+            <div className="ui-panel-stack" style={{ height: "100%" }}>
+                <div className="ui-panel-section">
+                    <div className="ui-form-row ui-form-row-top">
+                        <div className="ui-form-value ui-form-value-stretch">
+                            <div className="ui-inline-actions">
+                                <input
+                                    autoFocus
+                                    value={newName}
+                                    onChange={(e) => setNewName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSave();
+                                    }}
+                                    className="ui-input"
+                                    placeholder={t("viewpoint_title") || "视点名称"}
+                                />
+                                <Button variant="primary" onClick={handleSave}>
+                                    {t("btn_confirm") || "保存"}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 4,
-                    backgroundColor: theme.bg,
-                    padding: '8px',
-                    fontSize: '12px',
-                    color: theme.textMuted
-                }}>
+                <div className="ui-panel-section ui-panel-section-fill">
                     {viewpoints.length === 0 ? (
-                        <div style={{ textAlign: 'center', color: theme.textMuted, fontSize: 12, padding: '40px 0' }}>
+                        <div className="ui-empty-state">
                             {t("viewpoint_empty") || "暂无保存的视点"}
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div className="ui-viewpoint-list">
                             {viewpoints.map((vp: any) => (
-                                <div
-                                    key={vp.id}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '10px',
-                                        padding: '8px',
-                                        border: `1px solid ${theme.border}`,
-                                        borderRadius: 4,
-                                        cursor: 'pointer',
-                                        backgroundColor: theme.panelBg,
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onClick={() => onLoad(vp)}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = theme.itemHover;
-                                        e.currentTarget.style.borderColor = theme.accent;
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = theme.panelBg;
-                                        e.currentTarget.style.borderColor = theme.border;
-                                    }}
-                                >
-                                    <div style={{
-                                        width: 96,
-                                        height: 72,
-                                        backgroundColor: theme.bg,
-                                        borderRadius: 3,
-                                        overflow: 'hidden',
-                                        flexShrink: 0,
-                                        border: `1px solid ${theme.border}`
-                                    }}>
+                                <div key={vp.id} className="ui-viewpoint-card">
+                                    <button
+                                        className="ui-viewpoint-preview"
+                                        onClick={() => onLoad(vp)}
+                                        title={t("viewpoint_load") || "恢复视点"}
+                                    >
                                         {vp.image ? (
                                             <img
                                                 src={vp.image}
                                                 alt={vp.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                             />
                                         ) : (
-                                            <div style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: theme.textMuted,
-                                                fontSize: 10
-                                            }}>
-                                                无图
+                                            <div className="ui-empty-state" style={{ minHeight: "100%" }}>
+                                                {t("viewpoint_no_preview") || "无预览"}
                                             </div>
                                         )}
-                                    </div>
+                                    </button>
 
-                                    <div style={{
-                                        fontSize: '12px',
-                                        color: theme.text,
-                                        flex: 1,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {vp.name}
-                                    </div>
+                                    <div className="ui-viewpoint-main">
+                                        <input
+                                            className="ui-input"
+                                            value={editingNames[vp.id] || ""}
+                                            onChange={(e) => setEditingNames((prev) => ({
+                                                ...prev,
+                                                [vp.id]: e.target.value
+                                            }))}
+                                            onBlur={() => handleRenameCommit(vp.id)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    e.currentTarget.blur();
+                                                }
+                                            }}
+                                        />
 
-                                    <div
-                                        onClick={(e) => { e.stopPropagation(); onDelete(vp.id); }}
-                                        style={{
-                                            cursor: 'pointer',
-                                            color: theme.danger,
-                                            opacity: 0.7,
-                                            padding: '4px',
-                                            borderRadius: 3,
-                                            fontSize: '11px',
-                                            flexShrink: 0
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.opacity = '1';
-                                            e.currentTarget.style.backgroundColor = `${theme.danger}20`;
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.opacity = '0.7';
-                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                        }}
-                                    >
-                                        删除
+                                        <div className="ui-inline-actions ui-inline-actions-wrap">
+                                            <Button variant="default" onClick={() => onLoad(vp)}>
+                                                {t("viewpoint_load") || "恢复"}
+                                            </Button>
+                                            <Button variant="ghost" onClick={() => onOverwrite(vp.id)}>
+                                                {t("viewpoint_overwrite") || "覆盖"}
+                                            </Button>
+                                            <Button variant="ghost" onClick={() => onDelete(vp.id)}>
+                                                {t("delete_item") || "删除"}
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}

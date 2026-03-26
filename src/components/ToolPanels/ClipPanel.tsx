@@ -1,6 +1,6 @@
 import React from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Switch, DualSlider, Checkbox } from "../common";
+import { Switch, DualSlider, Checkbox, Slider, Button } from "../common";
 
 interface ClipPanelProps {
   t: any;
@@ -12,6 +12,10 @@ interface ClipPanelProps {
   setClipValues: any;
   clipActive: any;
   setClipActive: any;
+  clipHelperVisible: boolean;
+  setClipHelperVisible: (visible: boolean) => void;
+  clipHelperOpacity: number;
+  setClipHelperOpacity: (opacity: number) => void;
   theme?: any;
 }
 
@@ -77,12 +81,13 @@ const AxisSliderRow: React.FC<{
         style={{
           fontSize: "11px",
           color: "var(--text-primary)",
-          minWidth: "45px",
+          minWidth: "66px",
           textAlign: "right",
           flexShrink: 0,
+          fontVariantNumeric: "tabular-nums",
         }}
       >
-        {Math.round(value[0])}-{Math.round(value[1])}%
+        {String(Math.round(value[0])).padStart(2, "0")}-{String(Math.round(value[1])).padStart(2, "0")}%
       </span>
     </div>
   );
@@ -97,32 +102,67 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
   setClipValues,
   clipActive,
   setClipActive,
+  clipHelperVisible,
+  setClipHelperVisible,
+  clipHelperOpacity,
+  setClipHelperOpacity,
 }) => {
+  const handleReset = () => {
+    setClipValues({ x: [0, 100], y: [0, 100], z: [0, 100] });
+  };
+
   return (
     <FloatingPanel
       title={t("clip_title")}
       onClose={onClose}
-      width={280}
-      height={260}
+      width={320}
+      height={420}
       resizable={false}
       storageId="tool_clip"
     >
       <div
-        className="flex flex-col p-3"
-        style={{ height: "100%", gap: "12px" }}
+        className="ui-panel-stack"
+        style={{ height: "100%" }}
       >
-        {/* Header with main switch */}
-        <div
-          className="flex items-center justify-between p-2"
-          style={{ borderBottom: "1px solid var(--border-color)" }}
-        >
-          <span className="text-sm font-semibold">{t("clip_enable")}</span>
-          <Switch checked={clipEnabled} onChange={(v) => setClipEnabled(v)} />
+        <div className="ui-panel-section">
+          <div className="ui-form-row">
+            <span className="ui-form-label">{t("clip_enable")}</span>
+            <div className="ui-form-value">
+              <Switch checked={clipEnabled} onChange={(v) => setClipEnabled(v)} />
+            </div>
+          </div>
+
+          <div className="ui-form-row">
+            <span className="ui-form-label">{t("clip_helper_visible")}</span>
+            <div className="ui-form-value">
+              <Switch
+                checked={clipHelperVisible}
+                onChange={(v) => setClipHelperVisible(v)}
+                disabled={!clipEnabled}
+              />
+            </div>
+          </div>
+
+          <div className="ui-form-row">
+            <span className="ui-form-label">{t("clip_helper_opacity")}</span>
+            <div className="ui-form-value ui-form-value-stretch">
+              <div className="ui-slider-field">
+                <Slider
+                  min={0.05}
+                  max={0.35}
+                  step={0.01}
+                  value={clipHelperOpacity}
+                  onChange={(value) => setClipHelperOpacity(value)}
+                  disabled={!clipEnabled || !clipHelperVisible}
+                />
+                <span className="ui-slider-value">{Math.round(clipHelperOpacity * 100)}%</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Axis controls */}
         <div
-          className="flex flex-col"
+          className="ui-panel-section flex flex-col"
           style={{
             flex: 1,
             opacity: clipEnabled ? 1 : 0.4,
@@ -156,6 +196,12 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
             onChange={(val) => setClipValues({ ...clipValues, z: val })}
             disabled={!clipEnabled}
           />
+        </div>
+
+        <div className="ui-panel-footer">
+          <Button variant="default" onClick={handleReset} disabled={!clipEnabled}>
+            {t("clip_reset") || "重置范围"}
+          </Button>
         </div>
       </div>
     </FloatingPanel>

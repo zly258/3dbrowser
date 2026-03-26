@@ -94,6 +94,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       width={360}
       height={500}
       modal={true}
+      movable={false}
       theme={theme}
     >
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflowY: 'auto' }}>

@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { IconChevronRight, IconChevronDown, IconClose, IconSelectAll, IconEye, IconEyeOff, IconInvert } from "../theme/Icons";
+import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
 import { Checkbox } from "./common";
+import { ContextMenu } from "./ContextMenu";
 
 interface TreeNode {
     uuid: string;
     name: string;
-    type: 'GROUP' | 'MESH' | 'TILES';
+    type: "GROUP" | "MESH" | "TILES";
     depth: number;
     children: TreeNode[];
     expanded: boolean;
@@ -13,23 +14,17 @@ interface TreeNode {
     object: any;
     isFileNode?: boolean;
     isLastChild?: boolean;
-    parentIsLast?: boolean[]; // 追踪每一层父节点是否是最后一个孩子
+    parentIsLast?: boolean[];
 }
 
 export const buildTree = (object: any, depth = 0): TreeNode => {
-    // 检测 3D Tiles 渲染器：通常是一个 Group，但 userData 中可能带有 'tilesRenderer'，或由渲染器返回的组
-    // 在 SceneManager 中我们将其命名为 "3D Tileset"
-    
-    // 检查是否为瓦片集包装器
-    let isTiles = object.name === "3D Tileset"; 
-    // 或者直接检查对象是否带有 tilesRenderer 属性（取决于版本）
-    
+    const isTiles = object.name === "3D Tileset";
     const isMesh = object.isMesh;
-    
+
     const node: TreeNode = {
         uuid: object.uuid,
         name: object.name || "Unnamed",
-        type: isTiles ? 'TILES' : isMesh ? 'MESH' : 'GROUP',
+        type: isTiles ? "TILES" : isMesh ? "MESH" : "GROUP",
         depth,
         children: [],
         expanded: false,
@@ -37,16 +32,13 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
         object
     };
 
-    // 从树中过滤掉内部辅助对象和优化后的渲染组
     if (object.children && object.children.length > 0) {
         const children = object.children.filter((c: any) => {
-            // 过滤辅助对象
             if (c.name === "Helpers" || c.name === "Measure") return false;
-            // 过滤优化后的渲染组（用户不应该在大纲中看到它们）
             if (c.userData && c.userData.isOptimizedGroup) return false;
             return true;
         });
-        
+
         node.children = children.map((c: any, index: number) => {
             const childNode = buildTree(c, depth + 1);
             childNode.isLastChild = index === children.length - 1;
@@ -63,13 +55,47 @@ const flattenTree = (nodes: TreeNode[], result: TreeNode[] = [], parentIsLast: b
         const node = nodes[i];
         node.isLastChild = i === nodes.length - 1;
         node.parentIsLast = [...parentIsLast];
-        
         result.push(node);
         if (node.expanded && node.children && node.children.length > 0) {
             flattenTree(node.children, result, [...parentIsLast, node.isLastChild]);
         }
     }
     return result;
+};
+
+const collectExpandedState = (nodes: TreeNode[]) => {
+    const map = new Map<string, boolean>();
+    const walk = (list: TreeNode[]) => {
+        list.forEach((node) => {
+            map.set(node.uuid, node.expanded);
+            if (node.children.length > 0) walk(node.children);
+        });
+    };
+    walk(nodes);
+    return map;
+};
+
+const applyExpandedState = (nodes: TreeNode[], expandedMap: Map<string, boolean>) =>
+    nodes.map((node) => ({
+        ...node,
+        expanded: expandedMap.get(node.uuid) ?? node.expanded,
+        children: applyExpandedState(node.children, expandedMap)
+    }));
+
+const expandPathToUuid = (nodes: TreeNode[], targetUuid: string): [TreeNode[], boolean] => {
+    let found = false;
+    const nextNodes = nodes.map((node) => {
+        const [children, childFound] = expandPathToUuid(node.children, targetUuid);
+        const isSelf = node.uuid === targetUuid;
+        const isFound = isSelf || childFound;
+        if (isFound) found = true;
+        return {
+            ...node,
+            expanded: childFound ? true : node.expanded,
+            children
+        };
+    });
+    return [nextNodes, found];
 };
 
 interface SceneTreeProps {
@@ -82,62 +108,71 @@ interface SceneTreeProps {
     onDelete?: (obj: any) => void;
     onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
+    onHide?: (uuid: string) => void;
+    onShowAll?: () => void;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
-    t, treeRoot, setTreeRoot, selectedUuid, onSelect, onToggleVisibility, onDelete, onFocus
+    t,
+    treeRoot,
+    setTreeRoot,
+    selectedUuid,
+    onSelect,
+    onToggleVisibility,
+    onDelete,
+    onFocus,
+    onIsolate,
+    onHide,
+    onShowAll
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
-    const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
-    const [menuHover, setMenuHover] = useState<string | null>(null);
-    
-    const expandAll = () => {
-        const expand = (nodes: TreeNode[]): TreeNode[] => {
-            return nodes.map(n => ({
-                ...n,
-                expanded: n.children.length > 0,
-                children: expand(n.children)
-            }));
-        };
-        setTreeRoot(prev => expand(prev));
-    };
-
-    const collapseAll = () => {
-        const collapse = (nodes: TreeNode[]): TreeNode[] => {
-            return nodes.map(n => ({
-                ...n,
-                expanded: false,
-                children: collapse(n.children)
-            }));
-        };
-        setTreeRoot(prev => collapse(prev));
-    };
-
-    const handleContextMenu = (e: React.MouseEvent, node: TreeNode) => {
-        e.preventDefault();
-        setContextMenu({ x: e.clientX, y: e.clientY, node });
-    };
+    const [scrollTop, setScrollTop] = useState(0);
+    const [containerHeight, setContainerHeight] = useState(400);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const searchExpandedStateRef = useRef<Map<string, boolean> | null>(null);
+    const previousSearchQueryRef = useRef("");
 
     useEffect(() => {
-        const handleClick = () => setContextMenu(null);
-        document.addEventListener('click', handleClick);
-        return () => document.removeEventListener('click', handleClick);
+        if (!containerRef.current) return;
+        const resizeObserver = new ResizeObserver((entries) => {
+            entries.forEach((entry) => setContainerHeight(entry.contentRect.height));
+        });
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
     }, []);
-    
-    // 过滤树结构的辅助函数
+
+    useEffect(() => {
+        const prevQuery = previousSearchQueryRef.current;
+        if (!prevQuery && searchQuery) {
+            searchExpandedStateRef.current = collectExpandedState(treeRoot);
+        }
+        if (prevQuery && !searchQuery && searchExpandedStateRef.current) {
+            const snapshot = searchExpandedStateRef.current;
+            setTreeRoot((prev) => applyExpandedState(prev, snapshot));
+            searchExpandedStateRef.current = null;
+        }
+        previousSearchQueryRef.current = searchQuery;
+    }, [searchQuery, setTreeRoot, treeRoot]);
+
+    useEffect(() => {
+        if (!selectedUuid) return;
+        setTreeRoot((prev) => {
+            const [nextTree, found] = expandPathToUuid(prev, selectedUuid);
+            return found ? nextTree : prev;
+        });
+    }, [selectedUuid, setTreeRoot]);
+
     const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
         if (!query) return nodes;
-        
         const lowercaseQuery = query.toLowerCase();
         return nodes.reduce((acc: TreeNode[], node) => {
             const matches = node.name.toLowerCase().includes(lowercaseQuery);
             const filteredChildren = filterTree(node.children, query);
-            
             if (matches || filteredChildren.length > 0) {
                 acc.push({
                     ...node,
-                    expanded: query ? true : node.expanded, // 搜索时自动展开
+                    expanded: true,
                     children: filteredChildren
                 });
             }
@@ -147,181 +182,230 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
     const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
-    
+    const resultCount = flatData.length;
     const rowHeight = 24;
-    const [scrollTop, setScrollTop] = useState(0);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [containerHeight, setContainerHeight] = useState(400);
-
-    useEffect(() => {
-        if(containerRef.current) {
-            const resizeObserver = new ResizeObserver((entries) => {
-                for (let entry of entries) setContainerHeight(entry.contentRect.height);
-            });
-            resizeObserver.observe(containerRef.current);
-            return () => resizeObserver.disconnect();
-        }
-    }, []);
-
-    const toggleNode = (nodeUuid: string) => {
-        const toggle = (nodes: TreeNode[]): TreeNode[] => {
-            return nodes.map(n => {
-                if (n.uuid === nodeUuid) return { ...n, expanded: !n.expanded };
-                if (n.children.length > 0) return { ...n, children: toggle(n.children) };
-                return n;
-            });
-        };
-        setTreeRoot(prev => toggle(prev));
-    };
-
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
     const visibleCount = Math.ceil(containerHeight / rowHeight);
     const endIndex = Math.min(flatData.length, startIndex + visibleCount + 1);
     const visibleItems = flatData.slice(startIndex, endIndex);
 
+    useEffect(() => {
+        if (!selectedUuid || !containerRef.current) return;
+        const targetIndex = flatData.findIndex((node) => node.uuid === selectedUuid);
+        if (targetIndex < 0) return;
+
+        const currentTop = containerRef.current.scrollTop;
+        const currentBottom = currentTop + containerHeight;
+        const itemTop = targetIndex * rowHeight;
+        const itemBottom = itemTop + rowHeight;
+
+        if (itemTop < currentTop) {
+            containerRef.current.scrollTop = itemTop;
+        } else if (itemBottom > currentBottom) {
+            containerRef.current.scrollTop = Math.max(0, itemBottom - containerHeight);
+        }
+    }, [selectedUuid, flatData, containerHeight, rowHeight]);
+
+    const toggleNode = (nodeUuid: string) => {
+        const toggle = (nodes: TreeNode[]): TreeNode[] =>
+            nodes.map((node) => {
+                if (node.uuid === nodeUuid) return { ...node, expanded: !node.expanded };
+                if (node.children.length > 0) return { ...node, children: toggle(node.children) };
+                return node;
+            });
+        setTreeRoot((prev) => toggle(prev));
+    };
+
+    const expandAll = () => {
+        const expand = (nodes: TreeNode[]): TreeNode[] =>
+            nodes.map((node) => ({
+                ...node,
+                expanded: node.children.length > 0,
+                children: expand(node.children)
+            }));
+        setTreeRoot((prev) => expand(prev));
+    };
+
+    const collapseAll = () => {
+        const collapse = (nodes: TreeNode[]): TreeNode[] =>
+            nodes.map((node) => ({
+                ...node,
+                expanded: false,
+                children: collapse(node.children)
+            }));
+        setTreeRoot((prev) => collapse(prev));
+    };
+
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div style={{ padding: '8px', borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <div className="ui-tree-panel">
+            <div className="ui-search-bar">
+                <div className="ui-search-input-wrap">
                     <input
                         type="text"
                         placeholder={t("search_nodes")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="ui-input"
-                        style={{
-                            width: '100%',
-                            padding: '4px 28px 4px 8px',
-                            borderRadius: '0px',
-                            boxSizing: 'border-box'
-                        }}
+                        className="ui-input ui-input-compact"
                     />
                     {searchQuery && (
-                        <div
-                            onClick={() => setSearchQuery('')}
-                            style={{
-                                position: 'absolute',
-                                right: 4,
-                                cursor: 'pointer',
-                                opacity: 0.6,
-                                display: 'flex',
-                                padding: 2,
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
-                        >
+                        <button className="ui-search-clear" onClick={() => setSearchQuery("")}>
                             <IconClose width={14} height={14} />
-                        </div>
+                        </button>
                     )}
                 </div>
+                <div className="ui-search-meta">
+                    {searchQuery
+                        ? `${t("search_results") || "结果"}: ${resultCount}`
+                        : `${t("selected_count") || "已选择"}: ${selectedUuid ? 1 : 0}`}
+                </div>
             </div>
-            <div ref={containerRef} className="ui-tree-container flex-1 overflow-y-auto overflow-x-hidden py-[2px]" onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
+
+            <div
+                ref={containerRef}
+                className="ui-tree-container flex-1 overflow-y-auto overflow-x-hidden"
+                onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+            >
                 <div style={{ height: totalHeight, position: "relative" }}>
-                <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
-                    {visibleItems.map((node) => (
-                        <div key={node.uuid} 
-                                className={`ui-tree-node ${node.uuid === selectedUuid ? 'selected' : ''}`}
+                    <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
+                        {visibleItems.map((node) => (
+                            <div
+                                key={node.uuid}
+                                className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""}`}
                                 style={{ paddingLeft: 8 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
                                 onDoubleClick={() => onFocus?.(node.object)}
-                                onMouseEnter={() => setHoveredUuid(node.uuid)}
-                                onMouseLeave={() => setHoveredUuid(null)}
-                                onContextMenu={(e) => handleContextMenu(e, node)}
-                        >
-                            {/* Connection Lines */}
-                            {node.depth > 0 && (
-                                <div style={{ display: 'flex', height: '100%', alignItems: 'center', flexShrink: 0 }}>
-                                    {node.parentIsLast?.map((isLast, i) => (
-                                        <div key={i} style={{
-                                            width: 12,
-                                            height: '100%',
-                                            position: 'relative',
-                                            borderLeft: isLast ? 'none' : `1px solid var(--border-color)`
-                                        }} />
-                                    ))}
-                                    <div style={{
-                                        width: 12,
-                                        height: '100%',
-                                        position: 'relative',
-                                        display: 'flex',
-                                        alignItems: 'center'
-                                    }}>
-                                        {/* Vertical line segment */}
-                                        <div style={{
-                                            position: 'absolute',
-                                            left: 0,
-                                            top: 0,
-                                            bottom: node.isLastChild ? '50%' : 0,
-                                            borderLeft: `1px solid var(--border-color)`
-                                        }} />
-                                        {/* Horizontal line segment */}
-                                        <div style={{
-                                            position: 'absolute',
-                                            left: 0,
-                                            width: 10,
-                                            borderTop: `1px solid var(--border-color)`
-                                        }} />
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setContextMenu({ x: e.clientX, y: e.clientY, node });
+                                }}
+                            >
+                                {node.depth > 0 && (
+                                    <div style={{ display: "flex", height: "100%", alignItems: "center", flexShrink: 0 }}>
+                                        {node.parentIsLast?.map((isLast, i) => (
+                                            <div
+                                                key={i}
+                                                style={{
+                                                    width: 12,
+                                                    height: "100%",
+                                                    position: "relative",
+                                                    borderLeft: isLast ? "none" : "1px solid var(--border-color)"
+                                                }}
+                                            />
+                                        ))}
+                                        <div
+                                            style={{
+                                                width: 12,
+                                                height: "100%",
+                                                position: "relative",
+                                                display: "flex",
+                                                alignItems: "center"
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    left: 0,
+                                                    top: 0,
+                                                    bottom: node.isLastChild ? "50%" : 0,
+                                                    borderLeft: "1px solid var(--border-color)"
+                                                }}
+                                            />
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    left: 0,
+                                                    width: 10,
+                                                    borderTop: "1px solid var(--border-color)"
+                                                }}
+                                            />
+                                        </div>
                                     </div>
+                                )}
+
+                                <div
+                                    className="ui-tree-expander"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleNode(node.uuid);
+                                    }}
+                                >
+                                    {node.children.length > 0 ? (
+                                        node.expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />
+                                    ) : null}
                                 </div>
-                            )}
 
-                            <div className="ui-tree-expander" onClick={(e) => { e.stopPropagation(); toggleNode(node.uuid); }}>
-                                {node.children.length > 0 ? (
-                                    node.expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />
-                                ) : null}
-                            </div>
+                                <Checkbox
+                                    checked={node.visible}
+                                    onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
+                                    style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
+                                />
 
-                            <Checkbox
-                                checked={node.visible}
-                                onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
-                                style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
-                            />
-                            
-                            <div className="ui-tree-label">
-                                {searchQuery ? (
-                                    node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                <div className="ui-tree-label">
+                                    {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
                                         <span>
-                                            {node.name.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
-                                                part.toLowerCase() === searchQuery.toLowerCase() 
-                                                    ? <span key={i} style={{ backgroundColor: 'rgba(255, 255, 0, 0.4)', color: 'inherit' }}>{part}</span>
-                                                    : part
+                                            {node.name.split(new RegExp(`(${searchQuery})`, "gi")).map((part, index) =>
+                                                part.toLowerCase() === searchQuery.toLowerCase() ? (
+                                                    <span key={index} className="ui-search-hit">
+                                                        {part}
+                                                    </span>
+                                                ) : (
+                                                    part
+                                                )
                                             )}
                                         </span>
-                                    ) : node.name
-                                ) : node.name}
+                                    ) : (
+                                        node.name
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
                 </div>
             </div>
+
             {contextMenu && (
-                <div className="ui-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
-                    <div
-                        className="ui-context-menu-item"
-                        onClick={() => { expandAll(); setContextMenu(null); }}
-                    >
-                        {t("expand_all")}
-                    </div>
-                    <div
-                        className="ui-context-menu-item"
-                        onClick={() => { collapseAll(); setContextMenu(null); }}
-                    >
-                        {t("collapse_all")}
-                    </div>
-                    {contextMenu.node.isFileNode && (
-                        <>
-                            <div className="ui-context-menu-divider" />
-                            <div
-                                className="ui-context-menu-item"
-                                onClick={() => { onDelete?.(contextMenu.node.object); setContextMenu(null); }}
-                            >
-                                {t("delete_item")}
-                            </div>
-                        </>
-                    )}
-                </div>
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={() => setContextMenu(null)}
+                    items={[
+                        {
+                            label: t("locate_in_view") || "定位到视图",
+                            onClick: () => onFocus?.(contextMenu.node.object)
+                        },
+                        {
+                            label: t("hide_selected") || "隐藏选中",
+                            onClick: () => onHide?.(contextMenu.node.uuid)
+                        },
+                        {
+                            label: t("isolate_selection") || "隔离选中",
+                            onClick: () => onIsolate?.(contextMenu.node.uuid)
+                        },
+                        {
+                            label: t("show_all") || "显示全部",
+                            onClick: () => onShowAll?.()
+                        },
+                        { divider: true },
+                        {
+                            label: t("expand_all"),
+                            onClick: expandAll
+                        },
+                        {
+                            label: t("collapse_all"),
+                            onClick: collapseAll
+                        },
+                        ...(contextMenu.node.isFileNode
+                            ? [
+                                  { divider: true },
+                                  {
+                                      label: t("delete_item"),
+                                      onClick: () => onDelete?.(contextMenu.node.object)
+                                  }
+                              ]
+                            : [])
+                    ]}
+                />
             )}
         </div>
     );
