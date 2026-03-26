@@ -33,18 +33,31 @@ const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
 console.log('Updating package.json for distribution...');
 
-// Update paths for the lib version
-pkg.main = './3dbrowser.umd.js';
-pkg.module = './3dbrowser.es.js';
-pkg.types = './index.d.ts';
+// Update paths for the example-local lib version
+pkg.main = './3dbrowser.js';
+pkg.module = './3dbrowser.js';
+pkg.types = './ThreeViewer.d.ts';
 
 if (pkg.exports) {
   pkg.exports['.'] = {
-    types: './index.d.ts',
-    import: './3dbrowser.es.js',
-    require: './3dbrowser.umd.js'
+    types: './ThreeViewer.d.ts',
+    import: './3dbrowser.js',
+    require: './3dbrowser.js'
   };
 }
+
+pkg.files = [
+  '3dbrowser.css',
+  '3dbrowser.js',
+  'loaders-*.js',
+  'utils-*.js',
+  'ThreeViewer.d.ts',
+  'assets',
+  'libs',
+  'src',
+  'README.md',
+  'LICENSE'
+];
 
 // Write the modified package.json
 const destPkgPath = path.join(destDir, 'package.json');

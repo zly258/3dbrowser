@@ -97,6 +97,7 @@ class SceneManager {
     this.isCameraMoving = false;
     this.activePixelRatio = 1;
     this.chunkLoadResumeAt = 0;
+    this.cullingDirty = true;
     this.deferredStructureThreshold = 2e4;
     this.octreeWorkerThreshold = 25e3;
     this.initialChunkLoadTarget = 18;
@@ -104,6 +105,8 @@ class SceneManager {
     this.chunkWarmupActive = false;
     this.movingFocusCentralityThreshold = 0.18;
     this.movingFocusPixelThreshold = 28;
+    this.chunkVisibilityHoldMs = 220;
+    this.chunkResidencyMs = 1800;
     this.canvas = canvas;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -168,14 +171,17 @@ class SceneManager {
     this.controls.addEventListener("start", () => {
       this.isCameraMoving = true;
       this.chunkLoadResumeAt = performance.now() + 150;
+      this.cullingDirty = true;
     });
     this.controls.addEventListener("change", () => {
       this.isCameraMoving = true;
       this.chunkLoadResumeAt = performance.now() + 150;
+      this.cullingDirty = true;
     });
     this.controls.addEventListener("end", () => {
       this.isCameraMoving = false;
       this.chunkLoadResumeAt = performance.now() + 80;
+      this.cullingDirty = true;
     });
     this.ambientLight = new THREE.AmbientLight(16777215, this.settings.ambientInt);
     this.scene.add(this.ambientLight);
@@ -358,10 +364,11 @@ class SceneManager {
     }
     this.updateCameraClipping();
     const now = performance.now();
-    const cullingInterval = this.chunks.length > 2e3 ? 180 : this.chunks.length > 800 ? 130 : 100;
+    const cullingInterval = this.cullingDirty ? this.isCameraMoving ? 40 : 70 : this.chunks.length > 2e3 ? 260 : this.chunks.length > 800 ? 180 : 130;
     if (!this._lastCullingTime || now - this._lastCullingTime > cullingInterval) {
-      this.checkCullingAndLoad();
+      this.checkCullingAndLoad(now);
       this._lastCullingTime = now;
+      this.cullingDirty = false;
     }
     if (this.tilesRenderer) {
       this.camera.updateMatrixWorld();
@@ -757,7 +764,7 @@ class SceneManager {
       this.onChunkProgress(loaded, total);
     }
   }
-  checkCullingAndLoad() {
+  checkCullingAndLoad(now = performance.now()) {
     if (!this.chunkLoadingEnabled) return;
     if (this.chunks.length === 0) return;
     this.reportChunkProgress();
@@ -767,6 +774,9 @@ class SceneManager {
     this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
     const padding = this.chunkPadding;
     const cameraPos = this.camera.position;
+    const cameraForward = new THREE.Vector3();
+    this.camera.getWorldDirection(cameraForward);
+    const toChunkDirection = new THREE.Vector3();
     const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
     const canvasHeight = this.renderer.domElement.clientHeight;
     const toLoad = [];
@@ -783,40 +793,53 @@ class SceneManager {
       if (!c.center) c.center = c.bounds.getCenter(new THREE.Vector3());
       const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
       const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
-      const dist = c.center.distanceTo(cameraPos);
+      toChunkDirection.copy(c.center).sub(cameraPos);
+      const dist = toChunkDirection.length();
       const inRange = dist < this.maxRenderDistance;
       const boxSize = c.bounds.getSize(new THREE.Vector3()).length();
       const pixelSize = boxSize / viewHeight * canvasHeight;
       const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
       const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
       const centrality = 1 - Math.min(1, ndcDistance);
+      const forwardness = dist > 1e-5 ? Math.max(0, cameraForward.dot(toChunkDirection.divideScalar(dist))) : 1;
       const isTooSmall = pixelSize < 4;
       const shouldHidePeripheralWhileMoving = this.isCameraMoving && centrality < this.movingFocusCentralityThreshold && pixelSize < this.movingFocusPixelThreshold;
       const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
+      const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
+      const shouldKeepVisibleWhileMoving = this.isCameraMoving && inFrustum && !isClipped && inRange && !isTooSmall && now - lastTouchedAt < this.chunkVisibilityHoldMs;
+      const effectiveVisible = shouldBeVisible || shouldKeepVisibleWhileMoving;
+      if (effectiveVisible) {
+        c.lastVisibleAt = now;
+      }
+      if (centrality > 0.42 || forwardness > 0.55) {
+        c.lastFocusAt = now;
+      }
       if (c.loaded) {
         loadedChunks.push(c);
         if (c.mesh) {
-          if (c.mesh.visible !== shouldBeVisible) {
-            c.mesh.visible = shouldBeVisible;
+          if (c.mesh.visible !== effectiveVisible) {
+            c.mesh.visible = effectiveVisible;
           }
         } else {
           const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
           const bm = optimizedGroup?.getObjectByName(c.id);
           if (bm) {
             c.mesh = bm;
-            bm.visible = shouldBeVisible;
+            bm.visible = effectiveVisible;
           }
         }
       } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
         const viewportBoost = centrality > 0.8 ? 4.5 : centrality > 0.62 ? 2.8 : 1;
         const sizeScore = Math.min(8, pixelSize / 120);
         const distanceScore = 1e3 / (dist + 1);
+        const forwardScore = forwardness * 550;
+        const cacheBoost = this.chunkMeshCache.has(c.id) ? 420 : 0;
         const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget ? centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0 : 0;
-        const movingPriorityBoost = this.isCameraMoving ? centrality > 0.65 ? 900 : centrality > 0.4 ? 250 : -250 : 0;
+        const movingPriorityBoost = this.isCameraMoving ? centrality > 0.65 || forwardness > 0.7 ? 900 : centrality > 0.4 ? 250 : -250 : 0;
         if (this.isCameraMoving && centrality < 0.08 && pixelSize < 18) {
           return;
         }
-        c.priority = movingPriorityBoost + warmupBoost + viewportBoost * 1e3 + sizeScore * 120 + distanceScore + centrality * 300;
+        c.priority = movingPriorityBoost + cacheBoost + warmupBoost + forwardScore + viewportBoost * 1e3 + sizeScore * 120 + distanceScore + centrality * 300;
         toLoad.push(c);
       }
     });
@@ -826,6 +849,8 @@ class SceneManager {
       const targetUnload = loadedChunks.length - this.maxLoadedChunks;
       for (const c of loadedChunks) {
         if (unloadedCount >= targetUnload) break;
+        const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
+        if (now - lastTouchedAt < this.chunkResidencyMs) continue;
         if (!c.mesh || !c.mesh.visible) {
           this.unloadChunk(c);
           unloadedCount++;
@@ -895,6 +920,7 @@ class SceneManager {
     this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - 1);
     this.interactableListValid = false;
     this._needsBoundsUpdate = true;
+    this.cullingDirty = true;
   }
   async loadChunk(chunk) {
     this.processingChunks.add(chunk.id);
@@ -952,10 +978,13 @@ class SceneManager {
       if (loadedNow && !chunk.loaded) {
         chunk.loaded = true;
         this.chunkLoadedCount++;
+        chunk.lastVisibleAt = performance.now();
+        chunk.lastFocusAt = chunk.lastVisibleAt;
         if (this.chunkWarmupActive && this.chunkLoadedCount >= this.initialChunkLoadTarget) {
           this.chunkWarmupActive = false;
         }
         this.reportChunkProgress();
+        this.cullingDirty = true;
       }
       this.cancelledChunkIds.delete(chunk.id);
       const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
@@ -971,6 +1000,7 @@ class SceneManager {
   }
   setChunkLoadingEnabled(enabled) {
     this.chunkLoadingEnabled = enabled;
+    this.cullingDirty = true;
     if (enabled) this.checkCullingAndLoad();
   }
   setContentVisible(visible) {
@@ -8642,6 +8672,7 @@ const ThreeViewer = ({
   const viewportRef = useRef(null);
   const sceneMgr = useRef(null);
   const [mgrInstance, setMgrInstance] = useState(null);
+  const pointerDownRef = useRef(null);
   const hasModels = treeRoot.length > 0;
   const completedFileSetsRef = useRef(/* @__PURE__ */ new Set());
   const [errorState, setErrorState] = useState({ isOpen: false, title: "", message: "" });
@@ -9154,7 +9185,22 @@ const ThreeViewer = ({
     if (!mgr) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const clickMoveThreshold = 6;
+    const handleMouseDown = (e) => {
+      pointerDownRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        moved: false,
+        button: e.button
+      };
+    };
     const handleClick = (e) => {
+      const pointerState = pointerDownRef.current;
+      if (!pointerState || pointerState.button !== 0 || pointerState.moved) {
+        pointerDownRef.current = null;
+        return;
+      }
+      pointerDownRef.current = null;
       if (activeTool === "boxSelect") return;
       if (activeTool === "measure") {
         if (measureType !== "none") {
@@ -9181,6 +9227,13 @@ const ThreeViewer = ({
       }
     };
     const handleMouseMove = (e) => {
+      if (pointerDownRef.current && !pointerDownRef.current.moved) {
+        const dx = e.clientX - pointerDownRef.current.x;
+        const dy = e.clientY - pointerDownRef.current.y;
+        if (dx * dx + dy * dy > clickMoveThreshold * clickMoveThreshold) {
+          pointerDownRef.current.moved = true;
+        }
+      }
       if (activeTool === "measure") {
         mgr.updateMeasureHover(e.clientX, e.clientY);
         setMousePos(null);
@@ -9238,11 +9291,13 @@ const ThreeViewer = ({
         mgr.highlightObjects([]);
       }
     };
+    canvas.addEventListener("mousedown", handleMouseDown);
     canvas.addEventListener("click", handleClick);
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("contextmenu", handleContextMenu);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      canvas.removeEventListener("mousedown", handleMouseDown);
       canvas.removeEventListener("click", handleClick);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("contextmenu", handleContextMenu);
