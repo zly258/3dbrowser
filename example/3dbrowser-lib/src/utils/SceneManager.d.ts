@@ -143,6 +143,11 @@ export declare class SceneManager {
     private movingFocusPixelThreshold;
     private chunkVisibilityHoldMs;
     private chunkResidencyMs;
+    private centerPriorityThreshold;
+    private forwardPriorityThreshold;
+    private boundsScanBatchSize;
+    private chunkRegistrationBatchSize;
+    private chunkGhostBatchSize;
     constructor(canvas: HTMLCanvasElement);
     updateSettings(newSettings: Partial<SceneSettings>): void;
     private updateSunPosition;
@@ -170,6 +175,9 @@ export declare class SceneManager {
     private buildAndRegisterModelStructure;
     private yieldToMainThread;
     private createPreviewGhost;
+    private computeItemBoundsProgressively;
+    private createChunkGhostsProgressively;
+    private registerLeafChunksProgressively;
     private buildLeafPlans;
     updateCameraClipping(): void;
     resize(width?: number, height?: number): void;
@@ -189,6 +197,7 @@ export declare class SceneManager {
      * 构建基于 IFC 图层和空间结构的复合树
      */
     private buildIFCStructure;
+    private prepareObjectRuntimeData;
     addModel(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void): Promise<void>;
     removeObject(uuid: string): boolean;
     removeModel(uuid: string): Promise<boolean>;
