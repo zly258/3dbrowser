@@ -9372,14 +9372,24 @@ const ThreeViewer = ({
         updateTree();
       }, 500);
     };
-    const statsInterval = setInterval(() => {
-      if (manager) setStats(manager.getStats());
-    }, 1e3);
     return () => {
-      clearInterval(statsInterval);
       manager.dispose();
     };
   }, []);
+  useEffect(() => {
+    if (!mgrInstance || !showStats) return;
+    const updateStats = () => {
+      if (document.visibilityState !== "visible") return;
+      setStats(mgrInstance.getStats());
+    };
+    updateStats();
+    const statsInterval = window.setInterval(updateStats, 1e3);
+    document.addEventListener("visibilitychange", updateStats);
+    return () => {
+      window.clearInterval(statsInterval);
+      document.removeEventListener("visibilitychange", updateStats);
+    };
+  }, [mgrInstance, showStats]);
   useEffect(() => {
     if (!mgrInstance || !initialFiles) return;
     const loadInitial = async () => {

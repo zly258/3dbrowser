@@ -861,16 +861,29 @@ export const ThreeViewer = ({
             }, 500);
         };
 
-        const statsInterval = setInterval(() => {
-            if(manager) setStats(manager.getStats());
-        }, 1000);
-
         return () => {
             if (clearProgressTimer) clearTimeout(clearProgressTimer);
-            clearInterval(statsInterval);
             manager.dispose();
         };
     }, []); 
+
+    useEffect(() => {
+        if (!mgrInstance || !showStats) return;
+
+        const updateStats = () => {
+            if (document.visibilityState !== 'visible') return;
+            setStats(mgrInstance.getStats());
+        };
+
+        updateStats();
+        const statsInterval = window.setInterval(updateStats, 1000);
+        document.addEventListener('visibilitychange', updateStats);
+
+        return () => {
+            window.clearInterval(statsInterval);
+            document.removeEventListener('visibilitychange', updateStats);
+        };
+    }, [mgrInstance, showStats]);
 
     // --- Effect for Initial Files ---
     useEffect(() => {
