@@ -184,6 +184,10 @@ class SceneManager {
     this.movingPeripheralCursor = 0;
     this.movingPeripheralLastRefreshAt = 0;
     this.postMoveRecoveryUntil = 0;
+    this.chunkCullingTempSize = new THREE.Vector3();
+    this.chunkCullingTempDirection = new THREE.Vector3();
+    this.chunkCullingTempForward = new THREE.Vector3();
+    this.chunkCullingTempCenterNdc = new THREE.Vector3();
     this.boundsScanBatchSize = 2400;
     this.chunkRegistrationBatchSize = 18;
     this.chunkGhostBatchSize = 24;
@@ -1004,9 +1008,11 @@ class SceneManager {
     this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
     const padding = this.chunkPadding;
     const cameraPos = this.camera.position;
-    const cameraForward = new THREE.Vector3();
+    const cameraForward = this.chunkCullingTempForward;
     this.camera.getWorldDirection(cameraForward);
-    const toChunkDirection = new THREE.Vector3();
+    const toChunkDirection = this.chunkCullingTempDirection;
+    const tempSize = this.chunkCullingTempSize;
+    const tempCenterNdc = this.chunkCullingTempCenterNdc;
     const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
     const canvasHeight = this.renderer.domElement.clientHeight;
     const toLoad = [];
@@ -1015,7 +1021,7 @@ class SceneManager {
     const totalChunks = this.chunks.length;
     this.chunks.forEach((c, chunkIndex) => {
       if (!c.paddedBounds || c._padding !== padding) {
-        const size = c.bounds.getSize(new THREE.Vector3());
+        const size = c.bounds.getSize(tempSize);
         const pb = c.bounds.clone();
         pb.expandByVector(size.multiplyScalar(padding));
         c.paddedBounds = pb;
@@ -1027,9 +1033,9 @@ class SceneManager {
       toChunkDirection.copy(c.center).sub(cameraPos);
       const dist = toChunkDirection.length();
       const inRange = dist < this.maxRenderDistance;
-      const boxSize = c.bounds.getSize(new THREE.Vector3()).length();
+      const boxSize = c.bounds.getSize(tempSize).length();
       const pixelSize = boxSize / viewHeight * canvasHeight;
-      const centerNDC = c.center.clone().applyMatrix4(this.projScreenMatrix);
+      const centerNDC = tempCenterNdc.copy(c.center).applyMatrix4(this.projScreenMatrix);
       const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
       const centrality = 1 - Math.min(1, ndcDistance);
       const forwardness = dist > 1e-5 ? Math.max(0, cameraForward.dot(toChunkDirection.divideScalar(dist))) : 1;
