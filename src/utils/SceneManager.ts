@@ -519,8 +519,7 @@ export class SceneManager {
             opacity: 1,
             depthTest: false,
             depthWrite: false,
-            side: THREE.DoubleSide,
-            wireframe: true
+            side: THREE.BackSide
         });
         this.highlightMesh = new THREE.Mesh(new THREE.BufferGeometry(), highlightMat);
         this.highlightMesh.visible = false;
@@ -1445,7 +1444,7 @@ export class SceneManager {
             highlightMaterial.opacity = 1;
             highlightMaterial.depthTest = false;
             highlightMaterial.depthWrite = false;
-            highlightMaterial.wireframe = true;
+            highlightMaterial.side = THREE.BackSide;
             highlightMaterial.needsUpdate = true;
         }
 
@@ -3429,44 +3428,59 @@ export class SceneManager {
 
         this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : Array.from(resultSet)[0];
 
-        const dimmedColor = new THREE.Color("#d1d5db");
+        const dimmedColor = new THREE.Color("#d6d9df");
+        const accentColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
         this.contentGroup.traverse((child) => {
             const mesh = child as THREE.Mesh;
             if (!mesh.isMesh || !mesh.material) return;
-            const shouldKeepOpaque = resultSet.has(child.uuid);
-            if (shouldKeepOpaque) return;
             if (!this.locateObjectMaterialCache.has(child.uuid)) {
                 this.locateObjectMaterialCache.set(child.uuid, mesh.material);
             }
             const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            const dimmedMaterials = sourceMaterials.map((material) => {
+            const isMatched = resultSet.has(child.uuid);
+            const nextMaterials = sourceMaterials.map((material) => {
                 if (!material) return material;
-                const cloned = material.clone() as THREE.Material & { transparent?: boolean; opacity?: number; depthWrite?: boolean; color?: THREE.Color };
-                if ("transparent" in cloned) cloned.transparent = true;
-                if ("opacity" in cloned) cloned.opacity = 0.08;
-                if ("depthWrite" in cloned) cloned.depthWrite = false;
-                if ("color" in cloned && cloned.color) cloned.color.lerp(dimmedColor, 0.65);
+                const cloned = material.clone() as THREE.Material & {
+                    transparent?: boolean;
+                    opacity?: number;
+                    depthWrite?: boolean;
+                    color?: THREE.Color;
+                    emissive?: THREE.Color;
+                    roughness?: number;
+                    metalness?: number;
+                };
+                if ("transparent" in cloned) cloned.transparent = false;
+                if ("opacity" in cloned) cloned.opacity = 1;
+                if ("depthWrite" in cloned) cloned.depthWrite = true;
+                if ("color" in cloned && cloned.color) {
+                    const baseColor = cloned.color.clone();
+                    cloned.color.copy(isMatched ? baseColor.lerp(accentColor, 0.82) : baseColor.lerp(dimmedColor, 0.82));
+                }
+                if ("emissive" in cloned && cloned.emissive) {
+                    cloned.emissive.copy(isMatched ? accentColor.clone().multiplyScalar(0.16) : new THREE.Color(0x000000));
+                }
+                if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.88, cloned.roughness ?? 0.88);
+                if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
                 cloned.needsUpdate = true;
                 return cloned;
             });
-            mesh.material = Array.isArray(mesh.material) ? dimmedMaterials : dimmedMaterials[0];
+            mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
         });
 
         this.optimizedMapping.forEach((mappings, originalUuid) => {
-            const keepOpaque = resultSet.has(originalUuid);
+            const isMatched = resultSet.has(originalUuid);
             mappings.forEach((mapping) => {
-                if (keepOpaque) {
-                    mapping.mesh.setColorAt(mapping.instanceId, new THREE.Color(mapping.originalColor));
-                } else {
-                    const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
-                    this.locateDimmedInstances.set(key, {
-                        mesh: mapping.mesh,
-                        instanceId: mapping.instanceId,
-                        originalColor: mapping.originalColor
-                    });
-                    const sourceColor = new THREE.Color(mapping.originalColor);
-                    mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(dimmedColor, 0.82));
-                }
+                const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
+                this.locateDimmedInstances.set(key, {
+                    mesh: mapping.mesh,
+                    instanceId: mapping.instanceId,
+                    originalColor: mapping.originalColor
+                });
+                const sourceColor = new THREE.Color(mapping.originalColor);
+                mapping.mesh.setColorAt(
+                    mapping.instanceId,
+                    isMatched ? sourceColor.lerp(accentColor, 0.82) : sourceColor.lerp(dimmedColor, 0.82)
+                );
                 if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
             });
         });
@@ -3575,6 +3589,7 @@ export class SceneManager {
                 const worldQuat = new THREE.Quaternion();
                 const worldScale = new THREE.Vector3();
                 matrix.decompose(worldPos, worldQuat, worldScale);
+                worldScale.multiplyScalar(1.035);
 
                 this.highlightMesh.position.copy(worldPos);
                 this.highlightMesh.quaternion.copy(worldQuat);
@@ -3594,6 +3609,7 @@ export class SceneManager {
             const worldQuat = new THREE.Quaternion();
             const worldScale = new THREE.Vector3();
             focusObj.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+            worldScale.multiplyScalar(1.035);
 
             this.highlightMesh.position.copy(worldPos);
             this.highlightMesh.quaternion.copy(worldQuat);
