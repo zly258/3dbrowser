@@ -541,6 +541,27 @@ export const loadIFC = async (
         return buildConicPoints(basisCurve.Position, xRadius, yRadius, startAngle, endAngle);
     };
 
+    const offsetPolylinePoints = (
+        points: THREE.Vector3[],
+        distance: number,
+        referenceDirection = new THREE.Vector3(0, 0, 1)
+    ) => {
+        if (points.length < 2 || Math.abs(distance) < 1e-6) return points;
+        const shifted: THREE.Vector3[] = [];
+        for (let index = 0; index < points.length; index++) {
+            const prev = points[Math.max(0, index - 1)];
+            const next = points[Math.min(points.length - 1, index + 1)];
+            const tangent = next.clone().sub(prev);
+            if (tangent.lengthSq() < 1e-8) {
+                shifted.push(points[index].clone());
+                continue;
+            }
+            const normal = new THREE.Vector3().crossVectors(referenceDirection, tangent.normalize()).normalize();
+            shifted.push(points[index].clone().addScaledVector(normal, distance));
+        }
+        return shifted;
+    };
+
     const extractCurvePoints = (curveRef: any, visited = new Set<number>()): THREE.Vector3[] => {
         const curveId = resolveExpressId(curveRef);
         const curve = curveId ? getLineCached(curveId) : curveRef;
@@ -569,6 +590,28 @@ export const loadIFC = async (
                 const points = extractCurvePoints(segment?.ParentCurve, visited);
                 return segment?.SameSense === false ? points.reverse() : points;
             });
+        }
+
+        if (curve.is_a === "IFCCURVESEGMENT") {
+            const baseCurve = curve.ParentCurve || curve.BasisCurve || curve.BaseCurve;
+            const basePoints = extractCurvePoints(baseCurve, visited);
+            return curve.SameSense === false ? basePoints.reverse() : basePoints;
+        }
+
+        if (curve.is_a === "IFCPCURVE") {
+            return extractCurvePoints(curve.ReferenceCurve || curve.BasisCurve || curve.OuterBoundary, visited);
+        }
+
+        if (curve.is_a === "IFCOFFSETCURVE2D" || curve.is_a === "IFCOFFSETCURVE3D") {
+            const baseCurve = curve.BasisCurve || curve.ParentCurve || curve.ReferenceCurve;
+            const basePoints = extractCurvePoints(baseCurve, visited);
+            if (basePoints.length < 2) return basePoints;
+            const distance = getScalarValue(curve.Distance || curve.OffsetDistance) ?? 0;
+            const referenceDirection =
+                curve.is_a === "IFCOFFSETCURVE3D"
+                    ? getDirectionVector(curve.RefDirection, new THREE.Vector3(0, 0, 1))
+                    : new THREE.Vector3(0, 0, 1);
+            return offsetPolylinePoints(basePoints, distance, referenceDirection);
         }
 
         if (curve.is_a === "IFCBSPLINECURVE" || curve.is_a === "IFCBSPLINECURVEWITHKNOTS") {
