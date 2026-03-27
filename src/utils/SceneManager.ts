@@ -26,6 +26,8 @@ export interface SceneSettings {
     dirInt: number;
     bgColor: string;
     ifcGridVisible?: boolean;
+    highlightColor?: string;
+    highlightShowBox?: boolean;
     clip?: {
         helperVisible?: boolean;
         helperOpacity?: number;
@@ -135,6 +137,7 @@ export class SceneManager {
     private highlightedUuids: Set<string> = new Set();
     private locateFocusUuid: string | null = null;
     private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
+    private highlightPulseColor = new THREE.Color("#ffffff");
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -189,6 +192,8 @@ export class SceneManager {
         maxPixelRatio: 2,
         targetFps: 50,
         performanceMode: 'balanced',
+        highlightColor: "#ff9f1c",
+        highlightShowBox: false,
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
     };
 
@@ -507,12 +512,13 @@ export class SceneManager {
         this.helpersGroup.add(this.selectionBox);
 
         const highlightMat = new THREE.MeshBasicMaterial({
-            color: 0xffaa00,
-            transparent: true,
-            opacity: 0.3,
+            color: this.settings.highlightColor,
+            transparent: false,
+            opacity: 1,
             depthTest: false,
             depthWrite: false,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            wireframe: true
         });
         this.highlightMesh = new THREE.Mesh(new THREE.BufferGeometry(), highlightMat);
         this.highlightMesh.visible = false;
@@ -556,6 +562,7 @@ export class SceneManager {
     
     updateSettings(newSettings: Partial<SceneSettings>) {
         this.settings = { ...this.settings, ...newSettings };
+        this.applyHighlightSettings();
         if (newSettings.clip) {
             this.setClipHelperOptions({
                 visible: newSettings.clip.helperVisible,
@@ -820,9 +827,13 @@ export class SceneManager {
         const highlightMaterial = this.highlightMesh.material as THREE.MeshBasicMaterial;
         if (highlightMaterial) {
             if (this.locateFocusUuid && this.highlightMesh.visible) {
-                highlightMaterial.opacity = 0.2 + ((Math.sin(frameNow / 160) + 1) * 0.24);
+                const focusColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
+                const pulseMix = 0.15 + ((Math.sin(frameNow / 180) + 1) * 0.18);
+                highlightMaterial.color.copy(focusColor).lerp(this.highlightPulseColor, pulseMix);
+                highlightMaterial.opacity = 1;
             } else {
-                highlightMaterial.opacity = 0.3;
+                highlightMaterial.color.set(this.settings.highlightColor || "#ff9f1c");
+                highlightMaterial.opacity = 1;
             }
         }
 
@@ -1422,6 +1433,26 @@ export class SceneManager {
 
     private isInPostMoveRecovery(now: number) {
         return !this.isCameraMoving && now < this.postMoveRecoveryUntil;
+    }
+
+    private applyHighlightSettings() {
+        const highlightMaterial = this.highlightMesh.material as THREE.MeshBasicMaterial | undefined;
+        if (highlightMaterial) {
+            highlightMaterial.color.set(this.settings.highlightColor || "#ff9f1c");
+            highlightMaterial.transparent = false;
+            highlightMaterial.opacity = 1;
+            highlightMaterial.depthTest = false;
+            highlightMaterial.depthWrite = false;
+            highlightMaterial.wireframe = true;
+            highlightMaterial.needsUpdate = true;
+        }
+
+        const boxMaterial = this.selectionBox.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[] | undefined;
+        if (Array.isArray(boxMaterial)) {
+            boxMaterial.forEach((material) => material.color.set(this.settings.highlightColor || "#ff9f1c"));
+        } else if (boxMaterial) {
+            boxMaterial.color.set(this.settings.highlightColor || "#ff9f1c");
+        }
     }
 
     private getChunkRenderPhase(now: number): 'moving' | 'recovery' | 'idle' {
@@ -3525,7 +3556,7 @@ export class SceneManager {
 
         if (!union.isEmpty()) {
             this.selectionBox.box.copy(union);
-            this.selectionBox.visible = false; // 用户要求不显示包围盒
+            this.selectionBox.visible = !!this.settings.highlightShowBox;
         }
 
         const focusId = this.lastSelectedUuid;

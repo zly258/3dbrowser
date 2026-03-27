@@ -6,7 +6,8 @@ import {
     Switch,
     SegmentedControl,
     Select,
-    Slider
+    Slider,
+    ColorPicker
 } from "../common";
 
 /**
@@ -181,6 +182,21 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             <Switch
               checked={settings.ifcGridVisible !== false}
               onChange={(v) => onUpdate({ ifcGridVisible: v })}
+            />
+          </Row>
+        </Section>
+
+        <Section title={t("st_highlight") || "高亮设置"}>
+          <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="90px" stretch={true}>
+            <ColorPicker
+              value={settings.highlightColor || "#ff9f1c"}
+              onChange={(value) => onUpdate({ highlightColor: value })}
+            />
+          </Row>
+          <Row label={t("st_highlight_box") || "显示包围盒"} labelWidth="90px">
+            <Switch
+              checked={settings.highlightShowBox === true}
+              onChange={(value) => onUpdate({ highlightShowBox: value })}
             />
           </Row>
         </Section>
