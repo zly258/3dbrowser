@@ -343,7 +343,12 @@ export const loadIFC = async (
     rootGroup.userData.layerMap = layerMap;
     rootGroup.userData.ifcGridDiagnostics = [];
 
-    const createTextSprite = (text: string, position: THREE.Vector3, color: string) => {
+    const createTextSprite = (
+        text: string,
+        position: THREE.Vector3,
+        color: string,
+        worldHeight = 36
+    ) => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         if (!ctx) return new THREE.Sprite();
@@ -377,7 +382,7 @@ export const loadIFC = async (
             depthWrite: false
         }));
         sprite.position.copy(position);
-        const baseScale = 3.8;
+        const baseScale = THREE.MathUtils.clamp(worldHeight, 6, 320);
         sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
         sprite.renderOrder = 1002;
         sprite.userData.isIfcGridHelper = true;
@@ -845,7 +850,7 @@ export const loadIFC = async (
                 const bounds = new THREE.Box3().setFromPoints(points);
                 const size = bounds.getSize(new THREE.Vector3());
                 const maxSpan = Math.max(size.x, size.y, size.z, 1);
-                const radius = THREE.MathUtils.clamp(maxSpan * 0.0015, 0.03, 0.35);
+                const radius = THREE.MathUtils.clamp(maxSpan * 0.002, 0.6, 28);
                 const material = new THREE.MeshBasicMaterial({
                     color,
                     transparent: true,
@@ -907,10 +912,14 @@ export const loadIFC = async (
                             `${key}-${axisId}`;
                         const start = points[0];
                         const end = points[points.length - 1];
-                        const offset = new THREE.Vector3(0.12, 0.12, 0);
-                        gridGroup.add(createTextSprite(axisTag, start.clone().add(offset), color));
+                        const span = start.distanceTo(end);
+                        const labelSize = THREE.MathUtils.clamp(span * 0.035, 10, 220);
+                        const labelRadius = THREE.MathUtils.clamp(span * 0.002, 0.6, 28);
+                        const offsetValue = Math.max(labelRadius * 3.2, labelSize * 0.12);
+                        const offset = new THREE.Vector3(offsetValue, offsetValue, labelRadius * 0.6);
+                        gridGroup.add(createTextSprite(axisTag, start.clone().add(offset), color, labelSize));
                         if (start.distanceTo(end) > 1) {
-                            gridGroup.add(createTextSprite(axisTag, end.clone().add(offset), color));
+                            gridGroup.add(createTextSprite(axisTag, end.clone().add(offset), color, labelSize));
                         }
                     });
                 });

@@ -89,6 +89,18 @@ interface ChunkRuntimeProfile {
     recoveryLoadBudgetRatio: number;
 }
 
+const INVALID_DISPLAY_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
+
+function sanitizeDisplayLabel(...candidates: Array<string | null | undefined>) {
+    for (const candidate of candidates) {
+        if (typeof candidate !== "string") continue;
+        const trimmed = candidate.trim();
+        if (INVALID_DISPLAY_LABELS.has(trimmed.toLowerCase())) continue;
+        return trimmed;
+    }
+    return "";
+}
+
 export class SceneManager {
     canvas: HTMLCanvasElement;
     renderer: THREE.WebGLRenderer;
@@ -1847,9 +1859,10 @@ export class SceneManager {
     }
 
     private buildSceneGraph(object: THREE.Object3D): StructureTreeNode {
+        const fallbackName = (object as any).isMesh ? `Mesh_${object.id}` : `Group_${object.id}`;
         const node: StructureTreeNode = {
             id: object.uuid,
-            name: object.name || `Object_${object.id}`,
+            name: sanitizeDisplayLabel(object.name, object.userData?.name) || fallbackName,
             type: (object as any).isMesh ? 'Mesh' : 'Group',
             children: [],
             bimId: object.userData?.bimId ? String(object.userData.bimId) : (object.userData?.expressID !== undefined ? String(object.userData.expressID) : undefined),
@@ -1875,9 +1888,10 @@ export class SceneManager {
     private buildIFCStructure(object: THREE.Object3D): StructureTreeNode {
         // 递归构建原始空间结构
         const buildSpatialRecursive = (obj: THREE.Object3D): StructureTreeNode => {
+            const fallbackName = (obj as any).isMesh ? `Mesh_${obj.id}` : `Group_${obj.id}`;
             const node: StructureTreeNode = {
                 id: obj.uuid,
-                name: obj.name || `Object_${obj.id}`,
+                name: sanitizeDisplayLabel(obj.name, obj.userData?.name) || fallbackName,
                 type: (obj as any).isMesh ? 'Mesh' : 'Group',
                 children: [],
                 bimId: obj.userData?.expressID !== undefined ? String(obj.userData.expressID) : undefined,
