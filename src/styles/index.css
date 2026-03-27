@@ -1489,6 +1489,13 @@ body.font-loose,
   color: var(--text-secondary);
 }
 
+.ui-tree-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .ui-tree-locator {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
