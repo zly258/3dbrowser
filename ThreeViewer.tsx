@@ -747,16 +747,21 @@ export const ThreeViewer = ({
             return roots;
         });
 
-        const diagnostics = new Set<string>();
+        const diagnostics = new Map<string, number>();
         sceneMgr.current.contentGroup.children.forEach((child) => {
             const items = child.userData?.ifcGridDiagnostics;
             if (Array.isArray(items)) {
                 items.forEach((item: string) => {
-                    if (item) diagnostics.add(item);
+                    if (!item) return;
+                    diagnostics.set(item, (diagnostics.get(item) || 0) + 1);
                 });
             }
         });
-        setIfcGridDiagnostics(Array.from(diagnostics));
+        setIfcGridDiagnostics(
+            Array.from(diagnostics.entries())
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN"))
+                .map(([name, count]) => `${name} x${count}`)
+        );
     }, [])
 
     const setAllTreeExpanded = useCallback((expanded: boolean) => {
