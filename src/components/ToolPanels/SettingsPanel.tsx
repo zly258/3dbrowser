@@ -79,7 +79,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       title={t("settings")}
       onClose={onClose}
       width={360}
-      height={500}
+      height={400}
       modal={true}
       movable={false}
       theme={theme}
@@ -94,7 +94,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         </div>
 
         {activeTab === "general" && (
-          <div className="mb-2">
+          <div className="mb-2" style={{ padding: '0 6px' }}>
             {/* 主题选择 */}
             <Row label={t("st_theme")} labelWidth="70px">
               <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -147,7 +147,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === "viewport" && (
-          <div className="mb-2">
+          <div className="mb-2" style={{ padding: '0 6px' }}>
           <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -174,7 +174,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === "import" && (
-          <div className="mb-2">
+          <div className="mb-2" style={{ padding: '0 6px' }}>
           <Row label={t("ifc_grid_visible") || "IFC 轴网"} labelWidth="90px">
             <Switch
               checked={settings.ifcGridVisible !== false}
@@ -185,7 +185,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === "highlight" && (
-          <div className="mb-2">
+          <div className="mb-2" style={{ padding: '0 6px' }}>
           <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="90px" stretch={true}>
             <ColorPicker
               value={settings.highlightColor || "#ff9f1c"}
