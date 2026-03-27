@@ -38,13 +38,26 @@ interface IfcFilterState {
 
 type LocatorMode = "all" | "name" | "globalId" | "classification" | "typeName";
 
+const INVALID_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
+
+const sanitizeTreeLabel = (...candidates: Array<string | null | undefined>) => {
+    for (const candidate of candidates) {
+        if (typeof candidate !== "string") continue;
+        const trimmed = candidate.trim();
+        if (INVALID_LABELS.has(trimmed.toLowerCase())) continue;
+        return trimmed;
+    }
+    return "";
+};
+
 export const buildTree = (object: any, depth = 0): TreeNode => {
     const isTiles = object.name === "3D Tileset";
     const isMesh = object.isMesh;
+    const fallbackName = isTiles ? "3D Tileset" : isMesh ? `Mesh_${object.id}` : `Group_${object.id}`;
 
     const node: TreeNode = {
         uuid: object.uuid,
-        name: object.name || "Unnamed",
+        name: sanitizeTreeLabel(object.name, object.userData?.name) || fallbackName,
         type: isTiles ? "TILES" : isMesh ? "MESH" : "GROUP",
         depth,
         children: [],
@@ -126,9 +139,12 @@ const getRawChildren = (node: TreeNode | any): any[] => {
 
 const createTreeNodeFromRaw = (rawNode: any, depth: number, isFileNode = false): TreeNode => {
     const rawChildren = Array.isArray(rawNode?.children) ? rawNode.children : [];
+    const fallbackName = rawNode?.type === "Mesh"
+        ? `Mesh_${rawNode?.id ?? "?"}`
+        : `Group_${rawNode?.id ?? "?"}`;
     return {
         uuid: rawNode?.id ?? rawNode?.uuid ?? String(Math.random()),
-        name: rawNode?.name || "Unnamed",
+        name: sanitizeTreeLabel(rawNode?.name, rawNode?.userData?.name) || fallbackName,
         type: rawNode?.type === "Mesh" ? "MESH" : "GROUP",
         depth,
         children: [],
