@@ -376,8 +376,7 @@ export const loadIFC = async (
 
     const getCartesianPoint = (pointRef: any): THREE.Vector3 | null => {
         const pointId = resolveExpressId(pointRef);
-        if (!pointId) return null;
-        const point = getLineCached(pointId);
+        const point = pointId ? getLineCached(pointId) : pointRef;
         const coords = point?.Coordinates;
         if (!coords) return null;
 
@@ -389,6 +388,35 @@ export const loadIFC = async (
             Number(values[1] || 0),
             Number(values[2] || 0)
         );
+    };
+
+    const getScalarValue = (valueRef: any): number | null => {
+        if (valueRef === undefined || valueRef === null) return null;
+        if (typeof valueRef === "number") return Number.isFinite(valueRef) ? valueRef : null;
+        if (typeof valueRef === "string") {
+            const parsed = Number(valueRef);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        if (typeof valueRef === "object") {
+            if (typeof valueRef.value === "number") return Number.isFinite(valueRef.value) ? valueRef.value : null;
+            if (typeof valueRef.wrappedValue === "number") return Number.isFinite(valueRef.wrappedValue) ? valueRef.wrappedValue : null;
+        }
+        return null;
+    };
+
+    const sampleCurvePoints = (
+        evaluator: (t: number) => THREE.Vector3,
+        steps: number,
+        includeEnd = true
+    ) => {
+        const points: THREE.Vector3[] = [];
+        const count = Math.max(2, steps);
+        const denominator = includeEnd ? count - 1 : count;
+        for (let index = 0; index < count; index++) {
+            const t = denominator === 0 ? 0 : index / denominator;
+            points.push(evaluator(Math.min(1, Math.max(0, t))));
+        }
+        return points;
     };
 
     const placementMatrixCache = new Map<number, THREE.Matrix4>();
@@ -449,6 +477,60 @@ export const loadIFC = async (
         return matrix;
     };
 
+    const angleFromPointOnConic = (point: THREE.Vector3, basis: THREE.Matrix4, xRadius: number, yRadius: number) => {
+        const inverse = basis.clone().invert();
+        const localPoint = point.clone().applyMatrix4(inverse);
+        return Math.atan2(localPoint.y / Math.max(yRadius, 1e-6), localPoint.x / Math.max(xRadius, 1e-6));
+    };
+
+    const unwrapAngleRange = (startAngle: number, endAngle: number) => {
+        let normalizedEnd = endAngle;
+        while (normalizedEnd <= startAngle) {
+            normalizedEnd += Math.PI * 2;
+        }
+        return { startAngle, endAngle: normalizedEnd };
+    };
+
+    const buildConicPoints = (
+        positionRef: any,
+        xRadius: number,
+        yRadius: number,
+        startAngle = 0,
+        endAngle = Math.PI * 2
+    ) => {
+        const basis = getAxisPlacementMatrix(positionRef);
+        const { startAngle: from, endAngle: to } = unwrapAngleRange(startAngle, endAngle);
+        const span = Math.abs(to - from);
+        const steps = Math.max(12, Math.ceil((span / (Math.PI * 2)) * 48));
+        return sampleCurvePoints((t) => {
+            const angle = from + (to - from) * t;
+            return new THREE.Vector3(
+                Math.cos(angle) * xRadius,
+                Math.sin(angle) * yRadius,
+                0
+            ).applyMatrix4(basis);
+        }, steps, true);
+    };
+
+    const getTrimmedConicPoints = (curve: any, basisCurve: any, xRadius: number, yRadius: number) => {
+        const trim1Values = Array.isArray(curve.Trim1) ? curve.Trim1 : [curve.Trim1];
+        const trim2Values = Array.isArray(curve.Trim2) ? curve.Trim2 : [curve.Trim2];
+        const basis = getAxisPlacementMatrix(basisCurve.Position);
+
+        const resolveAngle = (trimValue: any) => {
+            const point = getCartesianPoint(trimValue);
+            if (point) {
+                return angleFromPointOnConic(point, basis, xRadius, yRadius);
+            }
+            return getScalarValue(trimValue);
+        };
+
+        const startAngle = trim1Values.map(resolveAngle).find((value): value is number => value !== null);
+        const endAngle = trim2Values.map(resolveAngle).find((value): value is number => value !== null);
+        if (startAngle === undefined || endAngle === undefined) return null;
+        return buildConicPoints(basisCurve.Position, xRadius, yRadius, startAngle, endAngle);
+    };
+
     const extractCurvePoints = (curveRef: any, visited = new Set<number>()): THREE.Vector3[] => {
         const curveId = resolveExpressId(curveRef);
         const curve = curveId ? getLineCached(curveId) : curveRef;
@@ -479,7 +561,42 @@ export const loadIFC = async (
             });
         }
 
+        if (curve.is_a === "IFCBSPLINECURVE" || curve.is_a === "IFCBSPLINECURVEWITHKNOTS") {
+            const controlPoints = (curve.ControlPointsList || curve.ControlPoints || [])
+                .map((pointRef: any) => getCartesianPoint(pointRef))
+                .filter((point: THREE.Vector3 | null): point is THREE.Vector3 => !!point);
+            if (controlPoints.length >= 2) {
+                const spline = new THREE.CatmullRomCurve3(controlPoints);
+                return spline.getPoints(Math.max(16, controlPoints.length * 6));
+            }
+        }
+
+        if (curve.is_a === "IFCCIRCLE") {
+            const radius = getScalarValue(curve.Radius) ?? 1;
+            return buildConicPoints(curve.Position, radius, radius);
+        }
+
+        if (curve.is_a === "IFCELLIPSE") {
+            const semiAxis1 = getScalarValue(curve.SemiAxis1) ?? 1;
+            const semiAxis2 = getScalarValue(curve.SemiAxis2) ?? semiAxis1;
+            return buildConicPoints(curve.Position, semiAxis1, semiAxis2);
+        }
+
         if (curve.is_a === "IFCTRIMMEDCURVE") {
+            const basisCurve = resolveExpressId(curve.BasisCurve)
+                ? getLineCached(resolveExpressId(curve.BasisCurve)!)
+                : curve.BasisCurve;
+            if (basisCurve?.is_a === "IFCCIRCLE") {
+                const radius = getScalarValue(basisCurve.Radius) ?? 1;
+                const arcPoints = getTrimmedConicPoints(curve, basisCurve, radius, radius);
+                if (arcPoints && arcPoints.length > 1) return arcPoints;
+            }
+            if (basisCurve?.is_a === "IFCELLIPSE") {
+                const semiAxis1 = getScalarValue(basisCurve.SemiAxis1) ?? 1;
+                const semiAxis2 = getScalarValue(basisCurve.SemiAxis2) ?? semiAxis1;
+                const arcPoints = getTrimmedConicPoints(curve, basisCurve, semiAxis1, semiAxis2);
+                if (arcPoints && arcPoints.length > 1) return arcPoints;
+            }
             const trim1 = toExpressIds(curve.Trim1).map((id) => getCartesianPoint(id)).filter((point): point is THREE.Vector3 => !!point);
             const trim2 = toExpressIds(curve.Trim2).map((id) => getCartesianPoint(id)).filter((point): point is THREE.Vector3 => !!point);
             if (trim1.length > 0 && trim2.length > 0) {
