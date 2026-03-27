@@ -1572,7 +1572,12 @@ export const ThreeViewer = ({
     }, [handleSelect, locateResultUuids]);
 
     const handleLocateResultsChange = useCallback((uuids: string[]) => {
-        setLocateResultUuids(uuids);
+        setLocateResultUuids((prev) => {
+            if (prev.length === uuids.length && prev.every((uuid, index) => uuid === uuids[index])) {
+                return prev;
+            }
+            return uuids;
+        });
         if (!sceneMgr.current) return;
         if (uuids.length === 0) {
             sceneMgr.current.clearLocateFocus();
