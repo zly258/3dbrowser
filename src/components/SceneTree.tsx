@@ -236,6 +236,8 @@ interface SceneTreeProps {
     onApplyStoreyWorkset?: (storeys: string[]) => void;
     onLocate?: (obj: any) => void;
     onClearLocate?: () => void;
+    onLocateResultsChange?: (uuids: string[]) => void;
+    locateResultUuids?: string[];
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
@@ -255,7 +257,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onApplyIfcFiltersToViewport,
     onApplyStoreyWorkset,
     onLocate,
-    onClearLocate
+    onClearLocate,
+    onLocateResultsChange,
+    locateResultUuids = []
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [locatorMode, setLocatorMode] = useState<LocatorMode>("all");
@@ -529,6 +533,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     }, [locatorQuery, onClearLocate]);
 
     useEffect(() => {
+        if (!locatorQuery.trim()) {
+            onLocateResultsChange?.([]);
+            return;
+        }
+        onLocateResultsChange?.(locatorMatches.map((item) => item.uuid));
+    }, [locatorMatches, locatorQuery, onLocateResultsChange]);
+
+    useEffect(() => {
         if (locatorMatches.length === 0 && locatorIndex !== 0) {
             setLocatorIndex(0);
         } else if (locatorMatches.length > 0 && locatorIndex > locatorMatches.length - 1) {
@@ -761,7 +773,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         {visibleItems.map((node) => (
                             <div
                                 key={node.uuid}
-                                className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
+                                className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
                                 style={{ paddingLeft: 8 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
                                 onDoubleClick={() => (onLocate ? onLocate(node.object) : onFocus?.(node.object))}

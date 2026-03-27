@@ -1721,6 +1721,10 @@ body.font-loose,
   font-weight: 600;
 }
 
+.ui-tree-node.matched {
+  background-color: rgba(91, 155, 213, 0.08);
+}
+
 .ui-tree-node.located {
   background-color: rgba(245, 158, 11, 0.22);
   box-shadow: inset 3px 0 0 #f59e0b;
