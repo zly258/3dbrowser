@@ -106,6 +106,7 @@ export const ThreeViewer = ({
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
     const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
+    const [selectedIfcStorey, setSelectedIfcStorey] = useState<string>("");
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -328,6 +329,7 @@ export const ThreeViewer = ({
     const [hiddenUuids, setHiddenUuids] = useState<Set<string>>(new Set());
     // 隔离对象记录
     const [isolatedUuids, setIsolatedUuids] = useState<Set<string>>(new Set());
+    const [ifcGridDiagnostics, setIfcGridDiagnostics] = useState<string[]>([]);
     const [contextMenuOpacity, setContextMenuOpacity] = useState(1.0);
     
     // Visibility undo stack
@@ -744,6 +746,17 @@ export const ThreeViewer = ({
             });
             return roots;
         });
+
+        const diagnostics = new Set<string>();
+        sceneMgr.current.contentGroup.children.forEach((child) => {
+            const items = child.userData?.ifcGridDiagnostics;
+            if (Array.isArray(items)) {
+                items.forEach((item: string) => {
+                    if (item) diagnostics.add(item);
+                });
+            }
+        });
+        setIfcGridDiagnostics(Array.from(diagnostics));
     }, [])
 
     const setAllTreeExpanded = useCallback((expanded: boolean) => {
@@ -792,12 +805,49 @@ export const ThreeViewer = ({
         setIsolatedUuids(new Set(matches));
         setSelectedUuids([]);
         setSelectedProps(null);
+        setSelectedIfcStorey("");
         updateTree();
         setToast({
             message: `${t("ifc_filter_applied") || "已按 IFC 筛选隔离显示"}: ${matches.length}`,
             type: "success"
         });
     }, [handleShowAll, t, updateTree]);
+
+    const handleApplyStoreyWorkset = useCallback((storeys: string[]) => {
+        if (!sceneMgr.current || storeys.length === 0) return;
+
+        const storeySet = new Set(storeys.filter(Boolean));
+        if (storeySet.size === 0) return;
+
+        const matches: string[] = [];
+        sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
+            if (!(obj as THREE.Mesh).isMesh) return;
+            const storey = obj.userData?.ifcMetadata?.storey;
+            if (storey && storeySet.has(storey)) {
+                matches.push(obj.uuid);
+            }
+        });
+
+        if (matches.length === 0) {
+            setToast({
+                message: `${t("failed")}: ${t("no_matching_ifc_filter") || "没有匹配当前 IFC 筛选的构件"}`,
+                type: "info"
+            });
+            return;
+        }
+
+        sceneMgr.current.isolateObjects(matches);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set(matches));
+        setSelectedUuids([]);
+        setSelectedProps(null);
+        setSelectedIfcStorey("");
+        updateTree();
+        setToast({
+            message: `${t("ifc_workset_applied") || "已按楼层工作集隔离显示"}: ${storeys.join(" / ")}`,
+            type: "success"
+        });
+    }, [t, updateTree]);
 
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
@@ -909,6 +959,7 @@ export const ThreeViewer = ({
 
     const handleClearSelection = () => {
         setSelectedUuids([]);
+        setSelectedIfcStorey("");
         sceneMgr.current?.highlightObjects([]);
     };
 
@@ -1299,6 +1350,7 @@ export const ThreeViewer = ({
         if (!obj) {
             setSelectedUuids([]);
             setSelectedProps(null);
+            setSelectedIfcStorey("");
             sceneMgr.current.highlightObjects([]);
             return;
         }
@@ -1337,6 +1389,20 @@ export const ThreeViewer = ({
         }
 
         const target = realObj || obj; // 优先使用真实对象，否则使用传入的对象（可能是 StructureTreeNode）
+        const targetStorey =
+            target?.userData?.ifcMetadata?.storey ||
+            (target instanceof THREE.Object3D
+                ? (() => {
+                      let cursor: THREE.Object3D | null = target;
+                      while (cursor) {
+                          const storey = cursor.userData?.ifcMetadata?.storey;
+                          if (storey) return storey;
+                          cursor = cursor.parent;
+                      }
+                      return "";
+                  })()
+                : "");
+        setSelectedIfcStorey(targetStorey || "");
 
         const basicProps: Record<string, string> = {};
         const geoProps: Record<string, string> = {};
@@ -1757,6 +1823,7 @@ export const ThreeViewer = ({
                     await sceneMgr.current?.clear();
                     setSelectedUuids([]);
                     setSelectedProps(null);
+                    setSelectedIfcStorey("");
                     ifcPropertyCacheRef.current.clear();
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
@@ -1894,6 +1961,7 @@ export const ThreeViewer = ({
                                 treeRoot={treeRoot}
                                 setTreeRoot={setTreeRoot}
                                 selectedUuid={selectedUuid}
+                                selectedStorey={selectedIfcStorey}
                                 onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
                                 onDelete={(obj) => {
@@ -1905,6 +1973,7 @@ export const ThreeViewer = ({
                                 onIsolate={handleIsolateObject}
                                 onShowAll={handleShowAll}
                                 onApplyIfcFiltersToViewport={handleApplyIfcFiltersToViewport}
+                                onApplyStoreyWorkset={handleApplyStoreyWorkset}
                             />
                         </div>
                         {/* Resize handle */}
@@ -2135,6 +2204,20 @@ export const ThreeViewer = ({
                     {(hiddenUuids.size > 0 || isolatedUuids.size > 0) && (
                         <button className="ui-statusbar-tag" onClick={handleShowAll}>
                             {hiddenUuids.size > 0 ? `${t("hide_selected") || "隐藏选中"} ${hiddenUuids.size}` : `${t("isolate_selection") || "隔离选中"} ${isolatedUuids.size}`}
+                        </button>
+                    )}
+                    {ifcGridDiagnostics.length > 0 && (
+                        <button
+                            className="ui-statusbar-tag"
+                            title={ifcGridDiagnostics.join(", ")}
+                            onClick={() =>
+                                setToast({
+                                    message: `${t("ifc_grid_diagnostics") || "轴网诊断"}: ${ifcGridDiagnostics.slice(0, 6).join(", ")}`,
+                                    type: "info"
+                                })
+                            }
+                        >
+                            {(t("ifc_grid_diagnostics") || "轴网诊断")} {ifcGridDiagnostics.length}
                         </button>
                     )}
                 </div>
