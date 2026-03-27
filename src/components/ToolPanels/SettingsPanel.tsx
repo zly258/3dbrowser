@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { TFunc, Lang } from "../../theme/Locales";
 import { SceneSettings } from "../../utils/SceneManager";
 import { FloatingPanel } from "./FloatingPanel";
@@ -10,30 +10,7 @@ import {
     ColorPicker
 } from "../common";
 
-/**
- * Section - 设置面板中的分节组件
- * 用于将相关设置项分组显示，带有标题和分隔线
- */
-const Section: React.FC<{
-  title: string;      // 分节标题
-  children?: React.ReactNode;  // 分节内容
-}> = ({ title, children }) => (
-  <div className="mb-3">
-    <div
-      className="text-xs font-semibold uppercase"
-      style={{
-        marginBottom: '6px',
-        paddingBottom: '4px',
-        color: 'var(--text-secondary)',
-        borderBottom: '1px solid var(--border-color)',
-        letterSpacing: '0.5px',
-      }}
-    >
-      {title}
-    </div>
-    {children}
-  </div>
-);
+type SettingsTab = "general" | "viewport" | "import" | "highlight";
 
 /**
  * Row - 设置面板中的行布局组件
@@ -88,6 +65,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   // 样式配置
   theme           // 主题配置
 }) => {
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+
+  const tabOptions = [
+    { value: "general", label: t("setting_general") || "通用" },
+    { value: "viewport", label: t("st_viewport") || "视口" },
+    { value: "import", label: t("st_import_settings") || "导入" },
+    { value: "highlight", label: t("st_highlight") || "高亮" }
+  ];
+
   return (
     <FloatingPanel
       title={t("settings")}
@@ -99,8 +85,16 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       theme={theme}
     >
       <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px', height: '100%', overflowY: 'auto' }}>
-        {/* 通用设置 */}
-        <Section title={t("setting_general")}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-panel)', paddingBottom: '6px' }}>
+          <SegmentedControl
+            options={tabOptions}
+            value={activeTab}
+            onChange={(value) => setActiveTab(value as SettingsTab)}
+          />
+        </div>
+
+        {activeTab === "general" && (
+          <div className="mb-2">
             {/* 主题选择 */}
             <Row label={t("st_theme")} labelWidth="70px">
               <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -149,10 +143,11 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 />
               </div>
             </Row>
-        </Section>
+          </div>
+        )}
 
-        {/* 视口设置 */}
-        <Section title={t("st_viewport")}>
+        {activeTab === "viewport" && (
+          <div className="mb-2">
           <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -175,18 +170,22 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               onChange={(v) => onUpdate({ adaptiveQuality: v })}
             />
           </Row>
-        </Section>
+          </div>
+        )}
 
-        <Section title={t("st_import_settings")}>
+        {activeTab === "import" && (
+          <div className="mb-2">
           <Row label={t("ifc_grid_visible") || "IFC 轴网"} labelWidth="90px">
             <Switch
               checked={settings.ifcGridVisible !== false}
               onChange={(v) => onUpdate({ ifcGridVisible: v })}
             />
           </Row>
-        </Section>
+          </div>
+        )}
 
-        <Section title={t("st_highlight") || "高亮设置"}>
+        {activeTab === "highlight" && (
+          <div className="mb-2">
           <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="90px" stretch={true}>
             <ColorPicker
               value={settings.highlightColor || "#ff9f1c"}
@@ -199,7 +198,8 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               onChange={(value) => onUpdate({ highlightShowBox: value })}
             />
           </Row>
-        </Section>
+          </div>
+        )}
       </div>
     </FloatingPanel>
   );

@@ -3899,7 +3899,7 @@ export class SceneManager {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const extent = maxDim > 0 ? maxDim : 100;
-        const padding = 1.2;
+        const padding = 1.08;
 
         const w = this.canvas.clientWidth;
         const h = this.canvas.clientHeight;
@@ -3962,7 +3962,7 @@ export class SceneManager {
             const targetLookAt = center.clone();
 
             // 在保持当前视角方向的前提下，按相机朝向投影模型范围并计算充满视口所需 zoom
-            const paddingForOrientationFit = 1.08;
+            const paddingForOrientationFit = 1.03;
             const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
             const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
             const halfBaseWidth = Math.max(1e-6, (this.camera.right - this.camera.left) * 0.5);
