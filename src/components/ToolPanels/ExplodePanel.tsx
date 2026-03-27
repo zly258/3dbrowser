@@ -57,7 +57,9 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
       title={t("explode_title") || "爆炸图"}
       onClose={onClose}
       width={340}
-      modal={true}
+      storageId="tool_explode"
+      modal={false}
+      autoHeight={true}
       theme={theme}
     >
       <div
