@@ -1489,6 +1489,12 @@ body.font-loose,
   color: var(--text-secondary);
 }
 
+.ui-tree-locator {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 6px;
+}
+
 .ui-search-clear:hover {
   background-color: var(--bg-hover);
   color: var(--text-primary);

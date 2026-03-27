@@ -36,6 +36,8 @@ interface IfcFilterState {
     material: string;
 }
 
+type LocatorMode = "all" | "name" | "globalId" | "classification" | "typeName";
+
 export const buildTree = (object: any, depth = 0): TreeNode => {
     const isTiles = object.name === "3D Tileset";
     const isMesh = object.isMesh;
@@ -177,6 +179,29 @@ const rawTreeContainsUuid = (rawNode: any, targetUuid: string): boolean => {
     return children.some((child) => rawTreeContainsUuid(child, targetUuid));
 };
 
+const getNodeLocatorText = (node: TreeNode | any, mode: LocatorMode) => {
+    const source = node?.object ?? node;
+    const meta = (source?.userData?.ifcMetadata || {}) as IfcMetadata;
+    const valuesByMode: Record<LocatorMode, Array<string | undefined | null | number>> = {
+        all: [
+            source?.name,
+            meta.globalId,
+            meta.typeName,
+            meta.category,
+            ...(meta.classifications || [])
+        ],
+        name: [source?.name],
+        globalId: [meta.globalId],
+        classification: meta.classifications || [],
+        typeName: [meta.typeName, meta.category]
+    };
+
+    return valuesByMode[mode]
+        .filter((value) => value !== undefined && value !== null && value !== "")
+        .join(" ")
+        .toLowerCase();
+};
+
 interface SceneTreeProps {
     t: (key: string) => string;
     treeRoot: TreeNode[];
@@ -211,6 +236,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onApplyStoreyWorkset
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
+    const [locatorMode, setLocatorMode] = useState<LocatorMode>("all");
+    const [locatorQuery, setLocatorQuery] = useState("");
     const [filters, setFilters] = useState<IfcFilterState>({
         storey: "",
         system: "",
@@ -372,6 +399,22 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }
         return null;
     }, [searchQuery, treeRoot]);
+    const locatorMatches = useMemo(() => {
+        if (!locatorQuery.trim()) return [];
+        const query = locatorQuery.trim().toLowerCase();
+        const results: TreeNode[] = [];
+        const stack = [...treeRoot];
+        while (stack.length > 0) {
+            const node = stack.shift()!;
+            if (getNodeLocatorText(node, locatorMode).includes(query)) {
+                results.push(node);
+            }
+            getRawChildren(node)
+                .map((child) => createTreeNodeFromRaw(child, (node.depth ?? 0) + 1))
+                .forEach((child) => stack.push(child));
+        }
+        return results;
+    }, [locatorMode, locatorQuery, treeRoot]);
     const rowHeight = 24;
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
@@ -438,6 +481,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         onFocus?.(firstSearchMatch.object);
     };
 
+    const handleLocateIfcMatch = (matchIndex = 0) => {
+        const target = locatorMatches[matchIndex];
+        if (!target) return;
+        onSelect(target.uuid, target.object);
+        onFocus?.(target.object);
+    };
+
     return (
         <div className="ui-tree-panel">
             <div className="ui-search-bar">
@@ -473,6 +523,55 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             disabled={!firstSearchMatch}
                         >
                             {t("locate_first_match") || "定位首个匹配"}
+                        </Button>
+                    </div>
+                )}
+                <div className="ui-tree-locator">
+                    <Select
+                        value={locatorMode}
+                        onChange={(value) => setLocatorMode(value as LocatorMode)}
+                        options={[
+                            { value: "all", label: t("ifc_locator_all") || "综合" },
+                            { value: "name", label: t("ifc_locator_name") || "名称" },
+                            { value: "globalId", label: t("ifc_locator_globalid") || "GlobalId" },
+                            { value: "classification", label: t("ifc_locator_classification") || "分类编码" },
+                            { value: "typeName", label: t("ifc_locator_type") || "类型" }
+                        ]}
+                        className="ui-input-compact"
+                    />
+                    <div className="ui-search-input-wrap">
+                        <input
+                            type="text"
+                            placeholder={t("ifc_locator_placeholder") || "按 IFC 标识定位..."}
+                            value={locatorQuery}
+                            onChange={(e) => setLocatorQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleLocateIfcMatch();
+                                }
+                            }}
+                            className="ui-input ui-input-compact"
+                        />
+                        {locatorQuery && (
+                            <button className="ui-search-clear" onClick={() => setLocatorQuery("")}>
+                                <IconClose width={14} height={14} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+                {locatorQuery && (
+                    <div className="ui-tree-search-meta">
+                        <span>
+                            {(t("ifc_locator_results") || "IFC结果")}: {locatorMatches.length}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            className="ui-properties-action"
+                            onClick={() => handleLocateIfcMatch()}
+                            disabled={locatorMatches.length === 0}
+                        >
+                            {t("ifc_locator_action") || "定位构件"}
                         </Button>
                     </div>
                 )}
