@@ -1550,11 +1550,12 @@ export const ThreeViewer = ({
         setLocatedUuid(null);
         setLocateResultUuids([]);
         sceneMgr.current?.clearLocateFocus();
+        sceneMgr.current?.highlightObjects(selectedUuids);
         if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
             sceneMgr.current?.setAllVisibility(true);
             updateTree();
         }
-    }, [hiddenUuids, isolatedUuids, updateTree]);
+    }, [hiddenUuids, isolatedUuids, selectedUuids, updateTree]);
 
     const processFiles = async (items: (File | string)[]) => {
         if (!items.length || !sceneMgr.current) return;

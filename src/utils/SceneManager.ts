@@ -136,6 +136,7 @@ export class SceneManager {
     private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
     private highlightedUuids: Set<string> = new Set();
     private locateFocusUuid: string | null = null;
+    private locateResultSet = new Set<string>();
     private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
     private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
@@ -3418,15 +3419,41 @@ export class SceneManager {
             if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         });
         this.locateDimmedInstances.clear();
+        this.locateResultSet.clear();
         this.locateFocusUuid = null;
+        this.highlightObjects([]);
+    }
+
+    private hasSameLocateResultSet(uuids: string[]) {
+        if (this.locateResultSet.size !== uuids.length) return false;
+        for (const uuid of uuids) {
+            if (!this.locateResultSet.has(uuid)) return false;
+        }
+        return true;
+    }
+
+    private updateLocateFocusHighlight(uuid: string | null) {
+        this.locateFocusUuid = uuid;
+        this.highlightObject(uuid);
     }
 
     setLocateResultSet(uuids: string[], focusUuid: string | null = null) {
-        this.clearLocateFocus();
-        const resultSet = new Set(uuids.filter(Boolean));
-        if (resultSet.size === 0) return;
+        const normalized = Array.from(new Set(uuids.filter(Boolean)));
+        if (normalized.length === 0) {
+            this.clearLocateFocus();
+            return;
+        }
 
-        this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : Array.from(resultSet)[0];
+        if (this.hasSameLocateResultSet(normalized)) {
+            const nextFocus = focusUuid && this.locateResultSet.has(focusUuid) ? focusUuid : normalized[0];
+            this.updateLocateFocusHighlight(nextFocus);
+            return;
+        }
+
+        this.clearLocateFocus();
+        const resultSet = new Set(normalized);
+        this.locateResultSet = resultSet;
+        this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : normalized[0];
 
         const dimmedColor = new THREE.Color("#d6d9df");
         const accentColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
@@ -3454,7 +3481,14 @@ export class SceneManager {
                 if ("depthWrite" in cloned) cloned.depthWrite = true;
                 if ("color" in cloned && cloned.color) {
                     const baseColor = cloned.color.clone();
-                    cloned.color.copy(isMatched ? baseColor.lerp(accentColor, 0.82) : baseColor.lerp(dimmedColor, 0.82));
+                    if (isMatched) {
+                        cloned.color.copy(baseColor.lerp(accentColor, 0.82));
+                    } else {
+                        cloned.transparent = true;
+                        cloned.opacity = 0.14;
+                        cloned.depthWrite = false;
+                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.72));
+                    }
                 }
                 if ("emissive" in cloned && cloned.emissive) {
                     cloned.emissive.copy(isMatched ? accentColor.clone().multiplyScalar(0.16) : new THREE.Color(0x000000));
@@ -3484,6 +3518,8 @@ export class SceneManager {
                 if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
             });
         });
+
+        this.updateLocateFocusHighlight(this.locateFocusUuid);
     }
 
     setLocateFocus(uuid: string | null) {
