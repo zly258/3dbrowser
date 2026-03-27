@@ -701,7 +701,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
   justify-content: space-between;
   height: 24px;
-  padding: 0 12px;
+  padding: 0 8px;
   background-color: var(--bg-header);
   border-top: 1px solid var(--border-color);
   font-size: 11px;
@@ -712,7 +712,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-statusbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
 }
 
 .ui-statusbar-item {
@@ -1379,6 +1379,10 @@ body.font-loose,
   color: var(--text-primary);
 }
 
+.ui-statusbar-btn-compact {
+  padding: 2px;
+}
+
 .ui-statusbar-tag {
   display: flex;
   align-items: center;
@@ -1399,6 +1403,19 @@ body.font-loose,
   background-color: var(--bg-active);
 }
 
+.ui-statusbar-tag-compact {
+  gap: 4px;
+  padding: 1px 6px;
+}
+
+.ui-statusbar-brand {
+  letter-spacing: 0.3px;
+}
+
+.ui-divider-vertical-compact {
+  margin: 0 2px;
+}
+
 /* 链接 ：下划线区分，不用彩色 */
 .ui-link {
   color: var(--text-primary);
@@ -1414,9 +1431,9 @@ body.font-loose,
 /* 统计区域 */
 .ui-stats-group {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
-  padding-left: 12px;
+  padding-left: 8px;
   border-left: 1px solid var(--border-color);
 }
 
@@ -1432,7 +1449,7 @@ body.font-loose,
 /* 操作提示区域 */
 .ui-tips {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   opacity: 0.85;
   color: var(--text-secondary);
   font-size: 11px;
@@ -1442,7 +1459,7 @@ body.font-loose,
 .ui-chunk-progress {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--text-primary);
   font-size: 11px;
   -webkit-font-smoothing: antialiased;
@@ -1493,7 +1510,8 @@ body.font-loose,
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .ui-icon-btn {
@@ -1501,6 +1519,22 @@ body.font-loose,
   min-width: 28px;
   padding: 0;
   justify-content: center;
+}
+
+.ui-tree-locator-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  justify-content: center;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+}
+
+.ui-tree-locator-btn:hover {
+  border-color: var(--border-hover);
 }
 
 .ui-tree-locator {
@@ -1688,9 +1722,10 @@ body.font-loose,
 }
 
 .ui-tree-node.located {
-  background-color: rgba(245, 158, 11, 0.18);
-  box-shadow: inset 2px 0 0 #f59e0b;
+  background-color: rgba(245, 158, 11, 0.22);
+  box-shadow: inset 3px 0 0 #f59e0b;
   color: var(--text-primary);
+  font-weight: 700;
 }
 
 .ui-tree-expander {

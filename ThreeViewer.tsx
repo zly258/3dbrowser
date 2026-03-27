@@ -205,6 +205,8 @@ export const ThreeViewer = ({
             sunLongitude: 0,
             sunTime: 12,
             sunShadow: false,
+            highlightColor: "#ff9f1c",
+            highlightShowBox: false,
             clip: {
                 helperVisible: initialSettings?.clip?.helperVisible ?? false,
                 helperOpacity: initialSettings?.clip?.helperOpacity ?? 0.12,
@@ -2291,20 +2293,20 @@ export const ThreeViewer = ({
                         </div>
                     )}
                     <button
-                        className="ui-statusbar-btn"
+                        className="ui-statusbar-btn ui-statusbar-btn-compact"
                         onClick={() => handleThemeModeChange(themeMode === 'dark' ? 'light' : 'dark')}
                         title={themeMode === 'dark' ? t("theme_light") : t("theme_dark")}
                     >
                         {themeMode === 'dark' ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
                     </button>
                     <button
-                        className="ui-statusbar-tag"
+                        className="ui-statusbar-tag ui-statusbar-tag-compact"
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
                     >
                         {lang === 'zh' ? 'EN' : '中文'}
                     </button>
-                    <div className="ui-divider-vertical" style={{ height: '12px' }} />
-                    <div className="ui-statusbar-tag">
+                    <div className="ui-divider-vertical ui-divider-vertical-compact" style={{ height: '12px' }} />
+                    <div className="ui-statusbar-tag ui-statusbar-tag-compact ui-statusbar-brand">
                         <span style={{ fontWeight: '600', letterSpacing: '0.5px' }}>3D BROWSER</span>
                     </div>
                 </div>

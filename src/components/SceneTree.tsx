@@ -279,11 +279,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const systems = new Set<string>();
         const categories = new Set<string>();
         const materials = new Set<string>();
+        let hasIfcModel = false;
 
         const walk = (list: Array<TreeNode | any>) => {
             list.forEach((entry) => {
                 const source = entry?.object ?? entry;
                 const meta = source?.userData?.ifcMetadata as IfcMetadata | undefined;
+                if (source?.userData?.isIFC || meta) hasIfcModel = true;
                 if (meta?.storey) storeys.add(meta.storey);
                 if (meta?.category) categories.add(meta.category);
                 meta?.systems?.forEach((item) => systems.add(item));
@@ -300,7 +302,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             storeys: sort(storeys),
             systems: sort(systems),
             categories: sort(categories),
-            materials: sort(materials)
+            materials: sort(materials),
+            hasIfcModel
         };
     };
 
@@ -310,6 +313,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         ifcOptions.systems.length > 0 ||
         ifcOptions.categories.length > 0 ||
         ifcOptions.materials.length > 0;
+    const hasIfcLocator = ifcOptions.hasIfcModel;
     const hasActiveFilters = Object.values(filters).some(Boolean);
     const selectedStoreyIndex = selectedStorey ? ifcOptions.storeys.indexOf(selectedStorey) : -1;
     const adjacentStoreys = selectedStoreyIndex >= 0
@@ -570,47 +574,49 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         </Button>
                     </div>
                 )}
-                <div className="ui-tree-locator">
-                    <Select
-                        value={locatorMode}
-                        onChange={(value) => setLocatorMode(value as LocatorMode)}
-                        options={[
-                            { value: "all", label: t("ifc_locator_all") || "综合" },
-                            { value: "name", label: t("ifc_locator_name") || "名称" },
-                            { value: "globalId", label: t("ifc_locator_globalid") || "GlobalId" },
-                            { value: "classification", label: t("ifc_locator_classification") || "分类编码" },
-                            { value: "typeName", label: t("ifc_locator_type") || "类型" }
-                        ]}
-                        className="ui-input-compact"
-                    />
-                    <div className="ui-search-input-wrap">
-                        <input
-                            type="text"
-                            placeholder={t("ifc_locator_placeholder") || "按 IFC 标识定位..."}
-                            value={locatorQuery}
-                            onChange={(e) => {
-                                setLocatorQuery(e.target.value);
-                                setLocatorIndex(0);
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    handleLocateIfcMatch(clampedLocatorIndex);
-                                }
-                            }}
-                            className="ui-input ui-input-compact"
+                {hasIfcLocator && (
+                    <div className="ui-tree-locator">
+                        <Select
+                            value={locatorMode}
+                            onChange={(value) => setLocatorMode(value as LocatorMode)}
+                            options={[
+                                { value: "all", label: t("ifc_locator_all") || "综合" },
+                                { value: "name", label: t("ifc_locator_name") || "名称" },
+                                { value: "globalId", label: t("ifc_locator_globalid") || "GlobalId" },
+                                { value: "classification", label: t("ifc_locator_classification") || "分类编码" },
+                                { value: "typeName", label: t("ifc_locator_type") || "类型" }
+                            ]}
+                            className="ui-input-compact"
                         />
-                        {locatorQuery && (
-                            <button className="ui-search-clear" onClick={() => {
-                                setLocatorQuery("");
-                                setLocatorIndex(0);
-                            }}>
-                                <IconClose width={14} height={14} />
-                            </button>
-                        )}
+                        <div className="ui-search-input-wrap">
+                            <input
+                                type="text"
+                                placeholder={t("ifc_locator_placeholder") || "按 IFC 标识定位..."}
+                                value={locatorQuery}
+                                onChange={(e) => {
+                                    setLocatorQuery(e.target.value);
+                                    setLocatorIndex(0);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        handleLocateIfcMatch(clampedLocatorIndex);
+                                    }
+                                }}
+                                className="ui-input ui-input-compact"
+                            />
+                            {locatorQuery && (
+                                <button className="ui-search-clear" onClick={() => {
+                                    setLocatorQuery("");
+                                    setLocatorIndex(0);
+                                }}>
+                                    <IconClose width={14} height={14} />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                </div>
-                {locatorQuery && (
+                )}
+                {hasIfcLocator && locatorQuery && (
                     <div className="ui-tree-search-meta">
                         <span>
                             {(t("ifc_locator_results") || "IFC结果")}: {locatorMatches.length}
@@ -619,7 +625,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         <div className="ui-tree-search-actions">
                             <Button
                                 variant="ghost"
-                                className="ui-properties-action ui-icon-btn"
+                                className="ui-properties-action ui-icon-btn ui-tree-locator-btn"
                                 onClick={() => {
                                     const nextIndex = Math.max(0, clampedLocatorIndex - 1);
                                     setLocatorIndex(nextIndex);
@@ -628,11 +634,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 disabled={locatorMatches.length === 0 || clampedLocatorIndex === 0}
                                 title={t("ifc_locator_prev") || "上一个"}
                             >
-                                <IconChevronLeft size={14} />
+                                <IconChevronLeft size={18} />
                             </Button>
                             <Button
                                 variant="ghost"
-                                className="ui-properties-action ui-icon-btn"
+                                className="ui-properties-action ui-icon-btn ui-tree-locator-btn"
                                 onClick={() => {
                                     const nextIndex = Math.min(locatorMatches.length - 1, clampedLocatorIndex + 1);
                                     setLocatorIndex(nextIndex);
@@ -641,16 +647,16 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 disabled={locatorMatches.length === 0 || clampedLocatorIndex >= locatorMatches.length - 1}
                                 title={t("ifc_locator_next") || "下一个"}
                             >
-                                <IconChevronRight size={14} />
+                                <IconChevronRight size={18} />
                             </Button>
                             <Button
                                 variant="ghost"
-                                className="ui-properties-action ui-icon-btn"
+                                className="ui-properties-action ui-icon-btn ui-tree-locator-btn"
                                 onClick={() => handleLocateIfcMatch(clampedLocatorIndex)}
                                 disabled={locatorMatches.length === 0}
                                 title={t("ifc_locator_action") || "定位构件"}
                             >
-                                <IconTarget size={14} />
+                                <IconTarget size={18} />
                             </Button>
                         </div>
                     </div>
@@ -758,7 +764,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
                                 style={{ paddingLeft: 8 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
-                                onDoubleClick={() => onFocus?.(node.object)}
+                                onDoubleClick={() => (onLocate ? onLocate(node.object) : onFocus?.(node.object))}
                                 onContextMenu={(e) => {
                                     e.preventDefault();
                                     setContextMenu({ x: e.clientX, y: e.clientY, node });
