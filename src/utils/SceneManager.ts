@@ -65,6 +65,8 @@ export interface StructureTreeNode {
     userData?: any;
 }
 
+type ExplodeMode = 'radial' | 'horizontal' | 'vertical';
+
 interface ChunkRuntimeProfile {
     name: 'compact' | 'balanced' | 'massive';
     movingFocusCentralityThreshold: number;
@@ -144,8 +146,9 @@ export class SceneManager {
     private explodeEnabled = false;
     private explodeStrength = 0;
     private explodeCenter = new THREE.Vector3();
-    private explodeObjectStates = new Map<string, { object: THREE.Object3D; basePosition: THREE.Vector3; directionLocal: THREE.Vector3 }>();
-    private explodeInstanceStates = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; baseMatrix: THREE.Matrix4; directionLocal: THREE.Vector3 }>();
+    private explodeMode: ExplodeMode = 'radial';
+    private explodeObjectStates = new Map<string, { object: THREE.Object3D; basePosition: THREE.Vector3; directionLocal: THREE.Vector3; weight: number }>();
+    private explodeInstanceStates = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; baseMatrix: THREE.Matrix4; directionLocal: THREE.Vector3; weight: number }>();
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -3418,6 +3421,23 @@ export class SceneManager {
         return directionWorld.clone().transformDirection(matrixWorld.clone().invert()).normalize();
     }
 
+    private getExplodeWorldDirection(vectorFromCenter: THREE.Vector3) {
+        const direction = vectorFromCenter.clone();
+        if (this.explodeMode === 'horizontal') {
+            direction.z = 0;
+        } else if (this.explodeMode === 'vertical') {
+            direction.x = 0;
+            direction.y = 0;
+            direction.z = direction.z >= 0 ? 1 : -1;
+        }
+        if (direction.lengthSq() < 1e-8) {
+            if (this.explodeMode === 'vertical') return new THREE.Vector3(0, 0, 1);
+            if (this.explodeMode === 'horizontal') return new THREE.Vector3(1, 0, 0);
+            return new THREE.Vector3(0, 0, 1);
+        }
+        return direction.normalize();
+    }
+
     private captureExplodeSnapshot() {
         this.explodeObjectStates.clear();
         this.explodeInstanceStates.clear();
@@ -3430,6 +3450,7 @@ export class SceneManager {
         }
 
         this.explodeCenter.copy(bounds.getCenter(new THREE.Vector3()));
+        const radius = Math.max(bounds.getSize(new THREE.Vector3()).length() * 0.5, 1);
         const objectBox = new THREE.Box3();
         const objectCenter = new THREE.Vector3();
 
@@ -3440,14 +3461,15 @@ export class SceneManager {
             objectBox.setFromObject(obj);
             if (objectBox.isEmpty()) return;
             objectCenter.copy(objectBox.getCenter(new THREE.Vector3()));
-            const directionWorld = objectCenter.sub(this.explodeCenter);
-            if (directionWorld.lengthSq() < 1e-8) directionWorld.set(0, 0, 1);
-            else directionWorld.normalize();
+            const vectorFromCenter = objectCenter.sub(this.explodeCenter);
+            const weight = THREE.MathUtils.clamp(vectorFromCenter.length() / radius, 0.18, 1.25);
+            const directionWorld = this.getExplodeWorldDirection(vectorFromCenter);
             const directionLocal = this.toLocalDirection(directionWorld, obj.parent?.matrixWorld || new THREE.Matrix4());
             this.explodeObjectStates.set(obj.uuid, {
                 object: obj,
                 basePosition: obj.position.clone(),
-                directionLocal
+                directionLocal,
+                weight
             });
         });
 
@@ -3468,14 +3490,15 @@ export class SceneManager {
                 instanceBox.copy(geometry.boundingBox).applyMatrix4(worldMatrix);
                 if (instanceBox.isEmpty()) return;
                 objectCenter.copy(instanceBox.getCenter(new THREE.Vector3()));
-                const directionWorld = objectCenter.sub(this.explodeCenter);
-                if (directionWorld.lengthSq() < 1e-8) directionWorld.set(0, 0, 1);
-                else directionWorld.normalize();
+                const vectorFromCenter = objectCenter.sub(this.explodeCenter);
+                const weight = THREE.MathUtils.clamp(vectorFromCenter.length() / radius, 0.18, 1.25);
+                const directionWorld = this.getExplodeWorldDirection(vectorFromCenter);
                 this.explodeInstanceStates.set(key, {
                     mesh: mapping.mesh,
                     instanceId: mapping.instanceId,
                     baseMatrix: instanceMatrix.clone(),
-                    directionLocal: this.toLocalDirection(directionWorld, mapping.mesh.matrixWorld)
+                    directionLocal: this.toLocalDirection(directionWorld, mapping.mesh.matrixWorld),
+                    weight
                 });
             });
         });
@@ -3484,10 +3507,10 @@ export class SceneManager {
     private applyExplodeState() {
         const bounds = this.computeTotalBounds(true, true);
         const size = bounds.isEmpty() ? new THREE.Vector3(100, 100, 100) : bounds.getSize(new THREE.Vector3());
-        const magnitude = Math.max(size.length() * 0.12 * (this.explodeStrength / 100), 0);
+        const magnitude = Math.max(size.length() * 0.08 * (this.explodeStrength / 100), 0);
 
         this.explodeObjectStates.forEach((state) => {
-            state.object.position.copy(state.basePosition).addScaledVector(state.directionLocal, magnitude);
+            state.object.position.copy(state.basePosition).addScaledVector(state.directionLocal, magnitude * state.weight);
             state.object.updateMatrixWorld();
         });
 
@@ -3497,7 +3520,7 @@ export class SceneManager {
         this.explodeInstanceStates.forEach((state) => {
             const matrix = state.baseMatrix.clone();
             matrix.decompose(translation, quaternion, scale);
-            translation.addScaledVector(state.directionLocal, magnitude);
+            translation.addScaledVector(state.directionLocal, magnitude * state.weight);
             matrix.compose(translation, quaternion, scale);
             state.mesh.setMatrixAt(state.instanceId, matrix);
             if (state.mesh.instanceMatrix) state.mesh.instanceMatrix.needsUpdate = true;
@@ -3546,6 +3569,14 @@ export class SceneManager {
         if (this.explodeObjectStates.size === 0 && this.explodeInstanceStates.size === 0) {
             this.captureExplodeSnapshot();
         }
+        this.applyExplodeState();
+    }
+
+    setExplodeMode(mode: ExplodeMode) {
+        this.explodeMode = mode;
+        if (!this.explodeEnabled) return;
+        this.restoreExplodeSnapshot();
+        this.captureExplodeSnapshot();
         this.applyExplodeState();
     }
 
@@ -4052,7 +4083,7 @@ export class SceneManager {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const extent = maxDim > 0 ? maxDim : 100;
-        const padding = 1.08;
+        const padding = 1.02;
 
         const w = this.canvas.clientWidth;
         const h = this.canvas.clientHeight;
@@ -4115,7 +4146,7 @@ export class SceneManager {
             const targetLookAt = center.clone();
 
             // 在保持当前视角方向的前提下，按相机朝向投影模型范围并计算充满视口所需 zoom
-            const paddingForOrientationFit = 1.03;
+            const paddingForOrientationFit = 1.01;
             const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
             const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
             const halfBaseWidth = Math.max(1e-6, (this.camera.right - this.camera.left) * 0.5);

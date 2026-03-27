@@ -1,15 +1,19 @@
 import React from "react";
 import { TFunc } from "../../theme/Locales";
 import { FloatingPanel } from "./FloatingPanel";
-import { Switch, Slider, Button } from "../common";
+import { Switch, Slider, Button, SegmentedControl } from "../common";
+
+type ExplodeMode = "radial" | "horizontal" | "vertical";
 
 interface ExplodePanelProps {
   t: TFunc;
   onClose: () => void;
   enabled: boolean;
   strength: number;
+  mode: ExplodeMode;
   onEnabledChange: (value: boolean) => void;
   onStrengthChange: (value: number) => void;
+  onModeChange: (value: ExplodeMode) => void;
   onReset: () => void;
   theme?: any;
 }
@@ -47,8 +51,10 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
   onClose,
   enabled,
   strength,
+  mode,
   onEnabledChange,
   onStrengthChange,
+  onModeChange,
   onReset,
   theme
 }) => {
@@ -96,6 +102,17 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
               {strength}%
             </div>
           </div>
+        </Row>
+        <Row label={t("explode_mode") || "方向"} stretch={true}>
+          <SegmentedControl
+            options={[
+              { value: "radial", label: t("explode_mode_radial") || "四周" },
+              { value: "horizontal", label: t("explode_mode_horizontal") || "横向" },
+              { value: "vertical", label: t("explode_mode_vertical") || "纵向" }
+            ]}
+            value={mode}
+            onChange={(value) => onModeChange(value as ExplodeMode)}
+          />
         </Row>
         <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "4px" }}>
           <Button variant="ghost" className="ui-properties-action" onClick={onReset}>

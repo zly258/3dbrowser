@@ -131,6 +131,7 @@ export const ThreeViewer = ({
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode'>('none');
     const [explodeEnabled, setExplodeEnabled] = useState(false);
     const [explodeStrength, setExplodeStrength] = useState(32);
+    const [explodeMode, setExplodeMode] = useState<'radial' | 'horizontal' | 'vertical'>('radial');
 
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
@@ -1084,7 +1085,7 @@ export const ThreeViewer = ({
                         });
                         updateTree();
                         setStatus(t("tileset_loaded"));
-                        setTimeout(() => mgrInstance?.fitView(true), 500);
+                        setTimeout(() => mgrInstance?.fitView(false), 500);
                     } else {
                         modelItems.push(item);
                     }
@@ -1366,6 +1367,11 @@ export const ThreeViewer = ({
         sceneMgr.current.setExplodeStrength(explodeStrength);
     }, [explodeStrength]);
 
+    useEffect(() => {
+        if (!sceneMgr.current) return;
+        sceneMgr.current.setExplodeMode(explodeMode);
+    }, [explodeMode]);
+
 
     // --- 处理函数 ---
 
@@ -1608,7 +1614,7 @@ export const ThreeViewer = ({
             updateTree();
             setStatus(t("success"));
             console.log("[ThreeViewer] processFiles completed successfully");
-            sceneMgr.current?.fitView(true);
+            sceneMgr.current?.fitView(false);
         } catch (err) {
             console.error("[ThreeViewer] processFiles error:", err); 
             setStatus(t("failed")); 
@@ -1708,7 +1714,7 @@ export const ThreeViewer = ({
                     });
                     updateTree();
                     setStatus(t("tileset_loaded"));
-                    sceneMgr.current?.fitView(true);
+                    sceneMgr.current?.fitView(false);
                 }
             } else {
                 // 直接传递 URL 到 processFiles，让其内部处理或传递给加载器
@@ -1771,7 +1777,7 @@ export const ThreeViewer = ({
                 });
                 updateTree(); // Tileset root added to tree
                 setStatus(t("tileset_loaded"));
-                sceneMgr.current?.fitView(true);
+                sceneMgr.current?.fitView(false);
             }
         } catch (err) { console.error(err); setStatus(t("failed") + ": " + (err as Error).message); } 
         finally { setLoading(false); }
@@ -1908,6 +1914,7 @@ export const ThreeViewer = ({
                     completedFileSetsRef.current.clear(); // 清除已完成的文件集记录
                     setExplodeEnabled(false);
                     setExplodeStrength(32);
+                    setExplodeMode('radial');
                     updateTree();
                     setStatus(t("ready"));
                 } catch (error) {
@@ -2240,11 +2247,14 @@ export const ThreeViewer = ({
                             onClose={() => setActiveTool('none')}
                             enabled={explodeEnabled}
                             strength={explodeStrength}
+                            mode={explodeMode}
                             onEnabledChange={setExplodeEnabled}
                             onStrengthChange={setExplodeStrength}
+                            onModeChange={setExplodeMode}
                             onReset={() => {
                                 setExplodeEnabled(false);
                                 setExplodeStrength(32);
+                                setExplodeMode('radial');
                                 sceneMgr.current?.resetExplode();
                             }}
                             theme={theme}
