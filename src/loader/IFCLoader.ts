@@ -83,7 +83,8 @@ export const loadIFC = async (
     input: string | File | ArrayBuffer,
     onProgress: ProgressCallback, 
     t: TFunc,
-    libPath: string = './libs'
+    libPath: string = './libs',
+    settings?: { ifcGridVisible?: boolean }
 ): Promise<THREE.Group> => {
     // web-ifc 运行时按 wasmPath 懒加载并复用，避免重复 Init 开销
     const { ifcApi, WebIFC } = await getIfcRuntime(libPath);
@@ -330,6 +331,182 @@ export const loadIFC = async (
     rootGroup.userData.ifcAPI = ifcApi;
     rootGroup.userData.modelID = modelID;
     rootGroup.userData.layerMap = layerMap;
+    rootGroup.userData.ifcGridDiagnostics = [];
+
+    const createTextSprite = (text: string, position: THREE.Vector3, color: string) => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return new THREE.Sprite();
+
+        const font = 'bold 26px "Microsoft YaHei", Arial, sans-serif';
+        ctx.font = font;
+        const padding = 14;
+        const textWidth = Math.ceil(ctx.measureText(text).width);
+        canvas.width = textWidth + padding * 2;
+        canvas.height = 44;
+
+        ctx.font = font;
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+        ctx.fillStyle = "#111827";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false
+        }));
+        sprite.position.copy(position);
+        const baseScale = 3.8;
+        sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
+        sprite.renderOrder = 1002;
+        sprite.userData.isIfcGridHelper = true;
+        return sprite;
+    };
+
+    const getCartesianPoint = (pointRef: any): THREE.Vector3 | null => {
+        const pointId = resolveExpressId(pointRef);
+        if (!pointId) return null;
+        const point = getLineCached(pointId);
+        const coords = point?.Coordinates;
+        if (!coords) return null;
+
+        const values = Array.isArray(coords)
+            ? coords.map((coord) => (coord?.value ?? coord))
+            : [];
+        return new THREE.Vector3(
+            Number(values[0] || 0),
+            Number(values[1] || 0),
+            Number(values[2] || 0)
+        );
+    };
+
+    const placementMatrixCache = new Map<number, THREE.Matrix4>();
+
+    const getDirectionVector = (directionRef: any, fallback: THREE.Vector3) => {
+        const directionId = resolveExpressId(directionRef);
+        if (!directionId) return fallback.clone();
+        const direction = getLineCached(directionId);
+        const ratios = direction?.DirectionRatios;
+        if (!Array.isArray(ratios)) return fallback.clone();
+        const vector = new THREE.Vector3(
+            Number(ratios[0]?.value ?? ratios[0] ?? fallback.x),
+            Number(ratios[1]?.value ?? ratios[1] ?? fallback.y),
+            Number(ratios[2]?.value ?? ratios[2] ?? fallback.z)
+        );
+        return vector.lengthSq() > 0 ? vector.normalize() : fallback.clone();
+    };
+
+    const getAxisPlacementMatrix = (placementRef: any): THREE.Matrix4 => {
+        const placementId = resolveExpressId(placementRef);
+        const placement = placementId ? getLineCached(placementId) : placementRef;
+        if (!placement) return new THREE.Matrix4();
+
+        const location = getCartesianPoint(placement.Location) || new THREE.Vector3();
+        const zAxis = getDirectionVector(placement.Axis, new THREE.Vector3(0, 0, 1));
+        let xAxis = getDirectionVector(placement.RefDirection, new THREE.Vector3(1, 0, 0));
+        let yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+        if (yAxis.lengthSq() === 0) {
+            xAxis = new THREE.Vector3(1, 0, 0);
+            yAxis = new THREE.Vector3(0, 1, 0);
+        }
+        xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();
+
+        return new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis).setPosition(location);
+    };
+
+    const getObjectPlacementMatrix = (placementRef: any): THREE.Matrix4 => {
+        const placementId = resolveExpressId(placementRef);
+        if (!placementId) return new THREE.Matrix4();
+        if (placementMatrixCache.has(placementId)) {
+            return placementMatrixCache.get(placementId)!.clone();
+        }
+
+        const placement = getLineCached(placementId);
+        let matrix = new THREE.Matrix4();
+
+        if (placement?.is_a === "IFCLOCALPLACEMENT") {
+            const relative = getAxisPlacementMatrix(placement.RelativePlacement);
+            const parentId = resolveExpressId(placement.PlacementRelTo);
+            matrix = parentId
+                ? getObjectPlacementMatrix(parentId).multiply(relative)
+                : relative;
+        } else if (placement?.is_a === "IFCAXIS2PLACEMENT3D" || placement?.is_a === "IFCAXIS2PLACEMENT2D") {
+            matrix = getAxisPlacementMatrix(placement);
+        }
+
+        placementMatrixCache.set(placementId, matrix.clone());
+        return matrix;
+    };
+
+    const extractCurvePoints = (curveRef: any, visited = new Set<number>()): THREE.Vector3[] => {
+        const curveId = resolveExpressId(curveRef);
+        const curve = curveId ? getLineCached(curveId) : curveRef;
+        if (!curve) return [];
+        if (curveId && visited.has(curveId)) return [];
+        if (curveId) visited.add(curveId);
+
+        if (curve.is_a === "IFCPOLYLINE") {
+            return toExpressIds(curve.Points)
+                .map((pointId) => getCartesianPoint(pointId))
+                .filter((point): point is THREE.Vector3 => !!point);
+        }
+
+        if (curve.is_a === "IFCINDEXEDPOLYCURVE") {
+            const points = getLineCached(resolveExpressId(curve.Points) || 0);
+            const coordList = points?.CoordList || [];
+            return coordList.map((coord: any) => {
+                const values = Array.isArray(coord) ? coord.map((item) => item?.value ?? item) : [];
+                return new THREE.Vector3(Number(values[0] || 0), Number(values[1] || 0), Number(values[2] || 0));
+            });
+        }
+
+        if (curve.is_a === "IFCCOMPOSITECURVE") {
+            return toExpressIds(curve.Segments).flatMap((segmentId) => {
+                const segment = getLineCached(segmentId);
+                const points = extractCurvePoints(segment?.ParentCurve, visited);
+                return segment?.SameSense === false ? points.reverse() : points;
+            });
+        }
+
+        if (curve.is_a === "IFCTRIMMEDCURVE") {
+            const trim1 = toExpressIds(curve.Trim1).map((id) => getCartesianPoint(id)).filter((point): point is THREE.Vector3 => !!point);
+            const trim2 = toExpressIds(curve.Trim2).map((id) => getCartesianPoint(id)).filter((point): point is THREE.Vector3 => !!point);
+            if (trim1.length > 0 && trim2.length > 0) {
+                return [trim1[0], trim2[0]];
+            }
+            return extractCurvePoints(curve.BasisCurve, visited);
+        }
+
+        if (curve.is_a === "IFCLINE") {
+            const origin = getCartesianPoint(curve.Pnt) || new THREE.Vector3();
+            const direction = getDirectionVector(curve.Dir?.Orientation, new THREE.Vector3(1, 0, 0));
+            const magnitude = Number(curve.Dir?.Magnitude?.value ?? curve.Dir?.Magnitude ?? 1) || 1;
+            const span = 1000 * magnitude;
+            return [
+                origin.clone().addScaledVector(direction, -span),
+                origin.clone().addScaledVector(direction, span)
+            ];
+        }
+
+        if (curve.is_a === "IFCGRIDAXIS") {
+            return extractCurvePoints(curve.AxisCurve, visited);
+        }
+
+        rootGroup.userData.ifcGridDiagnostics.push(curve.is_a || `UnknownCurve:${curveId ?? "?"}`);
+
+        return [];
+    };
 
     // --- 空间结构解析优化 ---
     const nodesMap = new Map<number, THREE.Object3D>();
@@ -412,7 +589,8 @@ export const loadIFC = async (
                 systems: [],
                 materials: [],
                 classifications: [],
-                typeName: ""
+                typeName: "",
+                globalId: props.GlobalId?.value || ""
             }
         };
         parent.add(group);
@@ -470,6 +648,110 @@ export const loadIFC = async (
     };
 
     loadSpatialStructure();
+
+    const buildIfcGridHelpers = () => {
+        try {
+            const gridType = getIfcTypeCode(ifcApi, "IFCGRID");
+            const grids = ifcApi.GetLineIDsWithType(modelID, gridType);
+            if (!grids || grids.size() === 0) return;
+
+            const gridGroup = new THREE.Group();
+            gridGroup.name = "__IFCGridHelper";
+            gridGroup.visible = settings?.ifcGridVisible !== false;
+            gridGroup.userData.isIfcGridHelper = true;
+
+            const axisConfigs = [
+                { key: "UAxes", color: "#d97706" },
+                { key: "VAxes", color: "#2563eb" },
+                { key: "WAxes", color: "#059669" }
+            ];
+
+            const createAxisPolyline = (points: THREE.Vector3[], color: string) => {
+                const axisGroup = new THREE.Group();
+                axisGroup.userData.isIfcGridHelper = true;
+
+                const bounds = new THREE.Box3().setFromPoints(points);
+                const size = bounds.getSize(new THREE.Vector3());
+                const maxSpan = Math.max(size.x, size.y, size.z, 1);
+                const radius = THREE.MathUtils.clamp(maxSpan * 0.0015, 0.03, 0.35);
+                const material = new THREE.MeshBasicMaterial({
+                    color,
+                    transparent: true,
+                    opacity: 0.92,
+                    depthTest: false,
+                    depthWrite: false
+                });
+
+                for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex++) {
+                    const start = points[pointIndex];
+                    const end = points[pointIndex + 1];
+                    const direction = new THREE.Vector3().subVectors(end, start);
+                    const length = direction.length();
+                    if (length <= 0.0001) continue;
+
+                    const cylinder = new THREE.Mesh(
+                        new THREE.CylinderGeometry(radius, radius, length, 10),
+                        material
+                    );
+                    cylinder.position.copy(start).add(end).multiplyScalar(0.5);
+                    cylinder.quaternion.setFromUnitVectors(
+                        new THREE.Vector3(0, 1, 0),
+                        direction.normalize()
+                    );
+                    cylinder.renderOrder = 1000;
+                    cylinder.userData.isIfcGridHelper = true;
+                    axisGroup.add(cylinder);
+                }
+
+                points.forEach((point) => {
+                    const joint = new THREE.Mesh(
+                        new THREE.SphereGeometry(radius * 1.15, 10, 10),
+                        material
+                    );
+                    joint.position.copy(point);
+                    joint.renderOrder = 1001;
+                    joint.userData.isIfcGridHelper = true;
+                    axisGroup.add(joint);
+                });
+
+                return axisGroup;
+            };
+
+            for (let i = 0; i < grids.size(); i++) {
+                const grid = getLineCached(grids.get(i));
+                if (!grid) continue;
+
+                axisConfigs.forEach(({ key, color }) => {
+                    toExpressIds(grid[key]).forEach((axisId) => {
+                        const axis = getLineCached(axisId);
+                        const placementMatrix = getObjectPlacementMatrix(grid?.ObjectPlacement);
+                        const points = extractCurvePoints(axis?.AxisCurve).map((point) => point.clone().applyMatrix4(placementMatrix));
+                        if (points.length < 2) return;
+
+                        gridGroup.add(createAxisPolyline(points, color));
+
+                        const axisTag = axis?.AxisTag?.value || axis?.Name?.value || `${key}-${axisId}`;
+                        const start = points[0];
+                        const end = points[points.length - 1];
+                        const offset = new THREE.Vector3(0.12, 0.12, 0);
+                        gridGroup.add(createTextSprite(axisTag, start.clone().add(offset), color));
+                        if (start.distanceTo(end) > 1) {
+                            gridGroup.add(createTextSprite(axisTag, end.clone().add(offset), color));
+                        }
+                    });
+                });
+            }
+
+            if (gridGroup.children.length > 0) {
+                rootGroup.add(gridGroup);
+                rootGroup.userData.ifcGridHelper = gridGroup;
+            }
+        } catch (e) {
+            console.warn("构建 IFC 轴网失败", e);
+        }
+    };
+
+    buildIfcGridHelpers();
     const shouldDeferMetadata = buffer.byteLength > 20 * 1024 * 1024;
     const applyLayerMetadata = () => {
         for (const [expressID, meshes] of meshesByExpressId.entries()) {
@@ -882,6 +1164,7 @@ export const loadIFC = async (
             addGroupEntry(rawGroups, "IFC Diagnostics", "CurrentlyUnparsed", currentUnparsed.join(", "));
 
             return {
+                groups: rawGroups,
                 normalizedGroups,
                 rawGroups,
                 filterMeta: {
@@ -987,10 +1270,10 @@ export const loadIFC = async (
             }
             
             // 优化构件名称：获取真实的 IFC 类型作为名称前缀
+            const entity = getLineCached(expressID);
             try {
-                const props = getLineCached(expressID);
-                const ifcType = props.is_a || 'Item';
-                const ifcName = props.Name?.value || '';
+                const ifcType = entity?.is_a || 'Item';
+                const ifcName = entity?.Name?.value || '';
                 mesh.name = ifcName ? `${ifcType}: ${ifcName}` : `${ifcType} [${expressID}]`;
             } catch(e) {
                 mesh.name = `IFC Item ${expressID}`; 
@@ -1012,13 +1295,14 @@ export const loadIFC = async (
                 ...(typeId ? systemMap.get(typeId) || [] : [])
             ]);
             mesh.userData.ifcMetadata = {
-                category: getLineCached(expressID)?.is_a || "",
+                category: entity?.is_a || "",
                 storey: spatialMeta?.storey || "",
                 spatialPath: spatialMeta?.path || [],
                 systems: systemsForMesh,
                 materials: materialsForMesh,
                 classifications,
                 typeName: typeEntity?.Name?.value || "",
+                globalId: entity.GlobalId?.value || "",
                 typeEntity: typeEntity?.is_a || "",
                 render: color
                     ? {

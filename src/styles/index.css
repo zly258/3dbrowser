@@ -1454,6 +1454,9 @@ body.font-loose,
 .ui-search-bar {
   padding: 8px;
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .ui-search-input-wrap {
@@ -1475,6 +1478,15 @@ body.font-loose,
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
+}
+
+.ui-tree-search-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .ui-search-clear:hover {

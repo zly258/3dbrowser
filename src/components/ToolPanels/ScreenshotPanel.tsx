@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button } from "../CommonUI";
+import { Button } from "../common/Button";
 import { FloatingPanel } from "./FloatingPanel";
 
 interface ScreenshotPanelProps {

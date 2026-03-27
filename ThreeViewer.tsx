@@ -22,6 +22,7 @@ import { ContextMenu } from "./src/components/ContextMenu";
 import { IconClose, IconSun, IconMoon, IconActivity, IconBox, IconGrid } from "./src/theme/Icons";
 import { usePersistentState } from "./src/hooks/usePersistentState";
 import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "./src/viewer/fileLoading";
+import { buildSelectedPropertyGroups, PropertyGroups } from "./src/viewer/selectionProperties";
 
 // --- 全局样式注入 ---
 
@@ -41,20 +42,12 @@ export interface ThreeViewerProps {
     hideDeleteModel?: boolean;
 }
 
-type PropertyGroups = Record<string, Record<string, string>>;
 type IfcFilterState = {
     storey: string;
     system: string;
     category: string;
     material: string;
 };
-
-type SelectedPropsState =
-    | PropertyGroups
-    | {
-          defaultView?: string;
-          views: Record<string, { label: string; groups: PropertyGroups }>;
-      };
 
 
 // --- 主应用 ---
@@ -112,7 +105,7 @@ export const ThreeViewer = ({
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
     const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
-    const [selectedProps, setSelectedProps] = useState<SelectedPropsState | null>(null);
+    const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -200,6 +193,7 @@ export const ThreeViewer = ({
             toneMapping: 'aces',
             exposure: 1,
             shadowQuality: 'medium',
+            ifcGridVisible: true,
             adaptiveQuality: true,
             minPixelRatio: 0.8,
             maxPixelRatio: 2,
@@ -252,6 +246,7 @@ export const ThreeViewer = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
+    const ifcPropertyCacheRef = useRef<Map<string, PropertyGroups>>(new Map());
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
 
@@ -693,12 +688,16 @@ export const ThreeViewer = ({
         }
 
         const expandedMap = new Map<string, boolean>();
+        const loadedMap = new Map<string, boolean>();
         const collectExpanded = (nodes: any[]) => {
             const stack = (nodes || []).slice();
             while (stack.length) {
                 const n = stack.pop();
                 if (!n) continue;
-                if (typeof n.uuid === 'string') expandedMap.set(n.uuid, !!n.expanded);
+                if (typeof n.uuid === 'string') {
+                    expandedMap.set(n.uuid, !!n.expanded);
+                    loadedMap.set(n.uuid, n.childrenLoaded !== false);
+                }
                 if (Array.isArray(n.children) && n.children.length) {
                     for (const child of n.children) {
                         stack.push(child);
@@ -707,46 +706,27 @@ export const ThreeViewer = ({
             }
         };
 
-        const convertNode = (node: any, depth = 0, isFileNode = false): any => {
-            const stack: {node: any, depth: number, isFileNode: boolean}[] = [{node, depth, isFileNode}];
-            const nodeMap = new Map<any, any>();
-            const childrenMap = new Map<any, any[]>();
-            const order: any[] = [];
+        const convertNode = (node: any, depth = 0, isFileNode = false, forceLoadChildren = false): any => {
+            const uuid = node.id;
+            const rawChildren = Array.isArray(node.children) ? node.children : [];
+            const hasChildren = rawChildren.length > 0;
+            const shouldLoadChildren = forceLoadChildren || loadedMap.get(uuid) === true;
 
-            // 第一遍：收集所有节点
-            while (stack.length) {
-                const {node: curr, depth: currDepth, isFileNode: currIsFileNode} = stack.pop()!;
-                if (nodeMap.has(curr)) continue; // 避免循环引用
-                const uuid = curr.id;
-                const converted = {
-                    uuid,
-                    name: curr.name,
-                    type: curr.type === 'Mesh' ? 'MESH' : 'GROUP',
-                    depth: currDepth,
-                    children: [], // 暂空
-                    expanded: expandedMap.get(uuid) ?? false,
-                    visible: curr.visible !== false,
-                    object: curr,
-                    isFileNode: currIsFileNode
-                };
-                nodeMap.set(curr, converted);
-                order.push(curr);
-                const children = curr.children || [];
-                childrenMap.set(curr, children);
-                // 子节点压栈，深度加1，isFileNode 为 false
-                for (let i = children.length - 1; i >= 0; i--) {
-                    stack.push({node: children[i], depth: currDepth + 1, isFileNode: false});
-                }
-            }
-
-            // 第二遍：构建 children 引用
-            for (const curr of order) {
-                const converted = nodeMap.get(curr);
-                const children = childrenMap.get(curr) || [];
-                converted.children = children.map(child => nodeMap.get(child)).filter(Boolean);
-            }
-
-            return nodeMap.get(node);
+            return {
+                uuid,
+                name: node.name,
+                type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
+                depth,
+                children: shouldLoadChildren
+                    ? rawChildren.map((child: any) => convertNode(child, depth + 1, false, false))
+                    : [],
+                expanded: expandedMap.get(uuid) ?? false,
+                visible: node.visible !== false,
+                object: node,
+                isFileNode,
+                hasChildren,
+                childrenLoaded: shouldLoadChildren
+            };
         };
 
         // 只显示 Root 的子节点，从而移除 Root 和 ImportedModels 这一层
@@ -756,10 +736,10 @@ export const ThreeViewer = ({
             (root.children || []).forEach((c: any) => {
                 if (c.name === "ImportedModels" || c.name === "Tilesets") {
                     (c.children || []).forEach((child: any) => {
-                        roots.push(convertNode(child, 0, true));
+                        roots.push(convertNode(child, 0, true, true));
                     });
                 } else {
-                    roots.push(convertNode(c, 0, true));
+                    roots.push(convertNode(c, 0, true, true));
                 }
             });
             return roots;
@@ -1360,8 +1340,7 @@ export const ThreeViewer = ({
 
         const basicProps: Record<string, string> = {};
         const geoProps: Record<string, string> = {};
-        let ifcNormalizedGroups: PropertyGroups | null = null;
-        let ifcRawGroups: PropertyGroups | null = null;
+        let ifcGroups: PropertyGroups | null = null;
 
         basicProps[t("prop_name")] = target.name || "Unnamed";
         basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
@@ -1408,76 +1387,62 @@ export const ThreeViewer = ({
                 geoProps[t("prop_volume")] = geometryData.volume.toFixed(3);
             }
 
-            // --- IFC 属性获取逻辑 ---
-            // 检查 userData 或 parent.userData
-            const userData = target.userData || {};
-            const parentUserData = target.parent?.userData || {};
-
-            if (userData.isIFC || parentUserData.isIFC) {
-                const ifcTarget = userData.isIFC ? target : target.parent;
-                if (ifcTarget && ifcTarget.userData.ifcAPI && ifcTarget.userData.modelID !== undefined) {
-                    const expressID = userData.expressID;
-                    if (expressID) {
-                        try {
-                            const ifcMgr = ifcTarget.userData.ifcManager;
-                            const ifcProps = await ifcMgr.getItemProperties(ifcTarget.userData.modelID, expressID);
-                            if (ifcProps?.normalizedGroups) {
-                                ifcNormalizedGroups = ifcProps.normalizedGroups;
-                                ifcRawGroups = ifcProps.rawGroups || ifcProps.normalizedGroups;
-                            }
-                        } catch(e) { console.error("IFC Props Error", e); }
-                    }
-                }
-            }
         } else if (target.userData?.boundingBox) {
              const size = new THREE.Vector3();
              target.userData.boundingBox.getSize(size);
              geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
         }
 
-        // 属性分组
-        const normalizedProps: PropertyGroups = {
-            [t("pg_basic")]: basicProps,
-            [t("pg_geo")]: geoProps
+        // --- IFC 属性获取逻辑 ---
+        const resolveIfcContext = (candidate: any) => {
+            let cursor = candidate instanceof THREE.Object3D ? candidate : null;
+            let expressID: number | undefined = candidate?.userData?.expressID;
+
+            while (cursor) {
+                if (cursor.userData?.expressID !== undefined && expressID === undefined) {
+                    expressID = cursor.userData.expressID;
+                }
+                if (cursor.userData?.ifcManager && cursor.userData?.modelID !== undefined) {
+                    return {
+                        ifcRoot: cursor,
+                        expressID
+                    };
+                }
+                cursor = cursor.parent;
+            }
+
+            return null;
         };
 
-        if (ifcNormalizedGroups) {
-            Object.assign(normalizedProps, ifcNormalizedGroups);
+        const ifcContext = resolveIfcContext(target);
+        if (ifcContext?.ifcRoot && ifcContext.expressID !== undefined) {
+            try {
+                const cacheKey = `${ifcContext.ifcRoot.userData.modelID}:${ifcContext.expressID}`;
+                ifcGroups = ifcPropertyCacheRef.current.get(cacheKey) || null;
+                if (!ifcGroups) {
+                    const ifcMgr = ifcContext.ifcRoot.userData.ifcManager;
+                    const ifcProps = await ifcMgr.getItemProperties(ifcContext.ifcRoot.userData.modelID, ifcContext.expressID);
+                    ifcGroups = ifcProps?.rawGroups || ifcProps?.groups || ifcProps?.normalizedGroups || null;
+                    if (ifcGroups) {
+                        ifcPropertyCacheRef.current.set(cacheKey, ifcGroups);
+                    }
+                }
+            } catch (e) {
+                console.error("IFC Props Error", e);
+            }
         }
 
         const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
-        if (nbimProps) {
-            normalizedProps["BIM 属性"] = nbimProps;
-        }
+        const selectedGroups = buildSelectedPropertyGroups({
+            basicLabel: t("pg_basic"),
+            geoLabel: t("pg_geo"),
+            basicProps,
+            geoProps,
+            ifcProps: ifcGroups,
+            nbimProps
+        });
 
-        if (ifcRawGroups) {
-            const rawProps: PropertyGroups = {
-                [t("pg_basic")]: basicProps,
-                [t("pg_geo")]: geoProps,
-                ...ifcRawGroups
-            };
-
-            if (nbimProps) {
-                rawProps["BIM 属性"] = nbimProps;
-            }
-
-            setSelectedProps({
-                defaultView: "normalized",
-                views: {
-                    normalized: {
-                        label: t("ifc_view_normalized") || "规范化",
-                        groups: normalizedProps
-                    },
-                    raw: {
-                        label: t("ifc_view_raw") || "原始 IFC",
-                        groups: rawProps
-                    }
-                }
-            });
-            return;
-        }
-
-        setSelectedProps(normalizedProps);
+        setSelectedProps(selectedGroups);
     };
 
     const processFiles = async (items: (File | string)[]) => {
@@ -1792,6 +1757,7 @@ export const ThreeViewer = ({
                     await sceneMgr.current?.clear();
                     setSelectedUuids([]);
                     setSelectedProps(null);
+                    ifcPropertyCacheRef.current.clear();
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
                     completedFileSetsRef.current.clear(); // 清除已完成的文件集记录

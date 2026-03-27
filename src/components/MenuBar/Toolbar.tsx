@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ThemeColors } from "../../theme/Styles";
-import { ImageButton } from "../CommonUI";
+import { ImageButton } from "../common/ImageButton";
 import {
     IconFolderOpen, IconFile, IconDownload, IconMaximize,
     IconRuler, IconScissors, IconSettings, IconInfo,

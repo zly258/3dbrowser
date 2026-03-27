@@ -156,10 +156,10 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Slider
-                  min={60}
+                  min={120}
                   max={180}
                   step={5}
-                  value={settings.viewCubeSize || 100}
+                  value={settings.viewCubeSize || 120}
                   onChange={(value) => onUpdate({ viewCubeSize: value })}
                 />
               </div>
@@ -172,6 +172,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             <Switch
               checked={settings.adaptiveQuality !== false}
               onChange={(v) => onUpdate({ adaptiveQuality: v })}
+            />
+          </Row>
+        </Section>
+
+        <Section title={t("st_import_settings")}>
+          <Row label={t("ifc_grid_visible") || "IFC 轴网"} labelWidth="90px">
+            <Switch
+              checked={settings.ifcGridVisible !== false}
+              onChange={(v) => onUpdate({ ifcGridVisible: v })}
             />
           </Row>
         </Section>
