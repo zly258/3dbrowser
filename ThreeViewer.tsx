@@ -371,6 +371,8 @@ export const ThreeViewer = ({
             setIsolatedUuids(new Set());
             updateTree();
         }
+        setLocatedUuid(null);
+        sceneMgr.current.clearLocateFocus();
     }, [hiddenUuids, isolatedUuids]);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
@@ -976,7 +978,11 @@ export const ThreeViewer = ({
     const handleClearLocate = useCallback(() => {
         setLocatedUuid(null);
         sceneMgr.current?.clearLocateFocus();
-    }, []);
+        if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
+            sceneMgr.current?.setAllVisibility(true);
+            updateTree();
+        }
+    }, [hiddenUuids, isolatedUuids, updateTree]);
 
     const handleClearSelection = () => {
         setSelectedUuids([]);
