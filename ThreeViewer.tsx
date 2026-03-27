@@ -1529,6 +1529,7 @@ export const ThreeViewer = ({
         setLocatedUuid(uuid);
         const resultSet = locateResultUuids.length > 0 ? locateResultUuids : [uuid];
         sceneMgr.current.setLocateResultSet(resultSet, uuid);
+        sceneMgr.current.highlightObject(uuid);
         sceneMgr.current.fitViewToObject(uuid);
         void handleSelect(obj);
     }, [handleSelect, locateResultUuids]);
@@ -1542,10 +1543,8 @@ export const ThreeViewer = ({
                 sceneMgr.current.setAllVisibility(true);
                 updateTree();
             }
-            return;
         }
-        sceneMgr.current.setLocateResultSet(uuids, locatedUuid && uuids.includes(locatedUuid) ? locatedUuid : uuids[0]);
-    }, [hiddenUuids.size, isolatedUuids.size, locatedUuid, updateTree]);
+    }, [hiddenUuids.size, isolatedUuids.size, updateTree]);
 
     const handleClearLocate = useCallback(() => {
         setLocatedUuid(null);

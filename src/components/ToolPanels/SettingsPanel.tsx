@@ -18,12 +18,12 @@ const Section: React.FC<{
   title: string;      // 分节标题
   children?: React.ReactNode;  // 分节内容
 }> = ({ title, children }) => (
-  <div className="mb-4">
+  <div className="mb-3">
     <div
       className="text-xs font-semibold uppercase"
       style={{
-        marginBottom: '10px',
-        paddingBottom: '6px',
+        marginBottom: '6px',
+        paddingBottom: '4px',
         color: 'var(--text-secondary)',
         borderBottom: '1px solid var(--border-color)',
         letterSpacing: '0.5px',
@@ -47,7 +47,7 @@ const Row: React.FC<{
 }> = ({ label, children, labelWidth = '80px', stretch = false }) => (
   <div
     className="flex items-center justify-between"
-    style={{ marginBottom: '10px', minHeight: '28px', gap: '16px' }}
+    style={{ marginBottom: '6px', minHeight: '26px', gap: '12px' }}
   >
     <span
       className="text-sm text-secondary flex-shrink-0"
@@ -98,7 +98,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       movable={false}
       theme={theme}
     >
-      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', overflowY: 'auto' }}>
+      <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px', height: '100%', overflowY: 'auto' }}>
         {/* 通用设置 */}
         <Section title={t("setting_general")}>
             {/* 主题选择 */}
@@ -154,7 +154,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         {/* 视口设置 */}
         <Section title={t("st_viewport")}>
           <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Slider
                   min={120}
