@@ -1040,6 +1040,9 @@ export const loadIFC = async (
         if (typeof value === 'string') {
             // 去除多余空格
             const cleaned = value.trim();
+            if (["", "n/a", "na", "undefined", "null", "-", "--"].includes(cleaned.toLowerCase())) {
+                return '';
+            }
             // 如果是GUID格式，保持原样
             if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleaned)) {
                 return cleaned;
