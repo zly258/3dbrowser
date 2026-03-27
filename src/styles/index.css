@@ -1524,6 +1524,12 @@ body.font-loose,
 .ui-tree-filter-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ui-tree-workset-actions {
+  justify-content: flex-start;
 }
 
 .ui-input-compact {

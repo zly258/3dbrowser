@@ -182,6 +182,7 @@ interface SceneTreeProps {
     treeRoot: TreeNode[];
     setTreeRoot: React.Dispatch<React.SetStateAction<TreeNode[]>>;
     selectedUuid: string | null;
+    selectedStorey?: string;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
     onDelete?: (obj: any) => void;
@@ -190,6 +191,7 @@ interface SceneTreeProps {
     onHide?: (uuid: string) => void;
     onShowAll?: () => void;
     onApplyIfcFiltersToViewport?: (filters: IfcFilterState) => void;
+    onApplyStoreyWorkset?: (storeys: string[]) => void;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
@@ -197,6 +199,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     treeRoot,
     setTreeRoot,
     selectedUuid,
+    selectedStorey,
     onSelect,
     onToggleVisibility,
     onDelete,
@@ -204,7 +207,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onIsolate,
     onHide,
     onShowAll,
-    onApplyIfcFiltersToViewport
+    onApplyIfcFiltersToViewport,
+    onApplyStoreyWorkset
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [filters, setFilters] = useState<IfcFilterState>({
@@ -257,6 +261,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         ifcOptions.categories.length > 0 ||
         ifcOptions.materials.length > 0;
     const hasActiveFilters = Object.values(filters).some(Boolean);
+    const selectedStoreyIndex = selectedStorey ? ifcOptions.storeys.indexOf(selectedStorey) : -1;
+    const adjacentStoreys = selectedStoreyIndex >= 0
+        ? ifcOptions.storeys.filter((_item, index) => Math.abs(index - selectedStoreyIndex) <= 1)
+        : [];
+    const canApplyCurrentStorey = Boolean(selectedStorey);
+    const canApplyAdjacentStoreys = adjacentStoreys.length > 1;
 
     const matchesIfcFilters = (meta?: IfcMetadata) => {
         if (!hasActiveFilters) return true;
@@ -530,6 +540,26 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 }
                             >
                                 {t("ifc_filter_clear") || "清除筛选"}
+                            </Button>
+                        </div>
+                    )}
+                    {selectedStorey && (
+                        <div className="ui-tree-filter-actions ui-tree-workset-actions">
+                            <Button
+                                variant="ghost"
+                                className="ui-properties-action"
+                                onClick={() => onApplyStoreyWorkset?.([selectedStorey])}
+                                disabled={!canApplyCurrentStorey}
+                            >
+                                {t("ifc_workset_current") || "当前楼层"}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                className="ui-properties-action"
+                                onClick={() => onApplyStoreyWorkset?.(adjacentStoreys)}
+                                disabled={!canApplyAdjacentStoreys}
+                            >
+                                {t("ifc_workset_adjacent") || "上下楼层"}
                             </Button>
                         </div>
                     )}
