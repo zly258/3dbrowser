@@ -280,6 +280,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const searchExpandedStateRef = useRef<Map<string, boolean> | null>(null);
     const previousSearchQueryRef = useRef("");
+    const lastLocateResultsRef = useRef<string[]>([]);
 
     const collectIfcOptions = (nodes: TreeNode[]) => {
         const storeys = new Set<string>();
@@ -541,11 +542,17 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     }, [locatorQuery, onClearLocate]);
 
     useEffect(() => {
-        if (!locatorQuery.trim()) {
-            onLocateResultsChange?.([]);
-            return;
-        }
-        onLocateResultsChange?.(locatorMatches.map((item) => item.uuid));
+        const nextLocateResults = locatorQuery.trim()
+            ? locatorMatches.map((item) => item.uuid)
+            : [];
+        const prevLocateResults = lastLocateResultsRef.current;
+        const changed = prevLocateResults.length !== nextLocateResults.length ||
+            prevLocateResults.some((uuid, index) => uuid !== nextLocateResults[index]);
+
+        if (!changed) return;
+
+        lastLocateResultsRef.current = nextLocateResults;
+        onLocateResultsChange?.(nextLocateResults);
     }, [locatorMatches, locatorQuery, onLocateResultsChange]);
 
     useEffect(() => {
