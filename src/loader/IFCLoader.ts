@@ -79,6 +79,17 @@ function uniqueStrings(values: Array<string | undefined | null>) {
     );
 }
 
+function sanitizeIfcLabel(...candidates: Array<string | undefined | null>) {
+    const invalidValues = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
+    for (const candidate of candidates) {
+        if (typeof candidate !== "string") continue;
+        const trimmed = candidate.trim();
+        if (invalidValues.has(trimmed.toLowerCase())) continue;
+        return trimmed;
+    }
+    return "";
+}
+
 export const loadIFC = async (
     input: string | File | ArrayBuffer,
     onProgress: ProgressCallback, 
@@ -226,13 +237,10 @@ export const loadIFC = async (
         if (!raw) return null;
 
         const identification =
-            raw.Identification?.value ||
-            raw.ItemReference?.value ||
-            raw.Reference?.value ||
-            "";
-        const name = raw.Name?.value || raw.Description?.value || raw.Source?.value || "";
+            sanitizeIfcLabel(raw.Identification?.value, raw.ItemReference?.value, raw.Reference?.value) || "";
+        const name = sanitizeIfcLabel(raw.Name?.value, raw.Description?.value, raw.Source?.value) || "";
         const parts = uniqueStrings([identification, name]);
-        return parts.length > 0 ? parts.join(" - ") : raw.is_a || null;
+        return parts.length > 0 ? parts.join(" - ") : sanitizeIfcLabel(raw.is_a) || null;
     };
 
     const buildClassificationMap = () => {
@@ -269,9 +277,9 @@ export const loadIFC = async (
         if (!line) return [];
 
         const baseNames = uniqueStrings([
-            line.Name?.value,
-            line.LayerSetName?.value,
-            line.Category?.value
+            sanitizeIfcLabel(line.Name?.value),
+            sanitizeIfcLabel(line.LayerSetName?.value),
+            sanitizeIfcLabel(line.Category?.value)
         ]);
 
         const nestedKeys = ["Materials", "MaterialLayers", "MaterialProfiles", "MaterialConstituents"];
@@ -315,7 +323,9 @@ export const loadIFC = async (
                 if (!groupId) continue;
                 const group = getLineCached(groupId);
                 if (!group || (group.is_a !== "IFCSYSTEM" && group.is_a !== "IFCDISTRIBUTIONSYSTEM")) continue;
-                const systemName = group.Name?.value || group.LongName?.value || `${group.is_a} [${groupId}]`;
+                const systemName =
+                    sanitizeIfcLabel(group.Name?.value, group.LongName?.value) ||
+                    `${group.is_a} [${groupId}]`;
                 toExpressIds(rel?.RelatedObjects).forEach((objID) => {
                     if (!systemMap.has(objID)) systemMap.set(objID, []);
                     systemMap.get(objID)!.push(systemName);
@@ -685,7 +695,9 @@ export const loadIFC = async (
         ];
         
         const isSpatialContainer = spatialTypes.includes(props.is_a);
-        const name = props.Name?.value || props.LongName?.value || `${props.is_a} [${expressID}]`;
+        const name =
+            sanitizeIfcLabel(props.Name?.value, props.LongName?.value, props.Description?.value) ||
+            `${props.is_a} [${expressID}]`;
         const group = new THREE.Group();
         group.name = name;
         nextSpatialContext = {
@@ -847,7 +859,9 @@ export const loadIFC = async (
 
                         gridGroup.add(createAxisPolyline(points, color));
 
-                        const axisTag = axis?.AxisTag?.value || axis?.Name?.value || `${key}-${axisId}`;
+                        const axisTag =
+                            sanitizeIfcLabel(axis?.AxisTag?.value, axis?.Name?.value) ||
+                            `${key}-${axisId}`;
                         const start = points[0];
                         const end = points[points.length - 1];
                         const offset = new THREE.Vector3(0.12, 0.12, 0);
@@ -1389,8 +1403,8 @@ export const loadIFC = async (
             // 优化构件名称：获取真实的 IFC 类型作为名称前缀
             const entity = getLineCached(expressID);
             try {
-                const ifcType = entity?.is_a || 'Item';
-                const ifcName = entity?.Name?.value || '';
+                const ifcType = sanitizeIfcLabel(entity?.is_a) || 'Item';
+                const ifcName = sanitizeIfcLabel(entity?.Name?.value, entity?.LongName?.value, entity?.Description?.value);
                 mesh.name = ifcName ? `${ifcType}: ${ifcName}` : `${ifcType} [${expressID}]`;
             } catch(e) {
                 mesh.name = `IFC Item ${expressID}`; 
