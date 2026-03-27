@@ -6,7 +6,7 @@ import {
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
-    IconLayers, IconImage
+    IconLayers, IconImage, IconExplode
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -25,8 +25,8 @@ interface MenuBarProps {
     displayMode?: 'solid' | 'transparent';
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;
@@ -411,6 +411,15 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             label={t('tb_sun')}
                             active={props.activeTool === 'sun'}
                             onClick={() => props.setActiveTool?.(props.activeTool === 'sun' ? 'none' : 'sun')}
+                            theme={theme}
+                        />
+                    )}
+                    {!isHidden('explode') && (
+                        <ImageButton
+                            icon={<IconExplode />}
+                            label={t('tb_explode') || '爆炸'}
+                            active={props.activeTool === 'explode'}
+                            onClick={() => props.setActiveTool?.(props.activeTool === 'explode' ? 'none' : 'explode')}
                             theme={theme}
                         />
                     )}

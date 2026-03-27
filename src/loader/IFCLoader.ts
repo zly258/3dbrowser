@@ -152,7 +152,7 @@ export const loadIFC = async (
     const classificationMap = new Map<number, string[]>();
     const materialMap = new Map<number, string[]>();
     const systemMap = new Map<number, string[]>();
-    const spatialMetaMap = new Map<number, { storey: string; path: string[]; container: string }>();
+    const spatialMetaMap = new Map<number, { storey: string; elevation?: number; path: string[]; container: string }>();
     const lineCache = new Map<number, any>();
     const getLineCached = (expressID: number) => {
         if (lineCache.has(expressID)) return lineCache.get(expressID);
@@ -722,7 +722,7 @@ export const loadIFC = async (
     const parseSpatialRecursive = (
         expressID: number,
         parent: THREE.Object3D,
-        spatialContext: { storey: string; path: string[]; container: string }
+        spatialContext: { storey: string; elevation?: number; path: string[]; container: string }
     ) => {
         const props = getLineCached(expressID);
         if (!props) return;
@@ -746,10 +746,14 @@ export const loadIFC = async (
         const name =
             sanitizeIfcLabel(props.Name?.value, props.LongName?.value, props.Description?.value) ||
             `${props.is_a} [${expressID}]`;
+        const storeyElevation = props.is_a === "IFCBUILDINGSTOREY"
+            ? getScalarValue(props.Elevation)
+            : spatialContext.elevation;
         const group = new THREE.Group();
         group.name = name;
         nextSpatialContext = {
             storey: props.is_a === "IFCBUILDINGSTOREY" ? name : spatialContext.storey,
+            elevation: storeyElevation ?? undefined,
             path: isSpatialContainer ? [...spatialContext.path, name] : spatialContext.path,
             container: props.is_a
         };
@@ -762,6 +766,7 @@ export const loadIFC = async (
             ifcMetadata: {
                 category: props.is_a,
                 storey: nextSpatialContext.storey,
+                elevation: nextSpatialContext.elevation,
                 spatialPath: nextSpatialContext.path,
                 systems: [],
                 materials: [],
@@ -804,6 +809,7 @@ export const loadIFC = async (
                 for (let i = 0; i < projects.size(); i++) {
                     parseSpatialRecursive(projects.get(i), rootGroup, {
                         storey: "",
+                        elevation: undefined,
                         path: [],
                         container: "IFCPROJECT"
                     });
@@ -814,6 +820,7 @@ export const loadIFC = async (
                 for (let i = 0; i < sites.size(); i++) {
                     parseSpatialRecursive(sites.get(i), rootGroup, {
                         storey: "",
+                        elevation: undefined,
                         path: [],
                         container: "IFCSITE"
                     });
@@ -1276,10 +1283,12 @@ export const loadIFC = async (
 
             if (spatialMeta) {
                 addGroupEntry(normalizedGroups, "IFC 空间", "所在楼层", spatialMeta.storey || '');
+                addGroupEntry(normalizedGroups, "IFC 空间", "楼层标高", spatialMeta.elevation ?? '');
                 addGroupEntry(normalizedGroups, "IFC 空间", "空间路径", spatialMeta.path.join(" / "));
                 addGroupEntry(normalizedGroups, "IFC 空间", "容器类型", spatialMeta.container);
 
                 addGroupEntry(rawGroups, "IFC Spatial", "Storey", spatialMeta.storey || '');
+                addGroupEntry(rawGroups, "IFC Spatial", "Elevation", spatialMeta.elevation ?? '');
                 addGroupEntry(rawGroups, "IFC Spatial", "Path", spatialMeta.path.join(" / "));
                 addGroupEntry(rawGroups, "IFC Spatial", "Container", spatialMeta.container);
             }
@@ -1354,6 +1363,7 @@ export const loadIFC = async (
                     category: entity?.is_a || "",
                     typeName,
                     storey: spatialMeta?.storey || "",
+                    elevation: spatialMeta?.elevation,
                     spatialPath: spatialMeta?.path || [],
                     systems,
                     materials,
@@ -1480,6 +1490,7 @@ export const loadIFC = async (
             mesh.userData.ifcMetadata = {
                 category: entity?.is_a || "",
                 storey: spatialMeta?.storey || "",
+                elevation: spatialMeta?.elevation,
                 spatialPath: spatialMeta?.path || [],
                 systems: systemsForMesh,
                 materials: materialsForMesh,

@@ -7,3 +7,4 @@ export { ExportPanel } from './ExportPanel';
 export { ScreenshotPanel } from './ScreenshotPanel';
 export { ViewpointPanel } from './ViewpointPanel';
 export { SunPanel } from './SunPanel';
+export { ExplodePanel } from './ExplodePanel';

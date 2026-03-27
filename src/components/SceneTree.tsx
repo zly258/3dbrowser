@@ -21,6 +21,7 @@ interface TreeNode {
 
 interface IfcMetadata {
     storey?: string;
+    elevation?: number;
     systems?: string[];
     category?: string;
     materials?: string[];
@@ -31,6 +32,7 @@ interface IfcMetadata {
 
 interface IfcFilterState {
     storey: string;
+    elevation: string;
     system: string;
     category: string;
     material: string;
@@ -267,6 +269,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const [locatorIndex, setLocatorIndex] = useState(0);
     const [filters, setFilters] = useState<IfcFilterState>({
         storey: "",
+        elevation: "",
         system: "",
         category: "",
         material: ""
@@ -283,6 +286,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const systems = new Set<string>();
         const categories = new Set<string>();
         const materials = new Set<string>();
+        const elevations = new Set<number>();
         let hasIfcModel = false;
 
         const walk = (list: Array<TreeNode | any>) => {
@@ -291,6 +295,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 const meta = source?.userData?.ifcMetadata as IfcMetadata | undefined;
                 if (source?.userData?.isIFC || meta) hasIfcModel = true;
                 if (meta?.storey) storeys.add(meta.storey);
+                if (typeof meta?.elevation === "number" && Number.isFinite(meta.elevation)) elevations.add(meta.elevation);
                 if (meta?.category) categories.add(meta.category);
                 meta?.systems?.forEach((item) => systems.add(item));
                 meta?.materials?.forEach((item) => materials.add(item));
@@ -304,6 +309,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const sort = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
         return {
             storeys: sort(storeys),
+            elevations: Array.from(elevations).sort((a, b) => a - b),
             systems: sort(systems),
             categories: sort(categories),
             materials: sort(materials),
@@ -314,6 +320,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const ifcOptions = useMemo(() => collectIfcOptions(treeRoot), [treeRoot]);
     const hasIfcFilters =
         ifcOptions.storeys.length > 0 ||
+        ifcOptions.elevations.length > 0 ||
         ifcOptions.systems.length > 0 ||
         ifcOptions.categories.length > 0 ||
         ifcOptions.materials.length > 0;
@@ -330,6 +337,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         if (!hasActiveFilters) return true;
         if (!meta) return false;
         if (filters.storey && meta.storey !== filters.storey) return false;
+        if (filters.elevation && String(meta.elevation) !== filters.elevation) return false;
         if (filters.category && meta.category !== filters.category) return false;
         if (filters.system && !(meta.systems || []).includes(filters.system)) return false;
         if (filters.material && !(meta.materials || []).includes(filters.material)) return false;
@@ -697,6 +705,15 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             className="ui-input-compact"
                         />
                         <Select
+                            value={filters.elevation}
+                            onChange={(value) => setFilters((prev) => ({ ...prev, elevation: value }))}
+                            options={[
+                                { value: "", label: t("ifc_filter_elevation") || "全部标高" },
+                                ...ifcOptions.elevations.map((item) => ({ value: String(item), label: String(item) }))
+                            ]}
+                            className="ui-input-compact"
+                        />
+                        <Select
                             value={filters.category}
                             onChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}
                             options={[
@@ -730,6 +747,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 onClick={() =>
                                     setFilters({
                                         storey: "",
+                                        elevation: "",
                                         system: "",
                                         category: "",
                                         material: ""

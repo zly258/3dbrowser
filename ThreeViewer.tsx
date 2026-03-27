@@ -11,7 +11,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { Toolbar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SunPanel, SettingsPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SunPanel, SettingsPanel, ExplodePanel } from "./src/components/ToolPanels";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
@@ -44,6 +44,7 @@ export interface ThreeViewerProps {
 
 type IfcFilterState = {
     storey: string;
+    elevation: string;
     system: string;
     category: string;
     material: string;
@@ -127,7 +128,9 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode'>('none');
+    const [explodeEnabled, setExplodeEnabled] = useState(false);
+    const [explodeStrength, setExplodeStrength] = useState(32);
 
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
@@ -797,6 +800,7 @@ export const ThreeViewer = ({
             if (!meta) return;
 
             if (filters.storey && meta.storey !== filters.storey) return;
+            if (filters.elevation && String(meta.elevation) !== filters.elevation) return;
             if (filters.category && meta.category !== filters.category) return;
             if (filters.system && !(meta.systems || []).includes(filters.system)) return;
             if (filters.material && !(meta.materials || []).includes(filters.material)) return;
@@ -1352,6 +1356,16 @@ export const ThreeViewer = ({
         }
     }, [measureType]);
 
+    useEffect(() => {
+        if (!sceneMgr.current) return;
+        sceneMgr.current.setExplodeEnabled(explodeEnabled);
+    }, [explodeEnabled]);
+
+    useEffect(() => {
+        if (!sceneMgr.current) return;
+        sceneMgr.current.setExplodeStrength(explodeStrength);
+    }, [explodeStrength]);
+
 
     // --- 处理函数 ---
 
@@ -1414,6 +1428,20 @@ export const ThreeViewer = ({
                   })()
                 : "");
         setSelectedIfcStorey(targetStorey || "");
+        const targetElevation =
+            typeof target?.userData?.ifcMetadata?.elevation === "number"
+                ? target.userData.ifcMetadata.elevation
+                : (target instanceof THREE.Object3D
+                    ? (() => {
+                        let cursor: THREE.Object3D | null = target;
+                        while (cursor) {
+                            const elevation = cursor.userData?.ifcMetadata?.elevation;
+                            if (typeof elevation === "number" && Number.isFinite(elevation)) return elevation;
+                            cursor = cursor.parent;
+                        }
+                        return undefined;
+                    })()
+                    : undefined);
 
         const basicProps: Record<string, string> = {};
         const geoProps: Record<string, string> = {};
@@ -1422,6 +1450,9 @@ export const ThreeViewer = ({
         basicProps[t("prop_name")] = target.name || "Unnamed";
         basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
         basicProps[t("prop_id")] = focusUuid; 
+        if (typeof targetElevation === "number" && Number.isFinite(targetElevation)) {
+            basicProps[t("prop_storey_elevation") || "楼层标高"] = String(targetElevation);
+        }
         
         if (target.getWorldPosition) {
             const worldPos = new THREE.Vector3();
@@ -1875,6 +1906,8 @@ export const ThreeViewer = ({
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
                     completedFileSetsRef.current.clear(); // 清除已完成的文件集记录
+                    setExplodeEnabled(false);
+                    setExplodeStrength(32);
                     updateTree();
                     setStatus(t("ready"));
                 } catch (error) {
@@ -2197,6 +2230,23 @@ export const ThreeViewer = ({
                             settings={sceneSettings}
                             onUpdate={handleSettingsUpdate}
                             onClose={() => setActiveTool('none')}
+                            theme={theme}
+                        />
+                    )}
+
+                    {activeTool === 'explode' && (
+                        <ExplodePanel
+                            t={t}
+                            onClose={() => setActiveTool('none')}
+                            enabled={explodeEnabled}
+                            strength={explodeStrength}
+                            onEnabledChange={setExplodeEnabled}
+                            onStrengthChange={setExplodeStrength}
+                            onReset={() => {
+                                setExplodeEnabled(false);
+                                setExplodeStrength(32);
+                                sceneMgr.current?.resetExplode();
+                            }}
                             theme={theme}
                         />
                     )}
