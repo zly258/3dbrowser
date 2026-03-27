@@ -10,6 +10,8 @@ interface AboutModalProps {
         theme: any;
 }
 
+declare const __APP_VERSION__: string;
+
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, theme }) => {
     if (!isOpen) return null;
 
@@ -32,6 +34,10 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
                 </div>
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
+                        <span style={{ opacity: 0.7 }}>{t("about_version")}</span>
+                        <span style={{ fontWeight: '500' }}>{__APP_VERSION__}</span>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                         <span style={{ opacity: 0.7 }}>{t("about_author")}</span>
                         <span style={{ fontWeight: '500' }}>zhangly1403@163.com</span>

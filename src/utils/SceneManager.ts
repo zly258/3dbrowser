@@ -141,6 +141,11 @@ export class SceneManager {
     private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
     private highlightPulseColor = new THREE.Color("#ffffff");
+    private explodeEnabled = false;
+    private explodeStrength = 0;
+    private explodeCenter = new THREE.Vector3();
+    private explodeObjectStates = new Map<string, { object: THREE.Object3D; basePosition: THREE.Vector3; directionLocal: THREE.Vector3 }>();
+    private explodeInstanceStates = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; baseMatrix: THREE.Matrix4; directionLocal: THREE.Vector3 }>();
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -3113,6 +3118,7 @@ export class SceneManager {
     async clear() {
         console.log("开始清空场景...");
         this.cancelDeferredStructureBuild();
+        this.resetExplode();
         
         try {
             // 1. 深度清理 contentGroup
@@ -3232,6 +3238,7 @@ export class SceneManager {
         });
 
         this.updateSceneBounds();
+        this.refreshExplodeState();
     }
 
     hideObjects(uuids: string[]) {
@@ -3300,6 +3307,7 @@ export class SceneManager {
         // 5. 更新状态
         this.interactableListValid = false;
         this.updateSceneBounds();
+        this.refreshExplodeState();
     }
 
     setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
@@ -3404,6 +3412,152 @@ export class SceneManager {
 
     highlightObject(uuid: string | null) {
         this.highlightObjects(uuid ? [uuid] : []);
+    }
+
+    private toLocalDirection(directionWorld: THREE.Vector3, matrixWorld: THREE.Matrix4) {
+        return directionWorld.clone().transformDirection(matrixWorld.clone().invert()).normalize();
+    }
+
+    private captureExplodeSnapshot() {
+        this.explodeObjectStates.clear();
+        this.explodeInstanceStates.clear();
+
+        let bounds = this.computeTotalBounds(true, true);
+        if (bounds.isEmpty()) bounds = this.computeTotalBounds(false, true);
+        if (bounds.isEmpty()) {
+            this.explodeCenter.set(0, 0, 0);
+            return;
+        }
+
+        this.explodeCenter.copy(bounds.getCenter(new THREE.Vector3()));
+        const objectBox = new THREE.Box3();
+        const objectCenter = new THREE.Vector3();
+
+        this.contentGroup.updateMatrixWorld(true);
+        this.contentGroup.traverse((obj) => {
+            const mesh = obj as THREE.Mesh;
+            if (!mesh.isMesh || !obj.visible || obj.userData?.isIfcGridHelper) return;
+            objectBox.setFromObject(obj);
+            if (objectBox.isEmpty()) return;
+            objectCenter.copy(objectBox.getCenter(new THREE.Vector3()));
+            const directionWorld = objectCenter.sub(this.explodeCenter);
+            if (directionWorld.lengthSq() < 1e-8) directionWorld.set(0, 0, 1);
+            else directionWorld.normalize();
+            const directionLocal = this.toLocalDirection(directionWorld, obj.parent?.matrixWorld || new THREE.Matrix4());
+            this.explodeObjectStates.set(obj.uuid, {
+                object: obj,
+                basePosition: obj.position.clone(),
+                directionLocal
+            });
+        });
+
+        const instanceBox = new THREE.Box3();
+        const instanceMatrix = new THREE.Matrix4();
+        const worldMatrix = new THREE.Matrix4();
+        this.optimizedMapping.forEach((mappings, originalUuid) => {
+            const isVisible = this.nodeMap.get(originalUuid)?.some((node) => node.visible !== false) ?? true;
+            if (!isVisible) return;
+            mappings.forEach((mapping) => {
+                const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
+                if (this.explodeInstanceStates.has(key)) return;
+                mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
+                const geometry = mapping.geometry || mapping.mesh.geometry;
+                if (!geometry?.boundingBox) geometry?.computeBoundingBox?.();
+                if (!geometry?.boundingBox) return;
+                worldMatrix.copy(mapping.mesh.matrixWorld).multiply(instanceMatrix);
+                instanceBox.copy(geometry.boundingBox).applyMatrix4(worldMatrix);
+                if (instanceBox.isEmpty()) return;
+                objectCenter.copy(instanceBox.getCenter(new THREE.Vector3()));
+                const directionWorld = objectCenter.sub(this.explodeCenter);
+                if (directionWorld.lengthSq() < 1e-8) directionWorld.set(0, 0, 1);
+                else directionWorld.normalize();
+                this.explodeInstanceStates.set(key, {
+                    mesh: mapping.mesh,
+                    instanceId: mapping.instanceId,
+                    baseMatrix: instanceMatrix.clone(),
+                    directionLocal: this.toLocalDirection(directionWorld, mapping.mesh.matrixWorld)
+                });
+            });
+        });
+    }
+
+    private applyExplodeState() {
+        const bounds = this.computeTotalBounds(true, true);
+        const size = bounds.isEmpty() ? new THREE.Vector3(100, 100, 100) : bounds.getSize(new THREE.Vector3());
+        const magnitude = Math.max(size.length() * 0.12 * (this.explodeStrength / 100), 0);
+
+        this.explodeObjectStates.forEach((state) => {
+            state.object.position.copy(state.basePosition).addScaledVector(state.directionLocal, magnitude);
+            state.object.updateMatrixWorld();
+        });
+
+        const translation = new THREE.Vector3();
+        const quaternion = new THREE.Quaternion();
+        const scale = new THREE.Vector3();
+        this.explodeInstanceStates.forEach((state) => {
+            const matrix = state.baseMatrix.clone();
+            matrix.decompose(translation, quaternion, scale);
+            translation.addScaledVector(state.directionLocal, magnitude);
+            matrix.compose(translation, quaternion, scale);
+            state.mesh.setMatrixAt(state.instanceId, matrix);
+            if (state.mesh.instanceMatrix) state.mesh.instanceMatrix.needsUpdate = true;
+        });
+
+        this.interactableListValid = false;
+        this.updateSceneBounds();
+        this.refreshExplodeState();
+    }
+
+    private restoreExplodeSnapshot() {
+        this.explodeObjectStates.forEach((state) => {
+            state.object.position.copy(state.basePosition);
+            state.object.updateMatrixWorld();
+        });
+        this.explodeInstanceStates.forEach((state) => {
+            state.mesh.setMatrixAt(state.instanceId, state.baseMatrix);
+            if (state.mesh.instanceMatrix) state.mesh.instanceMatrix.needsUpdate = true;
+        });
+        this.interactableListValid = false;
+        this.updateSceneBounds();
+    }
+
+    private refreshExplodeState() {
+        if (!this.explodeEnabled) return;
+        this.restoreExplodeSnapshot();
+        this.captureExplodeSnapshot();
+        this.applyExplodeState();
+    }
+
+    setExplodeEnabled(enabled: boolean) {
+        if (enabled === this.explodeEnabled) return;
+        this.explodeEnabled = enabled;
+        if (!enabled) {
+            this.restoreExplodeSnapshot();
+            this.explodeObjectStates.clear();
+            this.explodeInstanceStates.clear();
+            return;
+        }
+        this.captureExplodeSnapshot();
+        this.applyExplodeState();
+    }
+
+    setExplodeStrength(value: number) {
+        this.explodeStrength = THREE.MathUtils.clamp(value, 0, 100);
+        if (!this.explodeEnabled) return;
+        if (this.explodeObjectStates.size === 0 && this.explodeInstanceStates.size === 0) {
+            this.captureExplodeSnapshot();
+        }
+        this.applyExplodeState();
+    }
+
+    resetExplode() {
+        this.explodeStrength = 0;
+        if (this.explodeEnabled) {
+            this.restoreExplodeSnapshot();
+        }
+        this.explodeEnabled = false;
+        this.explodeObjectStates.clear();
+        this.explodeInstanceStates.clear();
     }
 
     clearLocateFocus() {

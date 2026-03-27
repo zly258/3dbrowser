@@ -257,6 +257,21 @@ export const IconLayers = (props: any) => createIcon(
   props
 );
 
+export const IconExplode = (props: any) => createIcon(
+  <>
+    <circle cx="12" cy="12" r="2.25" />
+    <line x1="12" y1="2" x2="12" y2="6" />
+    <line x1="12" y1="18" x2="12" y2="22" />
+    <line x1="2" y1="12" x2="6" y2="12" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+    <line x1="4.9" y1="4.9" x2="7.8" y2="7.8" />
+    <line x1="16.2" y1="16.2" x2="19.1" y2="19.1" />
+    <line x1="4.9" y1="19.1" x2="7.8" y2="16.2" />
+    <line x1="16.2" y1="7.8" x2="19.1" y2="4.9" />
+  </>,
+  props
+);
+
 export const IconSelectAll = (props: any) => createIcon(
   <>
     <path d="M3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4z" fill="none" />
