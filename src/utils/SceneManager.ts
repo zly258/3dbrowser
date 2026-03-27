@@ -137,6 +137,8 @@ export class SceneManager {
     private highlightedUuids: Set<string> = new Set();
     private locateFocusUuid: string | null = null;
     private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
+    private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
+    private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
     private highlightPulseColor = new THREE.Color("#ffffff");
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
@@ -3405,80 +3407,77 @@ export class SceneManager {
     }
 
     clearLocateFocus() {
-        if (this.locateMaterialCache.size > 0) {
-            this.contentGroup.traverse((child) => {
-                const materials = ((child as THREE.Mesh).isMesh && (child as THREE.Mesh).material)
-                    ? (Array.isArray((child as THREE.Mesh).material) ? (child as THREE.Mesh).material : [(child as THREE.Mesh).material])
-                    : ((child as any).isBatchedMesh && (child as any).material)
-                        ? (Array.isArray((child as any).material) ? (child as any).material : [(child as any).material])
-                        : [];
-                materials.forEach((material: any) => {
-                    const cache = material ? this.locateMaterialCache.get(material.uuid) : null;
-                    if (!material || !cache) return;
-                    material.transparent = cache.transparent;
-                    material.opacity = cache.opacity;
-                    material.depthWrite = cache.depthWrite;
-                    material.needsUpdate = true;
-                });
-            });
-            this.locateMaterialCache.clear();
-        }
-
+        this.locateObjectMaterialCache.forEach((material, uuid) => {
+            const obj = this.contentGroup.getObjectByProperty("uuid", uuid) as THREE.Mesh | null;
+            if (!obj || !obj.isMesh) return;
+            obj.material = material;
+        });
+        this.locateObjectMaterialCache.clear();
+        this.locateMaterialCache.clear();
+        this.locateDimmedInstances.forEach(({ mesh, instanceId, originalColor }) => {
+            mesh.setColorAt(instanceId, new THREE.Color(originalColor));
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        });
+        this.locateDimmedInstances.clear();
         this.locateFocusUuid = null;
     }
 
-    setLocateFocus(uuid: string | null) {
+    setLocateResultSet(uuids: string[], focusUuid: string | null = null) {
         this.clearLocateFocus();
-        if (!uuid) return;
+        const resultSet = new Set(uuids.filter(Boolean));
+        if (resultSet.size === 0) return;
 
-        this.locateFocusUuid = uuid;
-        const targetMaterials = new Set<string>();
-        const targetObject = this.contentGroup.getObjectByProperty("uuid", uuid);
-        if (targetObject) {
-            targetObject.traverse((child) => {
-                const mesh = child as THREE.Mesh;
-                if (!mesh.isMesh || !mesh.material) return;
-                const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-                if (material) targetMaterials.add(material.uuid);
-            });
-        }
+        this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : Array.from(resultSet)[0];
 
-        const targetMappings = this.optimizedMapping.get(uuid);
-        if (targetMappings) {
-            targetMappings.forEach((mapping) => {
-                const material = Array.isArray(mapping.mesh.material) ? mapping.mesh.material[0] : mapping.mesh.material;
-                if (material) targetMaterials.add(material.uuid);
-            });
-        }
-
-        const dimMaterial = (material: any, preserve = false) => {
-            if (!material || targetMaterials.has(material.uuid) || preserve) return;
-            if (!this.locateMaterialCache.has(material.uuid)) {
-                this.locateMaterialCache.set(material.uuid, {
-                    transparent: !!material.transparent,
-                    opacity: typeof material.opacity === "number" ? material.opacity : 1,
-                    depthWrite: material.depthWrite !== false
-                });
-            }
-            material.transparent = true;
-            material.opacity = 0.12;
-            material.depthWrite = false;
-            material.needsUpdate = true;
-        };
-
+        const dimmedColor = new THREE.Color("#d1d5db");
         this.contentGroup.traverse((child) => {
             const mesh = child as THREE.Mesh;
             if (!mesh.isMesh || !mesh.material) return;
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            materials.forEach((material) => dimMaterial(material, child === targetObject));
+            const shouldKeepOpaque = resultSet.has(child.uuid);
+            if (shouldKeepOpaque) return;
+            if (!this.locateObjectMaterialCache.has(child.uuid)) {
+                this.locateObjectMaterialCache.set(child.uuid, mesh.material);
+            }
+            const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            const dimmedMaterials = sourceMaterials.map((material) => {
+                if (!material) return material;
+                const cloned = material.clone() as THREE.Material & { transparent?: boolean; opacity?: number; depthWrite?: boolean; color?: THREE.Color };
+                if ("transparent" in cloned) cloned.transparent = true;
+                if ("opacity" in cloned) cloned.opacity = 0.08;
+                if ("depthWrite" in cloned) cloned.depthWrite = false;
+                if ("color" in cloned && cloned.color) cloned.color.lerp(dimmedColor, 0.65);
+                cloned.needsUpdate = true;
+                return cloned;
+            });
+            mesh.material = Array.isArray(mesh.material) ? dimmedMaterials : dimmedMaterials[0];
         });
 
-        this.contentGroup.traverse((child) => {
-            const batched = child as THREE.BatchedMesh;
-            if (!(batched as any).isBatchedMesh || !batched.material) return;
-            const materials = Array.isArray(batched.material) ? batched.material : [batched.material];
-            materials.forEach((material) => dimMaterial(material));
+        this.optimizedMapping.forEach((mappings, originalUuid) => {
+            const keepOpaque = resultSet.has(originalUuid);
+            mappings.forEach((mapping) => {
+                if (keepOpaque) {
+                    mapping.mesh.setColorAt(mapping.instanceId, new THREE.Color(mapping.originalColor));
+                } else {
+                    const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
+                    this.locateDimmedInstances.set(key, {
+                        mesh: mapping.mesh,
+                        instanceId: mapping.instanceId,
+                        originalColor: mapping.originalColor
+                    });
+                    const sourceColor = new THREE.Color(mapping.originalColor);
+                    mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(dimmedColor, 0.82));
+                }
+                if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
+            });
         });
+    }
+
+    setLocateFocus(uuid: string | null) {
+        if (!uuid) {
+            this.clearLocateFocus();
+            return;
+        }
+        this.setLocateResultSet([uuid], uuid);
     }
 
     highlightObjects(uuids: string[]) {

@@ -106,6 +106,7 @@ export const ThreeViewer = ({
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
     const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
     const [locatedUuid, setLocatedUuid] = useState<string | null>(null);
+    const [locateResultUuids, setLocateResultUuids] = useState<string[]>([]);
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
     const [selectedIfcStorey, setSelectedIfcStorey] = useState<string>("");
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
@@ -967,25 +968,6 @@ export const ThreeViewer = ({
         void handleSelect(obj);
     };
 
-    const handleLocateObject = useCallback((obj: any) => {
-        if (!sceneMgr.current || !obj) return;
-        const uuid = obj.uuid || obj.id;
-        if (!uuid) return;
-        setLocatedUuid(uuid);
-        sceneMgr.current.setLocateFocus(uuid);
-        sceneMgr.current.fitViewToObject(uuid);
-        void handleSelect(obj);
-    }, []);
-
-    const handleClearLocate = useCallback(() => {
-        setLocatedUuid(null);
-        sceneMgr.current?.clearLocateFocus();
-        if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
-            sceneMgr.current?.setAllVisibility(true);
-            updateTree();
-        }
-    }, [hiddenUuids, isolatedUuids, updateTree]);
-
     const handleClearSelection = () => {
         setSelectedUuids([]);
         setSelectedIfcStorey("");
@@ -1540,6 +1522,41 @@ export const ThreeViewer = ({
         setSelectedProps(selectedGroups);
     };
 
+    const handleLocateObject = useCallback((obj: any) => {
+        if (!sceneMgr.current || !obj) return;
+        const uuid = obj.uuid || obj.id;
+        if (!uuid) return;
+        setLocatedUuid(uuid);
+        const resultSet = locateResultUuids.length > 0 ? locateResultUuids : [uuid];
+        sceneMgr.current.setLocateResultSet(resultSet, uuid);
+        sceneMgr.current.fitViewToObject(uuid);
+        void handleSelect(obj);
+    }, [handleSelect, locateResultUuids]);
+
+    const handleLocateResultsChange = useCallback((uuids: string[]) => {
+        setLocateResultUuids(uuids);
+        if (!sceneMgr.current) return;
+        if (uuids.length === 0) {
+            sceneMgr.current.clearLocateFocus();
+            if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
+                sceneMgr.current.setAllVisibility(true);
+                updateTree();
+            }
+            return;
+        }
+        sceneMgr.current.setLocateResultSet(uuids, locatedUuid && uuids.includes(locatedUuid) ? locatedUuid : uuids[0]);
+    }, [hiddenUuids.size, isolatedUuids.size, locatedUuid, updateTree]);
+
+    const handleClearLocate = useCallback(() => {
+        setLocatedUuid(null);
+        setLocateResultUuids([]);
+        sceneMgr.current?.clearLocateFocus();
+        if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
+            sceneMgr.current?.setAllVisibility(true);
+            updateTree();
+        }
+    }, [hiddenUuids, isolatedUuids, updateTree]);
+
     const processFiles = async (items: (File | string)[]) => {
         if (!items.length || !sceneMgr.current) return;
         
@@ -2007,6 +2024,8 @@ export const ThreeViewer = ({
                                 onApplyStoreyWorkset={handleApplyStoreyWorkset}
                                 onLocate={handleLocateObject}
                                 onClearLocate={handleClearLocate}
+                                onLocateResultsChange={handleLocateResultsChange}
+                                locateResultUuids={locateResultUuids}
                             />
                         </div>
                         {/* Resize handle */}
