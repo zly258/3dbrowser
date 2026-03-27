@@ -1496,6 +1496,13 @@ body.font-loose,
   flex-wrap: wrap;
 }
 
+.ui-icon-btn {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
 .ui-tree-locator {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
@@ -1678,6 +1685,12 @@ body.font-loose,
   background-color: var(--bg-selected);
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.ui-tree-node.located {
+  background-color: rgba(245, 158, 11, 0.18);
+  box-shadow: inset 2px 0 0 #f59e0b;
+  color: var(--text-primary);
 }
 
 .ui-tree-expander {

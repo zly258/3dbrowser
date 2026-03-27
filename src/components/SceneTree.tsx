@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
+import { IconChevronRight, IconChevronLeft, IconChevronDown, IconClose, IconTarget } from "../theme/Icons";
 import { Button, Checkbox, Select } from "./common";
 import { ContextMenu } from "./ContextMenu";
 
@@ -207,6 +207,7 @@ interface SceneTreeProps {
     treeRoot: TreeNode[];
     setTreeRoot: React.Dispatch<React.SetStateAction<TreeNode[]>>;
     selectedUuid: string | null;
+    locatedUuid?: string | null;
     selectedStorey?: string;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
@@ -217,6 +218,8 @@ interface SceneTreeProps {
     onShowAll?: () => void;
     onApplyIfcFiltersToViewport?: (filters: IfcFilterState) => void;
     onApplyStoreyWorkset?: (storeys: string[]) => void;
+    onLocate?: (obj: any) => void;
+    onClearLocate?: () => void;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
@@ -224,6 +227,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     treeRoot,
     setTreeRoot,
     selectedUuid,
+    locatedUuid,
     selectedStorey,
     onSelect,
     onToggleVisibility,
@@ -233,7 +237,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onHide,
     onShowAll,
     onApplyIfcFiltersToViewport,
-    onApplyStoreyWorkset
+    onApplyStoreyWorkset,
+    onLocate,
+    onClearLocate
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [locatorMode, setLocatorMode] = useState<LocatorMode>("all");
@@ -489,12 +495,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const target = locatorMatches[matchIndex];
         if (!target) return;
         onSelect(target.uuid, target.object);
-        onFocus?.(target.object);
+        onLocate?.(target.object);
     };
 
     useEffect(() => {
         setLocatorIndex(0);
     }, [locatorMode, locatorQuery]);
+
+    useEffect(() => {
+        if (!locatorQuery.trim()) {
+            onClearLocate?.();
+        }
+    }, [locatorQuery, onClearLocate]);
 
     useEffect(() => {
         if (locatorMatches.length === 0 && locatorIndex !== 0) {
@@ -573,7 +585,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             className="ui-input ui-input-compact"
                         />
                         {locatorQuery && (
-                            <button className="ui-search-clear" onClick={() => setLocatorQuery("")}>
+                            <button className="ui-search-clear" onClick={() => {
+                                setLocatorQuery("");
+                                setLocatorIndex(0);
+                            }}>
                                 <IconClose width={14} height={14} />
                             </button>
                         )}
@@ -588,35 +603,38 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         <div className="ui-tree-search-actions">
                             <Button
                                 variant="ghost"
-                                className="ui-properties-action"
+                                className="ui-properties-action ui-icon-btn"
                                 onClick={() => {
                                     const nextIndex = Math.max(0, clampedLocatorIndex - 1);
                                     setLocatorIndex(nextIndex);
                                     handleLocateIfcMatch(nextIndex);
                                 }}
                                 disabled={locatorMatches.length === 0 || clampedLocatorIndex === 0}
+                                title={t("ifc_locator_prev") || "上一个"}
                             >
-                                {t("ifc_locator_prev") || "上一个"}
+                                <IconChevronLeft size={14} />
                             </Button>
                             <Button
                                 variant="ghost"
-                                className="ui-properties-action"
+                                className="ui-properties-action ui-icon-btn"
                                 onClick={() => {
                                     const nextIndex = Math.min(locatorMatches.length - 1, clampedLocatorIndex + 1);
                                     setLocatorIndex(nextIndex);
                                     handleLocateIfcMatch(nextIndex);
                                 }}
                                 disabled={locatorMatches.length === 0 || clampedLocatorIndex >= locatorMatches.length - 1}
+                                title={t("ifc_locator_next") || "下一个"}
                             >
-                                {t("ifc_locator_next") || "下一个"}
+                                <IconChevronRight size={14} />
                             </Button>
                             <Button
                                 variant="ghost"
-                                className="ui-properties-action"
+                                className="ui-properties-action ui-icon-btn"
                                 onClick={() => handleLocateIfcMatch(clampedLocatorIndex)}
                                 disabled={locatorMatches.length === 0}
+                                title={t("ifc_locator_action") || "定位构件"}
                             >
-                                {t("ifc_locator_action") || "定位构件"}
+                                <IconTarget size={14} />
                             </Button>
                         </div>
                     </div>
@@ -721,7 +739,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         {visibleItems.map((node) => (
                             <div
                                 key={node.uuid}
-                                className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""}`}
+                                className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
                                 style={{ paddingLeft: 8 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
                                 onDoubleClick={() => onFocus?.(node.object)}

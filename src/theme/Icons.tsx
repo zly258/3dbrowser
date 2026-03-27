@@ -23,8 +23,20 @@ const createIcon = (paths: React.ReactNode, props: any = {}) => {
 };
 
 export const IconChevronRight = (props: any) => createIcon(<polyline points="9 18 15 12 9 6" />, props);
+export const IconChevronLeft = (props: any) => createIcon(<polyline points="15 18 9 12 15 6" />, props);
 export const IconChevronDown = (props: any) => createIcon(<polyline points="6 9 12 15 18 9" />, props);
 export const IconChevronUp = (props: any) => createIcon(<polyline points="18 15 12 9 6 15" />, props);
+export const IconTarget = (props: any) => createIcon(
+  <>
+    <circle cx="12" cy="12" r="7" />
+    <circle cx="12" cy="12" r="2.5" />
+    <line x1="12" y1="2" x2="12" y2="5" />
+    <line x1="12" y1="19" x2="12" y2="22" />
+    <line x1="2" y1="12" x2="5" y2="12" />
+    <line x1="19" y1="12" x2="22" y2="12" />
+  </>,
+  props
+);
 export const IconClear = (props: any) => createIcon(
   <>
     <polyline points="3 6 5 6 21 6" />

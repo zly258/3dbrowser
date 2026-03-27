@@ -121,6 +121,8 @@ export class SceneManager {
     highlightMesh: THREE.Mesh; 
     private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
     private highlightedUuids: Set<string> = new Set();
+    private locateFocusUuid: string | null = null;
+    private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -801,6 +803,15 @@ export class SceneManager {
         if (this.tilesRenderer) {
             this.camera.updateMatrixWorld();
             this.tilesRenderer.update();
+        }
+
+        const highlightMaterial = this.highlightMesh.material as THREE.MeshBasicMaterial;
+        if (highlightMaterial) {
+            if (this.locateFocusUuid && this.highlightMesh.visible) {
+                highlightMaterial.opacity = 0.2 + ((Math.sin(frameNow / 160) + 1) * 0.24);
+            } else {
+                highlightMaterial.opacity = 0.3;
+            }
         }
 
         this.renderer.render(this.scene, this.camera);
@@ -3346,6 +3357,83 @@ export class SceneManager {
 
     highlightObject(uuid: string | null) {
         this.highlightObjects(uuid ? [uuid] : []);
+    }
+
+    clearLocateFocus() {
+        if (this.locateMaterialCache.size > 0) {
+            this.contentGroup.traverse((child) => {
+                const materials = ((child as THREE.Mesh).isMesh && (child as THREE.Mesh).material)
+                    ? (Array.isArray((child as THREE.Mesh).material) ? (child as THREE.Mesh).material : [(child as THREE.Mesh).material])
+                    : ((child as any).isBatchedMesh && (child as any).material)
+                        ? (Array.isArray((child as any).material) ? (child as any).material : [(child as any).material])
+                        : [];
+                materials.forEach((material: any) => {
+                    const cache = material ? this.locateMaterialCache.get(material.uuid) : null;
+                    if (!material || !cache) return;
+                    material.transparent = cache.transparent;
+                    material.opacity = cache.opacity;
+                    material.depthWrite = cache.depthWrite;
+                    material.needsUpdate = true;
+                });
+            });
+            this.locateMaterialCache.clear();
+        }
+
+        this.locateFocusUuid = null;
+    }
+
+    setLocateFocus(uuid: string | null) {
+        this.clearLocateFocus();
+        if (!uuid) return;
+
+        this.locateFocusUuid = uuid;
+        const targetMaterials = new Set<string>();
+        const targetObject = this.contentGroup.getObjectByProperty("uuid", uuid);
+        if (targetObject) {
+            targetObject.traverse((child) => {
+                const mesh = child as THREE.Mesh;
+                if (!mesh.isMesh || !mesh.material) return;
+                const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+                if (material) targetMaterials.add(material.uuid);
+            });
+        }
+
+        const targetMappings = this.optimizedMapping.get(uuid);
+        if (targetMappings) {
+            targetMappings.forEach((mapping) => {
+                const material = Array.isArray(mapping.mesh.material) ? mapping.mesh.material[0] : mapping.mesh.material;
+                if (material) targetMaterials.add(material.uuid);
+            });
+        }
+
+        const dimMaterial = (material: any, preserve = false) => {
+            if (!material || targetMaterials.has(material.uuid) || preserve) return;
+            if (!this.locateMaterialCache.has(material.uuid)) {
+                this.locateMaterialCache.set(material.uuid, {
+                    transparent: !!material.transparent,
+                    opacity: typeof material.opacity === "number" ? material.opacity : 1,
+                    depthWrite: material.depthWrite !== false
+                });
+            }
+            material.transparent = true;
+            material.opacity = 0.12;
+            material.depthWrite = false;
+            material.needsUpdate = true;
+        };
+
+        this.contentGroup.traverse((child) => {
+            const mesh = child as THREE.Mesh;
+            if (!mesh.isMesh || !mesh.material) return;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach((material) => dimMaterial(material, child === targetObject));
+        });
+
+        this.contentGroup.traverse((child) => {
+            const batched = child as THREE.BatchedMesh;
+            if (!(batched as any).isBatchedMesh || !batched.material) return;
+            const materials = Array.isArray(batched.material) ? batched.material : [batched.material];
+            materials.forEach((material) => dimMaterial(material));
+        });
     }
 
     highlightObjects(uuids: string[]) {

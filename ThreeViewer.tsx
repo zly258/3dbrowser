@@ -105,6 +105,7 @@ export const ThreeViewer = ({
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
     const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
+    const [locatedUuid, setLocatedUuid] = useState<string | null>(null);
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
     const [selectedIfcStorey, setSelectedIfcStorey] = useState<string>("");
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
@@ -961,6 +962,21 @@ export const ThreeViewer = ({
         sceneMgr.current.fitViewToObject(uuid);
         void handleSelect(obj);
     };
+
+    const handleLocateObject = useCallback((obj: any) => {
+        if (!sceneMgr.current || !obj) return;
+        const uuid = obj.uuid || obj.id;
+        if (!uuid) return;
+        setLocatedUuid(uuid);
+        sceneMgr.current.setLocateFocus(uuid);
+        sceneMgr.current.fitViewToObject(uuid);
+        void handleSelect(obj);
+    }, []);
+
+    const handleClearLocate = useCallback(() => {
+        setLocatedUuid(null);
+        sceneMgr.current?.clearLocateFocus();
+    }, []);
 
     const handleClearSelection = () => {
         setSelectedUuids([]);
@@ -1827,6 +1843,7 @@ export const ThreeViewer = ({
                 try {
                     await sceneMgr.current?.clear();
                     setSelectedUuids([]);
+                    setLocatedUuid(null);
                     setSelectedProps(null);
                     setSelectedIfcStorey("");
                     ifcPropertyCacheRef.current.clear();
@@ -1966,6 +1983,7 @@ export const ThreeViewer = ({
                                 treeRoot={treeRoot}
                                 setTreeRoot={setTreeRoot}
                                 selectedUuid={selectedUuid}
+                                locatedUuid={locatedUuid}
                                 selectedStorey={selectedIfcStorey}
                                 onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
@@ -1979,6 +1997,8 @@ export const ThreeViewer = ({
                                 onShowAll={handleShowAll}
                                 onApplyIfcFiltersToViewport={handleApplyIfcFiltersToViewport}
                                 onApplyStoreyWorkset={handleApplyStoreyWorkset}
+                                onLocate={handleLocateObject}
+                                onClearLocate={handleClearLocate}
                             />
                         </div>
                         {/* Resize handle */}
