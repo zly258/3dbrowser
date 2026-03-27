@@ -25,6 +25,7 @@ export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
     bgColor: string;
+    ifcGridVisible?: boolean;
     clip?: {
         helperVisible?: boolean;
         helperOpacity?: number;
@@ -547,6 +548,9 @@ export class SceneManager {
                 opacity: newSettings.clip.helperOpacity
             });
         }
+        if (newSettings.ifcGridVisible !== undefined) {
+            this.setIfcGridVisibility(newSettings.ifcGridVisible);
+        }
 
         // 应用光照
         this.ambientLight.intensity = this.settings.ambientInt;
@@ -599,6 +603,14 @@ export class SceneManager {
 
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
+    }
+
+    private setIfcGridVisibility(visible: boolean) {
+        this.contentGroup.traverse((obj) => {
+            if (obj.userData?.isIfcGridHelper) {
+                obj.visible = visible;
+            }
+        });
     }
 
     // 根据经纬度和时间计算太阳位置
@@ -1865,6 +1877,7 @@ export class SceneManager {
             this.nodeMap.get(obj.uuid)!.push(node);
 
             for (const child of obj.children) {
+                if (child.userData?.isIfcGridHelper) continue;
                 node.children!.push(buildSpatialRecursive(child));
             }
             return node;

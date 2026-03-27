@@ -1,48 +1,23 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { IconChevronRight, IconChevronDown } from "../theme/Icons";
-import { Button, SegmentedControl } from "./common";
+import { Button } from "./common";
 
 type PropertyGroups = Record<string, Record<string, string>>;
 
-type SelectedPropsState =
-    | PropertyGroups
-    | {
-          defaultView?: string;
-          views: Record<string, { label: string; groups: PropertyGroups }>;
-      };
-
 interface PropertiesPanelProps {
     t: (key: string) => string;
-    selectedProps: SelectedPropsState | null;
+    selectedProps: PropertyGroups | null;
     theme: any;
 }
-
-const isMultiViewProps = (
-    value: SelectedPropsState | null
-): value is { defaultView?: string; views: Record<string, { label: string; groups: PropertyGroups }> } =>
-    !!value && typeof value === "object" && "views" in value;
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps }) => {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
     const [copiedText, setCopiedText] = useState<string | null>(null);
-    const [activeView, setActiveView] = useState("normalized");
-
-    useEffect(() => {
-        if (isMultiViewProps(selectedProps)) {
-            setActiveView(selectedProps.defaultView || Object.keys(selectedProps.views)[0] || "normalized");
-        } else {
-            setActiveView("normalized");
-        }
-    }, [selectedProps]);
 
     const currentGroups = useMemo<PropertyGroups | null>(() => {
-        if (!selectedProps) return null;
-        if (isMultiViewProps(selectedProps)) {
-            return selectedProps.views[activeView]?.groups || selectedProps.views[Object.keys(selectedProps.views)[0]]?.groups || null;
-        }
         return selectedProps;
-    }, [activeView, selectedProps]);
+    }, [selectedProps]);
 
     const toggleGroup = (group: string) => {
         const next = new Set(collapsed);
@@ -99,18 +74,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
         <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
             {selectedProps && (
                 <div className="ui-properties-toolbar">
-                    {isMultiViewProps(selectedProps) && (
-                        <SegmentedControl
-                            className="ui-properties-views"
-                            value={activeView}
-                            onChange={setActiveView}
-                            options={Object.entries(selectedProps.views).map(([key, view]) => ({
-                                value: key,
-                                label: view.label
-                            }))}
-                        />
-                    )}
-
                     <div className="ui-search-input-wrap">
                         <input
                             type="text"

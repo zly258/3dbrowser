@@ -15,6 +15,8 @@ interface TreeNode {
     isFileNode?: boolean;
     isLastChild?: boolean;
     parentIsLast?: boolean[];
+    hasChildren?: boolean;
+    childrenLoaded?: boolean;
 }
 
 interface IfcMetadata {
@@ -22,6 +24,9 @@ interface IfcMetadata {
     systems?: string[];
     category?: string;
     materials?: string[];
+    classifications?: string[];
+    typeName?: string;
+    globalId?: string;
 }
 
 interface IfcFilterState {
@@ -112,6 +117,66 @@ const expandPathToUuid = (nodes: TreeNode[], targetUuid: string): [TreeNode[], b
     return [nextNodes, found];
 };
 
+const getRawChildren = (node: TreeNode | any): any[] => {
+    const children = node?.object?.children ?? node?.children;
+    return Array.isArray(children) ? children : [];
+};
+
+const createTreeNodeFromRaw = (rawNode: any, depth: number, isFileNode = false): TreeNode => {
+    const rawChildren = Array.isArray(rawNode?.children) ? rawNode.children : [];
+    return {
+        uuid: rawNode?.id ?? rawNode?.uuid ?? String(Math.random()),
+        name: rawNode?.name || "Unnamed",
+        type: rawNode?.type === "Mesh" ? "MESH" : "GROUP",
+        depth,
+        children: [],
+        expanded: false,
+        visible: rawNode?.visible !== false,
+        object: rawNode,
+        isFileNode,
+        hasChildren: rawChildren.length > 0,
+        childrenLoaded: false
+    };
+};
+
+const ensureNodeChildrenLoaded = (node: TreeNode): TreeNode => {
+    if (node.childrenLoaded || !node.hasChildren) return node;
+    return {
+        ...node,
+        childrenLoaded: true,
+        children: getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1))
+    };
+};
+
+const getNodeSearchText = (node: TreeNode | any) => {
+    const source = node?.object ?? node;
+    const meta = (source?.userData?.ifcMetadata || {}) as IfcMetadata;
+    return [
+        source?.name,
+        source?.type,
+        source?.bimId,
+        source?.userData?.bimId,
+        source?.userData?.expressID,
+        meta.storey,
+        meta.category,
+        meta.typeName,
+        meta.globalId,
+        ...(meta.systems || []),
+        ...(meta.materials || []),
+        ...(meta.classifications || [])
+    ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+};
+
+const rawTreeContainsUuid = (rawNode: any, targetUuid: string): boolean => {
+    if (!rawNode) return false;
+    if (rawNode.id === targetUuid || rawNode.uuid === targetUuid) return true;
+    const children = Array.isArray(rawNode.children) ? rawNode.children : [];
+    return children.some((child) => rawTreeContainsUuid(child, targetUuid));
+};
+
 interface SceneTreeProps {
     t: (key: string) => string;
     treeRoot: TreeNode[];
@@ -161,14 +226,16 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const categories = new Set<string>();
         const materials = new Set<string>();
 
-        const walk = (list: TreeNode[]) => {
-            list.forEach((node) => {
-                const meta = node.object?.userData?.ifcMetadata as IfcMetadata | undefined;
+        const walk = (list: Array<TreeNode | any>) => {
+            list.forEach((entry) => {
+                const source = entry?.object ?? entry;
+                const meta = source?.userData?.ifcMetadata as IfcMetadata | undefined;
                 if (meta?.storey) storeys.add(meta.storey);
                 if (meta?.category) categories.add(meta.category);
                 meta?.systems?.forEach((item) => systems.add(item));
                 meta?.materials?.forEach((item) => materials.add(item));
-                if (node.children.length > 0) walk(node.children);
+                const rawChildren = getRawChildren(entry);
+                if (rawChildren.length > 0) walk(rawChildren);
             });
         };
 
@@ -226,7 +293,35 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     useEffect(() => {
         if (!selectedUuid) return;
         setTreeRoot((prev) => {
-            const [nextTree, found] = expandPathToUuid(prev, selectedUuid);
+            const expandSelectedPath = (nodes: TreeNode[]): [TreeNode[], boolean] => {
+                let found = false;
+                const nextNodes = nodes.map((node) => {
+                    let workingNode = node;
+                    if (node.uuid === selectedUuid) {
+                        found = true;
+                        return node;
+                    }
+
+                    if (!node.childrenLoaded && node.hasChildren) {
+                        const rawChildren = getRawChildren(node);
+                        const containsTarget = rawChildren.some((child) => rawTreeContainsUuid(child, selectedUuid));
+                        if (containsTarget) {
+                            workingNode = ensureNodeChildrenLoaded(node);
+                        }
+                    }
+
+                    const [children, childFound] = expandSelectedPath(workingNode.children);
+                    if (childFound) found = true;
+                    return {
+                        ...workingNode,
+                        expanded: childFound ? true : workingNode.expanded,
+                        children
+                    };
+                });
+                return [nextNodes, found];
+            };
+
+            const [nextTree, found] = expandSelectedPath(prev);
             return found ? nextTree : prev;
         });
     }, [selectedUuid, setTreeRoot]);
@@ -235,12 +330,15 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const lowercaseQuery = query.toLowerCase();
         return nodes.reduce((acc: TreeNode[], node) => {
             const meta = node.object?.userData?.ifcMetadata as IfcMetadata | undefined;
-            const matchesQuery = !query || node.name.toLowerCase().includes(lowercaseQuery);
+            const matchesQuery = !query || getNodeSearchText(node).includes(lowercaseQuery);
             const matchesFilter = matchesIfcFilters(meta);
-            const filteredChildren = filterTree(node.children, query);
+            const sourceChildren = query || hasActiveFilters ? getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1)) : node.children;
+            const filteredChildren = filterTree(sourceChildren, query);
             if ((matchesQuery && matchesFilter) || filteredChildren.length > 0) {
                 acc.push({
                     ...node,
+                    childrenLoaded: query || hasActiveFilters ? true : node.childrenLoaded,
+                    hasChildren: node.hasChildren ?? getRawChildren(node).length > 0,
                     expanded: query || hasActiveFilters ? true : node.expanded,
                     children: filteredChildren
                 });
@@ -251,6 +349,19 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery, filters, hasActiveFilters]);
     const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
+    const firstSearchMatch = useMemo(() => {
+        if (!searchQuery) return null;
+        const query = searchQuery.toLowerCase();
+        const stack = [...treeRoot];
+        while (stack.length > 0) {
+            const node = stack.shift()!;
+            if (getNodeSearchText(node).includes(query)) return node;
+            getRawChildren(node)
+                .map((child) => createTreeNodeFromRaw(child, (node.depth ?? 0) + 1))
+                .forEach((child) => stack.push(child));
+        }
+        return null;
+    }, [searchQuery, treeRoot]);
     const rowHeight = 24;
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
@@ -278,7 +389,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const toggleNode = (nodeUuid: string) => {
         const toggle = (nodes: TreeNode[]): TreeNode[] =>
             nodes.map((node) => {
-                if (node.uuid === nodeUuid) return { ...node, expanded: !node.expanded };
+                if (node.uuid === nodeUuid) {
+                    const nextNode = ensureNodeChildrenLoaded(node);
+                    return { ...nextNode, expanded: !node.expanded };
+                }
                 if (node.children.length > 0) return { ...node, children: toggle(node.children) };
                 return node;
             });
@@ -287,11 +401,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     const expandAll = () => {
         const expand = (nodes: TreeNode[]): TreeNode[] =>
-            nodes.map((node) => ({
-                ...node,
-                expanded: node.children.length > 0,
-                children: expand(node.children)
-            }));
+            nodes.map((node) => {
+                const expandedNode = ensureNodeChildrenLoaded(node);
+                return {
+                    ...expandedNode,
+                    expanded: expandedNode.hasChildren,
+                    children: expand(expandedNode.children)
+                };
+            });
         setTreeRoot((prev) => expand(prev));
     };
 
@@ -305,6 +422,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         setTreeRoot((prev) => collapse(prev));
     };
 
+    const handleLocateFirstMatch = () => {
+        if (!firstSearchMatch) return;
+        onSelect(firstSearchMatch.uuid, firstSearchMatch.object);
+        onFocus?.(firstSearchMatch.object);
+    };
+
     return (
         <div className="ui-tree-panel">
             <div className="ui-search-bar">
@@ -314,6 +437,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         placeholder={t("search_nodes")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleLocateFirstMatch();
+                            }
+                        }}
                         className="ui-input ui-input-compact"
                     />
                     {searchQuery && (
@@ -322,6 +451,21 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         </button>
                     )}
                 </div>
+                {searchQuery && (
+                    <div className="ui-tree-search-meta">
+                        <span>
+                            {(t("search_results") || "结果")}: {flatData.length}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            className="ui-properties-action"
+                            onClick={handleLocateFirstMatch}
+                            disabled={!firstSearchMatch}
+                        >
+                            {t("locate_first_match") || "定位首个匹配"}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {hasIfcFilters && (
@@ -461,7 +605,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                         toggleNode(node.uuid);
                                     }}
                                 >
-                                    {node.children.length > 0 ? (
+                                    {node.hasChildren ? (
                                         node.expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />
                                     ) : null}
                                 </div>
@@ -504,18 +648,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         {
                             label: t("locate_in_view") || "定位到视图",
                             onClick: () => onFocus?.(contextMenu.node.object)
-                        },
-                        {
-                            label: t("hide_selected") || "隐藏选中",
-                            onClick: () => onHide?.(contextMenu.node.uuid)
-                        },
-                        {
-                            label: t("isolate_selection") || "隔离选中",
-                            onClick: () => onIsolate?.(contextMenu.node.uuid)
-                        },
-                        {
-                            label: t("show_all") || "显示全部",
-                            onClick: () => onShowAll?.()
                         },
                         { divider: true },
                         {
