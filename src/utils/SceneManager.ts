@@ -3505,7 +3505,6 @@ export class SceneManager {
 
         this.interactableListValid = false;
         this.updateSceneBounds();
-        this.refreshExplodeState();
     }
 
     private restoreExplodeSnapshot() {
