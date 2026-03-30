@@ -170,6 +170,19 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               onChange={(v) => onUpdate({ adaptiveQuality: v })}
             />
           </Row>
+          <Row label={t("st_performance_profile") || "性能策略"} labelWidth="90px">
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <SegmentedControl
+                options={[
+                  { value: 'smooth', label: t("st_perf_smooth") || '流畅优先' },
+                  { value: 'balanced', label: t("st_perf_balanced") || '平衡' },
+                  { value: 'quality', label: t("st_perf_quality") || '画质优先' }
+                ]}
+                value={settings.performanceMode || 'balanced'}
+                onChange={(v) => onUpdate({ performanceMode: v as 'smooth' | 'balanced' | 'quality' })}
+              />
+            </div>
+          </Row>
           </div>
         )}
 
