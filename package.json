@@ -32,7 +32,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && node scripts/post-build.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare": "husky",
+    "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose"
   },
   "dependencies": {
     "3d-tiles-renderer": "0.3.31",
@@ -43,9 +45,12 @@
     "web-ifc": "^0.0.74"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
+    "husky": "^9.1.7",
     "terser": "^5.46.0",
     "typescript": "~5.8.2",
     "vite": "^6.4.1"
