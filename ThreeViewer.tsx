@@ -205,6 +205,7 @@ export const ThreeViewer = ({
             minPixelRatio: 0.8,
             maxPixelRatio: 2,
             targetFps: 50,
+            performanceMode: 'balanced',
             sunEnabled: false,
             sunLatitude: 0,
             sunLongitude: 0,
@@ -258,6 +259,8 @@ export const ThreeViewer = ({
     const ifcPropertyCacheRef = useRef<Map<string, PropertyGroups>>(new Map());
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
+    const mouseMoveRafRef = useRef<number | null>(null);
+    const pendingMousePointRef = useRef<{ x: number; y: number } | null>(null);
 
     const handleThemeModeChange = useCallback((nextThemeMode: 'dark' | 'light') => {
         setThemeMode(nextThemeMode);
@@ -1177,12 +1180,31 @@ export const ThreeViewer = ({
                 setMousePos(null);
                 return;
             }
-            const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
-            if (intersect) {
-                setMousePos(intersect.point);
-            } else {
+            // 拖拽浏览时跳过射线检测，减少卡顿与抖动。
+            if (e.buttons !== 0) {
+                pendingMousePointRef.current = null;
+                if (mouseMoveRafRef.current !== null) {
+                    cancelAnimationFrame(mouseMoveRafRef.current);
+                    mouseMoveRafRef.current = null;
+                }
                 setMousePos(null);
+                return;
             }
+
+            pendingMousePointRef.current = { x: e.clientX, y: e.clientY };
+            if (mouseMoveRafRef.current !== null) return;
+
+            mouseMoveRafRef.current = requestAnimationFrame(() => {
+                mouseMoveRafRef.current = null;
+                const pending = pendingMousePointRef.current;
+                if (!pending) return;
+                const intersect = mgr.getRayIntersects(pending.x, pending.y);
+                if (intersect) {
+                    setMousePos(intersect.point);
+                } else {
+                    setMousePos(null);
+                }
+            });
         };
 
         const handleContextMenu = (e: MouseEvent) => {
@@ -1242,6 +1264,11 @@ export const ThreeViewer = ({
         window.addEventListener("keydown", handleKeyDown);
 
         return () => {
+            if (mouseMoveRafRef.current !== null) {
+                cancelAnimationFrame(mouseMoveRafRef.current);
+                mouseMoveRafRef.current = null;
+            }
+            pendingMousePointRef.current = null;
             canvas.removeEventListener("mousedown", handleMouseDown);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);

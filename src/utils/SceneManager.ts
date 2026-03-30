@@ -43,7 +43,7 @@ export interface SceneSettings {
     minPixelRatio?: number;
     maxPixelRatio?: number;
     targetFps?: number;
-    performanceMode?: 'balanced' | 'smooth';
+    performanceMode?: 'balanced' | 'smooth' | 'quality';
     // 光照模拟参数
     sunLatitude?: number;   // 纬度 (-90 ~ 90)
     sunLongitude?: number;  // 经度 (-180 ~ 180)
@@ -372,6 +372,13 @@ export class SceneManager {
     private chunkGhostBatchSize = 24;
     private animationFrameId: number | null = null;
     private disposed = false;
+    private interactionShadowDowngraded = false;
+    private interactionShadowRestoreAt = 0;
+    private interactionShadowRestoreDelayMs = 220;
+    private cullingScanCursor = 0;
+    private cullingTimeBudgetMovingMs = 4.5;
+    private cullingTimeBudgetRecoveryMs = 6.0;
+    private cullingTimeBudgetIdleMs = 9.0;
 
     private registerChunk(chunk: any) {
         this.chunks.push(chunk);
@@ -467,6 +474,7 @@ export class SceneManager {
             this.isCameraMoving = true;
             this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
             this.postMoveRecoveryUntil = 0;
+            this.interactionShadowRestoreAt = 0;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
@@ -476,6 +484,7 @@ export class SceneManager {
             this.isCameraMoving = true;
             this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
             this.postMoveRecoveryUntil = 0;
+            this.interactionShadowRestoreAt = 0;
             this.cullingDirty = true;
         });
         this.controls.addEventListener('end', () => {
@@ -484,6 +493,7 @@ export class SceneManager {
             this.isCameraMoving = false;
             this.chunkLoadResumeAt = now + Math.max(24, Math.floor(profile.resumeAfterMoveMs * 0.75));
             this.postMoveRecoveryUntil = now + profile.postMoveRecoveryMs;
+            this.interactionShadowRestoreAt = now + this.interactionShadowRestoreDelayMs;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
@@ -804,6 +814,7 @@ export class SceneManager {
             this.controls.update();
         }
 
+        this.updateInteractionPerformance(frameNow);
         this.updateAdaptiveQuality();
 
         // 如果需要更新边界 (例如分块加载/卸载后)
@@ -860,10 +871,34 @@ export class SceneManager {
         const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
         const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
         const targetFps = this.settings.targetFps ?? 50;
+        const chunkCount = this.chunks.length;
+        const meshCount = this.originalStats.meshes;
+        const mode = this.settings.performanceMode ?? 'balanced';
 
         let desiredRatio = maxRatio;
         if (this.isCameraMoving) {
-            desiredRatio = Math.max(minRatio, maxRatio * 0.65);
+            const movingScale = mode === 'quality'
+                ? (chunkCount > 3500 || meshCount > 250000
+                    ? 0.68
+                    : chunkCount > 1600 || meshCount > 120000
+                        ? 0.76
+                        : 0.84)
+                : mode === 'smooth'
+                    ? (chunkCount > 3500 || meshCount > 250000
+                        ? 0.44
+                        : chunkCount > 1600 || meshCount > 120000
+                            ? 0.52
+                            : 0.6)
+                    : (chunkCount > 3500 || meshCount > 250000
+                        ? 0.48
+                        : chunkCount > 1600 || meshCount > 120000
+                            ? 0.56
+                            : 0.65);
+            desiredRatio = Math.max(minRatio, maxRatio * movingScale);
+            const movingPenaltyThreshold = mode === 'quality' ? (targetFps - 12) : (targetFps - 8);
+            if (this.fps > 0 && this.fps < movingPenaltyThreshold) {
+                desiredRatio = Math.max(minRatio, desiredRatio - 0.08);
+            }
         } else if (this.fps > 0 && this.fps < targetFps - 5) {
             desiredRatio = Math.max(minRatio, this.activePixelRatio - 0.1);
         } else if (this.fps > targetFps + 8) {
@@ -877,6 +912,35 @@ export class SceneManager {
         this.renderer.setPixelRatio(desiredRatio);
         const rect = this.canvas.getBoundingClientRect();
         this.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
+    }
+
+    private isSunShadowConfigured() {
+        return this.settings.shadowQuality !== 'off'
+            && this.settings.sunShadow === true
+            && this.settings.sunEnabled !== false;
+    }
+
+    private updateInteractionPerformance(now: number) {
+        const mode = this.settings.performanceMode ?? 'balanced';
+        const shadowConfigured = this.isSunShadowConfigured();
+        const allowShadowDowngrade = mode !== 'quality';
+        if (this.isCameraMoving) {
+            if (allowShadowDowngrade && shadowConfigured && this.renderer.shadowMap.enabled) {
+                this.renderer.shadowMap.enabled = false;
+                this.interactionShadowDowngraded = true;
+            }
+            return;
+        }
+
+        if (!this.interactionShadowDowngraded) return;
+        if (!shadowConfigured) {
+            this.interactionShadowDowngraded = false;
+            return;
+        }
+        if (now < this.interactionShadowRestoreAt) return;
+
+        this.renderer.shadowMap.enabled = true;
+        this.interactionShadowDowngraded = false;
     }
 
     private initHardwareProfile() {
@@ -1561,6 +1625,7 @@ export class SceneManager {
         if (this.processingChunks.size >= this.maxConcurrentChunkLoads) return;
         const profile = this.getChunkRuntimeProfile();
         const phase = this.getChunkRenderPhase(now);
+        const mode = this.settings.performanceMode ?? 'balanced';
 
         this.camera.updateMatrixWorld();
         this.projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
@@ -1581,7 +1646,32 @@ export class SceneManager {
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
 
         const totalChunks = this.chunks.length;
-        this.chunks.forEach((c, chunkIndex) => {
+        const cullingLoopStart = performance.now();
+        const cullingTimeBudgetMs = phase === 'moving'
+            ? this.cullingTimeBudgetMovingMs
+            : phase === 'recovery'
+                ? this.cullingTimeBudgetRecoveryMs
+                : this.cullingTimeBudgetIdleMs;
+        let abortedByBudget = false;
+        const sampleUnloadedWhileMoving = mode !== 'quality' && phase === 'moving' && totalChunks > 1800;
+        const movingSampleStride = sampleUnloadedWhileMoving
+            ? (totalChunks > 5000 ? 8 : totalChunks > 3000 ? 6 : 4)
+            : 1;
+        const movingSampleSeed = sampleUnloadedWhileMoving
+            ? Math.floor(now / Math.max(1, profile.movingPeripheralRefreshMs)) % movingSampleStride
+            : 0;
+        const startIndex = totalChunks > 0 ? (this.cullingScanCursor % totalChunks) : 0;
+        for (let scanOffset = 0; scanOffset < totalChunks; scanOffset++) {
+            const chunkIndex = (startIndex + scanOffset) % totalChunks;
+            const c = this.chunks[chunkIndex];
+            if ((scanOffset & 31) === 0) {
+                const elapsed = performance.now() - cullingLoopStart;
+                if (elapsed > cullingTimeBudgetMs) {
+                    abortedByBudget = true;
+                    this.cullingScanCursor = (chunkIndex + 1) % totalChunks;
+                    break;
+                }
+            }
             if (!c.paddedBounds || c._padding !== padding) {
                 const size = c.bounds.getSize(tempSize);
                 const pb = c.bounds.clone();
@@ -1597,6 +1687,10 @@ export class SceneManager {
             toChunkDirection.copy(c.center).sub(cameraPos);
             const dist = toChunkDirection.length();
             const inRange = dist < this.maxRenderDistance;
+            if (sampleUnloadedWhileMoving && !c.loaded && (chunkIndex % movingSampleStride) !== movingSampleSeed) {
+                // 相机移动阶段对超大场景只抽样评估部分未加载分块，降低剔除主循环开销。
+                return;
+            }
             
             // 计算屏幕空间占用大小 (SSE 优化)
             // 对于正交相机，大小与距离无关，只与 zoom 和 frustumSize 有关
@@ -1670,24 +1764,27 @@ export class SceneManager {
                     : 0;
 
                 if (phase === 'moving' && centrality < 0.08 && pixelSize < 18) {
-                    return;
+                    continue;
                 }
                 if (phase === 'moving' && isPeripheralWhileMoving && !shouldRefreshPeripheral) {
-                    return;
+                    continue;
                 }
                 if (phase !== 'moving' && centerPriorityWindow && isPeripheralCandidate) {
-                    return;
+                    continue;
                 }
                 if (phase === 'moving' && (this.settings.performanceMode ?? 'balanced') === 'smooth') {
                     if (centrality < 0.3 && pixelSize < 54 && forwardness < 0.62) {
-                        return;
+                        continue;
                     }
                 }
 
                 c.priority = movingPriorityBoost + cacheBoost + warmupBoost + forwardScore + (viewportBoost * 1000) + (sizeScore * 120) + distanceScore + (centrality * 300);
                 toLoad.push(c);
             }
-        });
+        }
+        if (!abortedByBudget) {
+            this.cullingScanCursor = (startIndex + totalChunks) % Math.max(totalChunks, 1);
+        }
         
         // 卸载策略
         if (!this.isCameraMoving && loadedChunks.length > this.maxLoadedChunks) {
@@ -1720,6 +1817,11 @@ export class SceneManager {
             for (let i = 0; i < count; i++) {
                 this.loadChunk(toLoad[i]);
             }
+        }
+
+        if (abortedByBudget) {
+            // 延后剩余扫描到后续帧，避免单帧卡顿尖峰。
+            this.cullingDirty = true;
         }
 
         if (this.chunkWarmupActive && this.chunkLoadedCount >= this.initialChunkLoadTarget) {
@@ -5205,7 +5307,18 @@ export class SceneManager {
         this.locateResultSet.clear();
         this.fastPreviewModels.clear();
         this.clearChunkCache();
+        this.controls.dispose();
+        if (this.selectionBox.geometry) this.selectionBox.geometry.dispose();
+        const selectionMat = this.selectionBox.material as THREE.Material | THREE.Material[];
+        (Array.isArray(selectionMat) ? selectionMat : [selectionMat]).forEach((m) => m?.dispose?.());
+        if (this.highlightMesh.geometry) this.highlightMesh.geometry.dispose();
+        const highlightMat = this.highlightMesh.material as THREE.Material | THREE.Material[];
+        (Array.isArray(highlightMat) ? highlightMat : [highlightMat]).forEach((m) => m?.dispose?.());
+        if (this.tempMarker.geometry) this.tempMarker.geometry.dispose();
+        const tempMarkerMat = this.tempMarker.material as THREE.Material | THREE.Material[];
+        (Array.isArray(tempMarkerMat) ? tempMarkerMat : [tempMarkerMat]).forEach((m) => m?.dispose?.());
         this.dotTexture.dispose();
+        this.sharedMaterial.dispose();
         this.renderer.dispose();
         if (this.tilesRenderer) this.tilesRenderer.dispose();
     }

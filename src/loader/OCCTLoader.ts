@@ -120,7 +120,16 @@ function createMaterial(color: THREE.Color) {
     });
 }
 
-function buildThreeMesh(mesh: OcctMesh) {
+function getOrCreateMaterial(materialCache: Map<number, THREE.MeshPhongMaterial>, color: THREE.Color) {
+    const key = color.getHex();
+    const cached = materialCache.get(key);
+    if (cached) return cached;
+    const created = createMaterial(color);
+    materialCache.set(key, created);
+    return created;
+}
+
+function buildThreeMesh(mesh: OcctMesh, materialCache: Map<number, THREE.MeshPhongMaterial>) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(Array.from(mesh.attributes.position.array), 3));
 
@@ -138,7 +147,7 @@ function buildThreeMesh(mesh: OcctMesh) {
     geometry.computeBoundingSphere();
 
     const baseColor = getColorFromArray(mesh.color);
-    const baseMaterial = createMaterial(baseColor);
+    const baseMaterial = getOrCreateMaterial(materialCache, baseColor);
     const brepFaces = Array.isArray(mesh.brep_faces) ? mesh.brep_faces : [];
     const triangleCount = geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;
 
@@ -172,7 +181,7 @@ function buildThreeMesh(mesh: OcctMesh) {
                 }
 
                 const faceColor = getColorFromArray(face.color ?? mesh.color ?? null);
-                materials.push(createMaterial(faceColor));
+                materials.push(getOrCreateMaterial(materialCache, faceColor));
                 geometry.addGroup(start * 3, (endExclusive - start) * 3, materials.length - 1);
                 triangleIndex = Math.max(triangleIndex, endExclusive);
             }
@@ -349,10 +358,11 @@ export class OCCTLoader {
             source: "OCCT",
             isCADRoot: true
         };
+        const materialCache = new Map<number, THREE.MeshPhongMaterial>();
 
         const meshByIndex = new Map<number, THREE.Mesh>();
         result.meshes.forEach((mesh, index) => {
-            meshByIndex.set(index, buildThreeMesh(mesh));
+            meshByIndex.set(index, buildThreeMesh(mesh, materialCache));
         });
 
         const rootNode = result.root;
