@@ -1,23 +1,29 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "../common/Button";
 import { FloatingPanel } from "./FloatingPanel";
 
 interface ExportPanelProps {
     t: any;
     onClose?: () => void;
-    onExport: (format: string) => void;
-        theme: any;
+    onExport: (format: string, fileName: string) => void;
+    getDefaultFileName: (format: string) => string;
+    theme: any;
 }
 
-export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, theme }) => {
+export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, getDefaultFileName, theme }) => {
     const [format, setFormat] = useState('glb');
+    const [fileName, setFileName] = useState(() => getDefaultFileName('glb'));
+
+    useEffect(() => {
+        setFileName(getDefaultFileName(format));
+    }, [format, getDefaultFileName]);
 
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={400} resizable={false} theme={theme} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={500} resizable={false} theme={theme} storageId="tool_export">
             <div style={{ padding: 16 }}>
                 <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>{t("export_format")}:</div>
 
-                {[
+                {[ 
                     { id: 'glb', label: 'GLB', desc: t("export_glb") },
                     { id: 'lmb', label: 'LMB', desc: t("export_lmb") },
                     { id: '3dtiles', label: '3D Tiles', desc: t("export_3dtiles") },
@@ -38,9 +44,24 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
                     </label>
                 ))}
 
+                <div style={{ marginTop: 12, marginBottom: 8, fontSize: 12, color: theme.textMuted }}>
+                    {t("export_filename") || "文件名"}:
+                </div>
+                <input
+                    type="text"
+                    value={fileName}
+                    onChange={(e) => setFileName(e.target.value)}
+                    placeholder={t("export_filename_placeholder") || "请输入文件名"}
+                    className="ui-input ui-input-compact"
+                    style={{ width: '100%', marginBottom: 6 }}
+                />
+                <div style={{ fontSize: 11, color: theme.textMuted }}>
+                    {t("export_filename_hint") || "留空时自动按模型名生成"}
+                </div>
+
                 <Button
                     theme={theme}
-                    onClick={() => onExport(format)}
+                    onClick={() => onExport(format, fileName)}
                     style={{ width: '100%', marginTop: 10, height: 40 }}
                 >
                     {t("export_btn")}

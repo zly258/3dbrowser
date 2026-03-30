@@ -1574,12 +1574,14 @@ export const ThreeViewer = ({
         }
 
         const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
+        const nbimIfcGroups = sceneMgr.current.getNbimIfcPropertyGroups(focusUuid, "raw");
+        const mergedIfcGroups = ifcGroups || nbimIfcGroups || null;
         const selectedGroups = buildSelectedPropertyGroups({
             basicLabel: t("pg_basic"),
             geoLabel: t("pg_geo"),
             basicProps,
             geoProps,
-            ifcProps: ifcGroups,
+            ifcProps: mergedIfcGroups,
             nbimProps
         });
 
@@ -1815,11 +1817,53 @@ export const ThreeViewer = ({
         finally { setLoading(false); }
     };
 
+    const stripFileExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
+    const sanitizeFileStem = (name: string) => {
+        const sanitized = name
+            .replace(/[\\/:*?"<>|]/g, "_")
+            .replace(/\s+/g, " ")
+            .trim();
+        return sanitized || "model";
+    };
+    const getExportModelNames = useCallback(() => {
+        if (!sceneMgr.current) return [] as string[];
+        const content = sceneMgr.current.contentGroup;
+        const names: string[] = [];
+        content.children.forEach((child: THREE.Object3D) => {
+            if (child.userData?.isOptimizedGroup) return;
+            if (child.name === "TilesRenderer" || child.name.startsWith("optimized_")) return;
+            const rawName =
+                (typeof child.userData?.modelName === "string" ? child.userData.modelName : "") ||
+                (child.children?.[0]?.name || "") ||
+                child.name;
+            const baseName = sanitizeFileStem(stripFileExtension(rawName));
+            if (baseName) names.push(baseName);
+        });
+        return Array.from(new Set(names));
+    }, []);
+    const getDefaultExportFileName = useCallback((format: string) => {
+        const modelNames = getExportModelNames();
+        if (modelNames.length === 1) {
+            return modelNames[0];
+        }
+        const now = new Date();
+        const pad = (v: number) => String(v).padStart(2, "0");
+        const suffix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        return `${t("export_batch_name") || "批量导出"}_${suffix}`;
+    }, [getExportModelNames, t]);
+    const resolveExportFilename = (format: string, requestedName?: string) => {
+        const fallback = getDefaultExportFileName(format);
+        const stem = sanitizeFileStem(stripFileExtension((requestedName || "").trim()) || fallback);
+        return format === "3dtiles" ? stem : `${stem}.${format}`;
+    };
+
     // New unified Export Handler
-    const handleExport = async (format: string) => {
+    const handleExport = async (format: string, requestedName: string) => {
         if (!sceneMgr.current) return;
         
         const content = sceneMgr.current.contentGroup;
+        const resolvedFileName = resolveExportFilename(format, requestedName);
+        const resolvedStem = stripFileExtension(resolvedFileName);
         
         // NBIM 导出直接由 SceneManager 处理
         if (format === 'nbim') {
@@ -1832,7 +1876,7 @@ export const ThreeViewer = ({
             setActiveTool('none');
             setTimeout(async () => {
                 try {
-                    await sceneMgr.current?.exportNbim();
+                    await sceneMgr.current?.exportNbim(resolvedStem);
                     setToast({ message: t("success"), type: 'success' });
                 } catch (e) {
                     console.error(e);
@@ -1863,7 +1907,7 @@ export const ThreeViewer = ({
         setTimeout(async () => {
             try {
                 let blob: Blob | null = null;
-                let filename = `export.${format}`;
+                const filename = resolvedFileName;
 
                 if (format === '3dtiles') {
                     // 强制选择输出目录并直接写入
@@ -2225,7 +2269,13 @@ export const ThreeViewer = ({
                     )}
 
                     {activeTool === 'export' && (
-                        <ExportPanel t={t} onClose={() => setActiveTool('none')} onExport={handleExport} theme={theme} />
+                        <ExportPanel
+                            t={t}
+                            onClose={() => setActiveTool('none')}
+                            onExport={handleExport}
+                            getDefaultFileName={getDefaultExportFileName}
+                            theme={theme}
+                        />
                     )}
 
                     {activeTool === 'screenshot' && (

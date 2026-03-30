@@ -156,6 +156,10 @@ const resources: Record<Lang, Record<string, string>> = {
         export_lmb: "LMB (Custom Compressed)",
         export_3dtiles: "3D Tiles (Web)",
         export_nbim: "NBIM (High Performance)",
+        export_filename: "File Name",
+        export_filename_placeholder: "Enter file name",
+        export_filename_hint: "Leave empty to auto-generate from model names",
+        export_batch_name: "batch_export",
         export_btn: "Export",
         // 设置
         st_lighting: "Lighting",
@@ -434,6 +438,10 @@ const resources: Record<Lang, Record<string, string>> = {
         export_lmb: "LMB (自定义压缩)",
         export_3dtiles: "3D Tiles (Web大模型)",
         export_nbim: "NBIM (高性能分块模型)",
+        export_filename: "文件名",
+        export_filename_placeholder: "请输入文件名",
+        export_filename_hint: "为空时自动按模型名生成",
+        export_batch_name: "批量导出",
         export_btn: "开始导出",
         // 设置
         st_lighting: "场景光照",
