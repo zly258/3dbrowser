@@ -370,6 +370,8 @@ export class SceneManager {
     private boundsScanBatchSize = 2400;
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
+    private animationFrameId: number | null = null;
+    private disposed = false;
 
     private registerChunk(chunk: any) {
         this.chunks.push(chunk);
@@ -567,7 +569,7 @@ export class SceneManager {
         this.mouse = new THREE.Vector2();
 
         this.animate = this.animate.bind(this);
-        requestAnimationFrame(this.animate);
+        this.animationFrameId = requestAnimationFrame(this.animate);
     }
     
     updateSettings(newSettings: Partial<SceneSettings>) {
@@ -788,7 +790,8 @@ export class SceneManager {
     }
 
     animate() {
-        requestAnimationFrame(this.animate);
+        if (this.disposed) return;
+        this.animationFrameId = requestAnimationFrame(this.animate);
         this.frameCounter++;
         const frameNow = performance.now();
         if (frameNow - this.frameSampleTime >= 500) {
@@ -3752,25 +3755,8 @@ export class SceneManager {
 
         const focusMappings = this.optimizedMapping.get(focusId);
         if (focusMappings && focusMappings.length > 0) {
-            const m = focusMappings[0];
-            if (m.geometry) {
-                this.highlightMesh.geometry = m.geometry;
-
-                const matrix = new THREE.Matrix4();
-                m.mesh.getMatrixAt(m.instanceId, matrix);
-                matrix.premultiply(m.mesh.matrixWorld);
-
-                const worldPos = new THREE.Vector3();
-                const worldQuat = new THREE.Quaternion();
-                const worldScale = new THREE.Vector3();
-                matrix.decompose(worldPos, worldQuat, worldScale);
-                worldScale.multiplyScalar(1.035);
-
-                this.highlightMesh.position.copy(worldPos);
-                this.highlightMesh.quaternion.copy(worldQuat);
-                this.highlightMesh.scale.copy(worldScale);
-                this.highlightMesh.visible = true;
-            }
+            // 优化网格使用实例着色进行高亮，避免与外壳高亮叠加产生“双高亮”视觉。
+            this.highlightMesh.visible = false;
             return;
         }
 
@@ -5193,7 +5179,33 @@ export class SceneManager {
     }
 
     dispose() {
+        this.disposed = true;
+        this.cancelDeferredStructureBuild();
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
         if (this.logicTimer) clearInterval(this.logicTimer);
+        for (const worker of this.workers) {
+            try {
+                worker.terminate();
+            } catch (error) {
+                console.warn("Worker terminate failed:", error);
+            }
+        }
+        this.workers = [];
+        if (this.workerQueue.length > 0) {
+            const pending = this.workerQueue.splice(0, this.workerQueue.length);
+            pending.forEach((task) => task.reject(new Error("SceneManager disposed")));
+        }
+        this.activeWorkerCount = 0;
+        this.processingChunks.clear();
+        this.cancelledChunkIds.clear();
+        this.highlightedUuids.clear();
+        this.locateResultSet.clear();
+        this.fastPreviewModels.clear();
+        this.clearChunkCache();
+        this.dotTexture.dispose();
         this.renderer.dispose();
         if (this.tilesRenderer) this.tilesRenderer.dispose();
     }
