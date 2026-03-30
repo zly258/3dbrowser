@@ -2210,7 +2210,16 @@ export class SceneManager {
         const fileGroup = new THREE.Group();
         fileGroup.name = `file_${object.uuid}`;
         fileGroup.userData.originalUuid = object.uuid;
+        const modelName = sanitizeFileStem(
+            sanitizeDisplayLabel(
+                typeof object.userData?.modelName === "string" ? object.userData.modelName : "",
+                stripFileExtension(object.name),
+                object.name
+            ) || "model"
+        );
+        fileGroup.userData.modelName = modelName;
         object.userData.originalUuid = object.uuid;
+        object.userData.modelName = modelName;
         fileGroup.add(object);
 
         object.visible = keepVisible;
@@ -2802,7 +2811,7 @@ export class SceneManager {
         return bm;
     }
 
-    async exportNbim() {
+    async exportNbim(fileName?: string) {
         if (this.chunks.length === 0) throw new Error("无模型数据可导出");
 
         const bimIdTable: string[] = [""];
@@ -2821,14 +2830,20 @@ export class SceneManager {
         traverseBimIds(this.structureRoot);
 
         const ifcApiByModel = new Map<string, { ifcApi: any; modelID: number }>();
+        const ifcManagerByModel = new Map<string, { ifcManager: any; modelID: number }>();
         this.contentGroup.traverse(obj => {
             if (obj.userData?.ifcAPI && obj.userData?.modelID !== undefined && obj.userData?.originalUuid) {
                 ifcApiByModel.set(String(obj.userData.originalUuid), { ifcApi: obj.userData.ifcAPI, modelID: obj.userData.modelID });
             }
+            if (obj.userData?.ifcManager && obj.userData?.modelID !== undefined && obj.userData?.originalUuid) {
+                ifcManagerByModel.set(String(obj.userData.originalUuid), { ifcManager: obj.userData.ifcManager, modelID: obj.userData.modelID });
+            }
         });
 
         const bimProperties: Record<string, any> = {};
-        const fillBimProperties = (node: StructureTreeNode) => {
+        const stack: StructureTreeNode[] = [this.structureRoot];
+        while (stack.length > 0) {
+            const node = stack.pop()!;
             const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
             if (node.bimId) {
                 const key = `${originalUuid}::${node.bimId}`;
@@ -2846,11 +2861,29 @@ export class SceneManager {
                             }
                         } catch {}
                     }
+
+                    if (expressID !== undefined && ifcManagerByModel.has(originalUuid)) {
+                        try {
+                            const { ifcManager, modelID } = ifcManagerByModel.get(originalUuid)!;
+                            const fullProps = await ifcManager.getItemProperties(modelID, Number(expressID));
+                            const rawGroups = fullProps?.rawGroups || fullProps?.groups || null;
+                            const normalizedGroups = fullProps?.normalizedGroups || null;
+                            if (rawGroups && Object.keys(rawGroups).length > 0) {
+                                bimProperties[key].ifcRawGroups = rawGroups;
+                            }
+                            if (normalizedGroups && Object.keys(normalizedGroups).length > 0) {
+                                bimProperties[key].ifcNormalizedGroups = normalizedGroups;
+                            }
+                        } catch {}
+                    }
                 }
             }
-            if (node.children) node.children.forEach(fillBimProperties);
-        };
-        fillBimProperties(this.structureRoot);
+            if (node.children && node.children.length > 0) {
+                for (let i = node.children.length - 1; i >= 0; i--) {
+                    stack.push(node.children[i]);
+                }
+            }
+        }
 
         const chunkBlobs: Uint8Array[] = [];
         const exportChunks = this.chunks.map(c => ({
@@ -2859,6 +2892,7 @@ export class SceneManager {
                 min: { x: c.bounds.min.x, y: c.bounds.min.y, z: c.bounds.min.z },
                 max: { x: c.bounds.max.x, y: c.bounds.max.y, z: c.bounds.max.z }
             },
+            originalUuid: c.originalUuid ? String(c.originalUuid) : undefined,
             byteOffset: 0,
             byteLength: 0
         }));
@@ -3014,7 +3048,28 @@ export class SceneManager {
         const url = URL.createObjectURL(finalBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `model_${new Date().getTime()}.nbim`;
+        const deriveDefaultStem = () => {
+            const names: string[] = [];
+            this.contentGroup.children.forEach((child) => {
+                if (child.userData?.isOptimizedGroup) return;
+                if (child.name === "TilesRenderer" || child.name.startsWith("optimized_")) return;
+                const rawName =
+                    (typeof child.userData?.modelName === "string" ? child.userData.modelName : "") ||
+                    (child.children?.[0]?.name || "") ||
+                    child.name;
+                const baseName = sanitizeFileStem(stripFileExtension(rawName));
+                if (baseName) names.push(baseName);
+            });
+            const uniqueNames = Array.from(new Set(names));
+            if (uniqueNames.length === 1) return uniqueNames[0];
+            const now = new Date();
+            const pad = (v: number) => String(v).padStart(2, "0");
+            const suffix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+            return `批量导出_${suffix}`;
+        };
+        const defaultStem = deriveDefaultStem();
+        const resolvedName = sanitizeFileStem(stripFileExtension((fileName || "").trim()) || defaultStem);
+        a.download = `${resolvedName}.nbim`;
         a.click();
         URL.revokeObjectURL(url);
     }
@@ -3080,7 +3135,23 @@ export class SceneManager {
         }
 
         const rootId = modelRoot?.id || fileId;
-        this.nbimPropsByOriginalUuid.set(rootId, manifest.bimProperties || {});
+        const manifestBimProperties = (manifest?.bimProperties && typeof manifest.bimProperties === "object")
+            ? manifest.bimProperties as Record<string, any>
+            : {};
+        const groupedBimProperties = new Map<string, Record<string, any>>();
+        Object.entries(manifestBimProperties).forEach(([key, value]) => {
+            const sepIndex = key.indexOf("::");
+            const owner = sepIndex > 0 ? key.slice(0, sepIndex) : rootId;
+            if (!groupedBimProperties.has(owner)) groupedBimProperties.set(owner, {});
+            groupedBimProperties.get(owner)![key] = value;
+        });
+        if (groupedBimProperties.size > 0) {
+            groupedBimProperties.forEach((props, owner) => {
+                this.nbimPropsByOriginalUuid.set(owner, props);
+            });
+        } else {
+            this.nbimPropsByOriginalUuid.set(rootId, manifestBimProperties);
+        }
         const quickStats = manifest.stats || {
             meshes: this.countStructureRenderableNodes(modelRoot),
             faces: 0,
@@ -3092,6 +3163,9 @@ export class SceneManager {
         const fileGroup = new THREE.Group();
         fileGroup.name = `file_${rootId}`;
         fileGroup.userData.originalUuid = rootId;
+        const fileBaseName = sanitizeFileStem(stripFileExtension(file.name));
+        const modelRootName = typeof modelRoot?.name === "string" && modelRoot.name !== "Root" ? modelRoot.name : "";
+        fileGroup.userData.modelName = sanitizeFileStem(sanitizeDisplayLabel(modelRootName, fileBaseName, rootId) || fileBaseName);
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
         
@@ -3099,11 +3173,12 @@ export class SceneManager {
         if (modelRoot) {
             const traverse = (node: StructureTreeNode) => {
                 if (!node.userData) node.userData = {};
-                node.userData.originalUuid = rootId;
+                const nodeOriginalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : rootId;
+                node.userData.originalUuid = nodeOriginalUuid;
                 if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
                 this.nodeMap.get(node.id)!.push(node);
                 if (node.bimId) {
-                    const key = `${rootId}::${node.bimId}`;
+                    const key = `${nodeOriginalUuid}::${node.bimId}`;
                     if (!this.bimIdToNodeIds.has(key)) this.bimIdToNodeIds.set(key, []);
                     this.bimIdToNodeIds.get(key)!.push(node.id);
                 }
@@ -3144,7 +3219,7 @@ export class SceneManager {
                 byteLength: c.byteLength,
                 nbimFileId: fileId,
                 groupName: `optimized_${rootId}`,
-                originalUuid: rootId
+                originalUuid: c.originalUuid ? String(c.originalUuid) : rootId
             });
 
             // 显示鬼影
@@ -3275,7 +3350,28 @@ export class SceneManager {
         const map = this.nbimPropsByOriginalUuid.get(originalUuid);
         if (!map) return null;
         const key = `${originalUuid}::${node.bimId}`;
-        return map[key] || null;
+        const entry = map[key];
+        if (!entry || typeof entry !== "object") return entry || null;
+        const { ifcRawGroups, ifcNormalizedGroups, ...flatProps } = entry;
+        return flatProps;
+    }
+
+    getNbimIfcPropertyGroups(id: string, mode: "raw" | "normalized" = "raw"): Record<string, Record<string, string>> | null {
+        const node = this.nodeMap.get(id)?.[0];
+        if (!node || !node.bimId) return null;
+        const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
+        if (!originalUuid) return null;
+        const map = this.nbimPropsByOriginalUuid.get(originalUuid);
+        if (!map) return null;
+        const key = `${originalUuid}::${node.bimId}`;
+        const entry = map[key];
+        if (!entry || typeof entry !== "object") return null;
+        const rawGroups = entry.ifcRawGroups;
+        const normalizedGroups = entry.ifcNormalizedGroups;
+        if (mode === "normalized") {
+            return (normalizedGroups || rawGroups || null) as Record<string, Record<string, string>> | null;
+        }
+        return (rawGroups || normalizedGroups || null) as Record<string, Record<string, string>> | null;
     }
 
     setAllVisibility(visible: boolean) {
@@ -5322,4 +5418,16 @@ export class SceneManager {
         this.renderer.dispose();
         if (this.tilesRenderer) this.tilesRenderer.dispose();
     }
+}
+
+function stripFileExtension(name: string) {
+    return name.replace(/\.[^./\\]+$/, "");
+}
+
+function sanitizeFileStem(name: string) {
+    const sanitized = name
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/\s+/g, " ")
+        .trim();
+    return sanitized || "model";
 }
