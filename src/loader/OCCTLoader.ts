@@ -36,6 +36,70 @@ type OcctResult = {
 };
 
 const DEFAULT_COLOR = new THREE.Color(0xcccccc);
+let occtRuntimePromise: Promise<any> | null = null;
+
+declare global {
+    interface Window {
+        occtimportjs?: (moduleArg?: Record<string, unknown>) => Promise<any>;
+    }
+}
+
+function getOcctScriptUrl(wasmUrl: string) {
+    return wasmUrl.replace(/occt-import-js\.wasm(?:\?.*)?$/i, "occt-import-js.js");
+}
+
+async function ensureOcctRuntime(wasmUrl: string) {
+    if (occtRuntimePromise) {
+        return occtRuntimePromise;
+    }
+
+    occtRuntimePromise = (async () => {
+        const existingFactory = globalThis.window?.occtimportjs;
+        if (typeof existingFactory === "function") {
+            return existingFactory({
+                locateFile: (name: string) => name.endsWith(".wasm") ? wasmUrl : name
+            });
+        }
+
+        const scriptUrl = getOcctScriptUrl(wasmUrl);
+        await new Promise<void>((resolve, reject) => {
+            const existingScript = document.querySelector(`script[data-occt-import-js="true"]`) as HTMLScriptElement | null;
+            if (existingScript) {
+                if (typeof globalThis.window?.occtimportjs === "function") {
+                    resolve();
+                    return;
+                }
+                existingScript.addEventListener("load", () => resolve(), { once: true });
+                existingScript.addEventListener("error", () => reject(new Error(`Failed to load ${scriptUrl}`)), { once: true });
+                return;
+            }
+
+            const script = document.createElement("script");
+            script.src = scriptUrl;
+            script.async = true;
+            script.dataset.occtImportJs = "true";
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Failed to load ${scriptUrl}`));
+            document.head.appendChild(script);
+        });
+
+        const factory = globalThis.window?.occtimportjs;
+        if (typeof factory !== "function") {
+            throw new TypeError("window.occtimportjs is not available after script load");
+        }
+
+        return factory({
+            locateFile: (name: string) => name.endsWith(".wasm") ? wasmUrl : name
+        });
+    })();
+
+    try {
+        return await occtRuntimePromise;
+    } catch (error) {
+        occtRuntimePromise = null;
+        throw error;
+    }
+}
 
 function getColorFromArray(color?: [number, number, number] | null) {
     if (!Array.isArray(color) || color.length < 3) {
@@ -218,14 +282,7 @@ export class OCCTLoader {
 
         let occt;
         try {
-            // @ts-ignore
-            const initOCCT = (await import("occt-import-js")).default;
-            occt = await initOCCT({
-                locateFile: (name: string) => {
-                    if (name.endsWith(".wasm")) return this.wasmUrl;
-                    return name;
-                }
-            });
+            occt = await ensureOcctRuntime(this.wasmUrl);
         } catch (e) {
             console.error("初始化 OCCT 引擎失败:", e);
             throw new Error(t("error_cad_engine_init_failed"));

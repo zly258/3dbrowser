@@ -47,12 +47,11 @@ self.onmessage = function (e: MessageEvent) {
     }
 
     const { buffer, version, originalUuid, bimIdTable } = e.data;
-    let result: ParseResult;
-    if (version >= 8) {
-      result = parseChunkBinaryV8(buffer, originalUuid, bimIdTable || []);
-    } else {
-      result = parseChunkBinaryV7(buffer, originalUuid);
+    if (version !== 8) {
+      throw new Error(`Unsupported NBIM chunk version: ${version}. Only V8 is supported.`);
     }
+
+    const result: ParseResult = parseChunkBinaryV8(buffer, originalUuid, bimIdTable || []);
 
     const transferables: Transferable[] = [];
     result.geometries.forEach(geo => {
@@ -187,7 +186,7 @@ function parseGeometries(dv: DataView, buffer: ArrayBuffer, offset: { value: num
 }
 
 /**
- * 解析实例矩阵（V7 和 V8 通用部分）
+ * 解析实例矩阵
  */
 function parseMatrix(dv: DataView, offset: { value: number }): Float32Array {
   const matrix = new Float32Array(16);
@@ -195,33 +194,6 @@ function parseMatrix(dv: DataView, offset: { value: number }): Float32Array {
     matrix[k] = dv.getFloat32(offset.value, true); offset.value += 4;
   }
   return matrix;
-}
-
-function parseChunkBinaryV7(buffer: ArrayBuffer, originalUuid: string): ParseResult {
-  const dv = new DataView(buffer);
-  const offset = { value: 0 };
-
-  const geometries = parseGeometries(dv, buffer, offset);
-  const instanceCount = dv.getUint32(offset.value, true); offset.value += 4;
-  const instances: InstanceData[] = [];
-
-  for (let i = 0; i < instanceCount; i++) {
-    const bimIdNum = dv.getUint32(offset.value, true); offset.value += 4;
-    dv.getUint32(offset.value, true); offset.value += 4; // 类型
-    const hex = dv.getUint32(offset.value, true); offset.value += 4;
-
-    const matrix = parseMatrix(dv, offset);
-    const geoIdx = dv.getUint32(offset.value, true); offset.value += 4;
-
-    instances.push({
-      bimId: String(bimIdNum),
-      color: hex,
-      matrix: matrix,
-      geoIdx: geoIdx
-    });
-  }
-
-  return { geometries, instances, originalUuid };
 }
 
 function parseChunkBinaryV8(buffer: ArrayBuffer, originalUuid: string, bimIdTable: string[]): ParseResult {

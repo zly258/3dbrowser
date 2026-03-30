@@ -1809,7 +1809,10 @@ export class SceneManager {
                 const file = this.nbimFiles.get(chunk.nbimFileId)!;
                 const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
                 const meta = this.nbimMeta.get(chunk.nbimFileId);
-                const version = meta?.version ?? 7;
+                const version = meta?.version ?? 8;
+                if (version !== 8) {
+                    throw new Error(`Unsupported NBIM version: ${version}. Only V8 is supported.`);
+                }
                 
                 // 使用 Worker 进行解析
                 const workerResult = await this.runWorkerTask({
@@ -2539,24 +2542,6 @@ export class SceneManager {
         return renderer.group;
     }
 
-    // --- 辅助功能 (对齐 refs) ---
-    private getTypeIndex(type: string): number {
-        const types = ['Generic', 'Column', 'Beam', 'Slab', 'Wall', 'Window', 'Door', 'Pipe', 'Duct'];
-        const idx = types.indexOf(type);
-        return idx === -1 ? 0 : idx;
-    }
-
-    private guessType(name: string): string {
-        const n = name.toLowerCase();
-        if (n.includes('col') || n.includes('柱')) return 'Column';
-        if (n.includes('beam') || n.includes('梁')) return 'Beam';
-        if (n.includes('slab') || n.includes('板')) return 'Slab';
-        if (n.includes('wall') || n.includes('墙')) return 'Wall';
-        if (n.includes('window') || n.includes('窗')) return 'Window';
-        if (n.includes('door') || n.includes('门')) return 'Door';
-        return 'Generic';
-    }
-
     // --- NBIM 导入/导出功能 ---
     private generateChunkBinaryV8(items: any[], bimIdToIndex: Map<string, number>): ArrayBuffer {
         const uniqueGeos: THREE.BufferGeometry[] = [];
@@ -2619,9 +2604,8 @@ export class SceneManager {
             const firstNode = treeNodes?.[0];
             const bimId = item.bimId || firstNode?.bimId || firstNode?.id || item.uuid;
             const bimIdIndex = bimIdToIndex.get(bimId) ?? 0;
-            const typeStr = this.guessType(firstNode?.name || "");
             dv.setUint32(offset, bimIdIndex, true); offset += 4;
-            const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : this.getTypeIndex(typeStr);
+            const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : 0;
             dv.setUint32(offset, typeIndex, true); offset += 4;
             dv.setUint32(offset, item.color, true); offset += 4;
 
@@ -2776,41 +2760,6 @@ export class SceneManager {
 
         let currentOffset = 1024;
 
-        const decodeV7 = (buffer: ArrayBuffer) => {
-            const dv = new DataView(buffer);
-            let offset = 0;
-            const geoCount = dv.getUint32(offset, true); offset += 4;
-            const geometries: THREE.BufferGeometry[] = [];
-            for (let i = 0; i < geoCount; i++) {
-                const vertCount = dv.getUint32(offset, true); offset += 4;
-                const indexCount = dv.getUint32(offset, true); offset += 4;
-                const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-                const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-                const geo = new THREE.BufferGeometry();
-                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
-                geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
-                if (indexCount > 0) {
-                    const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
-                    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
-                }
-                geometries.push(geo);
-            }
-            const instanceCount = dv.getUint32(offset, true); offset += 4;
-            const matrix = new THREE.Matrix4();
-            const instances: any[] = [];
-            for (let i = 0; i < instanceCount; i++) {
-                const bimIdNum = dv.getUint32(offset, true); offset += 4;
-                const typeIndex = dv.getUint32(offset, true); offset += 4;
-                const color = dv.getUint32(offset, true); offset += 4;
-                for (let k = 0; k < 16; k++) {
-                    matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
-                }
-                const geoIdx = dv.getUint32(offset, true); offset += 4;
-                instances.push({ bimId: String(bimIdNum), typeIndex, color, matrix: matrix.clone(), geometry: geometries[geoIdx] });
-            }
-            return instances;
-        };
-
         const decodeV8 = (buffer: ArrayBuffer, table: string[]) => {
             const dv = new DataView(buffer);
             let offset = 0;
@@ -2857,8 +2806,11 @@ export class SceneManager {
                 const file = this.nbimFiles.get(chunk.nbimFileId)!;
                 const raw = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
                 const meta = this.nbimMeta.get(chunk.nbimFileId);
-                const version = meta?.version ?? 7;
-                const instances = version >= 8 ? decodeV8(raw, meta?.bimIdTable || []) : decodeV7(raw);
+                const version = meta?.version ?? 8;
+                if (version !== 8) {
+                    throw new Error(`Unsupported NBIM version: ${version}. Only V8 is supported.`);
+                }
+                const instances = decodeV8(raw, meta?.bimIdTable || []);
                 const items = instances.map(inst => ({ uuid: "", bimId: inst.bimId, typeIndex: inst.typeIndex, color: inst.color, matrix: inst.matrix, geometry: inst.geometry }));
                 buffer = this.generateChunkBinaryV8(items, bimIdToIndex);
             } else {
@@ -2975,6 +2927,9 @@ export class SceneManager {
         if (magic !== 0x4D49424E) throw new Error("不是有效的 NBIM 文件");
 
         const version = dv.getUint32(4, true);
+        if (version !== 8) {
+            throw new Error(`不支持的 NBIM 版本: ${version}，当前仅支持 V8`);
+        }
         
         const manifestOffset = dv.getUint32(8, true);
         const manifestLen = dv.getUint32(12, true);
