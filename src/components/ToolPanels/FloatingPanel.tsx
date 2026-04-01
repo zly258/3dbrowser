@@ -17,12 +17,14 @@ interface FloatingPanelProps {
     autoHeight?: boolean;
 }
 
+type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
 export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     title,
     onClose,
     children,
     width = 300,
-    height = 200,
+    height,
     x = 100,
     y = 100,
     resizable = false,
@@ -110,6 +112,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
     const isDragging = useRef(false);
     const isResizing = useRef(false);
+    const resizeDirection = useRef<ResizeDirection | null>(null);
     const dragStart = useRef({ x: 0, y: 0 });
     const startPos = useRef({ x: 0, y: 0 });
     const startSize = useRef({ w: 0, h: 0 });
@@ -150,11 +153,39 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                 newY = Math.max(0, Math.min(newY, maxY));
 
                 setPos({ x: newX, y: newY });
-            } else if (isResizing.current) {
-                setSize({
-                    w: Math.max(minWidth, startSize.current.w + dx),
-                    h: Math.max(minHeight, startSize.current.h + dy)
-                });
+            } else if (isResizing.current && resizeDirection.current) {
+                const dir = resizeDirection.current;
+                let newW = startSize.current.w;
+                let newH = startSize.current.h;
+                let newX = startPos.current.x;
+                let newY = startPos.current.y;
+
+                // 水平方向
+                if (dir.includes('e')) {
+                    newW = Math.max(minWidth, startSize.current.w + dx);
+                }
+                if (dir.includes('w')) {
+                    const maxDx = startSize.current.w - minWidth;
+                    const actualDx = Math.min(dx, maxDx);
+                    newW = startSize.current.w - actualDx;
+                    newX = startPos.current.x + actualDx;
+                }
+
+                // 垂直方向
+                if (dir.includes('s')) {
+                    newH = Math.max(minHeight, startSize.current.h + dy);
+                }
+                if (dir.includes('n')) {
+                    const maxDy = startSize.current.h - minHeight;
+                    const actualDy = Math.min(dy, maxDy);
+                    newH = startSize.current.h - actualDy;
+                    newY = startPos.current.y + actualDy;
+                }
+
+                setSize({ w: newW, h: newH });
+                if (dir.includes('w') || dir.includes('n')) {
+                    setPos({ x: newX, y: newY });
+                }
             }
         });
     }, [size, minWidth, minHeight]);
@@ -172,6 +203,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
         isDragging.current = false;
         isResizing.current = false;
+        resizeDirection.current = null;
         if (animationFrame.current) cancelAnimationFrame(animationFrame.current);
     }, [storageId]);
 
@@ -196,14 +228,16 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         startPos.current = { ...pos };
     };
 
-    const onResizeDown = (e: React.MouseEvent) => {
+    const onResizeDown = (direction: ResizeDirection) => (e: React.MouseEvent) => {
         // 模态模式下不可调整大小
         if (modal || e.button !== 0 || !resizable) return;
         e.preventDefault();
         e.stopPropagation();
         isResizing.current = true;
+        resizeDirection.current = direction;
         dragStart.current = { x: e.clientX, y: e.clientY };
         startSize.current = { ...size };
+        startPos.current = { ...pos };
     };
 
     const onCloseClick = (e: React.MouseEvent) => {
@@ -258,11 +292,35 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                 <div className="ui-panel-content">
                     {children}
                 </div>
+                {/* Resize handles */}
                 {resizable && !modal && (
-                    <div
-                        className="ui-panel-resize cursor-se-resize"
-                        onMouseDown={onResizeDown}
-                    />
+                    <>
+                        {/* 右边 */}
+                        <div
+                            className="ui-panel-resize-handle ui-panel-resize-e"
+                            onMouseDown={onResizeDown('e')}
+                        />
+                        {/* 下边 */}
+                        <div
+                            className="ui-panel-resize-handle ui-panel-resize-s"
+                            onMouseDown={onResizeDown('s')}
+                        />
+                        {/* 左边 */}
+                        <div
+                            className="ui-panel-resize-handle ui-panel-resize-w"
+                            onMouseDown={onResizeDown('w')}
+                        />
+                        {/* 右下角 */}
+                        <div
+                            className="ui-panel-resize-handle ui-panel-resize-se"
+                            onMouseDown={onResizeDown('se')}
+                        />
+                        {/* 左下角 */}
+                        <div
+                            className="ui-panel-resize-handle ui-panel-resize-sw"
+                            onMouseDown={onResizeDown('sw')}
+                        />
+                    </>
                 )}
             </div>
         </>

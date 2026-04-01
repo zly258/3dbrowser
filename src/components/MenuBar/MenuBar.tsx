@@ -45,7 +45,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     const batchConvertInputRef = React.useRef<HTMLInputElement>(null);
 
     return (
-        <div className="ui-toolbar" style={{ height: '26px', padding: '0 8px' }}>
+        <div className="ui-toolbar" style={{ height: '32px', padding: '0 12px' }}>
             {/* Hidden inputs for file opening */}
             <input
                 type="file"

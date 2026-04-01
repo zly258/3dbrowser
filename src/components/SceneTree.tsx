@@ -796,7 +796,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             <div
                                 key={node.uuid}
                                 className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
-                                style={{ paddingLeft: 8 }}
+                                style={{ paddingLeft: 8 + node.depth * 16 }}
                                 onClick={() => {
                                     selectionSourceRef.current = "tree";
                                     onSelect(node.uuid, node.object);
@@ -812,49 +812,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                     setContextMenu({ x: e.clientX, y: e.clientY, node });
                                 }}
                             >
-                                {node.depth > 0 && (
-                                    <div style={{ display: "flex", height: "100%", alignItems: "center", flexShrink: 0 }}>
-                                        {node.parentIsLast?.map((isLast, i) => (
-                                            <div
-                                                key={i}
-                                                style={{
-                                                    width: 12,
-                                                    height: "100%",
-                                                    position: "relative",
-                                                    borderLeft: isLast ? "none" : "1px solid var(--border-color)"
-                                                }}
-                                            />
-                                        ))}
-                                        <div
-                                            style={{
-                                                width: 12,
-                                                height: "100%",
-                                                position: "relative",
-                                                display: "flex",
-                                                alignItems: "center"
-                                            }}
-                                        >
-                                            <div
-                                                style={{
-                                                    position: "absolute",
-                                                    left: 0,
-                                                    top: 0,
-                                                    bottom: node.isLastChild ? "50%" : 0,
-                                                    borderLeft: "1px solid var(--border-color)"
-                                                }}
-                                            />
-                                            <div
-                                                style={{
-                                                    position: "absolute",
-                                                    left: 0,
-                                                    width: 10,
-                                                    borderTop: "1px solid var(--border-color)"
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
                                 <div
                                     className="ui-tree-expander"
                                     onClick={(e) => {

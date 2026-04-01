@@ -510,13 +510,20 @@ export const ThreeViewer = ({
         let image = "";
         try {
             sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
+            const srcCanvas = sceneMgr.current.canvas;
+            const srcWidth = srcCanvas.width;
+            const srcHeight = srcCanvas.height;
+            const scale = Math.min(640 / srcWidth, 360 / srcHeight);
+            const dstWidth = Math.round(srcWidth * scale);
+            const dstHeight = Math.round(srcHeight * scale);
+
             const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = 64;
-            tempCanvas.height = 48;
+            tempCanvas.width = dstWidth;
+            tempCanvas.height = dstHeight;
             const ctx = tempCanvas.getContext("2d");
             if (ctx) {
-                ctx.drawImage(sceneMgr.current.canvas, 0, 0, 64, 48);
-                image = tempCanvas.toDataURL("image/jpeg", 0.7);
+                ctx.drawImage(srcCanvas, 0, 0, dstWidth, dstHeight);
+                image = tempCanvas.toDataURL("image/jpeg", 0.92);
             }
         } catch (e) {
             console.error("Failed to capture thumbnail", e);

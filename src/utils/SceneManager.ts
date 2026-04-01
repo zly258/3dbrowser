@@ -5221,6 +5221,7 @@ export class SceneManager {
         if (this.onMeasureUpdate) {
             this.onMeasureUpdate([]);
         }
+        this.requestRender();
     }
 
     clearMeasurementPreview() {

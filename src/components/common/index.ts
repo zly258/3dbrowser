@@ -32,3 +32,6 @@ export type { SelectProps, SelectOption } from './Select';
 
 export { Checkbox } from './Checkbox';
 export type { CheckboxProps } from './Checkbox';
+
+export { InputNumber } from './InputNumber';
+export type { InputNumberProps } from './InputNumber';

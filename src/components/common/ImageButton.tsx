@@ -23,7 +23,7 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
             {...props}
         >
             <div className="flex items-center justify-center w-[18px] h-[18px] overflow-hidden">{icon}</div>
-            {label && <div className="text-[10px] leading-none font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-full mt-[2px]">{label}</div>}
+            {label && <div className="text-[10px] leading-none font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-full">{label}</div>}
         </button>
     );
 };
