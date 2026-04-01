@@ -19,7 +19,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
     }, [format, getDefaultFileName]);
 
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={500} resizable={false} theme={theme} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={450} resizable={false} theme={theme} storageId="tool_export">
             <div style={{ padding: 16 }}>
                 <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>{t("export_format")}:</div>
 

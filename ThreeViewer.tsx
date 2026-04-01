@@ -1370,7 +1370,8 @@ export const ThreeViewer = ({
         }
 
         // 统一处理 UUID (兼容 Object3D 和 StructureTreeNode)
-        const uuid = obj.uuid || obj.id;
+        const rawUuid = obj.uuid || obj.id;
+        const uuid = sceneMgr.current ? sceneMgr.current.resolveSelectionUuid(rawUuid) : rawUuid;
         if (!uuid) return;
 
         const nextUuids = isMultiSelect
@@ -1436,9 +1437,9 @@ export const ThreeViewer = ({
         const geoProps: Record<string, string> = {};
         let ifcGroups: PropertyGroups | null = null;
 
-        basicProps[t("prop_name")] = target.name || "Unnamed";
+        const wrappedId = sceneMgr.current?.getBimIdByUuid(focusUuid) || focusUuid;
+        basicProps[t("prop_id")] = wrappedId;
         basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
-        basicProps[t("prop_id")] = focusUuid; 
         if (typeof targetElevation === "number" && Number.isFinite(targetElevation)) {
             basicProps[t("prop_storey_elevation") || "楼层标高"] = String(targetElevation);
         }
@@ -1531,6 +1532,20 @@ export const ThreeViewer = ({
 
         const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
         const nbimIfcGroups = sceneMgr.current.getNbimIfcPropertyGroups(focusUuid, "raw");
+
+        if (nbimProps && Object.keys(nbimProps).length > 0) {
+            console.group(`NBIM 选中属性: ${focusUuid}`);
+            console.log(nbimProps);
+            console.log(JSON.stringify(nbimProps, null, 2));
+            console.groupEnd();
+        }
+
+        if (nbimIfcGroups) {
+            console.group(`NBIM IFC 组属性: ${focusUuid}`);
+            console.log(nbimIfcGroups);
+            console.log(JSON.stringify(nbimIfcGroups, null, 2));
+            console.groupEnd();
+        }
         const mergedIfcGroups = ifcGroups || nbimIfcGroups || null;
         const selectedGroups = buildSelectedPropertyGroups({
             basicLabel: t("pg_basic"),
