@@ -119,7 +119,6 @@ export const ThreeViewer = ({
         memory: 0,
         textureMemory: 0,
         drawCalls: 0,
-        fps: 0,
         chunksLoaded: 0,
         chunksTotal: 0,
         chunksQueued: 0,
@@ -2440,9 +2439,6 @@ export const ThreeViewer = ({
                                 <IconActivity width={14} height={14} />
                                 <span>{formatMemory(stats.memory)}</span>
                             </div>
-                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="FPS">
-                                {stats.fps} FPS
-                            </div>
                             {stats.chunksTotal > 0 && (
                                 <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunks">
                                     CH {stats.chunksLoaded}/{stats.chunksTotal}
@@ -2522,3 +2518,5 @@ export const ThreeViewer = ({
 };
 
 export default ThreeViewer;
+
+
