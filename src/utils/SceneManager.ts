@@ -266,9 +266,6 @@ export class SceneManager {
     private workerQueue: { resolve: Function, reject: Function, data: any, transferables: any[] }[] = [];
     private activeWorkerCount = 0;
     private maxWorkers = 4; // 限制固定为 4 个，平衡性能与系统开销
-    private frameSampleTime = performance.now();
-    private frameCounter = 0;
-    private fps = 0;
     private isCameraMoving = false;
     private activePixelRatio = 1;
     private chunkLoadResumeAt = 0;
@@ -801,15 +798,8 @@ export class SceneManager {
 
     animate() {
         if (this.disposed) return;
-        this.animationFrameId = requestAnimationFrame(this.animate);
-        this.frameCounter++;
-        const frameNow = performance.now();
-        if (frameNow - this.frameSampleTime >= 500) {
-            this.fps = (this.frameCounter * 1000) / (frameNow - this.frameSampleTime);
-            this.frameCounter = 0;
-            this.frameSampleTime = frameNow;
-        }
-        
+        this.animationFrameId = requestAnimationFrame(this.animate);       
+        const frameNow = performance.now();       
         if (this.controls) {
             this.controls.update();
         }
@@ -870,7 +860,6 @@ export class SceneManager {
         const deviceRatio = window.devicePixelRatio || 1;
         const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
         const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
-        const targetFps = this.settings.targetFps ?? 50;
         const chunkCount = this.chunks.length;
         const meshCount = this.originalStats.meshes;
         const mode = this.settings.performanceMode ?? 'balanced';
@@ -895,14 +884,6 @@ export class SceneManager {
                             ? 0.56
                             : 0.65);
             desiredRatio = Math.max(minRatio, maxRatio * movingScale);
-            const movingPenaltyThreshold = mode === 'quality' ? (targetFps - 12) : (targetFps - 8);
-            if (this.fps > 0 && this.fps < movingPenaltyThreshold) {
-                desiredRatio = Math.max(minRatio, desiredRatio - 0.08);
-            }
-        } else if (this.fps > 0 && this.fps < targetFps - 5) {
-            desiredRatio = Math.max(minRatio, this.activePixelRatio - 0.1);
-        } else if (this.fps > targetFps + 8) {
-            desiredRatio = Math.min(maxRatio, this.activePixelRatio + 0.05);
         }
 
         desiredRatio = Math.max(minRatio, Math.min(maxRatio, desiredRatio));
@@ -2567,32 +2548,101 @@ export class SceneManager {
         return this.removeObject(uuid);
     }
 
-    addTileset(url: string, onProgress?: (p: number, msg: string) => void) {
+        addTileset(url: string, onProgress?: (p: number, msg: string) => void) {
         if (this.tilesRenderer) {
             this.tilesRenderer.dispose();
             this.contentGroup.remove(this.tilesRenderer.group);
         }
 
         if (onProgress) onProgress(10, "正在初始化 TilesRenderer...");
-        
+
+        const parsedUrl = (() => {
+            try {
+                return new URL(url, typeof window !== "undefined" ? window.location.href : "http://localhost/");
+            } catch {
+                return null;
+            }
+        })();
+        const hashParams = parsedUrl?.hash ? new URLSearchParams(parsedUrl.hash.replace(/^#/, "")) : null;
+        const searchName = parsedUrl?.searchParams.get("displayName") || parsedUrl?.searchParams.get("name") || "";
+        const hashName = hashParams?.get("displayName") || hashParams?.get("name") || "";
+        const fileName = parsedUrl?.pathname
+            ? parsedUrl.pathname.split("/").pop()?.split("?")[0].split("#")[0] || ""
+            : "";
+        const displayName = sanitizeDisplayLabel(searchName, hashName, stripFileExtension(fileName), "3D Tileset") || "3D Tileset";
+
         const renderer = new TilesRenderer(url);
         renderer.setCamera(this.camera);
         renderer.setResolutionFromRenderer(this.camera, this.renderer);
 
-        // 从当前配置动态设置
-        renderer.errorTarget = 16; // 默认屏幕空间误差阈值
-        renderer.lruCache.maxSize = 500 * 1024 * 1024; // 默认缓存 500MB
+        renderer.errorTarget = 16;
+        renderer.lruCache.maxSize = 500 * 1024 * 1024;
 
-        (renderer.group as any).name = "3D Tileset"; // 确保大纲能识别
+        (renderer.group as any).name = displayName;
+        (renderer.group as any).userData = {
+            ...((renderer.group as any).userData || {}),
+            source: "3DTiles",
+            modelName: displayName
+        };
 
-        // 监听加载事件 (对齐 refs 进度)
         let loadedTiles = 0;
         let hasError = false;
 
+        const buildTilesTree = (tile: any, tilePath = "root"): StructureTreeNode => {
+            const fallbackName = tilePath === "root"
+                ? displayName
+                : `Tile_${tile.level ?? 0}_${tile.x || 0}_${tile.y || 0}`;
+            const contentUri = typeof tile?.content?.uri === "string" ? tile.content.uri : "";
+            const name = sanitizeDisplayLabel(
+                tile?.extras?.name,
+                tile?.content?.name,
+                contentUri ? stripFileExtension(contentUri.split("/").pop()?.split("?")[0].split("#")[0] || "") : "",
+                fallbackName
+            ) || fallbackName;
+            const node: StructureTreeNode = {
+                id: tile?.content?.uuid || `${(renderer.group as any).uuid}:${tilePath}`,
+                name,
+                type: 'Group',
+                children: [],
+                userData: {
+                    source: "3DTiles",
+                    contentUri,
+                    tilesBoundingVolumeBox: Array.isArray(tile?.boundingVolume?.box) ? [...tile.boundingVolume.box] : undefined
+                }
+            };
+
+            if (Array.isArray(tile?.children) && tile.children.length > 0) {
+                node.children = tile.children.map((child: any, index: number) => buildTilesTree(child, `${tilePath}.${index}`));
+            }
+
+            this.nodeMap.set(node.id, [node]);
+            return node;
+        };
+
+        const tilesNode: StructureTreeNode = {
+            id: (renderer.group as any).uuid,
+            name: displayName,
+            type: 'Group',
+            children: [],
+            userData: {
+                source: "3DTiles",
+                modelName: displayName
+            }
+        };
+
+        const refreshTilesStructure = () => {
+            const tilesetRoot = (renderer as any).tileset?.root;
+            tilesNode.name = displayName;
+            tilesNode.children = tilesetRoot ? [buildTilesTree(tilesetRoot)] : [];
+            this.nodeMap.set(tilesNode.id, [tilesNode]);
+            if (this.onTilesUpdate) this.onTilesUpdate();
+        };
+
         (renderer as any).onLoadTileSet = () => {
+            refreshTilesStructure();
             if (onProgress) onProgress(50, "Tileset 结构已加载");
         };
-        
+
         (renderer as any).onLoadModel = () => {
             loadedTiles++;
             if (onProgress && !hasError) {
@@ -2600,15 +2650,13 @@ export class SceneManager {
             }
         };
 
-        // 错误处理：3d-tiles-renderer 没有直接的 onError，这里用超时检查 tileset 是否成功解析
         setTimeout(() => {
             if (!(renderer as any).tileset && !hasError) {
                 hasError = true;
                 if (onProgress) onProgress(0, "加载失败: 无法获取 Tileset 配置文件，请检查网络或路径。");
             }
-        }, 10000); // 10秒超时检查
+        }, 10000);
 
-        // 树更新的钩子
         (renderer as any).onLoadTile = (_tile: any) => {
             if (this.onTilesUpdate) this.onTilesUpdate();
         };
@@ -2619,40 +2667,16 @@ export class SceneManager {
         this.contentGroup.add(renderer.group);
         this.tilesRenderer = renderer;
 
-        // 抵消全局偏移
         (renderer.group as any).position.copy(this.globalOffset.clone().negate());
-        (renderer.group as any).name = "3D Tileset";
+        (renderer.group as any).name = displayName;
 
-        // 添加到结构树
-        const buildTilesTree = (tile: any, depth = 0): StructureTreeNode => {
-            const node: StructureTreeNode = {
-                id: tile.content?.uuid || THREE.MathUtils.generateUUID(),
-                name: tile.content?.name || `Tile_${tile.level}_${tile.x || 0}_${tile.y || 0}`,
-                type: 'Group',
-                children: []
-            };
-            
-            if (tile.children) {
-                node.children = tile.children.map((c: any) => buildTilesTree(c, depth + 1));
-            }
-            
-            return node;
-        };
-
-        const tilesNode: StructureTreeNode = {
-            id: (renderer.group as any).uuid,
-            name: "3D Tileset",
-            type: 'Group',
-            children: (renderer as any).tileset ? [buildTilesTree((renderer as any).tileset.root)] : []
-        };
         if (!this.structureRoot.children) this.structureRoot.children = [];
         this.structureRoot.children.push(tilesNode);
         this.nodeMap.set(tilesNode.id, [tilesNode]);
-        
+
         this.updateSceneBounds();
-        // 如需，应用当前设置
         this.updateSettings(this.settings);
-        
+
         return renderer.group;
     }
 
@@ -4195,16 +4219,70 @@ export class SceneManager {
         this.fitBox(box, !keepOrientation);
     }
 
-    fitViewToObject(uuid: string) {
-        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-        if(!obj) return;
+        private unionObjectBounds(obj: THREE.Object3D, targetBox: THREE.Box3) {
         const box = new THREE.Box3();
-        if (obj.userData.boundingBox) {
+        if (obj.userData?.boundingBox) {
             box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
         } else {
             box.setFromObject(obj);
         }
-        if(!box.isEmpty()) this.fitBox(box, false);
+        if (!box.isEmpty()) targetBox.union(box);
+    }
+
+    private unionTilesNodeBounds(node: any, targetBox: THREE.Box3) {
+        const encodedBox = node?.userData?.tilesBoundingVolumeBox;
+        if (!Array.isArray(encodedBox) || encodedBox.length < 12) return;
+
+        const center = new THREE.Vector3(encodedBox[0], encodedBox[1], encodedBox[2]);
+        const axisX = new THREE.Vector3(encodedBox[3], encodedBox[4], encodedBox[5]);
+        const axisY = new THREE.Vector3(encodedBox[6], encodedBox[7], encodedBox[8]);
+        const axisZ = new THREE.Vector3(encodedBox[9], encodedBox[10], encodedBox[11]);
+        const extent = new THREE.Vector3(axisX.length(), axisY.length(), axisZ.length());
+        const box = new THREE.Box3(center.clone().sub(extent), center.clone().add(extent));
+        if (!box.isEmpty()) targetBox.union(box);
+    }
+
+    private unionOptimizedBounds(uuid: string, targetBox: THREE.Box3) {
+        const mappings = this.optimizedMapping.get(uuid);
+        if (!mappings || mappings.length === 0) return;
+
+        const instanceMatrix = new THREE.Matrix4();
+        for (const mapping of mappings) {
+            const geometry = mapping.geometry || mapping.mesh.geometry;
+            if (!geometry.boundingBox) geometry.computeBoundingBox();
+            if (!geometry.boundingBox) continue;
+            mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
+            instanceMatrix.premultiply(mapping.mesh.matrixWorld);
+            const box = geometry.boundingBox.clone().applyMatrix4(instanceMatrix);
+            if (!box.isEmpty()) targetBox.union(box);
+        }
+    }
+
+    private unionNodeBounds(uuid: string, targetBox: THREE.Box3, visited = new Set<string>()) {
+        if (!uuid || visited.has(uuid)) return;
+        visited.add(uuid);
+
+        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
+        if (obj) {
+            this.unionObjectBounds(obj, targetBox);
+        }
+
+        this.unionOptimizedBounds(uuid, targetBox);
+
+        const nodes = this.nodeMap.get(uuid) || [];
+        for (const node of nodes) {
+            this.unionTilesNodeBounds(node, targetBox);
+            const children = Array.isArray(node.children) ? node.children : [];
+            for (const child of children) {
+                this.unionNodeBounds(child.id, targetBox, visited);
+            }
+        }
+    }
+
+    fitViewToObject(uuid: string) {
+        const box = new THREE.Box3();
+        this.unionNodeBounds(uuid, box);
+        if (!box.isEmpty()) this.fitBox(box, false);
     }
 
     fitBox(box: THREE.Box3, updateCameraPosition: boolean = true) {
@@ -5368,7 +5446,6 @@ export class SceneManager {
             memory: parseFloat(this.originalStats.memory.toFixed(2)),
             textureMemory: parseFloat(textureMemory.toFixed(2)),
             drawCalls,
-            fps: Math.round(this.fps),
             chunksLoaded: this.chunkLoadedCount,
             chunksTotal: this.chunks.length,
             chunksQueued: this.processingChunks.size,
@@ -5431,3 +5508,9 @@ function sanitizeFileStem(name: string) {
         .trim();
     return sanitized || "model";
 }
+
+
+
+
+
+

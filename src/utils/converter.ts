@@ -8,6 +8,7 @@ interface OctreeItem {
   material: THREE.Material;
   matrix: THREE.Matrix4; // 世界矩阵
   center: THREE.Vector3;
+  name: string;
 }
 
 interface OctreeNode {
@@ -71,7 +72,8 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
             geometry,
             material: material as THREE.Material,
             matrix: _m4.clone(),
-            center: _v3.clone()
+            center: _v3.clone(),
+            name: mesh.name || mesh.parent?.name || `Mesh_${mesh.id}`
           });
         }
       } else {
@@ -82,8 +84,9 @@ function collectItems(root: THREE.Object3D): OctreeItem[] {
             geometry,
             material: material as THREE.Material,
             matrix: _m4.clone(),
-            center: _v3.clone()
-        });
+            center: _v3.clone(),
+            name: mesh.name || mesh.parent?.name || `Mesh_${mesh.id}`
+          });
       }
     }
   });
@@ -189,7 +192,7 @@ export async function convertLMBTo3DTiles(
   
   if (totalItems === 0) throw new Error("No meshes found in scene");
 
-  // 从根用户数据确定全局偏移
+  const displayName = String(root.userData?.modelName || root.name || "3D Tileset").replace(/\.[^./\\]+$/, "").trim() || "3D Tileset"; // 从根用户数据确定全局偏移
   const globalOffset = new THREE.Vector3(0, 0, 0);
   if (root.userData.originalCenter) {
       globalOffset.copy(root.userData.originalCenter);
@@ -608,3 +611,7 @@ export async function exportLMB(root: THREE.Object3D, onProgress: (msg: string) 
 
     return new Blob([finalBuffer], { type: 'application/octet-stream' });
 }
+
+
+
+

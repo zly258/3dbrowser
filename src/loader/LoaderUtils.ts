@@ -32,7 +32,11 @@ const libPathCache = new Map<string, string>();
 
 function normalizeLibPath(libPath: string) {
     if (!libPathCache.has(libPath)) {
-        libPathCache.set(libPath, libPath.replace(/\/$/, ""));
+        const trimmed = libPath.replace(/\/$/, "");
+        const resolved = typeof window !== "undefined"
+            ? new URL(trimmed ? `${trimmed}/` : "./", window.location.href).toString().replace(/\/$/, "")
+            : trimmed;
+        libPathCache.set(libPath, resolved);
     }
     return libPathCache.get(libPath)!;
 }
@@ -252,7 +256,8 @@ async function loadObjectByExtension(
             const buffer = typeof fileOrUrl === "string"
                 ? await fetch(url).then((r) => r.arrayBuffer())
                 : await fileOrUrl.arrayBuffer();
-            const wasmUrl = `${libPath}/occt-import-js/occt-import-js.wasm`;
+            const normalizedLibPath = normalizeLibPath(libPath);
+            const wasmUrl = `${normalizedLibPath}/occt-import-js/occt-import-js.wasm`;
             const { OCCTLoader } = await import("./OCCTLoader");
             const loader = new OCCTLoader(wasmUrl);
             reportStage("parse", 0);
@@ -388,7 +393,17 @@ export const parseTilesetFromFolder = async (files: FileList, onProgress: Progre
     };
     replaceUris(json.root);
 
+    const displayName = (
+        json?.asset?.extras?.displayName ||
+        files[0]?.webkitRelativePath?.split("/")?.[0] ||
+        "3D Tileset"
+    ).toString();
+
     onProgress(100, t("success"));
     const blob = new Blob([JSON.stringify(json)], { type: "application/json" });
-    return URL.createObjectURL(blob);
+    const blobUrl = URL.createObjectURL(blob);
+    return `${blobUrl}#displayName=${encodeURIComponent(displayName)}`;
 };
+
+
+

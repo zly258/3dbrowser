@@ -470,16 +470,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const targetIndex = flatData.findIndex((node) => node.uuid === selectedUuid);
         if (targetIndex < 0) return;
 
-        const currentTop = containerRef.current.scrollTop;
-        const currentBottom = currentTop + containerHeight;
-        const itemTop = targetIndex * rowHeight;
-        const itemBottom = itemTop + rowHeight;
-
-        if (itemTop < currentTop) {
-            containerRef.current.scrollTop = itemTop;
-        } else if (itemBottom > currentBottom) {
-            containerRef.current.scrollTop = Math.max(0, itemBottom - containerHeight);
-        }
+        const itemCenter = targetIndex * rowHeight + rowHeight / 2;
+        containerRef.current.scrollTop = Math.max(0, itemCenter - containerHeight / 2);
     }, [selectedUuid, flatData, containerHeight, rowHeight]);
 
     const toggleNode = (nodeUuid: string) => {
@@ -521,6 +513,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const handleLocateFirstMatch = () => {
         if (!firstSearchMatch) return;
         onSelect(firstSearchMatch.uuid, firstSearchMatch.object);
+        if (onLocate) {
+            onLocate(firstSearchMatch.object);
+            return;
+        }
         onFocus?.(firstSearchMatch.object);
     };
 
@@ -925,3 +921,5 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         </div>
     );
 };
+
+
