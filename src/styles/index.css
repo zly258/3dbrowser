@@ -692,7 +692,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolbar {
   display: flex;
   align-items: center;
-  height: 40px;
+  height: 48x;
   padding: 0 12px;
   gap: 4px;
   background-color: var(--bg-panel);

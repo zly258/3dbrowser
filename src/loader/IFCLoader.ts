@@ -95,10 +95,10 @@ function sanitizeIfcLabel(...candidates: Array<string | undefined | null>) {
 
 export const loadIFC = async (
     input: string | File | ArrayBuffer,
-    onProgress: ProgressCallback, 
+    onProgress: ProgressCallback,
     t: TFunc,
     libPath: string = './libs',
-    settings?: { ifcGridVisible?: boolean }
+    settings?: Record<string, unknown>
 ): Promise<THREE.Group> => {
     // web-ifc 运行时按 wasmPath 懒加载并复用，避免重复 Init 开销
     const { ifcApi, WebIFC } = await getIfcRuntime(libPath);
@@ -844,7 +844,7 @@ export const loadIFC = async (
 
             const gridGroup = new THREE.Group();
             gridGroup.name = "__IFCGridHelper";
-            gridGroup.visible = settings?.ifcGridVisible !== false;
+            gridGroup.visible = true;
             gridGroup.userData.isIfcGridHelper = true;
 
             const axisConfigs = [

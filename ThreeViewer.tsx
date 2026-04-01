@@ -198,7 +198,6 @@ export const ThreeViewer = ({
             toneMapping: 'aces',
             exposure: 1,
             shadowQuality: 'medium',
-            ifcGridVisible: true,
             adaptiveQuality: true,
             minPixelRatio: 0.8,
             maxPixelRatio: 2,
@@ -338,9 +337,8 @@ export const ThreeViewer = ({
     const [hiddenUuids, setHiddenUuids] = useState<Set<string>>(new Set());
     // 隔离对象记录
     const [isolatedUuids, setIsolatedUuids] = useState<Set<string>>(new Set());
-    const [ifcGridDiagnostics, setIfcGridDiagnostics] = useState<string[]>([]);
     const [contextMenuOpacity, setContextMenuOpacity] = useState(1.0);
-    
+
     // Visibility undo stack
     const visibilityStackRef = useRef<{uuid: string, visible: boolean}[][]>([]);
     
@@ -764,22 +762,6 @@ export const ThreeViewer = ({
             });
             return roots;
         });
-
-        const diagnostics = new Map<string, number>();
-        sceneMgr.current.contentGroup.children.forEach((child) => {
-            const items = child.userData?.ifcGridDiagnostics;
-            if (Array.isArray(items)) {
-                items.forEach((item: string) => {
-                    if (!item) return;
-                    diagnostics.set(item, (diagnostics.get(item) || 0) + 1);
-                });
-            }
-        });
-        setIfcGridDiagnostics(
-            Array.from(diagnostics.entries())
-                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN"))
-                .map(([name, count]) => `${name} x${count}`)
-        );
     }, [])
 
     const setAllTreeExpanded = useCallback((expanded: boolean) => {
@@ -2301,20 +2283,6 @@ export const ThreeViewer = ({
                     {(hiddenUuids.size > 0 || isolatedUuids.size > 0) && (
                         <button className="ui-statusbar-tag" onClick={handleShowAll}>
                             {hiddenUuids.size > 0 ? `${t("hide_selected") || "隐藏选中"} ${hiddenUuids.size}` : `${t("isolate_selection") || "隔离选中"} ${isolatedUuids.size}`}
-                        </button>
-                    )}
-                    {ifcGridDiagnostics.length > 0 && (
-                        <button
-                            className="ui-statusbar-tag"
-                            title={ifcGridDiagnostics.join(", ")}
-                            onClick={() =>
-                                setToast({
-                                    message: `${t("ifc_grid_diagnostics") || "轴网诊断"}: ${ifcGridDiagnostics.slice(0, 6).join(", ")}`,
-                                    type: "info"
-                                })
-                            }
-                        >
-                            {(t("ifc_grid_diagnostics") || "轴网诊断")} {ifcGridDiagnostics.length}
                         </button>
                     )}
                 </div>
