@@ -276,6 +276,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(400);
     const containerRef = useRef<HTMLDivElement>(null);
+    const selectionSourceRef = useRef<"tree" | "external" | null>(null);
     const searchExpandedStateRef = useRef<Map<string, boolean> | null>(null);
     const previousSearchQueryRef = useRef("");
     const lastLocateResultsRef = useRef<string[]>([]);
@@ -465,6 +466,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     useEffect(() => {
         if (!selectedUuid || !containerRef.current) return;
+
+        if (selectionSourceRef.current === "tree") {
+            selectionSourceRef.current = null;
+            return;
+        }
+
         const targetIndex = flatData.findIndex((node) => node.uuid === selectedUuid);
         if (targetIndex < 0) return;
 
@@ -790,7 +797,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 key={node.uuid}
                                 className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
                                 style={{ paddingLeft: 8 }}
-                                onClick={() => onSelect(node.uuid, node.object)}
+                                onClick={() => {
+                                    selectionSourceRef.current = "tree";
+                                    onSelect(node.uuid, node.object);
+                                }}
                                 onDoubleClick={(e) => {
                                     if (node.hasChildren) {
                                         e.stopPropagation();
