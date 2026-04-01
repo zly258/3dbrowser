@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { 
-    calculateGeometryMemory, 
+import {
+    calculateGeometryMemory,
     collectItems,
     collectItemsBatched,
-    buildOctree, 
+    buildOctree,
     collectLeafNodes,
     createBatchedMeshFromItems,
     createBatchedMeshFromItemsAsync
@@ -111,14 +111,14 @@ export class SceneManager {
     camera: THREE.OrthographicCamera;
     controls: OrbitControls;
     clock: THREE.Clock;
-    
+
     // 组
-    contentGroup: THREE.Group; 
+    contentGroup: THREE.Group;
     helpersGroup: THREE.Group;
     measureGroup: THREE.Group;
     ghostGroup: THREE.Group; // 渐进式加载时的占位边框组
     clipHelpersGroup: THREE.Group; // 剖切面辅助组
-    
+
     // 灯光
     ambientLight: THREE.AmbientLight;
     dirLight: THREE.DirectionalLight;
@@ -131,7 +131,7 @@ export class SceneManager {
     private bimIdToNodeIds = new Map<string, string[]>();
 
     selectionBox: THREE.Box3Helper;
-    highlightMesh: THREE.Mesh; 
+    highlightMesh: THREE.Mesh;
     private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
     private highlightedUuids: Set<string> = new Set();
     private locateFocusUuid: string | null = null;
@@ -157,9 +157,9 @@ export class SceneManager {
     currentMeasureModelUuid: string | null = null;
     previewLine: THREE.Line | null = null;
     previewPolygon: THREE.LineLoop | null = null;
-    tempMarker: THREE.Points; 
+    tempMarker: THREE.Points;
     measureRecords: Map<string, MeasurementRecord> = new Map();
-    
+
     // 框选状态
     private boxSelectState = {
         active: false,
@@ -169,24 +169,24 @@ export class SceneManager {
         endY: 0,
         rectElement: null as HTMLDivElement | null,
     };
-    
+
     // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
     clipPlaneHelpers: THREE.Mesh[] = [];
     clipHelperVisible = false;
     clipHelperOpacity = 0.12;
-    
+
     sceneCenter: THREE.Vector3 = new THREE.Vector3();
-    
+
     // 偏移状态 (解决大坐标问题)
     globalOffset: THREE.Vector3 = new THREE.Vector3();
-    
+
     // 组件映射
     componentMap: Map<number | string, any> = new Map();
-    
+
     // 优化后的网格映射: originalUuid -> { mesh, instanceId, originalColor, geometry }[]
     optimizedMapping: Map<string, { mesh: THREE.BatchedMesh, instanceId: number, originalColor: number, geometry?: THREE.BufferGeometry }[]> = new Map();
-    
+
     // 设置
     settings: SceneSettings = {
         ambientInt: 2.0,
@@ -209,13 +209,13 @@ export class SceneManager {
 
     // 资源
     dotTexture: THREE.Texture;
-    
+
     // 缓存
     sceneBounds: THREE.Box3 = new THREE.Box3();
     private cachedSceneSphere: THREE.Sphere = new THREE.Sphere();
     private sceneSphereValid: boolean = false;
     precomputedBounds: THREE.Box3 = new THREE.Box3(); // 预计算的包围盒
-    
+
     // 渐进式加载状态 (对齐 refs)
     private chunks: any[] = [];
     private chunkIdSet = new Set<string>();
@@ -227,7 +227,7 @@ export class SceneManager {
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
     private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
     private nbimPropsByOriginalUuid: Map<string, Record<string, any>> = new Map();
-    private sharedMaterial = new THREE.MeshStandardMaterial({ 
+    private sharedMaterial = new THREE.MeshStandardMaterial({
         color: 0xd9dce1,
         roughness: 0.82,
         metalness: 0.03,
@@ -411,15 +411,15 @@ export class SceneManager {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制最大像素比为2，平衡性能与清晰度
         this.renderer.setSize(width, height, false);
         this.renderer.setClearColor(this.settings.bgColor);
-        this.renderer.localClippingEnabled = true; 
+        this.renderer.localClippingEnabled = true;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.04;
         this.activePixelRatio = this.renderer.getPixelRatio();
-        
+
         // 场景
         this.scene = new THREE.Scene();
-        
+
         // 组
         this.contentGroup = new THREE.Group();
         this.contentGroup.name = "Content";
@@ -449,7 +449,7 @@ export class SceneManager {
             frustumSize * aspect / 2,
             frustumSize / 2,
             frustumSize / -2,
-            -1000000, 1000000 
+            -1000000, 1000000
         );
         this.camera.up.set(0, 0, 1);
         this.camera.position.set(1000, -1000, 1000);
@@ -497,7 +497,7 @@ export class SceneManager {
             this.cullingDirty = true;
             this.requestRender();
         });
-        
+
         // 灯光
         this.ambientLight = new THREE.AmbientLight(0xf7f8fb, this.settings.ambientInt);
         this.scene.add(this.ambientLight);
@@ -507,7 +507,7 @@ export class SceneManager {
         this.backLight = new THREE.DirectionalLight(0xe9eef6, 0.5);
         this.backLight.position.set(-40, -35, 30);
         this.scene.add(this.backLight);
-        
+
         // 太阳光（光照模拟）
         this.sunLight = new THREE.DirectionalLight(0xfff4e5, 1.5);
         this.sunLight.position.set(100, 100, 50);
@@ -549,16 +549,16 @@ export class SceneManager {
         // 测量辅助器（点）
         const markerGeo = new THREE.BufferGeometry();
         markerGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
-        const markerMat = new THREE.PointsMaterial({ 
-            color: 0xff0000, 
-            size: 8, 
-            sizeAttenuation: false, 
+        const markerMat = new THREE.PointsMaterial({
+            color: 0xff0000,
+            size: 8,
+            sizeAttenuation: false,
             map: this.dotTexture,
-            transparent: true, 
+            transparent: true,
             alphaTest: 0.5,
-            depthTest: false 
+            depthTest: false
         });
-        
+
         this.tempMarker = new THREE.Points(markerGeo, markerMat);
         this.tempMarker.visible = false;
         this.tempMarker.renderOrder = 1000;
@@ -569,11 +569,11 @@ export class SceneManager {
 
         // 射线投射
         this.raycaster = new THREE.Raycaster();
-        this.raycaster.params.Points.threshold = 10; 
+        this.raycaster.params.Points.threshold = 10;
         // @ts-ignore
         if (!this.raycaster.params.Line) this.raycaster.params.Line = { threshold: 1 };
         // @ts-ignore
-        this.raycaster.params.Line.threshold = 2; 
+        this.raycaster.params.Line.threshold = 2;
 
         this.mouse = new THREE.Vector2();
 
@@ -588,7 +588,7 @@ export class SceneManager {
         this.animateFramePending = true;
         this.animationFrameId = requestAnimationFrame(this.animate);
     }
-    
+
     updateSettings(newSettings: Partial<SceneSettings>) {
         this.settings = { ...this.settings, ...newSettings };
         this.applyHighlightSettings();
@@ -690,15 +690,15 @@ export class SceneManager {
         // 计算太阳位置
         // 将时间转换为角度（12点为0度，每小时15度）
         const hourAngle = (time - 12) * 15 * (Math.PI / 180);
-        
+
         // 纬度转换为弧度
         const latRad = lat * (Math.PI / 180);
-        
+
         // 太阳高度角（简化计算，假设春分/秋分）
         // 一天中太阳高度变化
         const sunElevation = 90 - Math.abs(lat) + 23.5 * Math.sin((time - 6) * 15 * (Math.PI / 180));
         const elevationRad = sunElevation * (Math.PI / 180);
-        
+
         // 太阳方位角
         const azimuthAngle = hourAngle + (lng * Math.PI / 180);
 
@@ -711,7 +711,7 @@ export class SceneManager {
         this.sunLight.position.set(center.x + x, center.y + Math.max(y, sceneSpan * 0.15), center.z + z);
         this.sunLight.target.position.copy(center);
         this.sunLight.target.updateMatrixWorld();
-        
+
         // 调整太阳光强度（根据高度角）
         const intensity = Math.max(0.2, Math.sin(elevationRad)) * 2;
         this.sunLight.intensity = intensity;
@@ -789,7 +789,7 @@ export class SceneManager {
             this.sunLight.castShadow = false;
         }
     }
-    
+
     createCircleTexture() {
         const size = 64;
         const canvas = document.createElement('canvas');
@@ -1431,7 +1431,7 @@ export class SceneManager {
 
         return leaves;
     }
-    
+
     updateCameraClipping() {
         if (!this.sceneBounds || this.sceneBounds.isEmpty()) return;
 
@@ -1439,16 +1439,16 @@ export class SceneManager {
             this.sceneBounds.getBoundingSphere(this.cachedSceneSphere);
             this.sceneSphereValid = true;
         }
-        
+
         const dist = this.camera.position.distanceTo(this.cachedSceneSphere.center);
-        
+
         // 增加更宽的裁剪范围，确保即便相机在模型内部或非常靠近时，也不会因为精度或计算误差导致裁剪
         // 使用半径的 20 倍作为基础，加上到中心的距离，确保范围足够覆盖整个可能的视锥空间
         const range = Math.max(this.cachedSceneSphere.radius * 20.0, dist + this.cachedSceneSphere.radius * 5.0);
-        
+
         // 只有当变化显著时才更新，避免每帧都触发投影矩阵更新
         const threshold = 0.01; // 1% 的变化阈值
-        if (Math.abs(this.camera.far - range) / Math.max(this.camera.far, 1) > threshold || 
+        if (Math.abs(this.camera.far - range) / Math.max(this.camera.far, 1) > threshold ||
             Math.abs(this.camera.near - (-range)) / Math.max(Math.abs(this.camera.near), 1) > threshold) {
             this.camera.near = -range;
             this.camera.far = range;
@@ -1458,7 +1458,7 @@ export class SceneManager {
 
     resize(width?: number, height?: number) {
         if (!this.canvas) return;
-        
+
         let w = width;
         let h = height;
 
@@ -1468,34 +1468,34 @@ export class SceneManager {
             h = rect.height;
         }
 
-        w = Math.max(1, w); 
+        w = Math.max(1, w);
         h = Math.max(1, h);
-        
+
         if (w === 0 || h === 0) return;
 
         const aspect = w / h;
         const cam = this.camera;
-        
+
         // 计算当前视锥体的高度
         const currentHeight = cam.top - cam.bottom;
         // 计算新的半高和半宽
         const halfHeight = currentHeight / 2;
         const halfWidth = halfHeight * aspect;
-        
+
         cam.left = -halfWidth;
         cam.right = halfWidth;
         cam.top = halfHeight;
         cam.bottom = -halfHeight;
-        
+
         cam.updateProjectionMatrix();
-        
+
         const maxRatio = this.settings.adaptiveQuality
             ? Math.min(window.devicePixelRatio, this.settings.maxPixelRatio ?? 2)
             : Math.min(window.devicePixelRatio, 2);
         this.activePixelRatio = maxRatio;
         this.renderer.setPixelRatio(maxRatio);
         this.renderer.setSize(w, h, false);
-        
+
         // 如果使用了 OrbitControls，需要更新它
         if (this.controls) {
             this.controls.update();
@@ -1694,7 +1694,7 @@ export class SceneManager {
 
             const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
-            
+
             toChunkDirection.copy(c.center).sub(cameraPos);
             const dist = toChunkDirection.length();
             const inRange = dist < this.maxRenderDistance;
@@ -1702,7 +1702,7 @@ export class SceneManager {
                 // 相机移动阶段对超大场景只抽样评估部分未加载分块，降低剔除主循环开销。
                 return;
             }
-            
+
             // 计算屏幕空间占用大小 (SSE 优化)
             // 对于正交相机，大小与距离无关，只与 zoom 和 frustumSize 有关
             const boxSize = c.bounds.getSize(tempSize).length();
@@ -1713,7 +1713,7 @@ export class SceneManager {
             const forwardness = dist > 1e-5
                 ? Math.max(0, cameraForward.dot(toChunkDirection.divideScalar(dist)))
                 : 1;
-            
+
             // 如果屏幕占比太小（例如小于 4 像素），则视为不可见 (LOD 优化)
             const isTooSmall = pixelSize < 4;
             const shouldHidePeripheralWhileMoving = phase === 'moving'
@@ -1796,14 +1796,14 @@ export class SceneManager {
         if (!abortedByBudget) {
             this.cullingScanCursor = (startIndex + totalChunks) % Math.max(totalChunks, 1);
         }
-        
+
         // 卸载策略
         if (!this.isCameraMoving && loadedChunks.length > this.maxLoadedChunks) {
             loadedChunks.sort((a, b) => b.center.distanceToSquared(cameraPos) - a.center.distanceToSquared(cameraPos));
-            
+
             let unloadedCount = 0;
             const targetUnload = loadedChunks.length - this.maxLoadedChunks;
-            
+
             for (const c of loadedChunks) {
                 if (unloadedCount >= targetUnload) break;
                 const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
@@ -1814,7 +1814,7 @@ export class SceneManager {
                 }
             }
         }
-        
+
         if (toLoad.length > 0 && performance.now() >= this.chunkLoadResumeAt) {
             // 按优先级排序
             toLoad.sort((a, b) => b.priority - a.priority);
@@ -1864,7 +1864,7 @@ export class SceneManager {
             worker!.removeEventListener('error', onError);
             this.workers.push(worker!);
             this.activeWorkerCount--;
-            
+
             if (e.data.type === 'success') {
                 task.resolve(e.data.result);
             } else {
@@ -1929,7 +1929,7 @@ export class SceneManager {
                 if (version !== 8) {
                     throw new Error(`Unsupported NBIM version: ${version}. Only V8 is supported.`);
                 }
-                
+
                 // 使用 Worker 进行解析
                 const workerResult = await this.runWorkerTask({
                     buffer,
@@ -1937,7 +1937,7 @@ export class SceneManager {
                     originalUuid: chunk.originalUuid,
                     bimIdTable: meta?.bimIdTable
                 }, [buffer]);
-                
+
                 bm = this.reconstructBatchedMesh(workerResult, this.sharedMaterial);
             }
 
@@ -1949,7 +1949,7 @@ export class SceneManager {
                 bm.name = chunk.id;
                 bm.userData.chunkId = chunk.id;
                 bm.userData.originalUuid = chunk.originalUuid;
-                
+
                 // 抵消全局偏移 (解决大坐标导致的精度问题)
                 // 只有远程 NBIM 分块需要手动抵消，因为其二进制数据是大坐标
                 // 本地分块在 addModel 时已经随 object 整体偏移过了，生成的 BatchedMesh 坐标是正确的
@@ -1957,7 +1957,7 @@ export class SceneManager {
                     bm.position.sub(this.globalOffset);
                     bm.updateMatrixWorld(true);
                 }
-                
+
                 // 查找或创建优化组
                 let optimizedGroup = this.contentGroup.getObjectByName(chunk.groupName) as THREE.Group;
                 if (!optimizedGroup) {
@@ -1967,7 +1967,7 @@ export class SceneManager {
                     optimizedGroup.userData.originalUuid = chunk.originalUuid;
                     this.contentGroup.add(optimizedGroup);
                 }
-                
+
                 optimizedGroup.add(bm);
                 chunk.mesh = bm;
                 loadedNow = true;
@@ -2027,10 +2027,10 @@ export class SceneManager {
             children: [],
             bimId: object.userData?.bimId ? String(object.userData.bimId)
                 : object.userData?.expressID !== undefined ? String(object.userData.expressID)
-                : (object.name ? String(object.name) : undefined),
+                    : (object.name ? String(object.name) : undefined),
             userData: { ...object.userData }
         };
-        
+
         // 将节点添加到映射表（支持一个 ID 对应多个节点）
         if (!this.nodeMap.has(object.uuid)) this.nodeMap.set(object.uuid, []);
         this.nodeMap.get(object.uuid)!.push(node);
@@ -2055,10 +2055,10 @@ export class SceneManager {
                 children: [],
                 bimId: obj.userData?.bimId ? String(obj.userData.bimId)
                     : obj.userData?.expressID !== undefined ? String(obj.userData.expressID)
-                    : (obj.name ? String(obj.name) : undefined),
+                        : (obj.name ? String(obj.name) : undefined),
                 userData: { ...obj.userData }
             };
-            
+
             if (!this.nodeMap.has(obj.uuid)) this.nodeMap.set(obj.uuid, []);
             this.nodeMap.get(obj.uuid)!.push(node);
 
@@ -2068,7 +2068,7 @@ export class SceneManager {
             }
             return node;
         };
-        
+
         return buildSpatialRecursive(object);
     }
 
@@ -2411,13 +2411,13 @@ export class SceneManager {
         const optimizedGroupsToRemove: THREE.Object3D[] = [];
         this.contentGroup.traverse(child => {
             // 匹配逻辑：名字匹配，或者 userData 里的原始 UUID 匹配
-            const isMatch = (child.name === `optimized_${uuid}`) || 
-                          (child.name === `file_${uuid}`) ||
-                          (child.userData.originalUuid === uuid) ||
-                          (child.userData.originalUuid === originalUuid) ||
-                          (child.name.startsWith('optimized_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid)) ||
-                          (child.name.startsWith('file_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid));
-            
+            const isMatch = (child.name === `optimized_${uuid}`) ||
+                (child.name === `file_${uuid}`) ||
+                (child.userData.originalUuid === uuid) ||
+                (child.userData.originalUuid === originalUuid) ||
+                (child.name.startsWith('optimized_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid)) ||
+                (child.name.startsWith('file_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid));
+
             if (isMatch) {
                 optimizedGroupsToRemove.push(child);
             }
@@ -2439,7 +2439,7 @@ export class SceneManager {
 
         const processRemoval = (o: THREE.Object3D | StructureTreeNode) => {
             const id = (o instanceof THREE.Object3D) ? o.uuid : (o as StructureTreeNode).id;
-            
+
             // 处理 BatchedMesh 实例移除（通过隐藏实现）
             const mappings = this.optimizedMapping.get(id);
             if (mappings) {
@@ -2558,7 +2558,7 @@ export class SceneManager {
         this.measureRecords.forEach((record, recordId) => {
             // 如果测量的关联模型是当前删除的对象，或者其子对象，则删除测量
             let isRelated = record.modelUuid === uuid || record.modelUuid === originalUuid;
-            
+
             if (!isRelated && record.modelUuid && obj) {
                 // 检查关联模型是否是正在删除对象的子孙
                 obj.traverse(child => {
@@ -2567,7 +2567,7 @@ export class SceneManager {
                     }
                 });
             }
-            
+
             if (isRelated) {
                 this.removeMeasurement(recordId);
             }
@@ -2584,7 +2584,7 @@ export class SceneManager {
     private generateChunkBinaryV8(items: any[], bimIdToIndex: Map<string, number>): ArrayBuffer {
         const uniqueGeos: THREE.BufferGeometry[] = [];
         const geoMap = new Map<THREE.BufferGeometry, number>();
-        
+
         items.forEach(item => {
             if (item.geometry && !geoMap.has(item.geometry)) {
                 geoMap.set(item.geometry, uniqueGeos.length);
@@ -2615,10 +2615,10 @@ export class SceneManager {
             const count = pos.count;
             const index = geo.index;
             const indexCount = index ? index.count : 0;
-            
+
             dv.setUint32(offset, count, true); offset += 4;
             dv.setUint32(offset, indexCount, true); offset += 4;
-            
+
             for (let i = 0; i < count; i++) {
                 dv.setFloat32(offset, pos.getX(i), true); offset += 4;
                 dv.setFloat32(offset, pos.getY(i), true); offset += 4;
@@ -2661,7 +2661,7 @@ export class SceneManager {
 
     private reconstructBatchedMesh(data: any, material: THREE.Material): THREE.BatchedMesh | null {
         const { geometries: geoData, instances: instData, originalUuid } = data;
-        
+
         // BatchedMesh 要求所有几何体必须一致地拥有（或都没有）索引。
         // 检查是否至少有一个几何体带有索引。
         const hasAnyIndex = geoData.some((g: any) => g.index && g.index.length > 0);
@@ -2688,7 +2688,7 @@ export class SceneManager {
             totalVerts += g.attributes.position.count;
             if (g.index) totalIndices += g.index.count;
         });
-        
+
         const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
         // 关键：禁用 BatchedMesh 自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制可见性。
         // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
@@ -2716,7 +2716,7 @@ export class SceneManager {
             const geo = geometries[inst.geoIdx];
             if (!geo.boundingBox) geo.computeBoundingBox();
             if (geo.boundingBox && (bm as any).setBoundingBoxAt) (bm as any).setBoundingBoxAt(instId, geo.boundingBox);
-            
+
             const bimId = inst.bimId;
             const key = `${originalUuid}::${bimId}`;
             const nodeIds = this.bimIdToNodeIds.get(key);
@@ -2784,7 +2784,7 @@ export class SceneManager {
                                 bimProperties[key].globalId = entity.GlobalId?.value || '';
                                 bimProperties[key].ifcName = entity.Name?.value || '';
                             }
-                        } catch {}
+                        } catch { }
                     }
 
                     if (expressID !== undefined && ifcManagerByModel.has(originalUuid)) {
@@ -2799,7 +2799,7 @@ export class SceneManager {
                             if (normalizedGroups && Object.keys(normalizedGroups).length > 0) {
                                 bimProperties[key].ifcNormalizedGroups = normalizedGroups;
                             }
-                        } catch {}
+                        } catch { }
                     }
                 }
             }
@@ -2862,7 +2862,7 @@ export class SceneManager {
         for (let i = 0; i < this.chunks.length; i++) {
             const chunk = this.chunks[i];
             const exportChunk = exportChunks[i];
-            
+
             let buffer: ArrayBuffer;
             if (chunk.node) {
                 buffer = this.generateChunkBinaryV8(chunk.node.items, bimIdToIndex);
@@ -2883,7 +2883,7 @@ export class SceneManager {
 
             const uint8 = new Uint8Array(buffer);
             chunkBlobs.push(uint8);
-            
+
             exportChunk.byteOffset = currentOffset;
             exportChunk.byteLength = uint8.byteLength;
             currentOffset += uint8.byteLength;
@@ -2978,12 +2978,12 @@ export class SceneManager {
         const dv = new DataView(header);
         dv.setUint32(0, 0x4D49424E, true); // 文件标识 'NBIM'
         dv.setUint32(4, 8, true);          // 版本 8
-        dv.setUint32(8, currentOffset, true); 
+        dv.setUint32(8, currentOffset, true);
         dv.setUint32(12, manifestBytes.byteLength, true);
 
         const blobParts: any[] = [header, ...chunkBlobs, manifestBytes];
         const finalBlob = new Blob(blobParts, { type: 'application/octet-stream' });
-        
+
         const url = URL.createObjectURL(finalBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -3021,7 +3021,7 @@ export class SceneManager {
         if (onProgress) onProgress(10, "正在解析 NBIM 文件头...");
         const headerBuffer = await file.slice(0, 1024).arrayBuffer();
         const dv = new DataView(headerBuffer);
-        
+
         const magic = dv.getUint32(0, true);
         if (magic !== 0x4D49424E) throw new Error("不是有效的 NBIM 文件");
 
@@ -3029,7 +3029,7 @@ export class SceneManager {
         if (version !== 8) {
             throw new Error(`不支持的 NBIM 版本: ${version}，当前仅支持 V8`);
         }
-        
+
         const manifestOffset = dv.getUint32(8, true);
         const manifestLen = dv.getUint32(12, true);
 
@@ -3039,7 +3039,7 @@ export class SceneManager {
         const manifest = JSON.parse(manifestText);
 
         this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
-        
+
         // 设置或更新场景包围盒
         if (manifest.globalBounds) {
             const newBounds = new THREE.Box3(
@@ -3060,10 +3060,10 @@ export class SceneManager {
             }
             this.sceneBounds.copy(this.precomputedBounds);
         }
-        
+
         const modelRoot = manifest.structureTree;
         if (!this.structureRoot.children) this.structureRoot.children = [];
-        
+
         // 不要增加额外的 root 节点，直接将内容加入 structureRoot
         if (modelRoot) {
             if (modelRoot.children && modelRoot.name === 'Root') {
@@ -3077,7 +3077,36 @@ export class SceneManager {
         const manifestBimProperties = (manifest?.bimProperties && typeof manifest.bimProperties === "object")
             ? manifest.bimProperties as Record<string, any>
             : {};
-        this.nbimPropsByOriginalUuid.set(rootId, manifestBimProperties);
+
+        // 从属性键中提取实际 owner（格式 "<owner>::<bimId>"）
+        const propKeys = Object.keys(manifestBimProperties);
+        const ownerSet = new Set<string>();
+        propKeys.forEach(k => {
+            const i = k.indexOf("::");
+            if (i > 0) ownerSet.add(k.slice(0, i));
+        });
+
+        // 确定节点 traverse 时使用的 fallback owner
+        // 优先用属性键中的实际 owner（单一 owner 情况），否则用 rootId
+        const defaultOwner = ownerSet.size === 1 ? [...ownerSet][0] : rootId;
+
+        // 存储属性 map：按 owner 分组
+        if (ownerSet.size >= 1) {
+            if (ownerSet.size === 1) {
+                this.nbimPropsByOriginalUuid.set(defaultOwner, manifestBimProperties);
+            } else {
+                const grouped = new Map<string, Record<string, any>>();
+                propKeys.forEach(k => {
+                    const i = k.indexOf("::");
+                    const owner = i > 0 ? k.slice(0, i) : rootId;
+                    if (!grouped.has(owner)) grouped.set(owner, {});
+                    grouped.get(owner)![k] = manifestBimProperties[k];
+                });
+                grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
+            }
+        } else {
+            this.nbimPropsByOriginalUuid.set(rootId, manifestBimProperties);
+        }
         const quickStats = manifest.stats || {
             meshes: this.countStructureRenderableNodes(modelRoot),
             faces: 0,
@@ -3094,12 +3123,12 @@ export class SceneManager {
         fileGroup.userData.modelName = sanitizeFileStem(sanitizeDisplayLabel(modelRootName, fileBaseName, rootId) || fileBaseName);
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
-        
+
         // 增量构建节点映射
         if (modelRoot) {
             const traverse = (node: StructureTreeNode) => {
                 if (!node.userData) node.userData = {};
-                const nodeOriginalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : rootId;
+                const nodeOriginalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : defaultOwner;
                 node.userData.originalUuid = nodeOriginalUuid;
                 if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
                 this.nodeMap.get(node.id)!.push(node);
@@ -3112,7 +3141,7 @@ export class SceneManager {
             };
             traverse(modelRoot);
         }
-        
+
         // 注册分块
         if (onProgress) onProgress(30, "正在初始化分块...");
         const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -3123,7 +3152,7 @@ export class SceneManager {
                 new THREE.Vector3(c.bounds.min.x, c.bounds.min.y, c.bounds.min.z),
                 new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)
             );
-            
+
             // 关键：将包围盒也平移到偏移后的局部空间，否则视锥体裁剪会失败
             if (this.globalOffset.length() > 0) {
                 bounds.translate(this.globalOffset.clone().negate());
@@ -3183,7 +3212,7 @@ export class SceneManager {
         console.log("开始清空场景...");
         this.cancelDeferredStructureBuild();
         this.resetExplode();
-        
+
         try {
             // 1. 深度清理 contentGroup
             const disposeObject = (obj: THREE.Object3D) => {
@@ -3205,19 +3234,19 @@ export class SceneManager {
             };
 
             this.contentGroup.traverse(disposeObject);
-            
+
             // 移除所有子节点
-            while(this.contentGroup.children.length > 0) {
+            while (this.contentGroup.children.length > 0) {
                 this.contentGroup.remove(this.contentGroup.children[0]);
             }
 
             // 2. 清理辅助组
             this.ghostGroup.children.forEach(disposeObject);
             this.ghostGroup.clear();
-            
+
             this.selectionBox.visible = false;
             this.highlightMesh.visible = false;
-            
+
             // 3. 清理测量记录
             this.clearAllMeasurements();
 
@@ -3247,7 +3276,7 @@ export class SceneManager {
             this.contentGroup.visible = true;
             this.ghostGroup.visible = true;
             this.chunkWarmupActive = false;
-            
+
             // 6. 重置全局偏移
             this.globalOffset.set(0, 0, 0);
 
@@ -3369,14 +3398,14 @@ export class SceneManager {
     isolateObjects(uuids: string[]) {
         // 1. 先隐藏所有对象
         this.setAllVisibility(false);
-        
+
         // 2. 显示所有选中的对象及其子对象
         const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
-        
+
         uuids.forEach(uuid => {
             // 使用 setObjectVisibility 来确保父节点也可见
             this.setObjectVisibility(uuid, true);
-            
+
             // 递归显示所有子对象
             const nodes = this.nodeMap.get(uuid);
             if (nodes) {
@@ -3392,7 +3421,7 @@ export class SceneManager {
                     showChildrenRecursive(node);
                 });
             }
-            
+
             // 收集受影响的 BatchedMesh
             const mappings = this.optimizedMapping.get(uuid);
             if (mappings) {
@@ -3401,7 +3430,7 @@ export class SceneManager {
                 });
             }
         });
-        
+
         // 3. 确保所有相关的 BatchedMesh 及其父节点可见
         affectedBatchedMeshes.forEach(bm => {
             bm.visible = true;
@@ -3412,7 +3441,7 @@ export class SceneManager {
                 parent = parent.parent;
             }
         });
-        
+
         // 4. 同时确保所有非优化对象的父节点也可见
         uuids.forEach(uuid => {
             const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
@@ -3424,7 +3453,7 @@ export class SceneManager {
                 }
             }
         });
-        
+
         // 5. 更新状态
         this.interactableListValid = false;
         this.updateSceneBounds();
@@ -3440,7 +3469,7 @@ export class SceneManager {
                 const setVisibleRecursive = (n: StructureTreeNode) => {
                     n.visible = visible;
                     if (n.children) n.children.forEach(setVisibleRecursive);
-                    
+
                     // 如果该子节点也有其他映射，同步更新它们
                     const otherNodes = this.nodeMap.get(n.id);
                     if (otherNodes) {
@@ -3452,7 +3481,7 @@ export class SceneManager {
         }
 
         const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-        
+
         // 如果设置为可见，确保所有父节点也可见
         if (visible && obj && showParents) {
             let parent = obj.parent;
@@ -3468,7 +3497,7 @@ export class SceneManager {
             if (this.highlightedUuids.has(uuid)) {
                 idsToUnhighlight.push(uuid);
             }
-            
+
             // 检查子对象
             if (obj) {
                 obj.traverse(child => {
@@ -4018,12 +4047,12 @@ export class SceneManager {
         const rect = this.canvas.getBoundingClientRect();
         this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
         this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-        
+
         this.raycaster.setFromCamera(this.mouse, this.camera);
-        
+
         if (!this.interactableListValid) {
             this.interactableList = [];
-            
+
             // 优化：优先从已加载的分块中收集网格，避免昂贵的 traverse
             if (this.chunks.length > 0) {
                 this.chunks.forEach(c => {
@@ -4038,10 +4067,10 @@ export class SceneManager {
             const traverseLimit = (o: THREE.Object3D, depth: number) => {
                 if (depth > 10) return;
                 if (!o.visible) return;
-                
+
                 // 跳过已经被分块系统处理的对象
                 if ((o as any).userData.chunkId) return;
-                
+
                 if ((o as THREE.Mesh).isMesh || (o as any).isBatchedMesh) {
                     if (!o.userData.isOptimized) {
                         this.interactableList.push(o);
@@ -4063,7 +4092,7 @@ export class SceneManager {
             this.interactableListValid = true;
         }
 
-        const intersects = this.raycaster.intersectObjects(this.interactableList, false); 
+        const intersects = this.raycaster.intersectObjects(this.interactableList, false);
         if (intersects.length > 0) {
             const hit = intersects[0];
             // 如果拾取到的是 BatchedMesh，我们需要将其转换为原始 Object3D 或 Proxy
@@ -4071,7 +4100,7 @@ export class SceneManager {
                 const bm = hit.object as THREE.BatchedMesh;
                 // 兼容不同版本的 Three.js 拾取结果字段
                 const batchId = (hit as any).batchId !== undefined ? (hit as any).batchId : (hit as any).instanceId;
-                
+
                 if (batchId !== undefined) {
                     const originalUuid = (bm.userData.batchIdToUuid as Map<number, string>)?.get(batchId);
                     if (originalUuid) {
@@ -4090,7 +4119,7 @@ export class SceneManager {
                                 (proxy as any).type = node.type;
                                 (proxy as any).isMesh = node.type === 'Mesh';
                             }
-                            
+
                             // 覆盖 getWorldPosition 以返回实例位置
                             proxy.getWorldPosition = (v: THREE.Vector3) => {
                                 const mat = new THREE.Matrix4();
@@ -4125,7 +4154,7 @@ export class SceneManager {
         }
 
         const totalBox = new THREE.Box3();
-        
+
         // 确保矩阵最新
         this.contentGroup.updateMatrixWorld(true);
 
@@ -4199,17 +4228,17 @@ export class SceneManager {
     fitView(keepOrientation = true) {
         this.contentGroup.updateMatrixWorld(true);
         let box = this.computeTotalBounds(true);
-        
+
         // 如果可见部分为空，尝试使用完整包围盒
         if (box.isEmpty()) {
             box = this.computeTotalBounds(false);
         }
 
-        this.sceneBounds = box.clone(); 
+        this.sceneBounds = box.clone();
         this.fitBox(box, !keepOrientation);
     }
 
-        private unionObjectBounds(obj: THREE.Object3D, targetBox: THREE.Box3) {
+    private unionObjectBounds(obj: THREE.Object3D, targetBox: THREE.Box3) {
         const box = new THREE.Box3();
         if (obj.userData?.boundingBox) {
             box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
@@ -4279,8 +4308,8 @@ export class SceneManager {
         if (box.isEmpty()) {
             this.camera.zoom = 1;
             this.camera.position.set(1000, 1000, 1000);
-            this.camera.lookAt(0,0,0);
-            this.controls.target.set(0,0,0);
+            this.camera.lookAt(0, 0, 0);
+            this.controls.target.set(0, 0, 0);
             this.camera.updateProjectionMatrix();
             this.controls.update();
             return;
@@ -4418,14 +4447,14 @@ export class SceneManager {
         let box = this.computeTotalBounds(true);
         if (box.isEmpty()) box = this.computeTotalBounds(false);
         this.sceneBounds = box.clone();
-        
+
         const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
         const size = box.isEmpty() ? new THREE.Vector3(100, 100, 100) : box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const dist = Math.max(maxDim * 2, 10);
 
         let pos = new THREE.Vector3();
-        switch(view) {
+        switch (view) {
             case 'top': pos.set(0, 0, dist); break;
             case 'bottom': pos.set(0, 0, -dist); break;
             case 'front': pos.set(0, -dist, 0); break;
@@ -4485,7 +4514,7 @@ export class SceneManager {
         if (state.right !== undefined) this.camera.right = state.right;
         if (state.top !== undefined) this.camera.top = state.top;
         if (state.bottom !== undefined) this.camera.bottom = state.bottom;
-        
+
         this.camera.updateProjectionMatrix();
         this.controls.update();
         this.requestRender();
@@ -4518,17 +4547,17 @@ export class SceneManager {
 
         // 平滑移动相机
         this.controls.target.copy(center);
-        
+
         // 调整缩放级别以适应测量结果
         const targetZoom = (this.camera.top - this.camera.bottom) / (maxDim * 0.5); // 进一步减小系数，靠得更近
-        
+
         this.camera.zoom = Math.min(targetZoom, 100.0); // 允许更大缩放
         this.camera.updateProjectionMatrix();
         this.controls.update();
         this.requestRender();
     }
 
-        // --- 测量逻辑 ---
+    // --- 测量逻辑 ---
     startMeasurement(type: MeasureType) {
         this.measureType = type;
         this.currentMeasurePoints = [];
@@ -4546,7 +4575,7 @@ export class SceneManager {
 
         this.currentMeasurePoints.push(point);
         // 临时点标记只在预览阶段显示，finalize 时会清除预览并重新生成正式点
-        this.addMarker(point, this.measureGroup); 
+        this.addMarker(point, this.measureGroup);
 
         // 检查完成状态
         if (this.measureType === 'dist' && this.currentMeasurePoints.length === 2) {
@@ -4556,7 +4585,7 @@ export class SceneManager {
         } else if (this.measureType === 'coord') {
             return this.finalizeMeasurement();
         }
-        
+
         this.updateMeasurePreview(); // 统一调用预览更新
         this.requestRender();
         return null;
@@ -4577,13 +4606,13 @@ export class SceneManager {
         if (points.length < 2) return;
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineDashedMaterial({ 
-            color: 0xff0000, 
-            dashSize: 5, 
-            gapSize: 2, 
-            depthTest: false 
+        const material = new THREE.LineDashedMaterial({
+            color: 0xff0000,
+            dashSize: 5,
+            gapSize: 2,
+            depthTest: false
         });
-        
+
         this.previewLine = new THREE.Line(geometry, material);
         this.previewLine.computeLineDistances();
         this.previewLine.renderOrder = 998;
@@ -4595,7 +4624,7 @@ export class SceneManager {
             this.tempMarker.visible = false;
             return;
         }
-        
+
         const intersect = this.getRayIntersects(clientX, clientY);
         if (intersect) {
             const p = intersect.point;
@@ -4605,11 +4634,11 @@ export class SceneManager {
             this.tempMarker.visible = true;
 
             if (this.currentMeasurePoints.length > 0) {
-                 this.updateMeasurePreview(p);
+                this.updateMeasurePreview(p);
             }
         } else {
             this.tempMarker.visible = false;
-            if(this.previewLine) this.previewLine.visible = false;
+            if (this.previewLine) this.previewLine.visible = false;
         }
         this.requestRender();
     }
@@ -4623,14 +4652,14 @@ export class SceneManager {
 
         let valStr = "";
         let displayVal = "";
-        let typeStr = this.measureType; 
+        let typeStr = this.measureType;
         let labelPos = new THREE.Vector3();
 
         if (this.measureType === 'dist') {
             const p1 = this.currentMeasurePoints[0];
             const p2 = this.currentMeasurePoints[1];
             const dist = p1.distanceTo(p2);
-            
+
             const dx = Math.abs(p2.x - p1.x);
             const dy = Math.abs(p2.y - p1.y);
             const dz = Math.abs(p2.z - p1.z);
@@ -4662,18 +4691,18 @@ export class SceneManager {
         group.add(label);
 
         this.measureGroup.add(group);
-        this.measureRecords.set(id, { 
-            id, 
-            type: typeStr, 
-            val: valStr, 
+        this.measureRecords.set(id, {
+            id,
+            type: typeStr,
+            val: valStr,
             group,
             modelUuid: this.currentMeasureModelUuid || undefined
         });
-        
+
         this.currentMeasurePoints = [];
         this.currentMeasureModelUuid = null;
         this.clearMeasurementPreview();
-        
+
         if (this.onMeasureUpdate) {
             this.onMeasureUpdate(Array.from(this.measureRecords.values()));
         }
@@ -4692,7 +4721,7 @@ export class SceneManager {
         const padding = 24;
         ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
         const textWidth = ctx.measureText(text).width;
-        
+
         canvas.width = textWidth + padding * 2;
         canvas.height = fontSize + padding;
 
@@ -4700,7 +4729,7 @@ export class SceneManager {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
         ctx.shadowBlur = 10;
         ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
-        
+
         const radius = 8;
         // @ts-ignore
         if (ctx.roundRect) {
@@ -4727,23 +4756,23 @@ export class SceneManager {
         const texture = new THREE.CanvasTexture(canvas);
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
-        
-        const spriteMaterial = new THREE.SpriteMaterial({ 
-            map: texture, 
+
+        const spriteMaterial = new THREE.SpriteMaterial({
+            map: texture,
             depthTest: false,
             sizeAttenuation: false // 关键：使文字不受相机缩放影响
         });
-        
+
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.position.copy(position);
-        
+
         // 由于 sizeAttenuation 为 false，scale 现在代表在屏幕空间占用的比例 (0.0 到 1.0)
         // 设定一个合适的大小，例如占据屏幕高度的 10%
         const baseScale = 0.5;
         sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
         sprite.renderOrder = 1001;
         sprite.userData = { type: 'label' };
-        
+
         return sprite;
     }
 
@@ -4751,7 +4780,7 @@ export class SceneManager {
         this.measureRecords.forEach((record, rid) => {
             const isHighlighted = rid === id;
             const color = isHighlighted ? 0x00ff00 : 0xff0000; // 高亮绿色，普通红色
-            
+
             record.group.traverse(child => {
                 if (child instanceof THREE.Line || child instanceof THREE.LineLoop) {
                     (child.material as THREE.LineBasicMaterial).color.set(color);
@@ -4780,7 +4809,7 @@ export class SceneManager {
         if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = 5;
 
         const intersects = this.raycaster.intersectObjects(this.measureGroup.children, true);
-        
+
         if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = oldThreshold;
 
         if (intersects.length > 0) {
@@ -4870,7 +4899,7 @@ export class SceneManager {
         const vB = new THREE.Vector3();
         const vC = new THREE.Vector3();
         const tmpMat = new THREE.Matrix4();
-        
+
         if (instanceId !== undefined && mesh.isInstancedMesh) {
             (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, tmpMat);
         } else {
@@ -4910,7 +4939,7 @@ export class SceneManager {
         const vB = new THREE.Vector3();
         const vC = new THREE.Vector3();
         const tmpMat = new THREE.Matrix4();
-        
+
         if (instanceId !== undefined && mesh.isInstancedMesh) {
             (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, tmpMat);
         } else {
@@ -4953,7 +4982,7 @@ export class SceneManager {
     getObjectGeometryData(uuid: string): { area: number, volume: number } {
         let area = 0;
         let volume = 0;
-        
+
         // 尝试从优化映射中获取
         const mappings = this.optimizedMapping.get(uuid);
         if (mappings && mappings.length > 0) {
@@ -4974,7 +5003,7 @@ export class SceneManager {
                 }
             }
         }
-        
+
         return { area, volume };
     }
 
@@ -5303,16 +5332,16 @@ export class SceneManager {
         this.requestRender();
     }
 
-    updateClippingPlanes(bounds: THREE.Box3, values: {x:number[], y:number[], z:number[]}, active: {x:boolean, y:boolean, z:boolean}) {
+    updateClippingPlanes(bounds: THREE.Box3, values: { x: number[], y: number[], z: number[] }, active: { x: boolean, y: boolean, z: boolean }) {
         if (bounds.isEmpty()) return;
         const { min, max } = bounds;
         const size = max.clone().sub(min);
         const center = bounds.getCenter(new THREE.Vector3());
-        
+
         // 辅助面大小：设置为包围盒对角线长度，既足够大又避免过大导致精度问题
         const diagonal = size.length();
         const helperSize = diagonal > 0 ? diagonal * 1.2 : 1000;
-        
+
         const xMin = min.x + (values.x[0] / 100) * size.x;
         const xMax = min.x + (values.x[1] / 100) * size.x;
         const yMin = min.y + (values.y[0] / 100) * size.y;
@@ -5326,7 +5355,7 @@ export class SceneManager {
         if (active.x) {
             this.clippingPlanes[0].constant = -xMin;
             this.clippingPlanes[1].constant = xMax;
-            
+
             this.updatePlaneHelper(0, new THREE.Vector3(1, 0, 0), xMin, center, helperSize, isEnabled);
             this.updatePlaneHelper(1, new THREE.Vector3(-1, 0, 0), xMax, center, helperSize, isEnabled);
         } else {
@@ -5340,7 +5369,7 @@ export class SceneManager {
         if (active.y) {
             this.clippingPlanes[2].constant = -yMin;
             this.clippingPlanes[3].constant = yMax;
-            
+
             this.updatePlaneHelper(2, new THREE.Vector3(0, 1, 0), yMin, center, helperSize, isEnabled);
             this.updatePlaneHelper(3, new THREE.Vector3(0, -1, 0), yMax, center, helperSize, isEnabled);
         } else {
@@ -5354,7 +5383,7 @@ export class SceneManager {
         if (active.z) {
             this.clippingPlanes[4].constant = -zMin;
             this.clippingPlanes[5].constant = zMax;
-            
+
             this.updatePlaneHelper(4, new THREE.Vector3(0, 0, 1), zMin, center, helperSize, isEnabled);
             this.updatePlaneHelper(5, new THREE.Vector3(0, 0, -1), zMax, center, helperSize, isEnabled);
         } else {
@@ -5372,16 +5401,16 @@ export class SceneManager {
 
         helper.visible = isEnabled && this.clipHelperVisible;
         helper.scale.set(size, size, 1);
-        
+
         // 设置位置：在对应轴向上设置为 dist，增加一个微小的偏移量 (1mm) 以减少与模型表面的闪烁
         const pos = new THREE.Vector3(center.x, center.y, center.z);
-        const epsilon = 0.001; 
+        const epsilon = 0.001;
         if (normal.x !== 0) pos.x = dist + (normal.x * epsilon);
         else if (normal.y !== 0) pos.y = dist + (normal.y * epsilon);
         else if (normal.z !== 0) pos.z = dist + (normal.z * epsilon);
-        
+
         helper.position.copy(pos);
-        
+
         // 设置旋转使其面向法线
         helper.lookAt(pos.clone().add(normal));
     }
@@ -5393,7 +5422,7 @@ export class SceneManager {
     private isBoxClipped(box: THREE.Box3): boolean {
         for (const plane of this.clippingPlanes) {
             if (plane.constant === Infinity) continue;
-            
+
             // 获取包围盒在平面法线方向上的最大点
             // 如果最大点都在平面负方向，说明整个盒子都在平面外
             const planeNormal = plane.normal;
@@ -5402,7 +5431,7 @@ export class SceneManager {
                 planeNormal.y > 0 ? box.max.y : box.min.y,
                 planeNormal.z > 0 ? box.max.z : box.min.z
             );
-            
+
             if (plane.distanceToPoint(maxPoint) < 0) {
                 return true;
             }
@@ -5416,7 +5445,7 @@ export class SceneManager {
 
         this.contentGroup.traverse((obj) => {
             if (obj.name === "__EdgesHelper") return;
-            
+
             if ((obj as THREE.Mesh).isMesh || (obj as any).isBatchedMesh) {
                 const mesh = obj as any;
 
@@ -5437,9 +5466,9 @@ export class SceneManager {
                 });
             }
         });
-        
+
         const drawCalls = this.renderer.info.render.calls;
-        return { 
+        return {
             meshes: this.originalStats.meshes,
             faces: this.originalStats.faces,
             memory: parseFloat(this.originalStats.memory.toFixed(2)),
