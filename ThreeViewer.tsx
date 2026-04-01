@@ -3,8 +3,7 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 import * as THREE from "three";
 import "./src/styles/index.css";
 import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
-import { parseTilesetFromFolder } from "./src/loader/LoaderUtils";
-import { convertLMBTo3DTiles, exportGLB, exportLMB } from "./src/utils/converter";
+import { exportGLB, exportLMB } from "./src/utils/converter";
 import { themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
@@ -967,14 +966,6 @@ export const ThreeViewer = ({
         }
     };
 
-    const handleFocusObject = (obj: any) => {
-        if (!sceneMgr.current || !obj) return;
-        const uuid = obj.uuid || obj.id;
-        if (!uuid) return;
-        sceneMgr.current.fitViewToObject(uuid);
-        void handleSelect(obj);
-    };
-
     const handleClearSelection = () => {
         setSelectedUuids([]);
         setSelectedIfcStorey("");
@@ -1032,15 +1023,6 @@ export const ThreeViewer = ({
             updateTree();
         };
 
-        // 监听瓦片更新（防抖刷新树）
-        let debounceTimer: any;
-        manager.onTilesUpdate = () => {
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                 updateTree();
-            }, 500);
-        };
-
         return () => {
             if (clearProgressTimer) clearTimeout(clearProgressTimer);
             manager.dispose();
@@ -1073,32 +1055,7 @@ export const ThreeViewer = ({
             const itemsToProcess: (File | string)[] = Array.isArray(initialFiles) ? initialFiles : [initialFiles];
             console.log("[ThreeViewer] loadInitial with items:", itemsToProcess);
             
-            // 分离 3D Tiles 和其他模型
-            const modelItems: (File | string)[] = [];
-            
-            for (const item of itemsToProcess) {
-                if (typeof item === 'string') {
-                    const urlPath = item.split('?')[0].split('#')[0];
-                    if (urlPath.toLowerCase().endsWith('.json') || urlPath.includes('tileset')) {
-                        console.log("[ThreeViewer] Initial URL detected as 3D Tiles:", item);
-                        mgrInstance.addTileset(item, (p, msg) => {
-                            setProgress(p);
-                            if(msg) setStatus(cleanLoadingStatus(msg));
-                        });
-                        updateTree();
-                        setStatus(t("tileset_loaded"));
-                        setTimeout(() => mgrInstance?.fitView(false), 500);
-                    } else {
-                        modelItems.push(item);
-                    }
-                } else {
-                    modelItems.push(item);
-                }
-            }
-
-            if (modelItems.length > 0) {
-                await processFiles(modelItems);
-            }
+            await processFiles(itemsToProcess);
         };
 
         loadInitial();
@@ -1594,7 +1551,6 @@ export const ThreeViewer = ({
         setLocatedUuid(uuid);
         const resultSet = locateResultUuids.length > 0 ? locateResultUuids : [uuid];
         sceneMgr.current.setLocateResultSet(resultSet, uuid);
-        sceneMgr.current.highlightObject(uuid);
         sceneMgr.current.fitViewToObject(uuid);
         void handleSelect(obj);
     }, [handleSelect, locateResultUuids]);
@@ -1735,24 +1691,7 @@ export const ThreeViewer = ({
         setLoading(true);
         setStatus(t("processing") + "...");
         try {
-            const urlPath = url.split('?')[0].split('#')[0];
-            console.log("[ThreeViewer] Parsed path:", urlPath);
-            if (urlPath.toLowerCase().endsWith('.json') || urlPath.includes('tileset')) {
-                console.log("[ThreeViewer] Detected as 3D Tiles");
-                // Assume 3D Tiles
-                if (sceneMgr.current) {
-                    sceneMgr.current.addTileset(url, (p, msg) => {
-                        setProgress(p);
-                        if(msg) setStatus(cleanLoadingStatus(msg));
-                    });
-                    updateTree();
-                    setStatus(t("tileset_loaded"));
-                    sceneMgr.current?.fitView(false);
-                }
-            } else {
-                // 直接传递 URL 到 processFiles，让其内部处理或传递给加载器
-                await processFiles([url]);
-            }
+            await processFiles([url]);
         } catch (err) {
             console.error("[ThreeViewer] handleOpenUrl error:", err);
             setStatus(t("failed"));
@@ -1790,32 +1729,6 @@ export const ThreeViewer = ({
         }
     };
 
-    const handleOpenFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files?.length || !sceneMgr.current) return;
-        setLoading(true);
-        setProgress(0);
-        try {
-            const url = await parseTilesetFromFolder(
-                e.target.files, 
-                (p, msg) => {
-                    setProgress(p);
-                    if(msg) setStatus(cleanLoadingStatus(msg));
-                }, 
-                t
-            );
-            if (url) {
-                sceneMgr.current.addTileset(url, (p, msg) => {
-                    setProgress(p);
-                    if(msg) setStatus(cleanLoadingStatus(msg));
-                });
-                updateTree(); // Tileset root added to tree
-                setStatus(t("tileset_loaded"));
-                sceneMgr.current?.fitView(false);
-            }
-        } catch (err) { console.error(err); setStatus(t("failed") + ": " + (err as Error).message); } 
-        finally { setLoading(false); }
-    };
-
     const stripFileExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
     const sanitizeFileStem = (name: string) => {
         const sanitized = name
@@ -1830,7 +1743,7 @@ export const ThreeViewer = ({
         const names: string[] = [];
         content.children.forEach((child: THREE.Object3D) => {
             if (child.userData?.isOptimizedGroup) return;
-            if (child.name === "TilesRenderer" || child.name.startsWith("optimized_")) return;
+            if (child.name.startsWith("optimized_")) return;
             const rawName =
                 (typeof child.userData?.modelName === "string" ? child.userData.modelName : "") ||
                 (child.children?.[0]?.name || "") ||
@@ -1853,7 +1766,7 @@ export const ThreeViewer = ({
     const resolveExportFilename = (format: string, requestedName?: string) => {
         const fallback = getDefaultExportFileName(format);
         const stem = sanitizeFileStem(stripFileExtension((requestedName || "").trim()) || fallback);
-        return format === "3dtiles" ? stem : `${stem}.${format}`;
+        return `${stem}.${format}`;
     };
 
     // New unified Export Handler
@@ -1888,7 +1801,7 @@ export const ThreeViewer = ({
         }
 
         // 收集所有原始模型进行导出（非优化组）
-        const modelsToExport = content.children.filter((c: THREE.Object3D) => !c.userData.isOptimizedGroup && c.name !== "TilesRenderer");
+        const modelsToExport = content.children.filter((c: THREE.Object3D) => !c.userData.isOptimizedGroup);
         if (modelsToExport.length === 0) { 
             setToast({ message: t("no_models"), type: 'info' });
             return; 
@@ -1908,37 +1821,7 @@ export const ThreeViewer = ({
                 let blob: Blob | null = null;
                 const filename = resolvedFileName;
 
-                if (format === '3dtiles') {
-                    // 强制选择输出目录并直接写入
-                    // @ts-ignore
-                    if (!window.showDirectoryPicker) {
-                        setToast({ message: t("select_output"), type: 'info' });
-                        throw new Error("Browser does not support directory picker");
-                    }
-                    // @ts-ignore
-                    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-                    const filesMap = await convertLMBTo3DTiles(exportGroup, (msg) => {
-                        if (msg.includes('%')) {
-                            const p = parseInt(msg.match(/(\d+)%/)?.[1] || "0");
-                            setProgress(p);
-                        }
-                        setStatus(cleanLoadingStatus(msg));
-                    });
-                setStatus(t("writing"));
-                    let writeCount = 0;
-                    for (const [name, b] of filesMap) {
-                        // @ts-ignore
-                        const fileHandle = await dirHandle.getFileHandle(name, { create: true });
-                        // @ts-ignore
-                        const writable = await fileHandle.createWritable();
-                        await writable.write(b);
-                        await writable.close();
-                        writeCount++;
-                        if (writeCount % 5 === 0) setProgress(Math.floor((writeCount / filesMap.size) * 100));
-                    }
-                    setToast({ message: t("success"), type: 'success' });
-                    return;
-                } else if (format === 'glb') {
+                if (format === 'glb') {
                     blob = await exportGLB(exportGroup);
                 } else if (format === 'lmb') {
                     blob = await exportLMB(exportGroup, (msg) => setStatus(cleanLoadingStatus(msg)));
@@ -2051,6 +1934,7 @@ export const ThreeViewer = ({
                 });
             }
         });
+        sceneMgr.current.requestRender();
     };
 
     return (
@@ -2075,7 +1959,6 @@ export const ThreeViewer = ({
                  setThemeType={setThemeMode}
                  handleOpenFiles={handleOpenFiles}
                  handleBatchConvert={handleBatchConvert}
-                 handleOpenFolder={handleOpenFolder}
                  handleOpenUrl={handleOpenUrl}
                  handleView={handleView}
                  handleClear={handleClear}
@@ -2131,7 +2014,6 @@ export const ThreeViewer = ({
                                     const uuid = obj?.uuid || obj?.id;
                                     if (uuid) handleDeleteObject(uuid);
                                 }}
-                                onFocus={(obj) => handleFocusObject(obj)}
                                 onHide={handleHideObject}
                                 onIsolate={handleIsolateObject}
                                 onShowAll={handleShowAll}

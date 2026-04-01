@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ThemeColors } from "../../theme/Styles";
 import { ImageButton } from "../common/ImageButton";
 import {
-    IconFolderOpen, IconFile, IconDownload, IconMaximize,
+    IconFile, IconDownload, IconMaximize,
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
@@ -16,7 +16,6 @@ interface MenuBarProps {
     setThemeType?: (type: 'dark' | 'light') => void;
     handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    handleOpenFolder?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleOpenUrl?: () => void;
     handleView?: (view: string) => void;
     handleClear?: () => void;
@@ -48,7 +47,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
     const isHidden = (id: string) => (hiddenMenus || []).includes(id);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const folderInputRef = React.useRef<HTMLInputElement>(null);
     const batchConvertInputRef = React.useRef<HTMLInputElement>(null);
 
     const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -109,15 +107,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 accept=".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleBatchConvert}
             />
-            <input
-                type="file"
-                ref={folderInputRef}
-                style={{ display: 'none' }}
-                {...{ webkitdirectory: "", directory: "" } as any}
-                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
-                onChange={props.handleOpenFolder}
-            />
-
             {!isHidden('file') && (
                 <div className="ui-toolbar-group">
                     <div style={{ position: 'relative' }}>
@@ -138,16 +127,6 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         {t('menu_open_file')}
-                                    </div>
-                                )}
-                                {!isHidden('open_folder') && (
-                                    <div
-                                        style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                        onClick={() => { folderInputRef.current?.click(); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        {t('menu_open_folder')}
                                     </div>
                                 )}
                                 {!isHidden('export') && (

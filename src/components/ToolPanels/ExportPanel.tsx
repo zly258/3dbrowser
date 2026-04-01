@@ -23,10 +23,9 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
             <div style={{ padding: 16 }}>
                 <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>{t("export_format")}:</div>
 
-                {[ 
+                {[
                     { id: 'glb', label: 'GLB', desc: t("export_glb") },
                     { id: 'lmb', label: 'LMB', desc: t("export_lmb") },
-                    { id: '3dtiles', label: '3D Tiles', desc: t("export_3dtiles") },
                     { id: 'nbim', label: 'NBIM', desc: t("export_nbim") }
                 ].map(opt => (
                     <label key={opt.id} style={{

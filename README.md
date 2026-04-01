@@ -8,7 +8,6 @@ Professional 3D model viewer library for React and Web applications. Built with 
 - **Multi-format Support**:
   - **BIM**: IFC (using web-ifc)
   - **Standard**: GLB/GLTF, FBX, OBJ
-  - **Large Scale**: 3D Tiles (using 3d-tiles-renderer)
   - **Custom**: LMB, NBIM
 - **Advanced Tools**:
   - **Measurement**: Distance, angle, and coordinate measurement tools.
@@ -62,14 +61,14 @@ function App() {
 |------|------|---------|-------------|
 | `libPath` | `string` | `'./libs'` | Path to the folder containing WASM/Worker files (relative to window.location) |
 | `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
-| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `open_folder`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`. |
+| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`. |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
 | `showStats` | `boolean` | `true` | Show performance statistics panel |
 | `showOutline` | `boolean` | `true` | Show scene structure outline panel |
 | `showProperties` | `boolean` | `true` | Show object properties panel |
 | `initialSettings` | `Partial<SceneSettings>` | - | Initial scene settings (lighting, bg, etc.) |
-| `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or File objects to load on mount |
+| `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or **files** to load on mount (single files or multi-file lists; no folder/directory picker) |
 | `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
 | `onLoad` | `(manager: SceneManager) => void` | - | Callback when the scene manager is initialized |
 | `hideDeleteModel` | `boolean` | `false` | Hide delete model button |
@@ -105,7 +104,6 @@ This project is intended for learning and research purposes only. **Commercial u
 - **多格式支持**:
   - **BIM**: IFC (基于 web-ifc)
   - **标准格式**: GLB/GLTF, FBX, OBJ
-  - **大规模场景**: 3D Tiles (基于 3d-tiles-renderer)
   - **自定义格式**: LMB, NBIM
 - **高级工具**:
   - **测量**: 距离、角度、坐标测量。
@@ -142,8 +140,7 @@ function App() {
         defaultLang="zh"
         showStats={true}
         initialFiles={[
-          "https://example.com/models/building.glb",
-          "https://example.com/models/tileset/tileset.json"
+          "https://example.com/models/building.glb"
         ]}
         onSelect={(uuid, object) => console.log('选中对象:', uuid, object)}
       />
@@ -160,14 +157,14 @@ function App() {
 |------|------|---------|-------------|
 | `libPath` | `string` | `'./libs'` | 包含 WASM/Worker 文件的文件夹路径（相对于 window.location） |
 | `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
-| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `open_folder`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`。 |
+| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`。 |
 | `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题 |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
 | `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
 | `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
 | `showProperties` | `boolean` | `true` | 是否显示对象属性面板 |
 | `initialSettings` | `Partial<SceneSettings>` | - | 初始场景设置（光照、背景等） |
-| `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的文件（URL 或 File 对象） |
+| `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的 **单个文件或文件列表**（URL 或 `File`；不支持整目录选择） |
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
 | `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
 | `hideDeleteModel` | `boolean` | `false` | 隐藏删除模型按钮 |
