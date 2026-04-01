@@ -10,7 +10,7 @@ import {
     ColorPicker
 } from "../common";
 
-type SettingsTab = "general" | "viewport" | "import" | "highlight";
+type SettingsTab = "general" | "viewport" | "highlight";
 
 /**
  * Row - 设置面板中的行布局组件
@@ -49,7 +49,7 @@ const Row: React.FC<{
 
 /**
  * SettingsPanel - 设置面板主组件
- * 提供主题、语言、字体大小和大模型优先相关配置
+ * 提供主题、语言和视口相关配置
  */
 export const SettingsPanel: React.FC<SettingsModalProps> = ({
   t,              // 翻译函数
@@ -70,7 +70,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   const tabOptions = [
     { value: "general", label: t("setting_general") || "通用" },
     { value: "viewport", label: t("st_viewport") || "视口" },
-    { value: "import", label: t("st_import_settings") || "导入" },
     { value: "highlight", label: t("st_highlight") || "高亮" }
   ];
 
@@ -167,17 +166,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 onChange={(v) => onUpdate({ performanceMode: v as 'smooth' | 'balanced' | 'quality' })}
               />
             </div>
-          </Row>
-          </div>
-        )}
-
-        {activeTab === "import" && (
-          <div className="mb-2" style={{ padding: '0 6px' }}>
-          <Row label={t("ifc_grid_visible") || "IFC 轴网"} labelWidth="90px">
-            <Switch
-              checked={settings.ifcGridVisible !== false}
-              onChange={(v) => onUpdate({ ifcGridVisible: v })}
-            />
           </Row>
           </div>
         )}
