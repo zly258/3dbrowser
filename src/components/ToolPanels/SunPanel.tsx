@@ -1,7 +1,6 @@
 import React from "react";
-import { Slider } from "../common";
+import { Slider, Checkbox, InputNumber } from "../common";
 import { FloatingPanel } from "./FloatingPanel";
-import { Checkbox } from "../common";
 
 interface SunPanelProps {
     t: any;
@@ -34,7 +33,7 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
     const timeValue = timeToSlider(settings.sunTime !== undefined ? settings.sunTime : 12);
 
     return (
-        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} height={350} resizable={false} theme={theme} storageId="tool_sun">
+        <FloatingPanel title={t("st_sun_simulation") || "光照模拟"} onClose={onClose} width={320} resizable={false} theme={theme} storageId="tool_sun">
             <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
                 {/* 启用开关 */}
@@ -56,25 +55,14 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                         <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_latitude") || "纬度"}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <input
-                                        type="number"
-                                        min={-90}
-                                        max={90}
-                                        value={settings.sunLatitude || 0}
-                                        onChange={(e) => {
-                                            let val = parseFloat(e.target.value);
-                                            val = Math.max(-90, Math.min(90, val));
-                                            onUpdate({ sunLatitude: val });
-                                        }}
-                                        className="ui-input"
-                                        style={{
-                                            width: 70,
-                                            textAlign: 'right'
-                                        }}
-                                    />
-                                    <span style={{ color: 'var(--text-secondary)' }}>°</span>
-                                </div>
+                                <InputNumber
+                                    min={-90}
+                                    max={90}
+                                    value={settings.sunLatitude || 0}
+                                    onChange={(val) => onUpdate({ sunLatitude: val })}
+                                    unit="°"
+                                    style={{ width: 80 }}
+                                />
                             </div>
                         </div>
 
@@ -82,25 +70,14 @@ export const SunPanel: React.FC<SunPanelProps> = ({ t, onClose, settings, onUpda
                         <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                                 <span>{t("st_sun_longitude") || "经度"}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <input
-                                        type="number"
-                                        min={-180}
-                                        max={180}
-                                        value={settings.sunLongitude || 0}
-                                        onChange={(e) => {
-                                            let val = parseFloat(e.target.value);
-                                            val = Math.max(-180, Math.min(180, val));
-                                            onUpdate({ sunLongitude: val });
-                                        }}
-                                        className="ui-input"
-                                        style={{
-                                            width: 70,
-                                            textAlign: 'right'
-                                        }}
-                                    />
-                                    <span style={{ color: 'var(--text-secondary)' }}>°</span>
-                                </div>
+                                <InputNumber
+                                    min={-180}
+                                    max={180}
+                                    value={settings.sunLongitude || 0}
+                                    onChange={(val) => onUpdate({ sunLongitude: val })}
+                                    unit="°"
+                                    style={{ width: 80 }}
+                                />
                             </div>
                         </div>
 

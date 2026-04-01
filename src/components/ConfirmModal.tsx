@@ -50,9 +50,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                     style={{
                         display: 'flex',
                         justifyContent: 'flex-end',
-                        gap: '10px',
-                        borderTop: '1px solid var(--border-color)',
-                        paddingTop: '14px'
+                        gap: '10px'
                     }}
                 >
                     <button

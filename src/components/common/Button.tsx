@@ -17,7 +17,7 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
     let btnClass = 'ui-btn';
     if (variant === 'primary') btnClass += ' ui-btn-primary';
-    else if (variant === 'danger') btnClass += ' bg-error text-white border-error';
+    else if (variant === 'danger') btnClass += ' ui-btn-danger';
     else if (variant === 'ghost') btnClass += ' ui-btn-ghost';
     else btnClass += ' ui-btn-default';
     

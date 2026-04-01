@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "../common";
 import { FloatingPanel } from "./FloatingPanel";
+import { IconTrash2 } from "../../theme/Icons";
 
 interface ViewpointPanelProps {
     t: any;
@@ -22,7 +23,6 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
     onUpdateName,
     onLoad,
     onDelete,
-    onOverwrite,
     theme
 }) => {
     const [newName, setNewName] = useState("");
@@ -64,90 +64,84 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
         <FloatingPanel
             title={t("viewpoint_title") || "视点管理"}
             onClose={onClose}
-            width={380}
+            width={320}
             height={470}
             resizable={true}
             theme={theme}
             storageId="tool_viewpoint"
         >
-            <div className="ui-panel-stack" style={{ height: "100%" }}>
-                <div className="ui-panel-section">
-                    <div className="ui-form-row ui-form-row-top">
-                        <div className="ui-form-value ui-form-value-stretch">
-                            <div className="ui-inline-actions">
-                                <input
-                                    autoFocus
-                                    value={newName}
-                                    onChange={(e) => setNewName(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleSave();
-                                    }}
-                                    className="ui-input"
-                                    placeholder={t("viewpoint_title") || "视点名称"}
-                                />
-                                <Button variant="primary" onClick={handleSave}>
-                                    {t("btn_confirm") || "保存"}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
+            <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
+                {/* 新建视点输入 */}
+                <div className="ui-inline-actions">
+                    <input
+                        autoFocus
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSave();
+                        }}
+                        className="ui-input"
+                        placeholder={t("viewpoint_title") || "视点名称"}
+                        style={{ flex: 1 }}
+                    />
+                    <Button variant="primary" onClick={handleSave}>
+                        {t("btn_confirm") || "保存"}
+                    </Button>
                 </div>
 
-                <div className="ui-panel-section ui-panel-section-fill">
+                {/* 视点网格列表 */}
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
                     {viewpoints.length === 0 ? (
                         <div className="ui-empty-state">
                             {t("viewpoint_empty") || "暂无保存的视点"}
                         </div>
                     ) : (
-                        <div className="ui-viewpoint-list">
+                        <div className="ui-viewpoint-grid">
                             {viewpoints.map((vp: any) => (
-                                <div key={vp.id} className="ui-viewpoint-card">
-                                    <button
-                                        className="ui-viewpoint-preview"
-                                        onClick={() => onLoad(vp)}
-                                        title={t("viewpoint_load") || "恢复视点"}
+                                <div key={vp.id} className="ui-viewpoint-card-v2">
+                                    {/* 图片区域 */}
+                                    <div
+                                        className="ui-viewpoint-image"
+                                        onDoubleClick={() => onLoad(vp)}
+                                        title={t("viewpoint_load") || "双击恢复视点"}
                                     >
                                         {vp.image ? (
                                             <img
                                                 src={vp.image}
                                                 alt={vp.name}
-                                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                             />
                                         ) : (
-                                            <div className="ui-empty-state" style={{ minHeight: "100%" }}>
+                                            <div className="ui-viewpoint-no-preview">
                                                 {t("viewpoint_no_preview") || "无预览"}
                                             </div>
                                         )}
-                                    </button>
-
-                                    <div className="ui-viewpoint-main">
-                                        <input
-                                            className="ui-input"
-                                            value={editingNames[vp.id] || ""}
-                                            onChange={(e) => setEditingNames((prev) => ({
-                                                ...prev,
-                                                [vp.id]: e.target.value
-                                            }))}
-                                            onBlur={() => handleRenameCommit(vp.id)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter") {
-                                                    e.currentTarget.blur();
-                                                }
+                                        {/* 删除按钮 */}
+                                        <button
+                                            className="ui-viewpoint-delete"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDelete(vp.id);
                                             }}
-                                        />
-
-                                        <div className="ui-inline-actions ui-inline-actions-wrap">
-                                            <Button variant="default" onClick={() => onLoad(vp)}>
-                                                {t("viewpoint_load") || "恢复"}
-                                            </Button>
-                                            <Button variant="ghost" onClick={() => onOverwrite(vp.id)}>
-                                                {t("viewpoint_overwrite") || "覆盖"}
-                                            </Button>
-                                            <Button variant="ghost" onClick={() => onDelete(vp.id)}>
-                                                {t("delete_item") || "删除"}
-                                            </Button>
-                                        </div>
+                                            title={t("delete_item") || "删除"}
+                                        >
+                                            <IconTrash2 size={12} />
+                                        </button>
                                     </div>
+                                    {/* 名称区域 */}
+                                    <input
+                                        className="ui-viewpoint-name"
+                                        value={editingNames[vp.id] || ""}
+                                        onChange={(e) => setEditingNames((prev) => ({
+                                            ...prev,
+                                            [vp.id]: e.target.value
+                                        }))}
+                                        onBlur={() => handleRenameCommit(vp.id)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.currentTarget.blur();
+                                            }
+                                        }}
+                                    />
                                 </div>
                             ))}
                         </div>

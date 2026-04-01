@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { IconChevronRight, IconChevronDown } from "../theme/Icons";
-import { Button } from "./common";
+import { IconChevronRight, IconChevronDown, IconCopy } from "../theme/Icons";
 
 type PropertyGroups = Record<string, Record<string, string>>;
 
@@ -92,14 +91,24 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                         </div>
 
                         <div className="ui-properties-actions">
-                            <Button
-                                variant="ghost"
+                            <button
                                 className="ui-properties-action"
                                 onClick={() => currentGroups && handleCopy(serializeGroups(currentGroups))}
                                 disabled={!currentGroups}
+                                title={t("copy_all_props") || "复制全部"}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    opacity: currentGroups ? 1 : 0.5,
+                                }}
                             >
-                                {t("copy_all_props") || "复制全部"}
-                            </Button>
+                                <IconCopy size={14} />
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -109,7 +118,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                 {filteredProps ? (
                     Object.entries(filteredProps).map(([group, props]) => (
                         <div key={group}>
-                            <div className="ui-prop-group" onClick={() => toggleGroup(group)}>
+                            <div className={`ui-prop-group${collapsed.has(group) ? ' collapsed' : ''}`} onClick={() => toggleGroup(group)}>
                                 <span>{group}</span>
                                 <div className="ui-prop-group-actions">
                                     <button
@@ -120,10 +129,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                                 [`[${group}]`, ...Object.entries(props).map(([k, v]) => `${k}: ${v}`)].join("\n")
                                             );
                                         }}
+                                        title={t("copy_group_props") || "复制组"}
                                     >
-                                        {t("copy_group_props") || "复制组"}
+                                        <IconCopy size={12} />
                                     </button>
-                                    <span style={{ opacity: 0.6, display: "flex", alignItems: "center" }}>
+                                    <span style={{ opacity: 0.6, display: "flex", alignItems: "center", marginLeft: 4 }}>
                                         {collapsed.has(group) ? (
                                             <IconChevronRight width={14} height={14} />
                                         ) : (

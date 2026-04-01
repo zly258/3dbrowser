@@ -120,11 +120,8 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
       resizable={false}
       storageId="tool_clip"
     >
-      <div
-        className="ui-panel-stack"
-        style={{ height: "100%" }}
-      >
-        <div className="ui-panel-section">
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div className="ui-form-row">
             <span className="ui-form-label">{t("clip_enable")}</span>
             <div className="ui-form-value">
@@ -162,9 +159,10 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
         </div>
 
         <div
-          className="ui-panel-section flex flex-col"
           style={{
             flex: 1,
+            display: "flex",
+            flexDirection: "column",
             opacity: clipEnabled ? 1 : 0.4,
             pointerEvents: clipEnabled ? "auto" : "none",
           }}
@@ -198,7 +196,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
           />
         </div>
 
-        <div className="ui-panel-footer">
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Button variant="default" onClick={handleReset} disabled={!clipEnabled}>
             {t("clip_reset") || "重置范围"}
           </Button>
