@@ -1,6 +1,12 @@
 import React, { useRef } from "react";
 import { ThemeColors } from "../../theme/Styles";
 import { ClassicMenuItem, ClassicSubItem } from "./MenuItem";
+import {
+    IconViewTop, IconViewBottom, IconViewFront, IconViewBack, IconViewLeft, IconViewRight,
+    IconViewSW, IconViewSE, IconViewNE, IconViewNW,
+    IconSolid, IconTransparent,
+    IconOpenFile, IconExportScene, IconClear
+} from "../../theme/Icons";
 
 interface MenuBarProps {
     t: (key: string) => string;
@@ -61,7 +67,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                 <ClassicMenuItem label={t('menu_file')} >
                     {(close) => (
                         <>
-                            {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} />}
+                            {!isHidden('open_file') && <ClassicSubItem icon={<IconOpenFile />} label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} />}
                             {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl?.(); close(); }} />}
                             {!isHidden('batch_convert') && (
                                 <>
@@ -72,13 +78,13 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                             {!isHidden('export') && (
                                 <>
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem label={t('menu_export')} onClick={() => { props.setActiveTool?.('export'); close(); }} />
+                                    <ClassicSubItem icon={<IconExportScene />} label={t('menu_export')} onClick={() => { props.setActiveTool?.('export'); close(); }} />
                                 </>
                             )}
                             {!isHidden('clear') && (
                                 <>
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem label={t('op_clear')} onClick={() => { props.handleClear?.(); close(); }} />
+                                    <ClassicSubItem icon={<IconClear />} label={t('op_clear')} onClick={() => { props.handleClear?.(); close(); }} />
                                 </>
                             )}
                         </>
@@ -94,17 +100,17 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                             {!isHidden('views') && (
                                 <>
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem label={t('view_front')} onClick={() => { props.handleView?.('front'); close(); }} />
-                                    <ClassicSubItem label={t('view_back')} onClick={() => { props.handleView?.('back'); close(); }} />
-                                    <ClassicSubItem label={t('view_top')} onClick={() => { props.handleView?.('top'); close(); }} />
-                                    <ClassicSubItem label={t('view_bottom')} onClick={() => { props.handleView?.('bottom'); close(); }} />
-                                    <ClassicSubItem label={t('view_left')} onClick={() => { props.handleView?.('left'); close(); }} />
-                                    <ClassicSubItem label={t('view_right')} onClick={() => { props.handleView?.('right'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewFront />} label={t('view_front')} onClick={() => { props.handleView?.('front'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewBack />} label={t('view_back')} onClick={() => { props.handleView?.('back'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewTop />} label={t('view_top')} onClick={() => { props.handleView?.('top'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewBottom />} label={t('view_bottom')} onClick={() => { props.handleView?.('bottom'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewLeft />} label={t('view_left')} onClick={() => { props.handleView?.('left'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewRight />} label={t('view_right')} onClick={() => { props.handleView?.('right'); close(); }} />
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem label={t('view_se')} onClick={() => { props.handleView?.('se'); close(); }} />
-                                    <ClassicSubItem label={t('view_sw')} onClick={() => { props.handleView?.('sw'); close(); }} />
-                                    <ClassicSubItem label={t('view_ne')} onClick={() => { props.handleView?.('ne'); close(); }} />
-                                    <ClassicSubItem label={t('view_nw')} onClick={() => { props.handleView?.('nw'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewSE />} label={t('view_se')} onClick={() => { props.handleView?.('se'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewSW />} label={t('view_sw')} onClick={() => { props.handleView?.('sw'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewNE />} label={t('view_ne')} onClick={() => { props.handleView?.('ne'); close(); }} />
+                                    <ClassicSubItem icon={<IconViewNW />} label={t('view_nw')} onClick={() => { props.handleView?.('nw'); close(); }} />
                                 </>
                             )}
                         </>

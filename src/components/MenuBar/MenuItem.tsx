@@ -56,9 +56,10 @@ interface SubItemProps {
     onClick: () => void;
         enabled?: boolean;
     checked?: boolean;
+    icon?: React.ReactNode;
 }
 
-export const ClassicSubItem = ({ label, onClick, enabled = true, checked }: SubItemProps) => {
+export const ClassicSubItem = ({ label, onClick, enabled = true, checked, icon }: SubItemProps) => {
     return (
         <div
             className={`ui-context-menu-item flex items-center justify-between ${!enabled ? 'disabled' : ''}`}
@@ -87,6 +88,11 @@ export const ClassicSubItem = ({ label, onClick, enabled = true, checked }: SubI
                     }}>
                         {checked && <div style={{ color: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>✓</div>}
                     </div>
+                )}
+                {icon && checked === undefined && (
+                    <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.8 }}>
+                        {React.cloneElement(icon as React.ReactElement, { size: 16 })}
+                    </span>
                 )}
                 {label}
             </div>

@@ -282,3 +282,179 @@ export const IconSelectAll = (props: any) => createIcon(
   </>,
   props
 );
+
+// View direction icons — isometric cube, face highlighted
+// Top face highlighted (top diamond)
+export const IconViewTop = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="12,3 21,8 12,13 3,8" fill="currentColor" fillOpacity="0.55" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// Bottom face highlighted (bottom diamond)
+export const IconViewBottom = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="3,16 12,13 21,16 12,21" fill="currentColor" fillOpacity="0.55" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// Front face: isometric-style cube, front face highlighted
+export const IconViewFront = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="3,8 12,13 12,21 3,16" fill="currentColor" fillOpacity="0.45" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// Back face highlighted
+export const IconViewBack = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="21,8 12,13 12,21 21,16" fill="currentColor" fillOpacity="0.45" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// Left face highlighted
+export const IconViewLeft = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="3,8 12,3 12,13 3,8" fill="currentColor" fillOpacity="0.45" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// Right face highlighted
+export const IconViewRight = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="21,8 12,3 12,13 21,8" fill="currentColor" fillOpacity="0.45" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// Isometric view — full cube, SW highlighted
+export const IconViewSW = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="3,8 12,13 12,21 3,16" fill="currentColor" fillOpacity="0.45" />
+    <polygon points="12,3 21,8 12,13 3,8" fill="currentColor" fillOpacity="0.25" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// SE
+export const IconViewSE = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="21,8 12,13 12,21 21,16" fill="currentColor" fillOpacity="0.45" />
+    <polygon points="12,3 21,8 12,13 3,8" fill="currentColor" fillOpacity="0.25" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// NE
+export const IconViewNE = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="21,8 12,13 12,21 21,16" fill="currentColor" fillOpacity="0.25" />
+    <polygon points="12,3 21,8 12,13 3,8" fill="currentColor" fillOpacity="0.45" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+// NW
+export const IconViewNW = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.08" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <polygon points="3,8 12,13 12,21 3,16" fill="currentColor" fillOpacity="0.25" />
+    <polygon points="12,3 21,8 12,13 3,8" fill="currentColor" fillOpacity="0.45" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+
+// Shading mode icons
+export const IconSolid = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.35" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+export const IconTransparent = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="none" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" strokeDasharray="2 2" />
+    <line x1="12" y1="13" x2="12" y2="21" strokeDasharray="2 2" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+  </>,
+  props
+);
+
+// File operation icons
+export const IconOpenFile = (props: any) => createIcon(
+  <>
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </>,
+  props
+);
+export const IconExportScene = (props: any) => createIcon(
+  <>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </>,
+  props
+);

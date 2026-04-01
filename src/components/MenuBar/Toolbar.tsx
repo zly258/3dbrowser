@@ -6,7 +6,11 @@ import {
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
     IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
-    IconLayers, IconImage, IconExplode
+    IconLayers, IconImage, IconExplode,
+    IconViewTop, IconViewBottom, IconViewFront, IconViewBack, IconViewLeft, IconViewRight,
+    IconViewSW, IconViewSE, IconViewNE, IconViewNW,
+    IconSolid, IconTransparent,
+    IconOpenFile, IconExportScene, IconClear
 } from "../../theme/Icons";
 
 interface MenuBarProps {
@@ -89,6 +93,22 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
         );
     };
 
+    const menuItem = (icon: React.ReactNode, label: string, onClick: () => void) => (
+        <div
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 14px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
+            onClick={onClick}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+            <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.8 }}>
+                {React.cloneElement(icon as React.ReactElement, { size: 16 })}
+            </span>
+            {label}
+        </div>
+    );
+
+    const menuDivider = () => <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />;
+
     return (
         <div className="ui-toolbar">
             <input
@@ -119,35 +139,13 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                         />
                         {renderDropdown('file', (
                             <>
-                                {!isHidden('open_file') && (
-                                    <div
-                                        style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                        onClick={() => { fileInputRef.current?.click(); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        {t('menu_open_file')}
-                                    </div>
-                                )}
-                                {!isHidden('export') && (
-                                    <div
-                                        style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                        onClick={() => { props.setActiveTool?.('export'); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        {t('menu_export')}
-                                    </div>
-                                )}
+                                {!isHidden('open_file') && menuItem(<IconOpenFile />, t('menu_open_file'), () => { fileInputRef.current?.click(); setOpenMenu(null); })}
+                                {!isHidden('export') && menuItem(<IconExportScene />, t('menu_export'), () => { props.setActiveTool?.('export'); setOpenMenu(null); })}
                                 {!isHidden('clear') && (
-                                    <div
-                                        style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                        onClick={() => { props.handleClear?.(); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        {t('op_clear')}
-                                    </div>
+                                    <>
+                                        {menuDivider()}
+                                        {menuItem(<IconClear />, t('op_clear'), () => { props.handleClear?.(); setOpenMenu(null); })}
+                                    </>
                                 )}
                             </>
                         ))}
@@ -173,87 +171,17 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                         />
                         {renderDropdown('views', (
                             <>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('front'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_front')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('back'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_back')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('top'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_top')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('bottom'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_bottom')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('left'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_left')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('right'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_right')}
-                                </div>
-                                <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('se'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_se')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('sw'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_sw')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('ne'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_ne')}
-                                </div>
-                                <div
-                                    style={{ padding: '6px 16px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
-                                    onClick={() => { props.handleView?.('nw'); setOpenMenu(null); }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    {t('view_nw')}
-                                </div>
+                                {menuItem(<IconViewFront />, t('view_front'), () => { props.handleView?.('front'); setOpenMenu(null); })}
+                                {menuItem(<IconViewBack />, t('view_back'), () => { props.handleView?.('back'); setOpenMenu(null); })}
+                                {menuItem(<IconViewTop />, t('view_top'), () => { props.handleView?.('top'); setOpenMenu(null); })}
+                                {menuItem(<IconViewBottom />, t('view_bottom'), () => { props.handleView?.('bottom'); setOpenMenu(null); })}
+                                {menuItem(<IconViewLeft />, t('view_left'), () => { props.handleView?.('left'); setOpenMenu(null); })}
+                                {menuItem(<IconViewRight />, t('view_right'), () => { props.handleView?.('right'); setOpenMenu(null); })}
+                                {menuDivider()}
+                                {menuItem(<IconViewSE />, t('view_se'), () => { props.handleView?.('se'); setOpenMenu(null); })}
+                                {menuItem(<IconViewSW />, t('view_sw'), () => { props.handleView?.('sw'); setOpenMenu(null); })}
+                                {menuItem(<IconViewNE />, t('view_ne'), () => { props.handleView?.('ne'); setOpenMenu(null); })}
+                                {menuItem(<IconViewNW />, t('view_nw'), () => { props.handleView?.('nw'); setOpenMenu(null); })}
                             </>
                         ))}
                     </div>
@@ -273,36 +201,8 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             />
                             {renderDropdown('displayMode', (
                                 <>
-                                    <div
-                                        style={{
-                                            padding: '6px 16px',
-                                            fontSize: '12px',
-                                            color: props.displayMode === 'solid' ? theme.accent : theme.text,
-                                            cursor: 'pointer',
-                                            backgroundColor: props.displayMode === 'solid' ? theme.itemHover : 'transparent',
-                                            fontWeight: props.displayMode === 'solid' ? '600' : '400'
-                                        }}
-                                        onClick={() => { props.handleDisplayModeChange?.('solid'); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = props.displayMode === 'solid' ? theme.itemHover : 'transparent'}
-                                    >
-                                        {t('dm_solid') || '着色'}
-                                    </div>
-                                    <div
-                                        style={{
-                                            padding: '6px 16px',
-                                            fontSize: '12px',
-                                            color: props.displayMode === 'transparent' ? theme.accent : theme.text,
-                                            cursor: 'pointer',
-                                            backgroundColor: props.displayMode === 'transparent' ? theme.itemHover : 'transparent',
-                                            fontWeight: props.displayMode === 'transparent' ? '600' : '400'
-                                        }}
-                                        onClick={() => { props.handleDisplayModeChange?.('transparent'); setOpenMenu(null); }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = props.displayMode === 'transparent' ? theme.itemHover : 'transparent'}
-                                    >
-                                        {t('dm_transparent') || '透明'}
-                                    </div>
+                                    {menuItem(<IconSolid />, t('dm_solid') || '着色', () => { props.handleDisplayModeChange?.('solid'); setOpenMenu(null); })}
+                                    {menuItem(<IconTransparent />, t('dm_transparent') || '透明', () => { props.handleDisplayModeChange?.('transparent'); setOpenMenu(null); })}
                                 </>
                             ))}
                         </div>
