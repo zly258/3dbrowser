@@ -3856,7 +3856,8 @@ export class SceneManager {
             const mappings = this.optimizedMapping.get(id);
             if (mappings) {
                 mappings.forEach(m => {
-                    m.mesh.setColorAt(m.instanceId, new THREE.Color(0xffaa00));
+                    const highlightColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
+                    m.mesh.setColorAt(m.instanceId, highlightColor);
                     if (m.mesh.instanceColor) {
                         m.mesh.instanceColor.needsUpdate = true;
                     }
