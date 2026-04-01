@@ -1962,7 +1962,7 @@ export const ThreeViewer = ({
     return (
         <ErrorBoundary t={t} theme={theme}>
             <div
-                className={`ui-container ${themeMode} font-${sceneSettings.fontSize || 'medium'}`}
+                className={`ui-container ${themeMode} font-medium`}
                 style={{
                     display: "flex", flexDirection: "column", height: "100%", width: "100%", 
                     backgroundColor: "var(--bg-primary)", color: "var(--text-primary)", 
@@ -2353,6 +2353,7 @@ export const ThreeViewer = ({
                             </div>
                         </div>
                     )}
+                    <div className="ui-divider-vertical ui-divider-vertical-compact" style={{ height: '12px' }} />
                     <button
                         className="ui-statusbar-btn ui-statusbar-btn-compact"
                         onClick={() => handleThemeModeChange(themeMode === 'dark' ? 'light' : 'dark')}

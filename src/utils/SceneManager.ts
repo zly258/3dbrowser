@@ -49,8 +49,6 @@ export interface SceneSettings {
     sunTime?: number;       // 时间 (0-24，12为正午)
     sunEnabled?: boolean;   // 是否启用太阳光模拟
     sunShadow?: boolean;    // 是否显示阴影
-    // 界面字号: 'compact' | 'medium' | 'loose'
-    fontSize?: 'compact' | 'medium' | 'loose';
 }
 
 export interface StructureTreeNode {

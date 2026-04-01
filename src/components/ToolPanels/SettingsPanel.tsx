@@ -128,21 +128,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 onChange={(v) => setShowStats(v)}
               />
             </Row>
-
-            {/* 字体大小 */}
-            <Row label={t("st_font_size")} labelWidth="70px">
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                <SegmentedControl
-                  options={[
-                    { value: 'compact', label: t("st_font_compact") || '紧凑' },
-                    { value: 'medium', label: t("st_font_medium") || '中等' },
-                    { value: 'loose', label: t("st_font_loose") || '宽松' }
-                  ]}
-                  value={settings.fontSize || 'medium'}
-                  onChange={(v) => onUpdate({ fontSize: v as 'compact' | 'medium' | 'loose' })}
-                />
-              </div>
-            </Row>
           </div>
         )}
 

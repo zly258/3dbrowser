@@ -166,6 +166,8 @@ body {
 /* ==================== 浮动面板 ==================== */
 .ui-panel {
   position: absolute;
+  left: 0;
+  top: 0;
   background-color: var(--bg-panel);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
@@ -173,11 +175,13 @@ body {
   flex-direction: column;
   z-index: 200;
   min-width: 220px;
-  min-height: 100px; /* Reduced min height */
+  min-height: 100px;
   overflow: hidden;
   color: var(--text-primary);
   box-shadow: var(--shadow-md);
-  transition: box-shadow 200ms ease, height 200ms ease;
+  /* GPU加速 */
+  transform: translate(0, 0);
+  backface-visibility: hidden;
 }
 
 .ui-panel:hover {
@@ -244,46 +248,47 @@ body {
 .ui-panel-resize-handle {
   position: absolute;
   z-index: 10;
+  background: transparent;
 }
 
 .ui-panel-resize-e {
   top: 0;
-  right: 0;
-  width: 6px;
+  right: -3px;
+  width: 8px;
   height: 100%;
-  cursor: e-resize;
+  cursor: ew-resize;
 }
 
 .ui-panel-resize-w {
   top: 0;
-  left: 0;
-  width: 6px;
+  left: -3px;
+  width: 8px;
   height: 100%;
-  cursor: w-resize;
+  cursor: ew-resize;
 }
 
 .ui-panel-resize-s {
-  bottom: 0;
+  bottom: -3px;
   left: 0;
   width: 100%;
-  height: 6px;
-  cursor: s-resize;
+  height: 8px;
+  cursor: ns-resize;
 }
 
 .ui-panel-resize-se {
-  bottom: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
-  cursor: se-resize;
+  bottom: -3px;
+  right: -3px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
 }
 
 .ui-panel-resize-sw {
-  bottom: 0;
-  left: 0;
-  width: 12px;
-  height: 12px;
-  cursor: sw-resize;
+  bottom: -3px;
+  left: -3px;
+  width: 16px;
+  height: 16px;
+  cursor: nesw-resize;
 }
 
 /* ==================== 按钮基础 ==================== */
@@ -753,43 +758,6 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-shrink: 0;
 }
 
-/* 宽松模式适配 - 解决显示不全问题 */
-.font-loose .ui-toolbar {
-  height: 60px;
-  padding: 0 16px;
-  gap: 12px;
-}
-
-.font-loose .ui-toolbar-btn {
-  height: 52px;
-  min-width: 56px;
-  padding: 6px 12px;
-  gap: 4px;
-}
-
-.font-loose .ui-toolbar-btn svg {
-  width: 22px;
-  height: 22px;
-}
-
-.font-loose .ui-toolbar-btn .text-\[10px\] {
-  font-size: 11px;
-}
-
-/* 中等模式微调 */
-.font-medium .ui-toolbar {
-  height: 52px;
-}
-
-.font-medium .ui-toolbar-btn {
-  height: 44px;
-}
-
-.font-compact .ui-toolbar-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* ==================== 状态栏 ==================== */
 .ui-statusbar {
   display: flex;
@@ -1181,77 +1149,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 /* ==================== 字号等级 ==================== */
-/* 字号等级 - 通过 CSS 变量控制全站字体大小 */
-:root.font-compact {
-  --font-size-base: 11px;
-}
-
-:root.font-medium {
+/* 固定使用中等字号 */
+:root {
   --font-size-base: 12px;
 }
 
-:root.font-loose {
-  --font-size-base: 14px;
-}
-
-/* 深色/浅色模式下的字号 */
-:root.dark.font-compact,
-.dark.font-compact {
-  --font-size-base: 11px;
-}
-
-:root.dark.font-medium,
-.dark.font-medium {
-  --font-size-base: 12px;
-}
-
-:root.dark.font-loose,
-.dark.font-loose {
-  --font-size-base: 14px;
-}
-
-:root.light.font-compact,
-.light.font-compact {
-  --font-size-base: 11px;
-}
-
-:root.light.font-medium,
-.light.font-medium {
-  --font-size-base: 12px;
-}
-
-:root.light.font-loose,
-.light.font-loose {
-  --font-size-base: 14px;
-}
-
-/* 全站字号应用 - 使用 !important 确保覆盖内联样式 */
-body.font-compact,
-body.font-medium,
-body.font-loose,
-#root.font-compact,
-#root.font-medium,
-#root.font-loose,
-.font-compact body,
-.font-medium body,
-.font-loose body,
-.font-compact #root,
-.font-medium #root,
-.font-loose #root {
-  font-size: var(--font-size-base) !important;
-}
-
-/* 所有面板和UI组件的字号 */
-.font-compact,
-.font-medium,
-.font-loose {
-  font-size: var(--font-size-base) !important;
-}
-
-.font-compact *,
-.font-medium *,
-.font-loose * {
-  font-size: inherit !important;
+/* 全站字号应用 */
+.ui-container {
+  font-size: var(--font-size-base);
 }
 
 /* 具体组件的字号 */
@@ -1273,36 +1178,6 @@ body.font-loose,
 .ui-group-title {
   font-size: 14px;
   font-weight: 500;
-}
-
-/* 紧凑模式额外处理 */
-.font-compact .ui-panel-header {
-  height: 24px;
-  font-size: 11px;
-}
-
-.font-compact .ui-toolbar {
-  height: 36px;
-  padding: 4px 8px;
-}
-
-.font-compact .ui-statusbar {
-  height: 22px;
-}
-
-/* 宽松模式额外处理 */
-.font-loose .ui-panel-header {
-  height: 32px;
-  font-size: 14px;
-}
-
-.font-loose .ui-toolbar {
-  height: 48px;
-  padding: 6px 4px;
-}
-
-.font-loose .ui-statusbar {
-  height: 28px;
 }
 
 /* ==================== 风格新增组件 ==================== */
