@@ -115,7 +115,7 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
           />
         </Row>
         <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "4px" }}>
-          <Button variant="ghost" className="ui-properties-action" onClick={onReset}>
+          <Button className="ui-properties-action" onClick={onReset}>
             {t("explode_reset") || "重置"}
           </Button>
         </div>

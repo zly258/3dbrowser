@@ -2025,7 +2025,9 @@ export class SceneManager {
             name: sanitizeDisplayLabel(object.name, object.userData?.name) || fallbackName,
             type: (object as any).isMesh ? 'Mesh' : 'Group',
             children: [],
-            bimId: object.userData?.bimId ? String(object.userData.bimId) : (object.userData?.expressID !== undefined ? String(object.userData.expressID) : undefined),
+            bimId: object.userData?.bimId ? String(object.userData.bimId)
+                : object.userData?.expressID !== undefined ? String(object.userData.expressID)
+                : (object.name ? String(object.name) : undefined),
             userData: { ...object.userData }
         };
         
@@ -2042,9 +2044,6 @@ export class SceneManager {
     /**
      * 构建基于 IFC 图层和空间结构的复合树
      */
-    /**
-     * 构建基于 IFC 图层和空间结构的复合树
-     */
     private buildIFCStructure(object: THREE.Object3D): StructureTreeNode {
         // 递归构建原始空间结构
         const buildSpatialRecursive = (obj: THREE.Object3D): StructureTreeNode => {
@@ -2054,7 +2053,9 @@ export class SceneManager {
                 name: sanitizeDisplayLabel(obj.name, obj.userData?.name) || fallbackName,
                 type: (obj as any).isMesh ? 'Mesh' : 'Group',
                 children: [],
-                bimId: obj.userData?.expressID !== undefined ? String(obj.userData.expressID) : undefined,
+                bimId: obj.userData?.bimId ? String(obj.userData.bimId)
+                    : obj.userData?.expressID !== undefined ? String(obj.userData.expressID)
+                    : (obj.name ? String(obj.name) : undefined),
                 userData: { ...obj.userData }
             };
             
@@ -2719,7 +2720,8 @@ export class SceneManager {
             const bimId = inst.bimId;
             const key = `${originalUuid}::${bimId}`;
             const nodeIds = this.bimIdToNodeIds.get(key);
-            batchIdToUuid.set(instId, nodeIds?.[0] || `bim_${bimId}`);
+            const resolvedUuid = nodeIds?.[0] || bimId || originalUuid;
+            batchIdToUuid.set(instId, resolvedUuid);
             batchIdToBimId.set(instId, bimId);
             batchIdToColor.set(instId, inst.color);
             batchIdToGeometry.set(instId, geometries[inst.geoIdx]);
@@ -2904,9 +2906,22 @@ export class SceneManager {
                     return Object.keys(out).length > 0 ? out : undefined;
                 };
 
+                // 用 mesh name 作为节点 id，重复时加 _N 后缀
+                const usedIds = new Set<string>();
+                const assignId = (rawName: string | undefined, fallback: string): string => {
+                    const base = (rawName && rawName.trim()) ? rawName.trim() : fallback;
+                    if (!usedIds.has(base)) { usedIds.add(base); return base; }
+                    let n = 2;
+                    while (usedIds.has(`${base}_${n}`)) n++;
+                    const id = `${base}_${n}`;
+                    usedIds.add(id);
+                    return id;
+                };
+
                 const srcRoot: any = this.structureRoot;
+                const rootId = assignId(srcRoot?.name, srcRoot?.id ?? "Root");
                 const rootCopy: any = {
-                    id: srcRoot?.id,
+                    id: rootId,
                     name: srcRoot?.name,
                     type: srcRoot?.type,
                     visible: srcRoot?.visible !== false,
@@ -2922,8 +2937,9 @@ export class SceneManager {
                     const { src, dst } = stack.pop()!;
                     const children = Array.isArray(src?.children) ? src.children : [];
                     for (const child of children) {
+                        const childId = assignId(child?.name, child?.id ?? "Node");
                         const childCopy: any = {
-                            id: child?.id,
+                            id: childId,
                             name: child?.name,
                             type: child?.type,
                             visible: child?.visible !== false,
@@ -3061,20 +3077,7 @@ export class SceneManager {
         const manifestBimProperties = (manifest?.bimProperties && typeof manifest.bimProperties === "object")
             ? manifest.bimProperties as Record<string, any>
             : {};
-        const groupedBimProperties = new Map<string, Record<string, any>>();
-        Object.entries(manifestBimProperties).forEach(([key, value]) => {
-            const sepIndex = key.indexOf("::");
-            const owner = sepIndex > 0 ? key.slice(0, sepIndex) : rootId;
-            if (!groupedBimProperties.has(owner)) groupedBimProperties.set(owner, {});
-            groupedBimProperties.get(owner)![key] = value;
-        });
-        if (groupedBimProperties.size > 0) {
-            groupedBimProperties.forEach((props, owner) => {
-                this.nbimPropsByOriginalUuid.set(owner, props);
-            });
-        } else {
-            this.nbimPropsByOriginalUuid.set(rootId, manifestBimProperties);
-        }
+        this.nbimPropsByOriginalUuid.set(rootId, manifestBimProperties);
         const quickStats = manifest.stats || {
             meshes: this.countStructureRenderableNodes(modelRoot),
             faces: 0,
@@ -3260,8 +3263,48 @@ export class SceneManager {
         return this.nodeMap.get(id);
     }
 
+    getBimIdByUuid(uuid: string): string | null {
+        const nodes = this.nodeMap.get(uuid);
+        if (nodes && nodes.length > 0 && nodes[0].bimId) {
+            return nodes[0].bimId;
+        }
+
+        // 在 bimIdToNodeIds 中查找对应关联（以 node.id 关联）
+        for (const [key, nodeIds] of this.bimIdToNodeIds.entries()) {
+            if (nodeIds.includes(uuid)) {
+                const parts = key.split("::");
+                return parts.length > 1 ? parts[1] : null;
+            }
+        }
+
+        return null;
+    }
+
+
+    resolveNodeUuidByBimId(bimId: string): string | null {
+        for (const [key, nodeIds] of this.bimIdToNodeIds.entries()) {
+            if (key.endsWith(`::${bimId}`) && nodeIds.length > 0) {
+                return nodeIds[0];
+            }
+        }
+        return null;
+    }
+
+    resolveSelectionUuid(rawUuid: string): string {
+        if (this.nodeMap.has(rawUuid)) return rawUuid;
+        // 防止包含mesh_前缀时转 bimId 再查找
+        const mapped = this.resolveNodeUuidByBimId(rawUuid);
+        return mapped || rawUuid;
+    }
+
+    private resolveNbimNode(id: string): StructureTreeNode | null {
+        const direct = this.nodeMap.get(id);
+        if (direct && direct.length > 0) return direct[0];
+        return null;
+    }
+
     getNbimProperties(id: string): any | null {
-        const node = this.nodeMap.get(id)?.[0];
+        const node = this.resolveNbimNode(id);
         if (!node || !node.bimId) return null;
         const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
         if (!originalUuid) return null;
@@ -3275,7 +3318,7 @@ export class SceneManager {
     }
 
     getNbimIfcPropertyGroups(id: string, mode: "raw" | "normalized" = "raw"): Record<string, Record<string, string>> | null {
-        const node = this.nodeMap.get(id)?.[0];
+        const node = this.resolveNbimNode(id);
         if (!node || !node.bimId) return null;
         const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
         if (!originalUuid) return null;
@@ -5464,9 +5507,3 @@ function sanitizeFileStem(name: string) {
         .trim();
     return sanitized || "model";
 }
-
-
-
-
-
-
