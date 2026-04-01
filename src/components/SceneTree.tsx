@@ -230,7 +230,6 @@ interface SceneTreeProps {
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
     onDelete?: (obj: any) => void;
-    onFocus?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
     onHide?: (uuid: string) => void;
     onShowAll?: () => void;
@@ -252,7 +251,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onSelect,
     onToggleVisibility,
     onDelete,
-    onFocus,
     onIsolate,
     onHide,
     onShowAll,
@@ -513,11 +511,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const handleLocateFirstMatch = () => {
         if (!firstSearchMatch) return;
         onSelect(firstSearchMatch.uuid, firstSearchMatch.object);
-        if (onLocate) {
-            onLocate(firstSearchMatch.object);
-            return;
-        }
-        onFocus?.(firstSearchMatch.object);
+        onLocate?.(firstSearchMatch.object);
     };
 
     const handleLocateIfcMatch = (matchIndex = 0) => {
@@ -797,7 +791,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
                                 style={{ paddingLeft: 8 }}
                                 onClick={() => onSelect(node.uuid, node.object)}
-                                onDoubleClick={() => (onLocate ? onLocate(node.object) : onFocus?.(node.object))}
+                                onDoubleClick={(e) => {
+                                    if (node.hasChildren) {
+                                        e.stopPropagation();
+                                        toggleNode(node.uuid);
+                                    }
+                                }}
                                 onContextMenu={(e) => {
                                     e.preventDefault();
                                     setContextMenu({ x: e.clientX, y: e.clientY, node });
@@ -895,7 +894,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     items={[
                         {
                             label: t("locate_in_view") || "定位到视图",
-                            onClick: () => onFocus?.(contextMenu.node.object)
+                            onClick: () => onLocate?.(contextMenu.node.object)
                         },
                         { divider: true },
                         {

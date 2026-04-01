@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { TilesRenderer } from "3d-tiles-renderer";
 import { 
     calculateGeometryMemory, 
     collectItems,
@@ -131,8 +130,6 @@ export class SceneManager {
     private nodeMap = new Map<string, StructureTreeNode[]>();
     private bimIdToNodeIds = new Map<string, string[]>();
 
-    // 引用
-    tilesRenderer: TilesRenderer | null = null;
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh; 
     private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
@@ -149,6 +146,8 @@ export class SceneManager {
     private explodeMode: ExplodeMode = 'radial';
     private explodeObjectStates = new Map<string, { object: THREE.Object3D; basePosition: THREE.Vector3; directionLocal: THREE.Vector3; weight: number }>();
     private explodeInstanceStates = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; baseMatrix: THREE.Matrix4; directionLocal: THREE.Vector3; weight: number }>();
+    private readonly explodeScratchUniform = new THREE.Vector3();
+    private readonly explodeScratchMix = new THREE.Vector3();
     raycaster: THREE.Raycaster;
     mouse: THREE.Vector2;
 
@@ -241,7 +240,6 @@ export class SceneManager {
     private _needsBoundsUpdate: boolean = false;
 
     // 回调
-    onTilesUpdate?: () => void;
     onStructureUpdate?: () => void;
     onMeasureUpdate?: (records: MeasurementRecord[]) => void;
     onChunkProgress?: (loaded: number, total: number) => void;
@@ -273,7 +271,7 @@ export class SceneManager {
     private deferredStructureThreshold = 20000;
     private octreeWorkerThreshold = 25000;
     private initialChunkLoadTarget = 18;
-    private warmupChunkBoost = 8;
+    private warmupChunkBoost = 12;
     private chunkWarmupActive = false;
     private chunkResidencyMs = 1800;
     private readonly chunkRuntimeProfiles: Record<ChunkRuntimeProfile['name'], ChunkRuntimeProfile> = {
@@ -368,6 +366,7 @@ export class SceneManager {
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
     private animationFrameId: number | null = null;
+    private animateFramePending = false;
     private disposed = false;
     private interactionShadowDowngraded = false;
     private interactionShadowRestoreAt = 0;
@@ -475,6 +474,7 @@ export class SceneManager {
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
+            this.requestRender();
         });
         this.controls.addEventListener('change', () => {
             const profile = this.getChunkRuntimeProfile();
@@ -483,6 +483,7 @@ export class SceneManager {
             this.postMoveRecoveryUntil = 0;
             this.interactionShadowRestoreAt = 0;
             this.cullingDirty = true;
+            this.requestRender();
         });
         this.controls.addEventListener('end', () => {
             const now = performance.now();
@@ -494,6 +495,7 @@ export class SceneManager {
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
             this.cullingDirty = true;
+            this.requestRender();
         });
         
         // 灯光
@@ -576,6 +578,14 @@ export class SceneManager {
         this.mouse = new THREE.Vector2();
 
         this.animate = this.animate.bind(this);
+        this.requestRender();
+    }
+
+    /** 按需调度一帧：合并多次调用，在相机静止且无后台任务时不常驻 requestAnimationFrame */
+    requestRender() {
+        if (this.disposed) return;
+        if (this.animateFramePending) return;
+        this.animateFramePending = true;
         this.animationFrameId = requestAnimationFrame(this.animate);
     }
     
@@ -798,8 +808,10 @@ export class SceneManager {
 
     animate() {
         if (this.disposed) return;
-        this.animationFrameId = requestAnimationFrame(this.animate);       
-        const frameNow = performance.now();       
+        this.animateFramePending = false;
+        this.animationFrameId = null;
+
+        const frameNow = performance.now();
         if (this.controls) {
             this.controls.update();
         }
@@ -833,16 +845,11 @@ export class SceneManager {
             this.cullingDirty = false;
         }
 
-        if (this.tilesRenderer) {
-            this.camera.updateMatrixWorld();
-            this.tilesRenderer.update();
-        }
-
         const highlightMaterial = this.highlightMesh.material as THREE.MeshBasicMaterial;
         if (highlightMaterial) {
             if (this.locateFocusUuid && this.highlightMesh.visible) {
                 const focusColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
-                const pulseMix = 0.15 + ((Math.sin(frameNow / 180) + 1) * 0.18);
+                const pulseMix = 0.22 + ((Math.sin(frameNow / 125) + 1) * 0.3);
                 highlightMaterial.color.copy(focusColor).lerp(this.highlightPulseColor, pulseMix);
                 highlightMaterial.opacity = 1;
             } else {
@@ -851,7 +858,30 @@ export class SceneManager {
             }
         }
 
+        const selectionLineMat = this.selectionBox.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[] | undefined;
+        if (this.locateFocusUuid && this.selectionBox.visible && selectionLineMat && !Array.isArray(selectionLineMat)) {
+            const baseSel = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
+            const pulseSel = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(frameNow / 125));
+            selectionLineMat.color.copy(baseSel).lerp(this.highlightPulseColor, 0.34 * pulseSel);
+        } else if (selectionLineMat && !Array.isArray(selectionLineMat)) {
+            selectionLineMat.color.set(this.settings.highlightColor || "#ff9f1c");
+        }
+
         this.renderer.render(this.scene, this.camera);
+
+        const chunksIncomplete = this.chunkLoadingEnabled && this.chunks.length > 0 && this.chunkLoadedCount < this.chunks.length;
+        const locatingPulse = !!(this.locateFocusUuid && (this.highlightMesh.visible || this.selectionBox.visible));
+        const keepLoop =
+            this.isCameraMoving ||
+            this.isInPostMoveRecovery(now) ||
+            this.processingChunks.size > 0 ||
+            this.chunkWarmupActive ||
+            chunksIncomplete ||
+            locatingPulse;
+
+        if (keepLoop) {
+            this.requestRender();
+        }
     }
 
     private updateAdaptiveQuality() {
@@ -930,8 +960,8 @@ export class SceneManager {
         const memoryGb = nav.deviceMemory || 8;
 
         this.maxWorkers = Math.max(2, Math.min(8, Math.floor(cpuCount / 2)));
-        this.maxConcurrentChunkLoads = Math.max(16, Math.min(96, cpuCount * 8));
-        this.maxChunkLoadsPerFrame = Math.max(8, Math.min(32, cpuCount * 2));
+        this.maxConcurrentChunkLoads = Math.max(24, Math.min(112, cpuCount * 10));
+        this.maxChunkLoadsPerFrame = Math.max(12, Math.min(40, cpuCount * 3));
         this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
         this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
     }
@@ -2521,6 +2551,7 @@ export class SceneManager {
 
         this.updateSceneBounds();
         if (this.onStructureUpdate) this.onStructureUpdate();
+        this.requestRender();
 
         // 6. 删除关联的测量记录
         this.measureRecords.forEach((record, recordId) => {
@@ -2546,138 +2577,6 @@ export class SceneManager {
 
     async removeModel(uuid: string) {
         return this.removeObject(uuid);
-    }
-
-        addTileset(url: string, onProgress?: (p: number, msg: string) => void) {
-        if (this.tilesRenderer) {
-            this.tilesRenderer.dispose();
-            this.contentGroup.remove(this.tilesRenderer.group);
-        }
-
-        if (onProgress) onProgress(10, "正在初始化 TilesRenderer...");
-
-        const parsedUrl = (() => {
-            try {
-                return new URL(url, typeof window !== "undefined" ? window.location.href : "http://localhost/");
-            } catch {
-                return null;
-            }
-        })();
-        const hashParams = parsedUrl?.hash ? new URLSearchParams(parsedUrl.hash.replace(/^#/, "")) : null;
-        const searchName = parsedUrl?.searchParams.get("displayName") || parsedUrl?.searchParams.get("name") || "";
-        const hashName = hashParams?.get("displayName") || hashParams?.get("name") || "";
-        const fileName = parsedUrl?.pathname
-            ? parsedUrl.pathname.split("/").pop()?.split("?")[0].split("#")[0] || ""
-            : "";
-        const displayName = sanitizeDisplayLabel(searchName, hashName, stripFileExtension(fileName), "3D Tileset") || "3D Tileset";
-
-        const renderer = new TilesRenderer(url);
-        renderer.setCamera(this.camera);
-        renderer.setResolutionFromRenderer(this.camera, this.renderer);
-
-        renderer.errorTarget = 16;
-        renderer.lruCache.maxSize = 500 * 1024 * 1024;
-
-        (renderer.group as any).name = displayName;
-        (renderer.group as any).userData = {
-            ...((renderer.group as any).userData || {}),
-            source: "3DTiles",
-            modelName: displayName
-        };
-
-        let loadedTiles = 0;
-        let hasError = false;
-
-        const buildTilesTree = (tile: any, tilePath = "root"): StructureTreeNode => {
-            const fallbackName = tilePath === "root"
-                ? displayName
-                : `Tile_${tile.level ?? 0}_${tile.x || 0}_${tile.y || 0}`;
-            const contentUri = typeof tile?.content?.uri === "string" ? tile.content.uri : "";
-            const name = sanitizeDisplayLabel(
-                tile?.extras?.name,
-                tile?.content?.name,
-                contentUri ? stripFileExtension(contentUri.split("/").pop()?.split("?")[0].split("#")[0] || "") : "",
-                fallbackName
-            ) || fallbackName;
-            const node: StructureTreeNode = {
-                id: tile?.content?.uuid || `${(renderer.group as any).uuid}:${tilePath}`,
-                name,
-                type: 'Group',
-                children: [],
-                userData: {
-                    source: "3DTiles",
-                    contentUri,
-                    tilesBoundingVolumeBox: Array.isArray(tile?.boundingVolume?.box) ? [...tile.boundingVolume.box] : undefined
-                }
-            };
-
-            if (Array.isArray(tile?.children) && tile.children.length > 0) {
-                node.children = tile.children.map((child: any, index: number) => buildTilesTree(child, `${tilePath}.${index}`));
-            }
-
-            this.nodeMap.set(node.id, [node]);
-            return node;
-        };
-
-        const tilesNode: StructureTreeNode = {
-            id: (renderer.group as any).uuid,
-            name: displayName,
-            type: 'Group',
-            children: [],
-            userData: {
-                source: "3DTiles",
-                modelName: displayName
-            }
-        };
-
-        const refreshTilesStructure = () => {
-            const tilesetRoot = (renderer as any).tileset?.root;
-            tilesNode.name = displayName;
-            tilesNode.children = tilesetRoot ? [buildTilesTree(tilesetRoot)] : [];
-            this.nodeMap.set(tilesNode.id, [tilesNode]);
-            if (this.onTilesUpdate) this.onTilesUpdate();
-        };
-
-        (renderer as any).onLoadTileSet = () => {
-            refreshTilesStructure();
-            if (onProgress) onProgress(50, "Tileset 结构已加载");
-        };
-
-        (renderer as any).onLoadModel = () => {
-            loadedTiles++;
-            if (onProgress && !hasError) {
-                onProgress(Math.min(99, 50 + loadedTiles), `已加载瓦片: ${loadedTiles}`);
-            }
-        };
-
-        setTimeout(() => {
-            if (!(renderer as any).tileset && !hasError) {
-                hasError = true;
-                if (onProgress) onProgress(0, "加载失败: 无法获取 Tileset 配置文件，请检查网络或路径。");
-            }
-        }, 10000);
-
-        (renderer as any).onLoadTile = (_tile: any) => {
-            if (this.onTilesUpdate) this.onTilesUpdate();
-        };
-        (renderer as any).onDisposeTile = (_tile: any) => {
-            if (this.onTilesUpdate) this.onTilesUpdate();
-        };
-
-        this.contentGroup.add(renderer.group);
-        this.tilesRenderer = renderer;
-
-        (renderer.group as any).position.copy(this.globalOffset.clone().negate());
-        (renderer.group as any).name = displayName;
-
-        if (!this.structureRoot.children) this.structureRoot.children = [];
-        this.structureRoot.children.push(tilesNode);
-        this.nodeMap.set(tilesNode.id, [tilesNode]);
-
-        this.updateSceneBounds();
-        this.updateSettings(this.settings);
-
-        return renderer.group;
     }
 
     // --- NBIM 导入/导出功能 ---
@@ -3076,7 +2975,7 @@ export class SceneManager {
             const names: string[] = [];
             this.contentGroup.children.forEach((child) => {
                 if (child.userData?.isOptimizedGroup) return;
-                if (child.name === "TilesRenderer" || child.name.startsWith("optimized_")) return;
+                if (child.name.startsWith("optimized_")) return;
                 const rawName =
                     (typeof child.userData?.modelName === "string" ? child.userData.modelName : "") ||
                     (child.children?.[0]?.name || "") ||
@@ -3264,7 +3163,7 @@ export class SceneManager {
 
         this.fitView(true);
         this.chunkWarmupActive = true;
-        this.initialChunkLoadTarget = this.chunks.length > 200 ? 24 : this.chunks.length > 80 ? 16 : 10;
+        this.initialChunkLoadTarget = this.chunks.length > 200 ? 44 : this.chunks.length > 80 ? 30 : 16;
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
         this.checkCullingAndLoad();
         if (!manifest.stats && manifest.chunks?.length) {
@@ -3309,23 +3208,17 @@ export class SceneManager {
                 this.contentGroup.remove(this.contentGroup.children[0]);
             }
 
-            // 2. 清理 3D Tiles
-            if (this.tilesRenderer) {
-                this.tilesRenderer.dispose();
-                this.tilesRenderer = null;
-            }
-
-            // 3. 清理辅助组
+            // 2. 清理辅助组
             this.ghostGroup.children.forEach(disposeObject);
             this.ghostGroup.clear();
             
             this.selectionBox.visible = false;
             this.highlightMesh.visible = false;
             
-            // 4. 清理测量记录
+            // 3. 清理测量记录
             this.clearAllMeasurements();
 
-            // 5. 清理状态数据
+            // 4. 清理状态数据
             this.optimizedMapping.clear();
             this.sceneBounds.makeEmpty();
             this.precomputedBounds.makeEmpty();
@@ -3356,6 +3249,7 @@ export class SceneManager {
             this.globalOffset.set(0, 0, 0);
 
             console.log("场景已清空");
+            this.requestRender();
         } catch (error) {
             console.error("清空场景失败:", error);
             throw error;
@@ -3422,6 +3316,7 @@ export class SceneManager {
 
         this.updateSceneBounds();
         this.refreshExplodeState();
+        this.requestRender();
     }
 
     hideObjects(uuids: string[]) {
@@ -3491,6 +3386,7 @@ export class SceneManager {
         this.interactableListValid = false;
         this.updateSceneBounds();
         this.refreshExplodeState();
+        this.requestRender();
     }
 
     setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
@@ -3591,6 +3487,7 @@ export class SceneManager {
 
         this.interactableListValid = false;
         this.updateSceneBounds();
+        this.requestRender();
     }
 
     highlightObject(uuid: string | null) {
@@ -3618,6 +3515,21 @@ export class SceneManager {
         return direction.normalize();
     }
 
+    /** 由 UUID 导出的稳定单位向量，近似均匀分布于球面（与径向方向混合后爆炸更散、更匀） */
+    private explodeStableUnitDirection(seed: string, target: THREE.Vector3) {
+        let h = 2166136261;
+        for (let i = 0; i < seed.length; i++) {
+            h ^= seed.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        const u1 = (h >>> 0) / 4294967296;
+        const u2 = (Math.imul(h ^ 0x9e3779b9, 2246822519) >>> 0) / 4294967296;
+        const phi = 2 * Math.PI * u1;
+        const z = 1 - 2 * u2;
+        const r = Math.sqrt(Math.max(0, 1 - z * z));
+        target.set(Math.cos(phi) * r, Math.sin(phi) * r, z).normalize();
+    }
+
     private captureExplodeSnapshot() {
         this.explodeObjectStates.clear();
         this.explodeInstanceStates.clear();
@@ -3641,9 +3553,19 @@ export class SceneManager {
             objectBox.setFromObject(obj);
             if (objectBox.isEmpty()) return;
             objectCenter.copy(objectBox.getCenter(new THREE.Vector3()));
-            const vectorFromCenter = objectCenter.sub(this.explodeCenter);
-            const weight = THREE.MathUtils.clamp(vectorFromCenter.length() / radius, 0.18, 1.25);
-            const directionWorld = this.getExplodeWorldDirection(vectorFromCenter);
+            const offset = objectCenter.sub(this.explodeCenter);
+            const distN = offset.length() / radius;
+            const weight = 0.14 + 0.86 * Math.pow(THREE.MathUtils.clamp(distN, 0, 2.5) / 2.5, 0.38);
+
+            let directionWorld: THREE.Vector3;
+            if (this.explodeMode === 'radial') {
+                const radial = this.getExplodeWorldDirection(offset);
+                this.explodeStableUnitDirection(obj.uuid, this.explodeScratchUniform);
+                const mix = Math.pow(1 - Math.min(distN / 1.08, 1), 1.15);
+                directionWorld = this.explodeScratchMix.copy(radial).multiplyScalar(1 - mix).addScaledVector(this.explodeScratchUniform, mix).normalize();
+            } else {
+                directionWorld = this.getExplodeWorldDirection(offset);
+            }
             const directionLocal = this.toLocalDirection(directionWorld, obj.parent?.matrixWorld || new THREE.Matrix4());
             this.explodeObjectStates.set(obj.uuid, {
                 object: obj,
@@ -3670,9 +3592,19 @@ export class SceneManager {
                 instanceBox.copy(geometry.boundingBox).applyMatrix4(worldMatrix);
                 if (instanceBox.isEmpty()) return;
                 objectCenter.copy(instanceBox.getCenter(new THREE.Vector3()));
-                const vectorFromCenter = objectCenter.sub(this.explodeCenter);
-                const weight = THREE.MathUtils.clamp(vectorFromCenter.length() / radius, 0.18, 1.25);
-                const directionWorld = this.getExplodeWorldDirection(vectorFromCenter);
+                const offset = objectCenter.sub(this.explodeCenter);
+                const distN = offset.length() / radius;
+                const weight = 0.14 + 0.86 * Math.pow(THREE.MathUtils.clamp(distN, 0, 2.5) / 2.5, 0.38);
+
+                let directionWorld: THREE.Vector3;
+                if (this.explodeMode === 'radial') {
+                    const radial = this.getExplodeWorldDirection(offset);
+                    this.explodeStableUnitDirection(key, this.explodeScratchUniform);
+                    const mix = Math.pow(1 - Math.min(distN / 1.08, 1), 1.15);
+                    directionWorld = this.explodeScratchMix.copy(radial).multiplyScalar(1 - mix).addScaledVector(this.explodeScratchUniform, mix).normalize();
+                } else {
+                    directionWorld = this.getExplodeWorldDirection(offset);
+                }
                 this.explodeInstanceStates.set(key, {
                     mesh: mapping.mesh,
                     instanceId: mapping.instanceId,
@@ -3687,7 +3619,7 @@ export class SceneManager {
     private applyExplodeState() {
         const bounds = this.computeTotalBounds(true, true);
         const size = bounds.isEmpty() ? new THREE.Vector3(100, 100, 100) : bounds.getSize(new THREE.Vector3());
-        const magnitude = Math.max(size.length() * 0.08 * (this.explodeStrength / 100), 0);
+        const magnitude = Math.max(size.length() * 0.125 * (this.explodeStrength / 100), 0);
 
         this.explodeObjectStates.forEach((state) => {
             state.object.position.copy(state.basePosition).addScaledVector(state.directionLocal, magnitude * state.weight);
@@ -3697,17 +3629,19 @@ export class SceneManager {
         const translation = new THREE.Vector3();
         const quaternion = new THREE.Quaternion();
         const scale = new THREE.Vector3();
+        const matrixWork = new THREE.Matrix4();
         this.explodeInstanceStates.forEach((state) => {
-            const matrix = state.baseMatrix.clone();
-            matrix.decompose(translation, quaternion, scale);
+            matrixWork.copy(state.baseMatrix);
+            matrixWork.decompose(translation, quaternion, scale);
             translation.addScaledVector(state.directionLocal, magnitude * state.weight);
-            matrix.compose(translation, quaternion, scale);
-            state.mesh.setMatrixAt(state.instanceId, matrix);
+            matrixWork.compose(translation, quaternion, scale);
+            state.mesh.setMatrixAt(state.instanceId, matrixWork);
             if (state.mesh.instanceMatrix) state.mesh.instanceMatrix.needsUpdate = true;
         });
 
         this.interactableListValid = false;
         this.updateSceneBounds();
+        this.requestRender();
     }
 
     private restoreExplodeSnapshot() {
@@ -3721,6 +3655,7 @@ export class SceneManager {
         });
         this.interactableListValid = false;
         this.updateSceneBounds();
+        this.requestRender();
     }
 
     private refreshExplodeState() {
@@ -3818,8 +3753,9 @@ export class SceneManager {
         const resultSet = new Set(normalized);
         this.locateResultSet = resultSet;
         this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : normalized[0];
+        const focusKey = this.locateFocusUuid;
 
-        const dimmedColor = new THREE.Color("#d6d9df");
+        const dimmedColor = new THREE.Color("#cfd4dc");
         const accentColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
         this.contentGroup.traverse((child) => {
             const mesh = child as THREE.Mesh;
@@ -3829,6 +3765,7 @@ export class SceneManager {
             }
             const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             const isMatched = resultSet.has(child.uuid);
+            const isFocus = isMatched && focusKey !== null && child.uuid === focusKey;
             const nextMaterials = sourceMaterials.map((material) => {
                 if (!material) return material;
                 const cloned = material.clone() as THREE.Material & {
@@ -3846,18 +3783,23 @@ export class SceneManager {
                 if ("color" in cloned && cloned.color) {
                     const baseColor = cloned.color.clone();
                     if (isMatched) {
-                        cloned.color.copy(baseColor.lerp(accentColor, 0.82));
+                        const tint = isFocus ? 0.93 : 0.76;
+                        cloned.color.copy(baseColor.lerp(accentColor, tint));
                     } else {
                         cloned.transparent = true;
-                        cloned.opacity = 0.14;
+                        cloned.opacity = 0.12;
                         cloned.depthWrite = false;
-                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.72));
+                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.78));
                     }
                 }
                 if ("emissive" in cloned && cloned.emissive) {
-                    cloned.emissive.copy(isMatched ? accentColor.clone().multiplyScalar(0.16) : new THREE.Color(0x000000));
+                    if (isMatched) {
+                        cloned.emissive.copy(accentColor.clone().multiplyScalar(isFocus ? 0.4 : 0.12));
+                    } else {
+                        cloned.emissive.set(0x000000);
+                    }
                 }
-                if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.88, cloned.roughness ?? 0.88);
+                if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
                 if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
                 cloned.needsUpdate = true;
                 return cloned;
@@ -3867,6 +3809,7 @@ export class SceneManager {
 
         this.optimizedMapping.forEach((mappings, originalUuid) => {
             const isMatched = resultSet.has(originalUuid);
+            const isFocus = isMatched && focusKey !== null && originalUuid === focusKey;
             mappings.forEach((mapping) => {
                 const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
                 this.locateDimmedInstances.set(key, {
@@ -3875,15 +3818,15 @@ export class SceneManager {
                     originalColor: mapping.originalColor
                 });
                 const sourceColor = new THREE.Color(mapping.originalColor);
-                mapping.mesh.setColorAt(
-                    mapping.instanceId,
-                    isMatched ? sourceColor.lerp(accentColor, 0.82) : sourceColor.lerp(dimmedColor, 0.82)
-                );
+                const tint = isFocus ? 0.93 : isMatched ? 0.76 : 0.82;
+                const target = isMatched ? accentColor : dimmedColor;
+                mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(target, tint));
                 if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
             });
         });
 
         this.updateLocateFocusHighlight(this.locateFocusUuid);
+        this.requestRender();
     }
 
     setLocateFocus(uuid: string | null) {
@@ -3921,11 +3864,14 @@ export class SceneManager {
             }
         };
 
-        for (const prev of this.highlightedUuids) {
-            if (!target.has(prev)) restoreOne(prev);
-        }
-        for (const next of target) {
-            if (!this.highlightedUuids.has(next)) applyOne(next);
+        const preserveLocateTint = this.locateResultSet.size > 0;
+        if (!preserveLocateTint) {
+            for (const prev of this.highlightedUuids) {
+                if (!target.has(prev)) restoreOne(prev);
+            }
+            for (const next of target) {
+                if (!this.highlightedUuids.has(next)) applyOne(next);
+            }
         }
 
         this.highlightedUuids = target;
@@ -3933,7 +3879,10 @@ export class SceneManager {
         this.highlightMesh.visible = false;
         this.lastSelectedUuid = uuids.length > 0 ? uuids[uuids.length - 1] : null;
 
-        if (target.size === 0) return;
+        if (target.size === 0) {
+            this.requestRender();
+            return;
+        }
 
         const union = new THREE.Box3();
         const tmpBox = new THREE.Box3();
@@ -3969,21 +3918,33 @@ export class SceneManager {
 
         if (!union.isEmpty()) {
             this.selectionBox.box.copy(union);
-            this.selectionBox.visible = !!this.settings.highlightShowBox;
+            const locatingFocus = !!(this.locateFocusUuid && target.has(this.locateFocusUuid));
+            if (locatingFocus) {
+                const pad = Math.max(union.getSize(new THREE.Vector3()).length() * 0.048, 0.22);
+                this.selectionBox.box.expandByScalar(pad);
+            }
+            this.selectionBox.visible = locatingFocus || !!this.settings.highlightShowBox;
         }
 
         const focusId = this.lastSelectedUuid;
-        if (!focusId) return;
+        if (!focusId) {
+            this.requestRender();
+            return;
+        }
 
         const focusMappings = this.optimizedMapping.get(focusId);
         if (focusMappings && focusMappings.length > 0) {
             // 优化网格使用实例着色进行高亮，避免与外壳高亮叠加产生“双高亮”视觉。
             this.highlightMesh.visible = false;
+            this.requestRender();
             return;
         }
 
         const focusObj = this.contentGroup.getObjectByProperty("uuid", focusId);
-        if (!focusObj) return;
+        if (!focusObj) {
+            this.requestRender();
+            return;
+        }
         if ((focusObj as THREE.Mesh).isMesh) {
             focusObj.updateMatrixWorld(true);
             this.highlightMesh.geometry = (focusObj as THREE.Mesh).geometry;
@@ -3999,6 +3960,7 @@ export class SceneManager {
             this.highlightMesh.scale.copy(worldScale);
             this.highlightMesh.visible = true;
         }
+        this.requestRender();
     }
 
     pick(clientX: number, clientY: number): { object: THREE.Object3D, intersect: THREE.Intersection } | null {
@@ -4128,31 +4090,15 @@ export class SceneManager {
             // 如果只计算可见物，跳过隐藏节点
             if (onlyVisible && !obj.visible) return;
 
-            // 1. 处理 3D Tileset (特殊对象，通常作为根组处理)
-            // 如果已经处理过 Tileset，我们可以跳过它的子节点以避免重复计算或精度问题
-            if (obj.name === "3D Tileset" && this.tilesRenderer) {
-                const tilesBox = new THREE.Box3();
-                if ((this.tilesRenderer as any).getBounds) {
-                    (this.tilesRenderer as any).getBounds(tilesBox);
-                    if (!tilesBox.isEmpty() && this.globalOffset.length() > 0) {
-                        if (Math.abs(tilesBox.min.x) > 100000 || Math.abs(tilesBox.min.y) > 100000) {
-                            tilesBox.translate(this.globalOffset.clone().negate());
-                        }
-                    }
-                    if (!tilesBox.isEmpty()) totalBox.union(tilesBox);
-                }
-                // 跳过子节点遍历，因为 getBounds 已经包含了全部
-                obj.traverse(child => { if (child !== obj) (child as any)._skipTraverse = true; });
-            }
-            // 2. 处理普通 Mesh (如果不是 Tileset 的子节点)
-            else if ((obj as THREE.Mesh).isMesh && !(obj as any)._skipTraverse) {
+            // 1. 处理普通 Mesh
+            if ((obj as THREE.Mesh).isMesh && !(obj as any)._skipTraverse) {
                 const mesh = obj as THREE.Mesh;
                 if (mesh.geometry) {
                     const box = new THREE.Box3().setFromObject(mesh);
                     if (!box.isEmpty()) totalBox.union(box);
                 }
             }
-            // 3. 处理 BatchedMesh
+            // 2. 处理 BatchedMesh
             else if ((obj as any).isBatchedMesh && !(obj as any)._skipTraverse) {
                 const bm = obj as any;
                 if (bm.computeBoundingBox) {
@@ -4349,6 +4295,7 @@ export class SceneManager {
                 this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
+                this.renderer.render(this.scene, this.camera);
 
                 if (progress < 1) {
                     requestAnimationFrame(animate);
@@ -4413,6 +4360,7 @@ export class SceneManager {
                 this.camera.zoom = startZoom + (targetZoom - startZoom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
+                this.renderer.render(this.scene, this.camera);
 
                 if (progress < 1) {
                     requestAnimationFrame(animate);
@@ -4496,6 +4444,7 @@ export class SceneManager {
         
         this.camera.updateProjectionMatrix();
         this.controls.update();
+        this.requestRender();
     }
 
     // --- 测量定位逻辑 ---
@@ -4532,6 +4481,7 @@ export class SceneManager {
         this.camera.zoom = Math.min(targetZoom, 100.0); // 允许更大缩放
         this.camera.updateProjectionMatrix();
         this.controls.update();
+        this.requestRender();
     }
 
         // --- 测量逻辑 ---
@@ -4564,6 +4514,7 @@ export class SceneManager {
         }
         
         this.updateMeasurePreview(); // 统一调用预览更新
+        this.requestRender();
         return null;
     }
 
@@ -4616,6 +4567,7 @@ export class SceneManager {
             this.tempMarker.visible = false;
             if(this.previewLine) this.previewLine.visible = false;
         }
+        this.requestRender();
     }
 
     finalizeMeasurement() {
@@ -4682,6 +4634,7 @@ export class SceneManager {
             this.onMeasureUpdate(Array.from(this.measureRecords.values()));
         }
 
+        this.requestRender();
         return { id, type: typeStr, val: valStr };
     }
 
@@ -5303,6 +5256,7 @@ export class SceneManager {
         if (!enabled) {
             this.clipPlaneHelpers.forEach(h => h.visible = false);
         }
+        this.requestRender();
     }
 
     updateClippingPlanes(bounds: THREE.Box3, values: {x:number[], y:number[], z:number[]}, active: {x:boolean, y:boolean, z:boolean}) {
@@ -5365,6 +5319,7 @@ export class SceneManager {
             this.clipPlaneHelpers[4].visible = false;
             this.clipPlaneHelpers[5].visible = false;
         }
+        this.requestRender();
     }
 
     private updatePlaneHelper(idx: number, normal: THREE.Vector3, dist: number, center: THREE.Vector3, size: number, isEnabled: boolean) {
@@ -5456,6 +5411,7 @@ export class SceneManager {
     dispose() {
         this.disposed = true;
         this.cancelDeferredStructureBuild();
+        this.animateFramePending = false;
         if (this.animationFrameId !== null) {
             cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = null;
@@ -5493,7 +5449,6 @@ export class SceneManager {
         this.dotTexture.dispose();
         this.sharedMaterial.dispose();
         this.renderer.dispose();
-        if (this.tilesRenderer) this.tilesRenderer.dispose();
     }
 }
 

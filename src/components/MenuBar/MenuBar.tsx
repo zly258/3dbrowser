@@ -9,7 +9,6 @@ interface MenuBarProps {
     setThemeType?: (type: 'dark' | 'light') => void;
     handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    handleOpenFolder?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleOpenUrl?: () => void;
     handleView?: (view: string) => void;
     handleClear?: () => void;
@@ -37,12 +36,11 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     const isHidden = (id: string) => (hiddenMenus || []).includes(id);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const folderInputRef = React.useRef<HTMLInputElement>(null);
     const batchConvertInputRef = React.useRef<HTMLInputElement>(null);
 
     return (
         <div className="ui-toolbar" style={{ height: '26px', padding: '0 8px' }}>
-            {/* Hidden inputs for file/folder opening */}
+            {/* Hidden inputs for file opening */}
             <input
                 type="file"
                 ref={fileInputRef}
@@ -59,21 +57,11 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
                 accept=".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleBatchConvert}
             />
-            <input
-                type="file"
-                ref={folderInputRef}
-                style={{ display: 'none' }}
-                {...{ webkitdirectory: "", directory: "" } as any}
-                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
-                onChange={props.handleOpenFolder}
-            />
-
             {!isHidden('file') && (
                 <ClassicMenuItem label={t('menu_file')} >
                     {(close) => (
                         <>
                             {!isHidden('open_file') && <ClassicSubItem label={t('menu_open_file')} onClick={() => { fileInputRef.current?.click(); close(); }} />}
-                            {!isHidden('open_folder') && <ClassicSubItem label={t('menu_open_folder')} onClick={() => { folderInputRef.current?.click(); close(); }} />}
                             {!isHidden('open_url') && <ClassicSubItem label={t('menu_open_url')} onClick={() => { props.handleOpenUrl?.(); close(); }} />}
                             {!isHidden('batch_convert') && (
                                 <>

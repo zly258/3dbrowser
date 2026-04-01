@@ -20,7 +20,7 @@ export default defineConfig(() => {
       })],
       assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.mtl', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.lmb', '**/*.lmbz', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges', '**/*.hdr', '**/*.exr', '**/*.ktx2'],
       optimizeDeps: {
-        exclude: ['web-ifc', '3d-tiles-renderer', 'occt-import-js']
+        exclude: ['web-ifc', 'occt-import-js']
       },
       build: {
         target: 'esnext',
@@ -45,7 +45,6 @@ export default defineConfig(() => {
             'react-dom/client',
             'react/jsx-runtime',
             'three',
-            '3d-tiles-renderer',
             'occt-import-js',
             'web-ifc'
           ],
@@ -70,7 +69,6 @@ export default defineConfig(() => {
                 './src/utils/exportLMB.ts',
                 './src/utils/exportGLB.ts',
                 './src/utils/converter.ts',
-                './src/utils/threeDTiles.ts',
                 './src/utils/octree.ts'
               ]
             },

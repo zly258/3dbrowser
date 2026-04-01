@@ -2,12 +2,11 @@
   "name": "@zhangly1403/3dbrowser",
   "private": false,
   "version": "1.5.7",
-  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, 3D Tiles, GLB, and more.",
+  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, GLB, and more.",
   "keywords": [
     "threejs",
     "bim",
     "ifc",
-    "3dtiles",
     "3d-viewer",
     "browser"
   ],
@@ -37,7 +36,6 @@
     "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose"
   },
   "dependencies": {
-    "3d-tiles-renderer": "0.3.31",
     "occt-import-js": "^0.0.23",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
