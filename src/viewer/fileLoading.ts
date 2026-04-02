@@ -1,6 +1,7 @@
 import { loadModelFiles } from "../loader/LoaderUtils";
 import { SceneSettings, SceneManager } from "../utils/SceneManager";
 import { TFunc } from "../theme/Locales";
+import type { LoaderRuntimeHints } from "../loader/LoaderUtils";
 
 export function cleanLoadingStatus(message: string) {
     if (!message) return "";
@@ -23,6 +24,8 @@ interface LoadSceneItemsArgs {
     libPath: string;
     t: TFunc;
     onProgress: (progress: number, message?: string) => void;
+    runtimeHints?: LoaderRuntimeHints;
+    isStale?: () => boolean;
 }
 
 export async function loadSceneItems({
@@ -31,7 +34,9 @@ export async function loadSceneItems({
     sceneSettings,
     libPath,
     t,
-    onProgress
+    onProgress,
+    runtimeHints = {},
+    isStale
 }: LoadSceneItemsArgs) {
     if (!items.length) return;
 
@@ -48,6 +53,7 @@ export async function loadSceneItems({
     }
 
     for (const item of nbimItems) {
+        if (isStale?.()) return;
         if (typeof item === "string") {
             const response = await fetch(item);
             if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
@@ -71,11 +77,16 @@ export async function loadSceneItems({
         onProgress,
         t,
         sceneSettings,
-        libPath
+        libPath,
+        {
+            ...runtimeHints,
+            isStale
+        }
     );
 
     const totalObjects = Math.max(loadedObjects.length, 1);
     for (let index = 0; index < loadedObjects.length; index++) {
+        if (isStale?.()) return;
         const obj = loadedObjects[index];
         const objectBase = 92 + Math.round((index / totalObjects) * 8);
         await manager.addModel(obj, (p: number, msg: string) => {

@@ -31,6 +31,8 @@ export function useFileLoadingFlow({
 }: FileLoadingFlowOptions) {
     const loadItemsIntoScene = useCallback(async (items: (File | string)[]) => {
         if (!items.length || !managerRef.current) return;
+        const generation = managerRef.current.beginLoadGeneration?.() ?? 0;
+        const runtimeHints = (managerRef.current as any).getChunkOptions?.() || {};
         await loadSceneItems({
             items,
             manager: managerRef.current,
@@ -40,7 +42,9 @@ export function useFileLoadingFlow({
             onProgress: (p, msg) => {
                 setProgress(p);
                 if (msg) setStatus(cleanLoadingStatus(msg));
-            }
+            },
+            runtimeHints,
+            isStale: () => !(managerRef.current?.isLoadGenerationCurrent?.(generation))
         });
     }, [libPath, managerRef, sceneSettings, setProgress, setStatus, t]);
 
