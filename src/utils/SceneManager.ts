@@ -1177,6 +1177,12 @@ export class SceneManager {
         return `${chunk.nbimFileId || "local"}:${chunk.byteOffset || 0}:${chunk.byteLength || 0}`;
     }
 
+    private hasValidChunkBinaryRange(chunk: any) {
+        return Number.isFinite(chunk?.byteOffset)
+            && Number.isFinite(chunk?.byteLength)
+            && chunk.byteLength > 0;
+    }
+
     private touchChunkReadCache(cacheKey: string) {
         this.chunkReadCacheOrder = this.chunkReadCacheOrder.filter((key) => key !== cacheKey);
         this.chunkReadCacheOrder.push(cacheKey);
@@ -1229,7 +1235,7 @@ export class SceneManager {
             if (pivotIndex < 0) continue;
             const nextChunk = this.chunks[pivotIndex + 1];
             if (!nextChunk || nextChunk.loaded || this.processingChunks.has(nextChunk.id)) continue;
-            if (!nextChunk.nbimFileId || !nextChunk.byteOffset || !nextChunk.byteLength) continue;
+            if (!nextChunk.nbimFileId || !this.hasValidChunkBinaryRange(nextChunk)) continue;
             const cacheKey = this.getChunkReadCacheKey(nextChunk);
             if (this.chunkReadCache.has(cacheKey)) continue;
             toPrefetch.push(nextChunk.id);
@@ -1249,7 +1255,7 @@ export class SceneManager {
             if (!chunkId) break;
             this.prefetchQueueSet.delete(chunkId);
             const chunk = this.getChunkById(chunkId);
-            if (!chunk || !chunk.nbimFileId || !chunk.byteOffset || !chunk.byteLength) continue;
+            if (!chunk || !chunk.nbimFileId || !this.hasValidChunkBinaryRange(chunk)) continue;
             const cacheKey = this.getChunkReadCacheKey(chunk);
             if (this.chunkReadCache.has(cacheKey)) continue;
 
@@ -2089,7 +2095,7 @@ export class SceneManager {
                     batchSize: 1200,
                     yieldControl: () => this.yieldToMainThread()
                 });
-            } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
+            } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && this.hasValidChunkBinaryRange(chunk)) {
                 // 来自 loadNbim 的远程分块
                 const buffer = await this.readChunkBuffer(chunk);
                 const meta = this.nbimMeta.get(chunk.nbimFileId);
@@ -2116,7 +2122,7 @@ export class SceneManager {
                             const next = this.chunks[chunkIndex + i];
                             if (!next) break;
                             if (next.loaded || this.processingChunks.has(next.id)) continue;
-                            if (!next.nbimFileId || !next.byteOffset || !next.byteLength) continue;
+                            if (!next.nbimFileId || !this.hasValidChunkBinaryRange(next)) continue;
                             candidates.push(next.id);
                         }
                         this.enqueueChunkPrefetch(candidates);
@@ -3114,7 +3120,7 @@ export class SceneManager {
             let buffer: ArrayBuffer;
             if (chunk.node) {
                 buffer = this.generateChunkBinaryV8(chunk.node.items, bimIdToIndex);
-            } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
+            } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && this.hasValidChunkBinaryRange(chunk)) {
                 const file = this.nbimFiles.get(chunk.nbimFileId)!;
                 const raw = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
                 const meta = this.nbimMeta.get(chunk.nbimFileId);

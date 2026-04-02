@@ -368,6 +368,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     useEffect(() => {
         if (!selectedUuid) return;
+        if (selectionSourceRef.current !== "tree") return;
         setTreeRoot((prev) => {
             const expandSelectedPath = (nodes: TreeNode[]): [TreeNode[], boolean] => {
                 let found = false;
