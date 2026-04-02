@@ -101,7 +101,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
             <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.8 }}>
-                {React.cloneElement(icon as React.ReactElement, { size: 16 })}
+                {icon}
             </span>
             {label}
         </div>

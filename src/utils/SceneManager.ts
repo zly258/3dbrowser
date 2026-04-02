@@ -9,6 +9,21 @@ import {
     createBatchedMeshFromItems,
     createBatchedMeshFromItemsAsync
 } from "./octree";
+import { adaptChunkRuntime, deriveInitialRuntimeFromHardware } from "./scene/chunkRuntime";
+import { debugLog, debugWarn } from "./scene/debugLogger";
+import { stableExplodeDirection } from "./scene/explode";
+import { readNbimHeader, readNbimManifest, type NbimManifest } from "./scene/nbimIO";
+import { estimateTextureMemoryMb } from "./scene/stats";
+import {
+    type PerformancePreset,
+    type SceneChunkOptions,
+    type SceneManagerOptions,
+    resolveSceneChunkOptions
+} from "./scene/types";
+
+const CHUNK_PROGRESS_REPORT_INTERVAL_MS = 48;
+const NBIM_CHUNK_REGISTRATION_BATCH = 220;
+const GHOST_VISIBLE_FIRST_BATCH = 180;
 
 export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
 
@@ -242,6 +257,7 @@ export class SceneManager {
     onChunkProgress?: (loaded: number, total: number) => void;
 
     private lastReportedProgress = { loaded: -1, total: -1 };
+    private lastChunkProgressReportAt = 0;
     private chunkLoadedCount: number = 0;
     private chunkPadding = 0.2;
     private maxConcurrentChunkLoads = 128; // 提高并发
@@ -253,6 +269,12 @@ export class SceneManager {
     private _lastCullingTime: number = 0;
     private chunkMeshCache = new Map<string, THREE.BatchedMesh>();
     private chunkCacheOrder: string[] = [];
+    private readonly chunkReadCache = new Map<string, ArrayBuffer>();
+    private chunkReadCacheOrder: string[] = [];
+    private prefetchQueue: string[] = [];
+    private prefetchInFlight = new Set<string>();
+    private prefetchRoundRobinCursor = 0;
+    private prefetchPaused = false;
     private originalStats = { meshes: 0, faces: 0, memory: 0 };
     private originalStatsByModel = new Map<string, { meshes: number; faces: number; memory: number }>();
 
@@ -261,6 +283,8 @@ export class SceneManager {
     private workerQueue: { resolve: Function, reject: Function, data: any, transferables: any[] }[] = [];
     private activeWorkerCount = 0;
     private maxWorkers = 4; // 限制固定为 4 个，平衡性能与系统开销
+    private readonly options: SceneManagerOptions;
+    private readonly resolvedChunkOptions: ReturnType<typeof resolveSceneChunkOptions>;
     private isCameraMoving = false;
     private activePixelRatio = 1;
     private chunkLoadResumeAt = 0;
@@ -372,6 +396,12 @@ export class SceneManager {
     private cullingTimeBudgetMovingMs = 4.5;
     private cullingTimeBudgetRecoveryMs = 6.0;
     private cullingTimeBudgetIdleMs = 9.0;
+    private adaptiveRuntimeAccumulatedMs = 0;
+    private adaptiveRuntimeSampleCount = 0;
+
+    private ghostEdgesGeometry: THREE.EdgesGeometry;
+    private ghostMaterial: THREE.LineBasicMaterial;
+    private ghostMeshPool: THREE.LineSegments[] = [];
 
     private registerChunk(chunk: any) {
         this.chunks.push(chunk);
@@ -385,8 +415,13 @@ export class SceneManager {
         }
     }
 
-    constructor(canvas: HTMLCanvasElement) {
+    constructor(canvas: HTMLCanvasElement, options: SceneManagerOptions = {}) {
         this.canvas = canvas;
+        this.options = options;
+        this.resolvedChunkOptions = resolveSceneChunkOptions(options.chunkOptions);
+        if (options.performancePreset) {
+            this.settings.performanceMode = options.performancePreset;
+        }
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
 
@@ -394,6 +429,9 @@ export class SceneManager {
         this.dotTexture = this.createCircleTexture();
         this.clock = new THREE.Clock();
         this.initHardwareProfile();
+
+        this.ghostEdgesGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+        this.ghostMaterial = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 });
 
         // 渲染器
         this.renderer = new THREE.WebGLRenderer({
@@ -465,6 +503,7 @@ export class SceneManager {
         this.controls.addEventListener('start', () => {
             const profile = this.getChunkRuntimeProfile();
             this.isCameraMoving = true;
+            this.prefetchPaused = true;
             this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
             this.postMoveRecoveryUntil = 0;
             this.interactionShadowRestoreAt = 0;
@@ -476,6 +515,7 @@ export class SceneManager {
         this.controls.addEventListener('change', () => {
             const profile = this.getChunkRuntimeProfile();
             this.isCameraMoving = true;
+            this.prefetchPaused = true;
             this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
             this.postMoveRecoveryUntil = 0;
             this.interactionShadowRestoreAt = 0;
@@ -486,6 +526,7 @@ export class SceneManager {
             const now = performance.now();
             const profile = this.getChunkRuntimeProfile();
             this.isCameraMoving = false;
+            this.prefetchPaused = false;
             this.chunkLoadResumeAt = now + Math.max(24, Math.floor(profile.resumeAfterMoveMs * 0.75));
             this.postMoveRecoveryUntil = now + profile.postMoveRecoveryMs;
             this.interactionShadowRestoreAt = now + this.interactionShadowRestoreDelayMs;
@@ -944,12 +985,15 @@ export class SceneManager {
         const nav = navigator as Navigator & { deviceMemory?: number };
         const cpuCount = Math.max(2, nav.hardwareConcurrency || 4);
         const memoryGb = nav.deviceMemory || 8;
+        const preset = (this.options.performancePreset ?? this.settings.performanceMode ?? "balanced") as PerformancePreset;
+        const runtime = deriveInitialRuntimeFromHardware(cpuCount, preset);
 
         this.maxWorkers = Math.max(2, Math.min(8, Math.floor(cpuCount / 2)));
-        this.maxConcurrentChunkLoads = Math.max(24, Math.min(112, cpuCount * 10));
-        this.maxChunkLoadsPerFrame = Math.max(12, Math.min(40, cpuCount * 3));
+        this.maxConcurrentChunkLoads = runtime.maxConcurrentChunkLoads;
+        this.maxChunkLoadsPerFrame = runtime.maxChunkLoadsPerFrame;
         this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
         this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
+        this.settings.targetFps = this.resolvedChunkOptions.targetMinFps;
     }
 
     private collectObjectOverview(object: THREE.Object3D) {
@@ -1099,6 +1143,98 @@ export class SceneManager {
         this.chunkCacheOrder = this.chunkCacheOrder.filter((chunkId) => this.chunkMeshCache.has(chunkId));
     }
 
+    private getChunkReadCacheKey(chunk: any) {
+        return `${chunk.nbimFileId || "local"}:${chunk.byteOffset || 0}:${chunk.byteLength || 0}`;
+    }
+
+    private touchChunkReadCache(cacheKey: string) {
+        this.chunkReadCacheOrder = this.chunkReadCacheOrder.filter((key) => key !== cacheKey);
+        this.chunkReadCacheOrder.push(cacheKey);
+    }
+
+    private putChunkReadCache(cacheKey: string, buffer: ArrayBuffer) {
+        this.chunkReadCache.set(cacheKey, buffer);
+        this.touchChunkReadCache(cacheKey);
+        while (this.chunkReadCacheOrder.length > this.resolvedChunkOptions.chunkReadCacheSize) {
+            const evictKey = this.chunkReadCacheOrder.shift();
+            if (!evictKey) continue;
+            this.chunkReadCache.delete(evictKey);
+        }
+    }
+
+    private async readChunkBuffer(chunk: any) {
+        const cacheKey = this.getChunkReadCacheKey(chunk);
+        const cached = this.chunkReadCache.get(cacheKey);
+        if (cached) {
+            this.touchChunkReadCache(cacheKey);
+            return cached.slice(0);
+        }
+        const file = this.nbimFiles.get(chunk.nbimFileId);
+        if (!file) throw new Error(`NBIM file not found for chunk: ${chunk.id}`);
+        const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+        this.putChunkReadCache(cacheKey, buffer.slice(0));
+        return buffer;
+    }
+
+    private enqueueChunkPrefetch(chunkIds: string[]) {
+        if (this.resolvedChunkOptions.chunkPrefetchWindow <= 0) return;
+        for (const chunkId of chunkIds) {
+            if (this.prefetchQueue.includes(chunkId)) continue;
+            if (this.prefetchInFlight.has(chunkId)) continue;
+            this.prefetchQueue.push(chunkId);
+        }
+    }
+
+    private schedulePrefetchFromVisibleChunks(visibleChunks: any[]) {
+        if (this.resolvedChunkOptions.chunkPrefetchWindow <= 0) return;
+        if (this.prefetchPaused || this.isCameraMoving) return;
+        if (visibleChunks.length === 0) return;
+
+        const windowSize = this.resolvedChunkOptions.chunkPrefetchWindow;
+        const toPrefetch: string[] = [];
+        for (let i = 0; i < visibleChunks.length && toPrefetch.length < windowSize; i++) {
+            const pivot = visibleChunks[(this.prefetchRoundRobinCursor + i) % visibleChunks.length];
+            const pivotIndex = this.chunks.findIndex((chunk) => chunk.id === pivot.id);
+            if (pivotIndex < 0) continue;
+            const nextChunk = this.chunks[pivotIndex + 1];
+            if (!nextChunk || nextChunk.loaded || this.processingChunks.has(nextChunk.id)) continue;
+            if (!nextChunk.nbimFileId || !nextChunk.byteOffset || !nextChunk.byteLength) continue;
+            const cacheKey = this.getChunkReadCacheKey(nextChunk);
+            if (this.chunkReadCache.has(cacheKey)) continue;
+            toPrefetch.push(nextChunk.id);
+        }
+        this.prefetchRoundRobinCursor++;
+        this.enqueueChunkPrefetch(toPrefetch);
+        void this.processPrefetchQueue();
+    }
+
+    private async processPrefetchQueue() {
+        if (this.prefetchPaused || this.isCameraMoving) return;
+        if (this.prefetchQueue.length === 0) return;
+
+        const maxParallel = Math.max(1, Math.min(4, Math.floor(this.maxWorkers / 2)));
+        while (!this.prefetchPaused && !this.isCameraMoving && this.prefetchQueue.length > 0 && this.prefetchInFlight.size < maxParallel) {
+            const chunkId = this.prefetchQueue.shift();
+            if (!chunkId) break;
+            const chunk = this.chunks.find((item) => item.id === chunkId);
+            if (!chunk || !chunk.nbimFileId || !chunk.byteOffset || !chunk.byteLength) continue;
+            const cacheKey = this.getChunkReadCacheKey(chunk);
+            if (this.chunkReadCache.has(cacheKey)) continue;
+
+            this.prefetchInFlight.add(chunkId);
+            void this.readChunkBuffer(chunk)
+                .catch((error) => {
+                    debugWarn("SceneManager/prefetch", `prefetch failed for ${chunkId}`, error);
+                })
+                .finally(() => {
+                    this.prefetchInFlight.delete(chunkId);
+                    if (!this.prefetchPaused && !this.isCameraMoving && this.prefetchQueue.length > 0) {
+                        void this.processPrefetchQueue();
+                    }
+                });
+        }
+    }
+
     private unregisterOptimizedMeshMapping(bm: THREE.BatchedMesh) {
         const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
         if (!batchIdToUuid) return;
@@ -1134,21 +1270,42 @@ export class SceneManager {
         }
     }
 
-    private ensureChunkGhost(chunk: any) {
-        if (this.ghostGroup.getObjectByName(`ghost_${chunk.id}`)) return;
+    private acquireGhostLine() {
+        const reused = this.ghostMeshPool.pop();
+        if (reused) {
+            reused.visible = true;
+            return reused;
+        }
+        return new THREE.LineSegments(this.ghostEdgesGeometry, this.ghostMaterial);
+    }
 
+    private releaseGhostLine(line: THREE.LineSegments) {
+        line.visible = false;
+        line.name = "";
+        line.scale.set(1, 1, 1);
+        line.position.set(0, 0, 0);
+        if (line.material instanceof THREE.LineBasicMaterial) {
+            line.material.opacity = 0.3;
+        }
+        this.ghostMeshPool.push(line);
+    }
+
+    private createGhostLine(name: string, bounds: THREE.Box3) {
         const size = new THREE.Vector3();
         const center = new THREE.Vector3();
-        chunk.bounds.getSize(size);
-        chunk.bounds.getCenter(center);
+        bounds.getSize(size);
+        bounds.getCenter(center);
 
-        const edges = new THREE.LineSegments(
-            new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
-            new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 })
-        );
-        edges.name = `ghost_${chunk.id}`;
+        const edges = this.acquireGhostLine();
+        edges.name = name;
         edges.scale.copy(size);
         edges.position.copy(center);
+        return edges;
+    }
+
+    private ensureChunkGhost(chunk: any) {
+        if (this.ghostGroup.getObjectByName(`ghost_${chunk.id}`)) return;
+        const edges = this.createGhostLine(`ghost_${chunk.id}`, chunk.bounds);
         this.ghostGroup.add(edges);
     }
 
@@ -1212,18 +1369,10 @@ export class SceneManager {
     }
 
     private createPreviewGhost(bounds: THREE.Box3, name: string) {
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-        bounds.getSize(size);
-        bounds.getCenter(center);
-
-        const edges = new THREE.LineSegments(
-            new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
-            new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.45 })
-        );
-        edges.name = name;
-        edges.scale.copy(size);
-        edges.position.copy(center);
+        const edges = this.createGhostLine(name, bounds);
+        if (edges.material instanceof THREE.LineBasicMaterial) {
+            edges.material.opacity = 0.45;
+        }
         this.ghostGroup.add(edges);
         return edges;
     }
@@ -1274,12 +1423,6 @@ export class SceneManager {
     ) {
         if (ghostSpecs.length === 0) return;
 
-        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-        const edgesGeo = new THREE.EdgesGeometry(boxGeo);
-        const boxMat = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 });
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-
         for (let start = 0; start < ghostSpecs.length; start += this.chunkGhostBatchSize) {
             const end = Math.min(ghostSpecs.length, start + this.chunkGhostBatchSize);
             for (let index = start; index < end; index++) {
@@ -1287,14 +1430,7 @@ export class SceneManager {
                 const chunk = this.chunks.find((c) => c.id === spec.chunkId);
                 if (!chunk || chunk.loaded || this.cancelledChunkIds.has(spec.chunkId)) continue;
                 if (this.ghostGroup.getObjectByName(`ghost_${spec.chunkId}`)) continue;
-
-                spec.bounds.getSize(size);
-                spec.bounds.getCenter(center);
-
-                const edges = new THREE.LineSegments(edgesGeo, boxMat);
-                edges.name = `ghost_${spec.chunkId}`;
-                edges.scale.copy(size);
-                edges.position.copy(center);
+                const edges = this.createGhostLine(`ghost_${spec.chunkId}`, spec.bounds);
                 this.ghostGroup.add(edges);
             }
 
@@ -1491,10 +1627,15 @@ export class SceneManager {
     }
 
     private reportChunkProgress() {
+        const now = performance.now();
         const total = this.chunks.length;
         const loaded = this.chunkLoadedCount;
-        if (this.onChunkProgress && (loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total)) {
+        const changed = loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total;
+        const shouldFlush = total === 0 || (total > 0 && loaded >= total);
+        const intervalReached = (now - this.lastChunkProgressReportAt) >= CHUNK_PROGRESS_REPORT_INTERVAL_MS;
+        if (this.onChunkProgress && changed && (intervalReached || shouldFlush)) {
             this.lastReportedProgress = { loaded, total };
+            this.lastChunkProgressReportAt = now;
             this.onChunkProgress(loaded, total);
         }
     }
@@ -1686,7 +1827,7 @@ export class SceneManager {
             const inRange = dist < this.maxRenderDistance;
             if (sampleUnloadedWhileMoving && !c.loaded && (chunkIndex % movingSampleStride) !== movingSampleSeed) {
                 // 相机移动阶段对超大场景只抽样评估部分未加载分块，降低剔除主循环开销。
-                return;
+                continue;
             }
 
             // 计算屏幕空间占用大小 (SSE 优化)
@@ -1816,6 +1957,24 @@ export class SceneManager {
             }
         }
 
+        this.schedulePrefetchFromVisibleChunks(loadedChunks);
+        this.adaptiveRuntimeSampleCount++;
+        this.adaptiveRuntimeAccumulatedMs += this.clock.getDelta() * 1000;
+        if (this.adaptiveRuntimeSampleCount >= 20) {
+            const sampleAvg = this.adaptiveRuntimeAccumulatedMs / this.adaptiveRuntimeSampleCount;
+            const adaptive = adaptChunkRuntime({
+                hardwareConcurrency: Math.max(2, navigator.hardwareConcurrency || 4),
+                frameDeltaMs: sampleAvg,
+                targetMinFps: this.resolvedChunkOptions.targetMinFps,
+                currentConcurrentLoads: this.maxConcurrentChunkLoads,
+                currentFrameBudget: this.maxChunkLoadsPerFrame
+            });
+            this.maxConcurrentChunkLoads = adaptive.nextConcurrentLoads;
+            this.maxChunkLoadsPerFrame = adaptive.nextFrameBudget;
+            this.adaptiveRuntimeSampleCount = 0;
+            this.adaptiveRuntimeAccumulatedMs = 0;
+        }
+
         if (abortedByBudget) {
             // 延后剩余扫描到后续帧，避免单帧卡顿尖峰。
             this.cullingDirty = true;
@@ -1908,8 +2067,7 @@ export class SceneManager {
                 });
             } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && chunk.byteOffset) {
                 // 来自 loadNbim 的远程分块
-                const file = this.nbimFiles.get(chunk.nbimFileId)!;
-                const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+                const buffer = await this.readChunkBuffer(chunk);
                 const meta = this.nbimMeta.get(chunk.nbimFileId);
                 const version = meta?.version ?? 8;
                 if (version !== 8) {
@@ -1925,6 +2083,22 @@ export class SceneManager {
                 }, [buffer]);
 
                 bm = this.reconstructBatchedMesh(workerResult, this.sharedMaterial);
+
+                if (!this.isCameraMoving && this.resolvedChunkOptions.chunkPrefetchWindow > 0) {
+                    const chunkIndex = this.chunks.findIndex((item) => item.id === chunk.id);
+                    if (chunkIndex >= 0) {
+                        const candidates: string[] = [];
+                        for (let i = 1; i <= this.resolvedChunkOptions.chunkPrefetchWindow; i++) {
+                            const next = this.chunks[chunkIndex + i];
+                            if (!next) break;
+                            if (next.loaded || this.processingChunks.has(next.id)) continue;
+                            if (!next.nbimFileId || !next.byteOffset || !next.byteLength) continue;
+                            candidates.push(next.id);
+                        }
+                        this.enqueueChunkPrefetch(candidates);
+                        void this.processPrefetchQueue();
+                    }
+                }
             }
 
             if (bm) {
@@ -1983,7 +2157,7 @@ export class SceneManager {
             const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
             if (ghost) {
                 this.ghostGroup.remove(ghost);
-                if ((ghost as any).geometry) (ghost as any).geometry.dispose();
+                this.releaseGhostLine(ghost as THREE.LineSegments);
             }
         } catch (err) {
             console.error(`加载分块 ${chunk.id} 失败:`, err);
@@ -1994,8 +2168,33 @@ export class SceneManager {
 
     setChunkLoadingEnabled(enabled: boolean) {
         this.chunkLoadingEnabled = enabled;
+        this.prefetchPaused = !enabled;
         this.cullingDirty = true;
         if (enabled) this.checkCullingAndLoad();
+    }
+
+    setChunkOptions(options: SceneChunkOptions = {}) {
+        const resolved = resolveSceneChunkOptions(options);
+        this.resolvedChunkOptions.chunkReadCacheSize = resolved.chunkReadCacheSize;
+        this.resolvedChunkOptions.chunkPrefetchWindow = resolved.chunkPrefetchWindow;
+        this.resolvedChunkOptions.ghostMode = resolved.ghostMode;
+        this.resolvedChunkOptions.targetMinFps = resolved.targetMinFps;
+        this.settings.targetFps = resolved.targetMinFps;
+
+        while (this.chunkReadCacheOrder.length > this.resolvedChunkOptions.chunkReadCacheSize) {
+            const evict = this.chunkReadCacheOrder.shift();
+            if (!evict) continue;
+            this.chunkReadCache.delete(evict);
+        }
+    }
+
+    getChunkOptions() {
+        return {
+            chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
+            chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
+            ghostMode: this.resolvedChunkOptions.ghostMode,
+            targetMinFps: this.resolvedChunkOptions.targetMinFps
+        };
     }
 
     setContentVisible(visible: boolean) {
@@ -2306,13 +2505,7 @@ export class SceneManager {
 
         if (!previewGhost) return;
         this.ghostGroup.remove(previewGhost);
-        if ((previewGhost as any).geometry) (previewGhost as any).geometry.dispose();
-        if ((previewGhost as any).material) {
-            const materials = Array.isArray((previewGhost as any).material)
-                ? (previewGhost as any).material
-                : [(previewGhost as any).material];
-            materials.forEach((m: any) => m.dispose && m.dispose());
-        }
+        this.releaseGhostLine(previewGhost as THREE.LineSegments);
     }
 
     private cancelDeferredStructureBuild() {
@@ -2497,7 +2690,7 @@ export class SceneManager {
                 const ghost = this.ghostGroup.getObjectByName(`ghost_${c.id}`);
                 if (ghost) {
                     this.ghostGroup.remove(ghost);
-                    if ((ghost as any).geometry) (ghost as any).geometry.dispose();
+                    this.releaseGhostLine(ghost as THREE.LineSegments);
                 }
                 return false;
             }
@@ -3005,24 +3198,17 @@ export class SceneManager {
         this.nbimFiles.set(fileId, file);
 
         if (onProgress) onProgress(10, "正在解析 NBIM 文件头...");
-        const headerBuffer = await file.slice(0, 1024).arrayBuffer();
-        const dv = new DataView(headerBuffer);
-
-        const magic = dv.getUint32(0, true);
+        const header = await readNbimHeader(file);
+        const magic = header.magic;
         if (magic !== 0x4D49424E) throw new Error("不是有效的 NBIM 文件");
 
-        const version = dv.getUint32(4, true);
+        const version = header.version;
         if (version !== 8) {
             throw new Error(`不支持的 NBIM 版本: ${version}，当前仅支持 V8`);
         }
 
-        const manifestOffset = dv.getUint32(8, true);
-        const manifestLen = dv.getUint32(12, true);
-
         if (onProgress) onProgress(20, "正在读取元数据...");
-        const manifestBlob = file.slice(manifestOffset, manifestOffset + manifestLen);
-        const manifestText = await manifestBlob.text();
-        const manifest = JSON.parse(manifestText);
+        const manifest = await readNbimManifest(file, header) as NbimManifest;
 
         this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
 
@@ -3036,7 +3222,7 @@ export class SceneManager {
             // 处理大坐标偏移
             if (this.globalOffset.length() === 0) {
                 newBounds.getCenter(this.globalOffset);
-                console.log("初始化全局偏移 (NBIM):", this.globalOffset);
+                debugLog("SceneManager/NBIM", "初始化全局偏移", this.globalOffset);
             }
 
             if (this.precomputedBounds.isEmpty()) {
@@ -3130,18 +3316,23 @@ export class SceneManager {
 
         // 注册分块
         if (onProgress) onProgress(30, "正在初始化分块...");
-        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-        const boxMat = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 });
 
-        manifest.chunks.forEach((c: any) => {
+        const chunkOffset = this.globalOffset.lengthSq() > 0 ? this.globalOffset.clone().negate() : null;
+        const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
+        const deferredGhostSpecs: Array<{ chunkId: string; bounds: THREE.Box3 }> = [];
+        const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
+            ? Number.MAX_SAFE_INTEGER
+            : GHOST_VISIBLE_FIRST_BATCH;
+        for (let i = 0; i < chunkEntries.length; i++) {
+            const c = chunkEntries[i];
             const bounds = new THREE.Box3(
                 new THREE.Vector3(c.bounds.min.x, c.bounds.min.y, c.bounds.min.z),
                 new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)
             );
 
             // 关键：将包围盒也平移到偏移后的局部空间，否则视锥体裁剪会失败
-            if (this.globalOffset.length() > 0) {
-                bounds.translate(this.globalOffset.clone().negate());
+            if (chunkOffset) {
+                bounds.translate(chunkOffset);
             }
 
             const chunkId = c.id;
@@ -3163,19 +3354,24 @@ export class SceneManager {
                 originalUuid: c.originalUuid ? String(c.originalUuid) : rootId
             });
 
-            // 显示鬼影
-            const size = new THREE.Vector3();
-            bounds.getSize(size);
-
-            const edges = new THREE.LineSegments(
-                new THREE.EdgesGeometry(boxGeo),
-                boxMat
-            );
-            edges.name = `ghost_${chunkId}`;
-            edges.scale.copy(size);
-            edges.position.copy(center);
-            this.ghostGroup.add(edges);
-        });
+            if (i < immediateGhostLimit) {
+                const edges = this.createGhostLine(`ghost_${chunkId}`, bounds);
+                this.ghostGroup.add(edges);
+            } else {
+                deferredGhostSpecs.push({ chunkId, bounds });
+            }
+            if ((i + 1) % NBIM_CHUNK_REGISTRATION_BATCH === 0) {
+                if (onProgress) {
+                    const ratio = Math.max(0, Math.min(1, (i + 1) / chunkEntries.length));
+                    const progress = 30 + Math.round(ratio * 40);
+                    onProgress(progress, "正在初始化分块...");
+                }
+                await this.yieldToMainThread();
+            }
+        }
+        if (deferredGhostSpecs.length > 0) {
+            void this.createChunkGhostsProgressively(deferredGhostSpecs);
+        }
 
         this.reportChunkProgress();
 
@@ -3195,7 +3391,7 @@ export class SceneManager {
     }
 
     async clear() {
-        console.log("开始清空场景...");
+        debugLog("SceneManager", "开始清空场景...");
         this.cancelDeferredStructureBuild();
         this.resetExplode();
 
@@ -3227,8 +3423,12 @@ export class SceneManager {
             }
 
             // 2. 清理辅助组
-            this.ghostGroup.children.forEach(disposeObject);
-            this.ghostGroup.clear();
+            while (this.ghostGroup.children.length > 0) {
+                const ghost = this.ghostGroup.children[0];
+                this.ghostGroup.remove(ghost);
+                this.releaseGhostLine(ghost as THREE.LineSegments);
+            }
+            this.ghostMeshPool.length = 0;
 
             this.selectionBox.visible = false;
             this.highlightMesh.visible = false;
@@ -3251,10 +3451,14 @@ export class SceneManager {
             this.lastReportedProgress = { loaded: -1, total: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
+            this.prefetchQueue = [];
+            this.prefetchInFlight.clear();
             this.chunkLoadedCount = 0;
             this.reportChunkProgress(); // 通知前端分片进度已重置
             this.componentMap.clear();
             this.clearChunkCache();
+            this.chunkReadCache.clear();
+            this.chunkReadCacheOrder = [];
             this.originalStats = { meshes: 0, faces: 0, memory: 0 };
             this.originalStatsByModel.clear();
             this.fastPreviewModels.clear();
@@ -3266,7 +3470,7 @@ export class SceneManager {
             // 6. 重置全局偏移
             this.globalOffset.set(0, 0, 0);
 
-            console.log("场景已清空");
+            debugLog("SceneManager", "场景已清空");
             this.requestRender();
         } catch (error) {
             console.error("清空场景失败:", error);
@@ -3575,17 +3779,7 @@ export class SceneManager {
 
     /** 由 UUID 导出的稳定单位向量，近似均匀分布于球面（与径向方向混合后爆炸更散、更匀） */
     private explodeStableUnitDirection(seed: string, target: THREE.Vector3) {
-        let h = 2166136261;
-        for (let i = 0; i < seed.length; i++) {
-            h ^= seed.charCodeAt(i);
-            h = Math.imul(h, 16777619);
-        }
-        const u1 = (h >>> 0) / 4294967296;
-        const u2 = (Math.imul(h ^ 0x9e3779b9, 2246822519) >>> 0) / 4294967296;
-        const phi = 2 * Math.PI * u1;
-        const z = 1 - 2 * u2;
-        const r = Math.sqrt(Math.max(0, 1 - z * z));
-        target.set(Math.cos(phi) * r, Math.sin(phi) * r, z).normalize();
+        stableExplodeDirection(seed, target);
     }
 
     private captureExplodeSnapshot() {
@@ -5427,39 +5621,13 @@ export class SceneManager {
     }
 
     getStats() {
-        let textureMemory = 0;
-        const textures = new Set<THREE.Texture>();
-
-        this.contentGroup.traverse((obj) => {
-            if (obj.name === "__EdgesHelper") return;
-
-            if ((obj as THREE.Mesh).isMesh || (obj as any).isBatchedMesh) {
-                const mesh = obj as any;
-
-                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                materials.forEach((material: any) => {
-                    if (!material) return;
-                    Object.values(material).forEach((value) => {
-                        if (value instanceof THREE.Texture && !textures.has(value)) {
-                            textures.add(value);
-                            const image = (value as any).image;
-                            const width = image?.width || 0;
-                            const height = image?.height || 0;
-                            if (width > 0 && height > 0) {
-                                textureMemory += (width * height * 4) / (1024 * 1024);
-                            }
-                        }
-                    });
-                });
-            }
-        });
-
         const drawCalls = this.renderer.info.render.calls;
+        const textureMemory = estimateTextureMemoryMb(this.contentGroup);
         return {
             meshes: this.originalStats.meshes,
             faces: this.originalStats.faces,
             memory: parseFloat(this.originalStats.memory.toFixed(2)),
-            textureMemory: parseFloat(textureMemory.toFixed(2)),
+            textureMemory,
             drawCalls,
             chunksLoaded: this.chunkLoadedCount,
             chunksTotal: this.chunks.length,
@@ -5492,10 +5660,20 @@ export class SceneManager {
         this.activeWorkerCount = 0;
         this.processingChunks.clear();
         this.cancelledChunkIds.clear();
+        this.prefetchQueue = [];
+        this.prefetchInFlight.clear();
+        this.chunkReadCache.clear();
+        this.chunkReadCacheOrder = [];
         this.highlightedUuids.clear();
         this.locateResultSet.clear();
         this.fastPreviewModels.clear();
         this.clearChunkCache();
+        while (this.ghostGroup.children.length > 0) {
+            const ghost = this.ghostGroup.children[0];
+            this.ghostGroup.remove(ghost);
+            this.releaseGhostLine(ghost as THREE.LineSegments);
+        }
+        this.ghostMeshPool.length = 0;
         this.controls.dispose();
         if (this.selectionBox.geometry) this.selectionBox.geometry.dispose();
         const selectionMat = this.selectionBox.material as THREE.Material | THREE.Material[];
@@ -5508,6 +5686,8 @@ export class SceneManager {
         (Array.isArray(tempMarkerMat) ? tempMarkerMat : [tempMarkerMat]).forEach((m) => m?.dispose?.());
         this.dotTexture.dispose();
         this.sharedMaterial.dispose();
+        this.ghostEdgesGeometry.dispose();
+        this.ghostMaterial.dispose();
         this.renderer.dispose();
     }
 }
@@ -5523,3 +5703,5 @@ function sanitizeFileStem(name: string) {
         .trim();
     return sanitized || "model";
 }
+
+export type { PerformancePreset, SceneChunkOptions, SceneManagerOptions };
