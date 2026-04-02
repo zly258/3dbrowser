@@ -945,7 +945,10 @@ export const loadIFC = async (
     };
 
     buildIfcGridHelpers();
-    const shouldDeferMetadata = buffer.byteLength > 20 * 1024 * 1024;
+    const explicitDefer = typeof (settings as any)?.deferIfcProperties === "boolean"
+        ? Boolean((settings as any).deferIfcProperties)
+        : undefined;
+    const shouldDeferMetadata = explicitDefer ?? (buffer.byteLength > 20 * 1024 * 1024);
     const applyLayerMetadata = () => {
         for (const [expressID, meshes] of meshesByExpressId.entries()) {
             const layerName = layerMap.get(expressID);

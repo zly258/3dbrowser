@@ -2,12 +2,20 @@ import * as THREE from "three";
 import { TFunc, ProgressCallback } from "../theme/Locales";
 import { SceneSettings } from "../utils/SceneManager";
 import { createResourceResolver } from "./resourceResolver";
+import type { LoadProfile } from "../utils/scene/types";
 
 export interface LoadedItem {
     name: string;
     uuid: string;
     type: "MODEL" | "TILES";
     object?: THREE.Object3D;
+}
+
+export interface LoaderRuntimeHints {
+    loadProfile?: LoadProfile;
+    deferIfcProperties?: boolean;
+    fastGeometrySanitize?: boolean;
+    isStale?: () => boolean;
 }
 
 type LoadStage = "fetch" | "parse" | "normalize" | "optimize" | "addToScene";
@@ -29,6 +37,29 @@ const STAGE_WEIGHTS: Record<LoadStage, [number, number]> = {
 };
 
 const libPathCache = new Map<string, string>();
+let gltfModulesPromise: Promise<{
+    GLTFLoader: any;
+    DRACOLoader: any;
+    KTX2Loader: any;
+    MeshoptDecoder: any;
+}> | null = null;
+
+async function getGltfModules() {
+    if (!gltfModulesPromise) {
+        gltfModulesPromise = Promise.all([
+            import("three/examples/jsm/loaders/GLTFLoader.js"),
+            import("three/examples/jsm/loaders/DRACOLoader.js"),
+            import("three/examples/jsm/loaders/KTX2Loader.js"),
+            import("three/examples/jsm/libs/meshopt_decoder.module.js")
+        ]).then(([a, b, c, d]) => ({
+            GLTFLoader: a.GLTFLoader,
+            DRACOLoader: b.DRACOLoader,
+            KTX2Loader: c.KTX2Loader,
+            MeshoptDecoder: d.MeshoptDecoder
+        }));
+    }
+    return gltfModulesPromise;
+}
 
 function normalizeLibPath(libPath: string) {
     if (!libPathCache.has(libPath)) {
@@ -61,17 +92,7 @@ function createLoadingManager(
 }
 
 async function createGltfLoaderRuntime(manager: THREE.LoadingManager, libPath: string) {
-    const [
-        { GLTFLoader },
-        { DRACOLoader },
-        { KTX2Loader },
-        { MeshoptDecoder }
-    ] = await Promise.all([
-        import("three/examples/jsm/loaders/GLTFLoader.js"),
-        import("three/examples/jsm/loaders/DRACOLoader.js"),
-        import("three/examples/jsm/loaders/KTX2Loader.js"),
-        import("three/examples/jsm/libs/meshopt_decoder.module.js")
-    ]);
+    const { GLTFLoader, DRACOLoader, KTX2Loader, MeshoptDecoder } = await getGltfModules();
 
     const normalizedLibPath = normalizeLibPath(libPath);
     const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
@@ -134,7 +155,8 @@ async function loadObjectByExtension(
     reportStage: ReturnType<typeof createStageProgressReporter>,
     t: TFunc,
     settings: SceneSettings,
-    libPath: string
+    libPath: string,
+    runtimeHints: LoaderRuntimeHints
 ) {
     const supportsCompressedTextures = typeof window !== "undefined" && !!window.createImageBitmap;
     const loaderContext = createLoadingManager(files, libPath, settings);
@@ -145,7 +167,11 @@ async function loadObjectByExtension(
             const { LMBLoader } = await import("./lmbLoader");
             const loader = new LMBLoader();
             reportStage("parse", 0);
-            return await loader.loadAsync(url, (p) => reportStage("parse", p * 100));
+            return await loader.loadAsync(
+                url,
+                (p) => reportStage("parse", p * 100),
+                { fastMode: (runtimeHints.loadProfile ?? "balanced") === "max-speed" }
+            );
         }
 
         if (ext === "glb" || ext === "gltf") {
@@ -189,12 +215,16 @@ async function loadObjectByExtension(
         if (ext === "ifc") {
             const { loadIFC } = await import("./IFCLoader");
             reportStage("parse", 0);
+            const ifcSettings = {
+                ...(settings as unknown as Record<string, unknown>),
+                deferIfcProperties: runtimeHints.deferIfcProperties ?? true
+            };
             return await loadIFC(
                 typeof fileOrUrl === "string" ? url : fileOrUrl,
                 (p, msg) => reportStage("parse", p, msg),
                 t,
                 libPath,
-                settings as unknown as Record<string, unknown>
+                ifcSettings
             );
         }
 
@@ -276,11 +306,15 @@ async function loadObjectByExtension(
     }
 }
 
-function normalizeLoadedObject(object: THREE.Object3D, settings: SceneSettings) {
+function normalizeLoadedObject(object: THREE.Object3D, settings: SceneSettings, mode: "fast" | "full" = "full") {
+    const maxFastMeshes = 3200;
+    let meshVisited = 0;
     object.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
+            if (mode === "fast" && meshVisited >= maxFastMeshes) return;
             const mesh = child as THREE.Mesh;
             mesh.frustumCulled = settings.frustumCulling ?? true;
+            meshVisited += 1;
 
             if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
             if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
@@ -302,12 +336,14 @@ export const loadModelFiles = async (
     onProgress: ProgressCallback,
     t: TFunc,
     settings: SceneSettings,
-    libPath: string = "./libs"
+    libPath: string = "./libs",
+    runtimeHints: LoaderRuntimeHints = {}
 ): Promise<THREE.Object3D[]> => {
     const loadedObjects: THREE.Object3D[] = [];
     const totalFiles = files.length;
 
     for (let i = 0; i < totalFiles; i++) {
+        if (runtimeHints.isStale?.()) break;
         const fileOrUrl = files[i];
         const isUrl = typeof fileOrUrl === "string";
         let fileName = "";
@@ -331,12 +367,19 @@ export const loadModelFiles = async (
 
         try {
             reportStage("fetch", 5);
-            const object = await loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t, settings, libPath);
+            const object = await loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t, settings, libPath, runtimeHints);
             if (!object) continue;
 
             object.name = fileName;
             reportStage("normalize", 30, `${t("processing")} ${fileName}`);
-            normalizeLoadedObject(object, settings);
+            const fastSanitize = runtimeHints.fastGeometrySanitize ?? true;
+            normalizeLoadedObject(object, settings, fastSanitize ? "fast" : "full");
+            if (fastSanitize) {
+                setTimeout(() => {
+                    if (runtimeHints.isStale?.()) return;
+                    normalizeLoadedObject(object, settings, "full");
+                }, 0);
+            }
             reportStage("optimize", 100, `${t("analyzing")} ${fileName}`);
             reportStage("addToScene", 100, `${t("success")} ${fileName}`);
             loadedObjects.push(object);

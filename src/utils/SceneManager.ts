@@ -9,7 +9,7 @@ import {
     createBatchedMeshFromItems,
     createBatchedMeshFromItemsAsync
 } from "./octree";
-import { adaptChunkRuntime, deriveInitialRuntimeFromHardware } from "./scene/chunkRuntime";
+import { deriveInitialRuntimeFromHardware } from "./scene/chunkRuntime";
 import { debugLog, debugWarn } from "./scene/debugLogger";
 import { stableExplodeDirection } from "./scene/explode";
 import { readNbimHeader, readNbimManifest, type NbimManifest } from "./scene/nbimIO";
@@ -231,6 +231,8 @@ export class SceneManager {
     // 渐进式加载状态 (对齐 refs)
     private chunks: any[] = [];
     private chunkIdSet = new Set<string>();
+    private chunkById = new Map<string, any>();
+    private chunkIndexById = new Map<string, number>();
     private processingChunks = new Set<string>();
     private cancelledChunkIds = new Set<string>();
     private frustum = new THREE.Frustum();
@@ -272,6 +274,7 @@ export class SceneManager {
     private readonly chunkReadCache = new Map<string, ArrayBuffer>();
     private chunkReadCacheOrder: string[] = [];
     private prefetchQueue: string[] = [];
+    private prefetchQueueSet = new Set<string>();
     private prefetchInFlight = new Set<string>();
     private prefetchRoundRobinCursor = 0;
     private prefetchPaused = false;
@@ -377,6 +380,7 @@ export class SceneManager {
     private postMoveRecoveryUntil = 0;
     private deferredStructureTimer: ReturnType<typeof setTimeout> | null = null;
     private deferredStructureToken = 0;
+    private loadGeneration = 0;
     private fastPreviewMeshLimit = 1200;
     private fastPreviewModels = new Set<string>();
     private readonly chunkCullingTempSize = new THREE.Vector3();
@@ -396,8 +400,7 @@ export class SceneManager {
     private cullingTimeBudgetMovingMs = 4.5;
     private cullingTimeBudgetRecoveryMs = 6.0;
     private cullingTimeBudgetIdleMs = 9.0;
-    private adaptiveRuntimeAccumulatedMs = 0;
-    private adaptiveRuntimeSampleCount = 0;
+    private forceMaxChunkLoadSpeed = true;
 
     private ghostEdgesGeometry: THREE.EdgesGeometry;
     private ghostMaterial: THREE.LineBasicMaterial;
@@ -406,13 +409,28 @@ export class SceneManager {
     private registerChunk(chunk: any) {
         this.chunks.push(chunk);
         this.chunkIdSet.add(chunk.id);
+        this.chunkById.set(chunk.id, chunk);
+        this.chunkIndexById.set(chunk.id, this.chunks.length - 1);
     }
 
     private rebuildChunkIdSet() {
         this.chunkIdSet.clear();
-        for (const chunk of this.chunks) {
+        this.chunkById.clear();
+        this.chunkIndexById.clear();
+        for (let index = 0; index < this.chunks.length; index++) {
+            const chunk = this.chunks[index];
             this.chunkIdSet.add(chunk.id);
+            this.chunkById.set(chunk.id, chunk);
+            this.chunkIndexById.set(chunk.id, index);
         }
+    }
+
+    private getChunkById(chunkId: string) {
+        return this.chunkById.get(chunkId);
+    }
+
+    private getChunkIndex(chunkId: string) {
+        return this.chunkIndexById.get(chunkId) ?? -1;
     }
 
     constructor(canvas: HTMLCanvasElement, options: SceneManagerOptions = {}) {
@@ -988,9 +1006,21 @@ export class SceneManager {
         const preset = (this.options.performancePreset ?? this.settings.performanceMode ?? "balanced") as PerformancePreset;
         const runtime = deriveInitialRuntimeFromHardware(cpuCount, preset);
 
-        this.maxWorkers = Math.max(2, Math.min(8, Math.floor(cpuCount / 2)));
-        this.maxConcurrentChunkLoads = runtime.maxConcurrentChunkLoads;
-        this.maxChunkLoadsPerFrame = runtime.maxChunkLoadsPerFrame;
+        if (this.forceMaxChunkLoadSpeed) {
+            // 极速模式：按硬件提高并行度，优先可见分片尽快解码与上屏。
+            this.maxWorkers = Math.max(4, Math.min(12, cpuCount - 1));
+            this.maxConcurrentChunkLoads = Math.max(128, Math.min(192, this.maxWorkers * 24));
+            this.maxChunkLoadsPerFrame = Math.max(64, Math.min(128, this.maxWorkers * 14));
+            this.cullingTimeBudgetMovingMs = 7.5;
+            this.cullingTimeBudgetRecoveryMs = 10.5;
+            this.cullingTimeBudgetIdleMs = 14.0;
+            this.chunkRegistrationBatchSize = 28;
+            this.chunkGhostBatchSize = 40;
+        } else {
+            this.maxWorkers = 4;
+            this.maxConcurrentChunkLoads = runtime.maxConcurrentChunkLoads;
+            this.maxChunkLoadsPerFrame = runtime.maxChunkLoadsPerFrame;
+        }
         this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
         this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
         this.settings.targetFps = this.resolvedChunkOptions.targetMinFps;
@@ -1179,9 +1209,10 @@ export class SceneManager {
     private enqueueChunkPrefetch(chunkIds: string[]) {
         if (this.resolvedChunkOptions.chunkPrefetchWindow <= 0) return;
         for (const chunkId of chunkIds) {
-            if (this.prefetchQueue.includes(chunkId)) continue;
+            if (this.prefetchQueueSet.has(chunkId)) continue;
             if (this.prefetchInFlight.has(chunkId)) continue;
             this.prefetchQueue.push(chunkId);
+            this.prefetchQueueSet.add(chunkId);
         }
     }
 
@@ -1194,7 +1225,7 @@ export class SceneManager {
         const toPrefetch: string[] = [];
         for (let i = 0; i < visibleChunks.length && toPrefetch.length < windowSize; i++) {
             const pivot = visibleChunks[(this.prefetchRoundRobinCursor + i) % visibleChunks.length];
-            const pivotIndex = this.chunks.findIndex((chunk) => chunk.id === pivot.id);
+            const pivotIndex = this.getChunkIndex(pivot.id);
             if (pivotIndex < 0) continue;
             const nextChunk = this.chunks[pivotIndex + 1];
             if (!nextChunk || nextChunk.loaded || this.processingChunks.has(nextChunk.id)) continue;
@@ -1216,7 +1247,8 @@ export class SceneManager {
         while (!this.prefetchPaused && !this.isCameraMoving && this.prefetchQueue.length > 0 && this.prefetchInFlight.size < maxParallel) {
             const chunkId = this.prefetchQueue.shift();
             if (!chunkId) break;
-            const chunk = this.chunks.find((item) => item.id === chunkId);
+            this.prefetchQueueSet.delete(chunkId);
+            const chunk = this.getChunkById(chunkId);
             if (!chunk || !chunk.nbimFileId || !chunk.byteOffset || !chunk.byteLength) continue;
             const cacheKey = this.getChunkReadCacheKey(chunk);
             if (this.chunkReadCache.has(cacheKey)) continue;
@@ -1427,7 +1459,7 @@ export class SceneManager {
             const end = Math.min(ghostSpecs.length, start + this.chunkGhostBatchSize);
             for (let index = start; index < end; index++) {
                 const spec = ghostSpecs[index];
-                const chunk = this.chunks.find((c) => c.id === spec.chunkId);
+                const chunk = this.getChunkById(spec.chunkId);
                 if (!chunk || chunk.loaded || this.cancelledChunkIds.has(spec.chunkId)) continue;
                 if (this.ghostGroup.getObjectByName(`ghost_${spec.chunkId}`)) continue;
                 const edges = this.createGhostLine(`ghost_${spec.chunkId}`, spec.bounds);
@@ -1501,7 +1533,8 @@ export class SceneManager {
         maxItemsPerNode: number,
         maxDepth: number
     ) {
-        if (items.length < this.octreeWorkerThreshold) {
+        const workerThreshold = this.resolvedChunkOptions.preferWorkerOctree ? 1200 : this.octreeWorkerThreshold;
+        if (items.length < workerThreshold) {
             const octree = buildOctree(items, bounds, { maxItemsPerNode, maxDepth });
             return collectLeafNodes(octree).map((node) => ({
                 bounds: node.bounds,
@@ -1681,6 +1714,10 @@ export class SceneManager {
         profile: ChunkRuntimeProfile,
         warmupExtra: number
     ) {
+        if (this.forceMaxChunkLoadSpeed) {
+            return this.maxChunkLoadsPerFrame + warmupExtra;
+        }
+
         const mode = this.settings.performanceMode ?? 'balanced';
         const chunkCount = this.chunks.length;
         const isHugeScene = chunkCount > 2000;
@@ -1958,21 +1995,8 @@ export class SceneManager {
         }
 
         this.schedulePrefetchFromVisibleChunks(loadedChunks);
-        this.adaptiveRuntimeSampleCount++;
-        this.adaptiveRuntimeAccumulatedMs += this.clock.getDelta() * 1000;
-        if (this.adaptiveRuntimeSampleCount >= 20) {
-            const sampleAvg = this.adaptiveRuntimeAccumulatedMs / this.adaptiveRuntimeSampleCount;
-            const adaptive = adaptChunkRuntime({
-                hardwareConcurrency: Math.max(2, navigator.hardwareConcurrency || 4),
-                frameDeltaMs: sampleAvg,
-                targetMinFps: this.resolvedChunkOptions.targetMinFps,
-                currentConcurrentLoads: this.maxConcurrentChunkLoads,
-                currentFrameBudget: this.maxChunkLoadsPerFrame
-            });
-            this.maxConcurrentChunkLoads = adaptive.nextConcurrentLoads;
-            this.maxChunkLoadsPerFrame = adaptive.nextFrameBudget;
-            this.adaptiveRuntimeSampleCount = 0;
-            this.adaptiveRuntimeAccumulatedMs = 0;
+        if (!this.forceMaxChunkLoadSpeed) {
+            // 保留入口，当前极速模式下不做自适应降速。
         }
 
         if (abortedByBudget) {
@@ -2085,7 +2109,7 @@ export class SceneManager {
                 bm = this.reconstructBatchedMesh(workerResult, this.sharedMaterial);
 
                 if (!this.isCameraMoving && this.resolvedChunkOptions.chunkPrefetchWindow > 0) {
-                    const chunkIndex = this.chunks.findIndex((item) => item.id === chunk.id);
+                    const chunkIndex = this.getChunkIndex(chunk.id);
                     if (chunkIndex >= 0) {
                         const candidates: string[] = [];
                         for (let i = 1; i <= this.resolvedChunkOptions.chunkPrefetchWindow; i++) {
@@ -2173,12 +2197,36 @@ export class SceneManager {
         if (enabled) this.checkCullingAndLoad();
     }
 
+    private applyNbimScaleTuning(chunkCount: number) {
+        const userChunkOptions = this.options.chunkOptions || {};
+        const autoTuned = chunkCount >= 2000
+            ? { chunkPrefetchWindow: 0, chunkReadCacheSize: 128, targetMinFps: 20 }
+            : chunkCount <= 1000
+                ? { chunkPrefetchWindow: 0, chunkReadCacheSize: 128, targetMinFps: 20 }
+                : { chunkPrefetchWindow: 0, chunkReadCacheSize: 128, targetMinFps: 20 };
+
+        this.setChunkOptions({
+            chunkPrefetchWindow: userChunkOptions.chunkPrefetchWindow ?? autoTuned.chunkPrefetchWindow,
+            chunkReadCacheSize: userChunkOptions.chunkReadCacheSize ?? autoTuned.chunkReadCacheSize,
+            targetMinFps: userChunkOptions.targetMinFps ?? autoTuned.targetMinFps,
+            ghostMode: userChunkOptions.ghostMode ?? this.resolvedChunkOptions.ghostMode,
+            loadProfile: userChunkOptions.loadProfile ?? this.resolvedChunkOptions.loadProfile,
+            deferIfcProperties: userChunkOptions.deferIfcProperties ?? this.resolvedChunkOptions.deferIfcProperties,
+            preferWorkerOctree: userChunkOptions.preferWorkerOctree ?? this.resolvedChunkOptions.preferWorkerOctree,
+            fastGeometrySanitize: userChunkOptions.fastGeometrySanitize ?? this.resolvedChunkOptions.fastGeometrySanitize
+        });
+    }
+
     setChunkOptions(options: SceneChunkOptions = {}) {
         const resolved = resolveSceneChunkOptions(options);
         this.resolvedChunkOptions.chunkReadCacheSize = resolved.chunkReadCacheSize;
         this.resolvedChunkOptions.chunkPrefetchWindow = resolved.chunkPrefetchWindow;
         this.resolvedChunkOptions.ghostMode = resolved.ghostMode;
         this.resolvedChunkOptions.targetMinFps = resolved.targetMinFps;
+        this.resolvedChunkOptions.loadProfile = resolved.loadProfile;
+        this.resolvedChunkOptions.deferIfcProperties = resolved.deferIfcProperties;
+        this.resolvedChunkOptions.preferWorkerOctree = resolved.preferWorkerOctree;
+        this.resolvedChunkOptions.fastGeometrySanitize = resolved.fastGeometrySanitize;
         this.settings.targetFps = resolved.targetMinFps;
 
         while (this.chunkReadCacheOrder.length > this.resolvedChunkOptions.chunkReadCacheSize) {
@@ -2193,7 +2241,11 @@ export class SceneManager {
             chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
             chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
             ghostMode: this.resolvedChunkOptions.ghostMode,
-            targetMinFps: this.resolvedChunkOptions.targetMinFps
+            targetMinFps: this.resolvedChunkOptions.targetMinFps,
+            loadProfile: this.resolvedChunkOptions.loadProfile,
+            deferIfcProperties: this.resolvedChunkOptions.deferIfcProperties,
+            preferWorkerOctree: this.resolvedChunkOptions.preferWorkerOctree,
+            fastGeometrySanitize: this.resolvedChunkOptions.fastGeometrySanitize
         };
     }
 
@@ -2314,7 +2366,13 @@ export class SceneManager {
 
     private configureModelWarmup(meshCount: number) {
         this.chunkWarmupActive = true;
+        if (this.resolvedChunkOptions.loadProfile === "max-speed") {
+            this.initialChunkLoadTarget = meshCount > 100000 ? 42 : meshCount > 30000 ? 32 : 20;
+            this.warmupChunkBoost = 16;
+            return;
+        }
         this.initialChunkLoadTarget = meshCount > 100000 ? 24 : meshCount > 30000 ? 18 : 12;
+        this.warmupChunkBoost = 12;
     }
 
     private prepareStructureStage(
@@ -2431,9 +2489,11 @@ export class SceneManager {
     ) {
         if (onProgress) onProgress(10, "正在收集构件...");
 
-        const items = meshCount >= this.octreeWorkerThreshold
+        const preferFastCollect = this.resolvedChunkOptions.loadProfile === "max-speed";
+        const collectBatchedThreshold = preferFastCollect ? 1200 : this.octreeWorkerThreshold;
+        const items = meshCount >= collectBatchedThreshold
             ? await collectItemsBatched(object, {
-                batchSize: 3000,
+                batchSize: preferFastCollect ? 5200 : 3000,
                 onProgress: (processed, total) => {
                     if (!onProgress || total === 0) return;
                     const ratio = processed / total;
@@ -2514,6 +2574,15 @@ export class SceneManager {
             this.deferredStructureTimer = null;
         }
         this.deferredStructureToken++;
+    }
+
+    beginLoadGeneration() {
+        this.loadGeneration += 1;
+        return this.loadGeneration;
+    }
+
+    isLoadGenerationCurrent(generation: number) {
+        return generation === this.loadGeneration;
     }
 
     private deactivateFastPreviewForModel(originalUuid: string) {
@@ -3319,6 +3388,7 @@ export class SceneManager {
 
         const chunkOffset = this.globalOffset.lengthSq() > 0 ? this.globalOffset.clone().negate() : null;
         const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
+        this.applyNbimScaleTuning(chunkEntries.length);
         const deferredGhostSpecs: Array<{ chunkId: string; bounds: THREE.Box3 }> = [];
         const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
             ? Number.MAX_SAFE_INTEGER
@@ -3391,6 +3461,7 @@ export class SceneManager {
     }
 
     async clear() {
+        this.beginLoadGeneration();
         debugLog("SceneManager", "开始清空场景...");
         this.cancelDeferredStructureBuild();
         this.resetExplode();
@@ -3448,10 +3519,13 @@ export class SceneManager {
             this.bimIdToNodeIds.clear();
             this.chunks = [];
             this.chunkIdSet.clear();
+            this.chunkById.clear();
+            this.chunkIndexById.clear();
             this.lastReportedProgress = { loaded: -1, total: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
             this.prefetchQueue = [];
+            this.prefetchQueueSet.clear();
             this.prefetchInFlight.clear();
             this.chunkLoadedCount = 0;
             this.reportChunkProgress(); // 通知前端分片进度已重置
@@ -5762,6 +5836,7 @@ export class SceneManager {
         this.processingChunks.clear();
         this.cancelledChunkIds.clear();
         this.prefetchQueue = [];
+        this.prefetchQueueSet.clear();
         this.prefetchInFlight.clear();
         this.chunkReadCache.clear();
         this.chunkReadCacheOrder = [];

@@ -59,6 +59,12 @@ type IfcFilterState = {
     material: string;
 };
 
+type ChunkBenchmarkState = {
+    startedAt: number | null;
+    t20Ms: number | null;
+    t50Ms: number | null;
+};
+
 
 // --- 主应用 ---
 export const ThreeViewer = ({ 
@@ -75,7 +81,7 @@ export const ThreeViewer = ({
      onSelect: propOnSelect,
      onLoad,
      hideDeleteModel = false,
-     performancePreset = 'balanced',
+     performancePreset = 'quality',
      chunkOptions
  }: ThreeViewerProps) => {
     const sceneBgFollowsTheme = initialSettings?.bgColor === undefined;
@@ -93,6 +99,17 @@ export const ThreeViewer = ({
     const theme = useMemo(() => {
         return themes[themeMode];
     }, [themeMode]);
+
+    const effectiveChunkOptions = useMemo<SceneChunkOptions>(() => ({
+        chunkReadCacheSize: chunkOptions?.chunkReadCacheSize ?? 128,
+        chunkPrefetchWindow: chunkOptions?.chunkPrefetchWindow ?? 0,
+        targetMinFps: chunkOptions?.targetMinFps ?? 20,
+        ghostMode: chunkOptions?.ghostMode,
+        loadProfile: chunkOptions?.loadProfile ?? "max-speed",
+        deferIfcProperties: chunkOptions?.deferIfcProperties ?? true,
+        preferWorkerOctree: chunkOptions?.preferWorkerOctree ?? true,
+        fastGeometrySanitize: chunkOptions?.fastGeometrySanitize ?? true
+    }), [chunkOptions]);
 
     
 
@@ -166,6 +183,11 @@ export const ThreeViewer = ({
         pixelRatio: 1
     });
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
+    const [chunkBenchmark, setChunkBenchmark] = useState<ChunkBenchmarkState>({
+        startedAt: null,
+        t20Ms: null,
+        t50Ms: null
+    });
     
     // 工具状态
     const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode'>('none');
@@ -354,13 +376,13 @@ export const ThreeViewer = ({
     useEffect(() => {
         const manager = sceneMgr.current;
         if (!manager) return;
-        manager.setChunkOptions(chunkOptions || {});
+        manager.setChunkOptions(effectiveChunkOptions);
         manager.updateSettings({
             ...sceneSettings,
             performanceMode: performancePreset,
-            targetFps: chunkOptions?.targetMinFps ?? sceneSettings.targetFps
+            targetFps: effectiveChunkOptions.targetMinFps ?? sceneSettings.targetFps
         });
-    }, [chunkOptions, performancePreset, sceneSettings]);
+    }, [effectiveChunkOptions, performancePreset, sceneSettings]);
     
     // 是否加载了模型（基于treeRoot判断）
     const hasModels = treeRoot.length > 0;
@@ -368,9 +390,20 @@ export const ThreeViewer = ({
     // 跟踪已完成首次加载的文件集,避免重复toast提示
     const completedFileSetsRef = useRef<Set<string>>(new Set());
     const currentFileSetIdRef = useRef("");
+    const chunkBenchmarkRef = useRef<ChunkBenchmarkState>({
+        startedAt: null,
+        t20Ms: null,
+        t50Ms: null
+    });
 
     useEffect(() => {
         currentFileSetIdRef.current = currentFileSetId;
+    }, [currentFileSetId]);
+
+    useEffect(() => {
+        const reset: ChunkBenchmarkState = { startedAt: null, t20Ms: null, t50Ms: null };
+        chunkBenchmarkRef.current = reset;
+        setChunkBenchmark(reset);
     }, [currentFileSetId]);
 
     // Error State
@@ -393,6 +426,35 @@ export const ThreeViewer = ({
             setChunkProgress({ loaded: 0, total: 0 });
         }
     });
+
+    const handleManagerChunkProgress = useCallback((loaded: number, total: number) => {
+        onManagerChunkProgress(loaded, total);
+
+        if (total <= 0) return;
+        const now = performance.now();
+        const next = { ...chunkBenchmarkRef.current };
+        if (!next.startedAt && loaded > 0) {
+            next.startedAt = now;
+        }
+        if (next.startedAt) {
+            const elapsed = now - next.startedAt;
+            const p = loaded / total;
+            if (next.t20Ms === null && p >= 0.2) {
+                next.t20Ms = elapsed;
+            }
+            if (next.t50Ms === null && p >= 0.5) {
+                next.t50Ms = elapsed;
+            }
+        }
+
+        const changed = next.startedAt !== chunkBenchmarkRef.current.startedAt
+            || next.t20Ms !== chunkBenchmarkRef.current.t20Ms
+            || next.t50Ms !== chunkBenchmarkRef.current.t50Ms;
+        if (changed) {
+            chunkBenchmarkRef.current = next;
+            setChunkBenchmark(next);
+        }
+    }, [onManagerChunkProgress]);
     
     // 右键菜单状态
     const [contextMenu, setContextMenu] = useState<{
@@ -1035,7 +1097,7 @@ export const ThreeViewer = ({
         
         const manager = new SceneManager(canvasRef.current, {
             performancePreset,
-            chunkOptions
+            chunkOptions: effectiveChunkOptions
         });
         sceneMgr.current = manager;
         setMgrInstance(manager);
@@ -1052,7 +1114,7 @@ export const ThreeViewer = ({
             manager.resize();
         });
 
-        manager.onChunkProgress = onManagerChunkProgress;
+        manager.onChunkProgress = handleManagerChunkProgress;
 
         manager.onMeasureUpdate = (records) => {
             setMeasureHistory(records.map(r => ({ id: r.id, type: r.type, val: r.val })));
@@ -1894,6 +1956,9 @@ export const ThreeViewer = ({
                     ifcPropertyCacheRef.current.clear();
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
+                    const resetBenchmark: ChunkBenchmarkState = { startedAt: null, t20Ms: null, t50Ms: null };
+                    chunkBenchmarkRef.current = resetBenchmark;
+                    setChunkBenchmark(resetBenchmark);
                     completedFileSetsRef.current.clear(); // 清除已完成的文件集记录
                     setExplodeEnabled(false);
                     setExplodeStrength(32);
@@ -2335,6 +2400,16 @@ export const ThreeViewer = ({
                             {stats.chunksTotal > 0 && (
                                 <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunks">
                                     CH {stats.chunksLoaded}/{stats.chunksTotal}
+                                </div>
+                            )}
+                            {chunkBenchmark.t20Ms !== null && (
+                                <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Time to 20% visible chunks">
+                                    T20 {(chunkBenchmark.t20Ms / 1000).toFixed(2)}s
+                                </div>
+                            )}
+                            {chunkBenchmark.t50Ms !== null && (
+                                <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Time to 50% visible chunks">
+                                    T50 {(chunkBenchmark.t50Ms / 1000).toFixed(2)}s
                                 </div>
                             )}
                             <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Pixel Ratio">

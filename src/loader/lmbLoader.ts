@@ -149,13 +149,18 @@ export const composeMatrixByMatrix3 = (matrix: Float32Array, position: Float32Ar
 export class LMBLoader extends Loader {
   manager: LoadingManager;
   private static expressIdCounter = LMB_EXPRESS_ID_START;
+  private static textDecoder = new TextDecoder();
 
   constructor(manager?: LoadingManager) {
     super(manager);
     this.manager = manager || THREE.DefaultLoadingManager;
   }
 
-  async loadAsync(url: string, onProgress?: (progress: any) => void): Promise<THREE.Group> {
+  async loadAsync(
+    url: string,
+    onProgress?: (progress: any) => void,
+    options: { fastMode?: boolean } = {}
+  ): Promise<THREE.Group> {
     const loader = new FileLoader(this.manager);
     loader.setResponseType("arraybuffer");
 
@@ -166,10 +171,15 @@ export class LMBLoader extends Loader {
     const isCompressed = url.split('?')[0].split('#')[0].toLowerCase().endsWith("lmbz");
     if (isCompressed) throw new Error("不支持 lmbz 压缩格式，请使用 .lmb");
 
-    return this.parse(buffer, onProgress);
+    return this.parse(buffer, onProgress, options);
   }
 
-  parse(buffer: ArrayBuffer, onProgress: (progress: number) => void = () => {}) {
+  parse(
+    buffer: ArrayBuffer,
+    onProgress: (progress: number) => void = () => {},
+    options: { fastMode?: boolean } = {}
+  ) {
+    const fastMode = options.fastMode ?? true;
     const view = new DataView(buffer);
     let offset = 0;
     
@@ -191,7 +201,7 @@ export class LMBLoader extends Loader {
     // 2. 颜色表
     const colors: number[] = [];
     for (let i = 0; i < colorCount; i++) {
-      onProgress(currentStep / totalSteps);
+      if ((i & 31) === 0) onProgress(currentStep / totalSteps);
       currentStep++;
       const color = view.getUint32(offset, true);
       colors.push(color);
@@ -223,9 +233,9 @@ export class LMBLoader extends Loader {
 
     // 3. 节点数据
     for (let i = 0; i < nodeCount; i++) {
-      onProgress(currentStep / totalSteps);
+      if ((i & 31) === 0) onProgress(currentStep / totalSteps);
       currentStep++;
-      const node = this.parseNode(buffer, view, offset);
+      const node = this.parseNode(buffer, view, offset, { decodeNames: !fastMode });
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(node.vertices, 3));
@@ -281,12 +291,20 @@ export class LMBLoader extends Loader {
     return root;
   }
 
-  parseNode(buffer: ArrayBuffer, view: DataView, offset: number) {
+  parseNode(
+    buffer: ArrayBuffer,
+    view: DataView,
+    offset: number,
+    options: { decodeNames?: boolean } = {}
+  ) {
+    const decodeNames = options.decodeNames ?? true;
     // 名称
     const nameLength = view.getUint16(offset, true);
     offset += 2;
 
-    const name = new TextDecoder().decode(new Uint8Array(buffer, offset, nameLength));
+    const name = decodeNames
+      ? LMBLoader.textDecoder.decode(new Uint8Array(buffer, offset, nameLength))
+      : "";
     offset += nameLength;
 
     while (offset % 4 !== 0) offset++;
@@ -389,7 +407,9 @@ export class LMBLoader extends Loader {
         const instanceNameLength = view.getUint16(offset, true);
         offset += 2;
 
-        const instanceName = new TextDecoder().decode(new Uint8Array(buffer, offset, instanceNameLength));
+        const instanceName = decodeNames
+          ? LMBLoader.textDecoder.decode(new Uint8Array(buffer, offset, instanceNameLength))
+          : "";
         offset += instanceNameLength;
 
         const alignmentPadding = (4 - (offset % 4)) % 4;
