@@ -113,6 +113,32 @@ export const ThreeViewer = ({
         }
     }, [defaultLang, lang, setLang]);
 
+    // 全站禁用原生右键菜单与常见鼠标手势（保留应用内自定义右键逻辑）
+    useEffect(() => {
+        const preventDefault = (event: Event) => {
+            event.preventDefault();
+        };
+        const preventBrowserNavigation = (event: MouseEvent) => {
+            // button 3/4: 浏览器后退/前进侧键
+            if (event.button === 3 || event.button === 4) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+
+        document.addEventListener("contextmenu", preventDefault, { capture: true });
+        document.addEventListener("gesturestart", preventDefault as EventListener, { capture: true } as AddEventListenerOptions);
+        window.addEventListener("auxclick", preventDefault as EventListener, { capture: true });
+        window.addEventListener("mousedown", preventBrowserNavigation, { capture: true });
+
+        return () => {
+            document.removeEventListener("contextmenu", preventDefault, { capture: true } as EventListenerOptions);
+            document.removeEventListener("gesturestart", preventDefault as EventListener, { capture: true } as EventListenerOptions);
+            window.removeEventListener("auxclick", preventDefault as EventListener, { capture: true } as EventListenerOptions);
+            window.removeEventListener("mousedown", preventBrowserNavigation, { capture: true } as EventListenerOptions);
+        };
+    }, []);
+
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
     const {
@@ -1575,12 +1601,18 @@ export const ThreeViewer = ({
         if (!sceneMgr.current || !obj) return;
         const uuid = obj.uuid || obj.id;
         if (!uuid) return;
+
         setLocatedUuid(uuid);
-        const resultSet = locateResultUuids.length > 0 ? locateResultUuids : [uuid];
-        sceneMgr.current.setLocateResultSet(resultSet, uuid);
+        // 定位统一走“隔离 + 视图聚焦”，避免全场景材质克隆导致卡顿
+        sceneMgr.current.clearLocateFocus();
+        sceneMgr.current.isolateObjects([uuid]);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set([uuid]));
+        updateTree();
+
         sceneMgr.current.fitViewToObject(uuid);
         void handleSelect(obj);
-    }, [handleSelect, locateResultUuids]);
+    }, [handleSelect, updateTree]);
 
     const handleLocateResultsChange = useCallback((uuids: string[]) => {
         setLocateResultUuids((prev) => {
@@ -1592,23 +1624,23 @@ export const ThreeViewer = ({
         if (!sceneMgr.current) return;
         if (uuids.length === 0) {
             sceneMgr.current.clearLocateFocus();
-            if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
-                sceneMgr.current.setAllVisibility(true);
-                updateTree();
-            }
+            sceneMgr.current.setAllVisibility(true);
+            setHiddenUuids(new Set());
+            setIsolatedUuids(new Set());
+            updateTree();
         }
-    }, [hiddenUuids.size, isolatedUuids.size, updateTree]);
+    }, [updateTree]);
 
     const handleClearLocate = useCallback(() => {
         setLocatedUuid(null);
         setLocateResultUuids([]);
         sceneMgr.current?.clearLocateFocus();
+        sceneMgr.current?.setAllVisibility(true);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set());
         sceneMgr.current?.highlightObjects(selectedUuids);
-        if (hiddenUuids.size === 0 && isolatedUuids.size === 0) {
-            sceneMgr.current?.setAllVisibility(true);
-            updateTree();
-        }
-    }, [hiddenUuids, isolatedUuids, selectedUuids, updateTree]);
+        updateTree();
+    }, [selectedUuids, updateTree]);
     const { processFiles, loadItemsIntoScene } = useFileLoadingFlow({
         managerRef: sceneMgr,
         sceneSettings,

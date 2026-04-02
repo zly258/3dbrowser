@@ -3959,9 +3959,9 @@ export class SceneManager {
 
     clearLocateFocus() {
         this.locateObjectMaterialCache.forEach((material, uuid) => {
-            const obj = this.contentGroup.getObjectByProperty("uuid", uuid) as THREE.Mesh | null;
-            if (!obj || !obj.isMesh) return;
-            obj.material = material;
+            const obj = this.contentGroup.getObjectByProperty("uuid", uuid) as (THREE.Mesh & { isBatchedMesh?: boolean }) | null;
+            if (!obj || (!obj.isMesh && !(obj as any).isBatchedMesh)) return;
+            (obj as any).material = material;
         });
         this.locateObjectMaterialCache.clear();
         this.locateMaterialCache.clear();
@@ -3983,6 +3983,30 @@ export class SceneManager {
         return true;
     }
 
+    private expandLocateTargets(ids: string[]) {
+        const expanded = new Set<string>();
+        const queue = [...ids];
+        const visited = new Set<string>();
+
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            if (!current || visited.has(current)) continue;
+            visited.add(current);
+            expanded.add(current);
+
+            const nodes = this.nodeMap.get(current);
+            if (!nodes || nodes.length === 0) continue;
+            for (const node of nodes) {
+                if (!node.children || node.children.length === 0) continue;
+                for (const child of node.children) {
+                    if (!visited.has(child.id)) queue.push(child.id);
+                }
+            }
+        }
+
+        return expanded;
+    }
+
     private updateLocateFocusHighlight(uuid: string | null) {
         this.locateFocusUuid = uuid;
         this.highlightObject(uuid);
@@ -3994,20 +4018,24 @@ export class SceneManager {
             this.clearLocateFocus();
             return;
         }
+        const selectedSet = new Set(normalized);
 
-        if (this.hasSameLocateResultSet(normalized)) {
-            const nextFocus = focusUuid && this.locateResultSet.has(focusUuid) ? focusUuid : normalized[0];
+        const expandedTargets = this.expandLocateTargets(normalized);
+        const expandedList = Array.from(expandedTargets);
+
+        if (this.hasSameLocateResultSet(expandedList)) {
+            const nextFocus = focusUuid && this.locateResultSet.has(focusUuid) ? focusUuid : expandedList[0];
             this.updateLocateFocusHighlight(nextFocus);
             return;
         }
 
         this.clearLocateFocus();
-        const resultSet = new Set(normalized);
+        const resultSet = expandedTargets;
         this.locateResultSet = resultSet;
-        this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : normalized[0];
+        this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : expandedList[0];
         const focusKey = this.locateFocusUuid;
 
-        const dimmedColor = new THREE.Color("#cfd4dc");
+        const dimmedColor = new THREE.Color("#b7bec9");
         const accentColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
         this.contentGroup.traverse((child) => {
             const mesh = child as THREE.Mesh;
@@ -4039,9 +4067,9 @@ export class SceneManager {
                         cloned.color.copy(baseColor.lerp(accentColor, tint));
                     } else {
                         cloned.transparent = true;
-                        cloned.opacity = 0.12;
+                        cloned.opacity = 0.18;
                         cloned.depthWrite = false;
-                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.78));
+                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.84));
                     }
                 }
                 if ("emissive" in cloned && cloned.emissive) {
@@ -4057,6 +4085,79 @@ export class SceneManager {
                 return cloned;
             });
             mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
+        });
+
+        // NBIM / BatchedMesh 路径：按 originalUuid 维度应用“目标高亮 + 其他透明灰”
+        this.contentGroup.traverse((child) => {
+            const batched = child as THREE.Object3D & {
+                isBatchedMesh?: boolean;
+                material?: THREE.Material | THREE.Material[];
+                userData?: any;
+            };
+            if (!batched.isBatchedMesh || !batched.material) return;
+
+            if (!this.locateObjectMaterialCache.has(child.uuid)) {
+                this.locateObjectMaterialCache.set(child.uuid, batched.material);
+            }
+            const owner = batched.userData?.originalUuid ? String(batched.userData.originalUuid) : "";
+            const batchIdToUuid = batched.userData?.batchIdToUuid as Map<number, string> | undefined;
+            let hasMatchedInstance = false;
+            let hasFocusInstance = false;
+            if (batchIdToUuid && batchIdToUuid.size > 0) {
+                for (const instanceUuid of batchIdToUuid.values()) {
+                    if (!hasMatchedInstance && resultSet.has(instanceUuid)) hasMatchedInstance = true;
+                    if (!hasFocusInstance && focusKey !== null && instanceUuid === focusKey) hasFocusInstance = true;
+                    if (hasMatchedInstance && hasFocusInstance) break;
+                }
+            }
+            const ownerExplicitSelected = owner ? selectedSet.has(owner) : false;
+            const isMatched = resultSet.has(child.uuid) || hasMatchedInstance || ownerExplicitSelected;
+            const isFocus =
+                (this.locateFocusUuid !== null && this.locateFocusUuid === child.uuid) ||
+                hasFocusInstance ||
+                (ownerExplicitSelected && this.locateFocusUuid !== null && this.locateFocusUuid === owner);
+            const sourceMaterials = Array.isArray(batched.material) ? batched.material : [batched.material];
+
+            const nextMaterials = sourceMaterials.map((material) => {
+                if (!material) return material;
+                const cloned = material.clone() as THREE.Material & {
+                    transparent?: boolean;
+                    opacity?: number;
+                    depthWrite?: boolean;
+                    color?: THREE.Color;
+                    emissive?: THREE.Color;
+                    roughness?: number;
+                    metalness?: number;
+                };
+                if ("transparent" in cloned) cloned.transparent = false;
+                if ("opacity" in cloned) cloned.opacity = 1;
+                if ("depthWrite" in cloned) cloned.depthWrite = true;
+
+                if ("color" in cloned && cloned.color) {
+                    const baseColor = cloned.color.clone();
+                    if (isMatched) {
+                        const tint = isFocus ? 0.92 : 0.7;
+                        cloned.color.copy(baseColor.lerp(accentColor, tint));
+                    } else {
+                        cloned.transparent = true;
+                        cloned.opacity = 0.16;
+                        cloned.depthWrite = false;
+                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.86));
+                    }
+                }
+                if ("emissive" in cloned && cloned.emissive) {
+                    if (isMatched) {
+                        cloned.emissive.copy(accentColor.clone().multiplyScalar(isFocus ? 0.36 : 0.12));
+                    } else {
+                        cloned.emissive.set(0x000000);
+                    }
+                }
+                if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
+                if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
+                cloned.needsUpdate = true;
+                return cloned;
+            });
+            (batched as any).material = Array.isArray(batched.material) ? nextMaterials : nextMaterials[0];
         });
 
         this.optimizedMapping.forEach((mappings, originalUuid) => {
@@ -4481,10 +4582,10 @@ export class SceneManager {
     fitViewToObject(uuid: string) {
         const box = new THREE.Box3();
         this.unionNodeBounds(uuid, box);
-        if (!box.isEmpty()) this.fitBox(box, false);
+        if (!box.isEmpty()) this.fitBox(box, false, 1.14);
     }
 
-    fitBox(box: THREE.Box3, updateCameraPosition: boolean = true) {
+    fitBox(box: THREE.Box3, updateCameraPosition: boolean = true, paddingOverride?: number) {
         if (box.isEmpty()) {
             this.camera.zoom = 1;
             this.camera.position.set(1000, 1000, 1000);
@@ -4499,7 +4600,7 @@ export class SceneManager {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const extent = maxDim > 0 ? maxDim : 100;
-        const padding = 1.02;
+        const padding = paddingOverride ?? 1.02;
 
         const w = this.canvas.clientWidth;
         const h = this.canvas.clientHeight;
