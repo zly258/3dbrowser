@@ -31,6 +31,26 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
             setCopiedText(text);
             setTimeout(() => setCopiedText(null), 1500);
         } catch (e) {
+            try {
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                textarea.setAttribute("readonly", "true");
+                textarea.style.position = "fixed";
+                textarea.style.left = "-9999px";
+                textarea.style.top = "0";
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                const copied = document.execCommand("copy");
+                document.body.removeChild(textarea);
+                if (copied) {
+                    setCopiedText(text);
+                    setTimeout(() => setCopiedText(null), 1500);
+                    return;
+                }
+            } catch {
+                // noop
+            }
             console.error("Failed to copy", e);
         }
     };

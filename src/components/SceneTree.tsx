@@ -465,19 +465,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const visibleItems = flatData.slice(startIndex, endIndex);
 
     useEffect(() => {
-        if (!selectedUuid || !containerRef.current) return;
-
         if (selectionSourceRef.current === "tree") {
             selectionSourceRef.current = null;
-            return;
         }
-
-        const targetIndex = flatData.findIndex((node) => node.uuid === selectedUuid);
-        if (targetIndex < 0) return;
-
-        const itemCenter = targetIndex * rowHeight + rowHeight / 2;
-        containerRef.current.scrollTop = Math.max(0, itemCenter - containerHeight / 2);
-    }, [selectedUuid, flatData, containerHeight, rowHeight]);
+    }, [selectedUuid]);
 
     const toggleNode = (nodeUuid: string) => {
         const toggle = (nodes: TreeNode[]): TreeNode[] =>
