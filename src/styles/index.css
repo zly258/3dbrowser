@@ -46,6 +46,13 @@
 
   /* Typography */
   --font-size-base: 13px;
+  --font-size-secondary: 12px;
+  --font-size-label: 11px;
+
+  /* Density */
+  --control-h-sm: 24px;
+  --control-h-md: 28px;
+  --control-h-lg: 32px;
 
   /* Rounded Corners (MD3 Token based, but adjusted for "medium") */
   --radius-sm: 4px;
@@ -101,6 +108,13 @@
 
   /* Typography */
   --font-size-base: 13px;
+  --font-size-secondary: 12px;
+  --font-size-label: 11px;
+
+  /* Density */
+  --control-h-sm: 24px;
+  --control-h-md: 28px;
+  --control-h-lg: 32px;
 
   /* Rounded Corners */
   --radius-sm: 4px;
@@ -305,7 +319,7 @@ body {
   cursor: pointer;
   transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
-  min-height: 28px; /* Reduced button height */
+  min-height: var(--control-h-md);
   border: 1px solid transparent;
   white-space: nowrap;
   letter-spacing: 0.1px;
@@ -398,11 +412,11 @@ body {
 }
 
 .ui-btn-icon-sm {
-  width: 22px;
-  height: 22px;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
   padding: 0;
-  min-width: 22px;
-  min-height: 22px;
+  min-width: var(--control-h-sm);
+  min-height: var(--control-h-sm);
 }
 
 /* 按钮激活状态 */
@@ -423,7 +437,7 @@ body {
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   transition: all 200ms ease;
-  min-height: 28px;
+  min-height: var(--control-h-md);
 }
 
 .ui-input:focus {
@@ -597,7 +611,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* ==================== 数据面板 ==================== */
 .ui-data-panel {
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -625,13 +639,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-data-label {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--font-size-label);
 }
 
 .ui-data-value {
   color: var(--text-primary);
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
 }
 
 /* ==================== 列表项 ==================== */
@@ -692,7 +706,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolbar {
   display: flex;
   align-items: center;
-  height: 48x;
+  height: 46px;
   padding: 0 12px;
   gap: 4px;
   background-color: var(--bg-panel);
@@ -718,10 +732,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
-  height: 40px; /* Fixed height to prevent 'height > width' */
+  padding: 3px 8px;
+  height: 40px;
   min-width: 40px;
-  gap: 2px;
+  gap: 3px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 200ms ease;
@@ -729,7 +743,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: transparent;
   border: none;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .ui-toolbar-btn:hover {
@@ -756,6 +770,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+  overflow: visible;
+}
+
+.ui-toolbar-btn > div:last-child {
+  line-height: 1.2;
 }
 
 /* ==================== 状态栏 ==================== */
@@ -763,11 +782,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 24px;
+  height: 26px;
   padding: 0 8px;
   background-color: var(--bg-header);
   border-top: 1px solid var(--border-color);
-  font-size: 11px;
+  font-size: var(--font-size-label);
+  line-height: 1;
   color: var(--text-secondary);
 }
 
@@ -782,12 +802,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   gap: 4px;
+  line-height: 1;
 }
 
 .ui-statusbar-value {
   color: var(--text-primary);
   font-weight: 500;
-  font-size: 11px;
+  font-size: var(--font-size-label);
 }
 
 /* ==================== 模态框 ==================== */
@@ -924,7 +945,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* ==================== 文本工具 ==================== */
 .text-xs { font-size: 11px; }
-.text-sm { font-size: 12px; }
+.text-sm { font-size: var(--font-size-secondary); }
 .text-base { font-size: 13px; }
 .text-lg { font-size: 14px; }
 .text-xl { font-size: 16px; }
@@ -1151,7 +1172,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 /* ==================== 字号等级 ==================== */
 /* 固定使用中等字号 */
 :root {
-  --font-size-base: 12px;
+  --font-size-base: 13px;
 }
 
 /* 全站字号应用 */
@@ -1163,7 +1184,6 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-panel,
 .ui-modal,
 .ui-toolbar,
-.ui-statusbar,
 .ui-btn,
 .ui-input,
 .ui-segmented-item,
@@ -1358,10 +1378,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: var(--radius-md);
   background-color: var(--bg-hover);
-  font-size: 11px;
+  font-size: var(--font-size-label);
+  line-height: 1;
   color: var(--text-primary);
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -1376,11 +1397,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-statusbar-tag-compact {
   gap: 4px;
-  padding: 1px 6px;
+  padding: 2px 6px;
 }
 
 .ui-statusbar-brand {
   letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
 }
 
 .ui-divider-vertical-compact {
@@ -1576,7 +1600,6 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-input-number .ui-input {
   padding-right: 32px;
   font-family: 'Roboto Mono', 'Consolas', monospace;
-  -moz-appearance: textfield; /* Hide native spinner in Firefox */
 }
 
 /* Hide native number spinner in Chrome/Safari/Edge */

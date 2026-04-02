@@ -22,8 +22,24 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
             className={`ui-toolbar-btn ${active ? 'active' : ''} ${className}`}
             {...props}
         >
-            <div className="flex items-center justify-center w-[18px] h-[18px] overflow-hidden">{icon}</div>
-            {label && <div className="text-[10px] leading-none font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-full">{label}</div>}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, overflow: "visible" }}>
+                {icon}
+            </div>
+            {label && (
+                <div
+                    style={{
+                        fontSize: 11,
+                        lineHeight: 1,
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: "100%"
+                    }}
+                >
+                    {label}
+                </div>
+            )}
         </button>
     );
 };

@@ -189,7 +189,13 @@ async function loadObjectByExtension(
         if (ext === "ifc") {
             const { loadIFC } = await import("./IFCLoader");
             reportStage("parse", 0);
-            return await loadIFC(typeof fileOrUrl === "string" ? url : fileOrUrl, (p, msg) => reportStage("parse", p, msg), t, libPath, settings);
+            return await loadIFC(
+                typeof fileOrUrl === "string" ? url : fileOrUrl,
+                (p, msg) => reportStage("parse", p, msg),
+                t,
+                libPath,
+                settings as unknown as Record<string, unknown>
+            );
         }
 
         if (ext === "obj") {

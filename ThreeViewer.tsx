@@ -2,7 +2,7 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 // @ts-ignore
 import * as THREE from "three";
 import "./src/styles/index.css";
-import { SceneManager, MeasureType, SceneSettings } from "./src/utils/SceneManager";
+import { SceneManager, MeasureType, SceneSettings, PerformancePreset, SceneChunkOptions } from "./src/utils/SceneManager";
 import { exportGLB, exportLMB } from "./src/utils/converter";
 import { themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
@@ -20,8 +20,16 @@ import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { ContextMenu } from "./src/components/ContextMenu";
 import { IconClose, IconSun, IconMoon, IconActivity, IconBox, IconGrid } from "./src/theme/Icons";
 import { usePersistentState } from "./src/hooks/usePersistentState";
-import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "./src/viewer/fileLoading";
+import { useChunkProgress } from "./src/hooks/useChunkProgress";
+import { useFileLoadingFlow } from "./src/hooks/useFileLoadingFlow";
+import { useSceneSelection } from "./src/hooks/useSceneSelection";
+import { cleanLoadingStatus } from "./src/viewer/fileLoading";
 import { buildSelectedPropertyGroups, PropertyGroups } from "./src/viewer/selectionProperties";
+
+const IS_DEV = typeof window !== "undefined" && (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+);
 
 // --- 全局样式注入 ---
 
@@ -39,6 +47,8 @@ export interface ThreeViewerProps {
     onSelect?: (uuid: string, object: any) => void;
     onLoad?: (manager: SceneManager) => void;
     hideDeleteModel?: boolean;
+    performancePreset?: PerformancePreset;
+    chunkOptions?: SceneChunkOptions;
 }
 
 type IfcFilterState = {
@@ -64,7 +74,9 @@ export const ThreeViewer = ({
      initialFiles,
      onSelect: propOnSelect,
      onLoad,
-     hideDeleteModel = false
+     hideDeleteModel = false,
+     performancePreset = 'balanced',
+     chunkOptions
  }: ThreeViewerProps) => {
     const sceneBgFollowsTheme = initialSettings?.bgColor === undefined;
 
@@ -103,8 +115,12 @@ export const ThreeViewer = ({
 
     // 状态
     const [treeRoot, setTreeRoot] = useState<any[]>([]);
-    const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
-    const selectedUuid = selectedUuids.length > 0 ? selectedUuids[selectedUuids.length - 1] : null;
+    const {
+        selectedUuids,
+        selectedUuid,
+        setSelectedUuids,
+        clearSelection
+    } = useSceneSelection();
     const [locatedUuid, setLocatedUuid] = useState<string | null>(null);
     const [locateResultUuids, setLocateResultUuids] = useState<string[]>([]);
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
@@ -308,12 +324,28 @@ export const ThreeViewer = ({
             });
         }
     }, [clipHelperVisible, clipHelperOpacity, setClipHelperOpacity]);
+
+    useEffect(() => {
+        const manager = sceneMgr.current;
+        if (!manager) return;
+        manager.setChunkOptions(chunkOptions || {});
+        manager.updateSettings({
+            ...sceneSettings,
+            performanceMode: performancePreset,
+            targetFps: chunkOptions?.targetMinFps ?? sceneSettings.targetFps
+        });
+    }, [chunkOptions, performancePreset, sceneSettings]);
     
     // 是否加载了模型（基于treeRoot判断）
     const hasModels = treeRoot.length > 0;
     
     // 跟踪已完成首次加载的文件集,避免重复toast提示
     const completedFileSetsRef = useRef<Set<string>>(new Set());
+    const currentFileSetIdRef = useRef("");
+
+    useEffect(() => {
+        currentFileSetIdRef.current = currentFileSetId;
+    }, [currentFileSetId]);
 
     // Error State
     const [errorState, setErrorState] = useState<{
@@ -325,6 +357,16 @@ export const ThreeViewer = ({
 
     // Toast Message State
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+
+    const { onManagerChunkProgress } = useChunkProgress({
+        fileSetIdRef: currentFileSetIdRef,
+        completedFileSetsRef,
+        onProgress: setChunkProgress,
+        onCompleted: () => {
+            setToast({ message: t("all_chunks_loaded"), type: 'success' });
+            setChunkProgress({ loaded: 0, total: 0 });
+        }
+    });
     
     // 右键菜单状态
     const [contextMenu, setContextMenu] = useState<{
@@ -956,7 +998,7 @@ export const ThreeViewer = ({
     };
 
     const handleClearSelection = () => {
-        setSelectedUuids([]);
+        clearSelection();
         setSelectedIfcStorey("");
         sceneMgr.current?.highlightObjects([]);
     };
@@ -965,7 +1007,10 @@ export const ThreeViewer = ({
     useEffect(() => {
         if (!canvasRef.current) return;
         
-        const manager = new SceneManager(canvasRef.current);
+        const manager = new SceneManager(canvasRef.current, {
+            performancePreset,
+            chunkOptions
+        });
         sceneMgr.current = manager;
         setMgrInstance(manager);
         
@@ -981,28 +1026,7 @@ export const ThreeViewer = ({
             manager.resize();
         });
 
-        // 监听分块加载进度
-        let clearProgressTimer: any = null;
-
-        manager.onChunkProgress = (loaded, total) => {
-            setChunkProgress({ loaded, total });
-            
-            if (loaded === total && total > 0 && currentFileSetId) {
-                // 只在首次完成加载时显示toast
-                if (!completedFileSetsRef.current.has(currentFileSetId)) {
-                    setToast({ message: t("all_chunks_loaded"), type: 'success' });
-                    completedFileSetsRef.current.add(currentFileSetId);
-                    
-                    // 加载完成后，立即清空进度信息，不再显示3秒
-                    setChunkProgress({ loaded: 0, total: 0 });
-                }
-            } else {
-                if (clearProgressTimer) {
-                    clearTimeout(clearProgressTimer);
-                    clearProgressTimer = null;
-                }
-            }
-        };
+        manager.onChunkProgress = onManagerChunkProgress;
 
         manager.onMeasureUpdate = (records) => {
             setMeasureHistory(records.map(r => ({ id: r.id, type: r.type, val: r.val })));
@@ -1013,7 +1037,6 @@ export const ThreeViewer = ({
         };
 
         return () => {
-            if (clearProgressTimer) clearTimeout(clearProgressTimer);
             manager.dispose();
         };
     }, []); 
@@ -1522,14 +1545,14 @@ export const ThreeViewer = ({
         const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
         const nbimIfcGroups = sceneMgr.current.getNbimIfcPropertyGroups(focusUuid, "raw");
 
-        if (nbimProps && Object.keys(nbimProps).length > 0) {
+        if (IS_DEV && nbimProps && Object.keys(nbimProps).length > 0) {
             console.group(`NBIM 选中属性: ${focusUuid}`);
             console.log(nbimProps);
             console.log(JSON.stringify(nbimProps, null, 2));
             console.groupEnd();
         }
 
-        if (nbimIfcGroups) {
+        if (IS_DEV && nbimIfcGroups) {
             console.group(`NBIM IFC 组属性: ${focusUuid}`);
             console.log(nbimIfcGroups);
             console.log(JSON.stringify(nbimIfcGroups, null, 2));
@@ -1586,52 +1609,18 @@ export const ThreeViewer = ({
             updateTree();
         }
     }, [hiddenUuids, isolatedUuids, selectedUuids, updateTree]);
-
-    const processFiles = async (items: (File | string)[]) => {
-        if (!items.length || !sceneMgr.current) return;
-        
-        // Update current file set ID
-        const setId = createFileSetId(items);
-        setCurrentFileSetId(setId);
-        
-        console.log("[ThreeViewer] processFiles called with", items.length, "items");
-        (sceneMgr.current as any).setChunkLoadingEnabled?.(true);
-        (sceneMgr.current as any).setContentVisible?.(true);
-        setLoading(true);
-        setStatus(t("loading"));
-        setProgress(0);
-        
-        try {
-            await loadItemsIntoScene(items);
-            
-            updateTree();
-            setStatus(t("success"));
-            console.log("[ThreeViewer] processFiles completed successfully");
-            sceneMgr.current?.fitView(false);
-        } catch (err) {
-            console.error("[ThreeViewer] processFiles error:", err); 
-            setStatus(t("failed")); 
-            setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
-        } finally { 
-            setLoading(false); 
-        }
-    };
-
-    const loadItemsIntoScene = async (items: (File | string)[]) => {
-        if (!items.length || !sceneMgr.current) return;
-
-        await loadSceneItems({
-            items,
-            manager: sceneMgr.current,
-            sceneSettings,
-            libPath,
-            t,
-            onProgress: (p, msg) => {
-                setProgress(p);
-                if (msg) setStatus(cleanLoadingStatus(msg));
-            }
-        });
-    };
+    const { processFiles, loadItemsIntoScene } = useFileLoadingFlow({
+        managerRef: sceneMgr,
+        sceneSettings,
+        libPath,
+        t,
+        setCurrentFileSetId,
+        setLoading,
+        setStatus,
+        setProgress,
+        setToast,
+        updateTree
+    });
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
@@ -1691,7 +1680,7 @@ export const ThreeViewer = ({
         const url = window.prompt(t("menu_open_url"), "http://");
         if (!url || !url.startsWith("http")) return;
         
-        console.log("[ThreeViewer] handleOpenUrl called with:", url);
+        if (IS_DEV) console.log("[ThreeViewer] handleOpenUrl called with:", url);
         setLoading(true);
         setStatus(t("processing") + "...");
         try {

@@ -57,3 +57,48 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
 export const DEFAULT_FONT = "'Roboto', 'Inter', 'Segoe UI', 'Microsoft YaHei', sans-serif";
 
 export const colors = themes.dark;
+
+function readCssVar(name: string) {
+    if (typeof window === "undefined") return "";
+    const style = getComputedStyle(document.documentElement);
+    return style.getPropertyValue(name).trim();
+}
+
+export function resolveThemeColors(themeMode: "dark" | "light"): ThemeColors {
+    const fallback = themes[themeMode];
+    const vars = {
+        bg: readCssVar("--bg-primary"),
+        panelBg: readCssVar("--bg-panel"),
+        headerBg: readCssVar("--bg-header"),
+        border: readCssVar("--border-color"),
+        text: readCssVar("--text-primary"),
+        textLight: themeMode === "dark" ? "#FFFFFF" : "#000000",
+        textMuted: readCssVar("--text-muted"),
+        accent: readCssVar("--accent"),
+        highlight: readCssVar("--bg-selected"),
+        itemHover: readCssVar("--bg-hover"),
+        success: readCssVar("--success"),
+        warning: readCssVar("--warning"),
+        danger: readCssVar("--error"),
+        canvasBg: readCssVar("--bg-canvas"),
+        shadow: readCssVar("--shadow-md")
+    };
+
+    return {
+        bg: vars.bg || fallback.bg,
+        panelBg: vars.panelBg || fallback.panelBg,
+        headerBg: vars.headerBg || fallback.headerBg,
+        border: vars.border || fallback.border,
+        text: vars.text || fallback.text,
+        textLight: vars.textLight || fallback.textLight,
+        textMuted: vars.textMuted || fallback.textMuted,
+        accent: vars.accent || fallback.accent,
+        highlight: vars.highlight || fallback.highlight,
+        itemHover: vars.itemHover || fallback.itemHover,
+        success: vars.success || fallback.success,
+        warning: vars.warning || fallback.warning,
+        danger: vars.danger || fallback.danger,
+        canvasBg: vars.canvasBg || fallback.canvasBg,
+        shadow: vars.shadow || fallback.shadow
+    };
+}

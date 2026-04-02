@@ -91,7 +91,7 @@ export const ClassicSubItem = ({ label, onClick, enabled = true, checked, icon }
                 )}
                 {icon && checked === undefined && (
                     <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.8 }}>
-                        {React.cloneElement(icon as React.ReactElement, { size: 16 })}
+                        {icon}
                     </span>
                 )}
                 {label}
