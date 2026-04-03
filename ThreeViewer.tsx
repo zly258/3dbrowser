@@ -27,6 +27,7 @@ import { cleanLoadingStatus } from "./src/viewer/fileLoading";
 import { buildSelectedPropertyGroups, PropertyGroups } from "./src/viewer/selectionProperties";
 import { usePropertySearch } from "./src/viewer/usePropertySearch";
 import { useClashCheck } from "./src/viewer/useClashCheck";
+import { useClashSummary } from "./src/viewer/useClashSummary";
 
 const IS_DEV = typeof window !== "undefined" && (
     window.location.hostname === "localhost" ||
@@ -193,7 +194,6 @@ export const ThreeViewer = ({
     // 存储历史记录: { id, type, val }
     const [measureHistory, setMeasureHistory] = useState<any[]>([]);
     const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
-    const clashAnnotatedUuidsRef = useRef<Set<string>>(new Set());
 
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
@@ -416,51 +416,7 @@ export const ThreeViewer = ({
         setSelectedUuids,
         t
     });
-    const clashSummaryByUuid = useMemo(() => {
-        const summary = new Map<string, {
-            total: number;
-            newCount: number;
-            confirmedCount: number;
-            resolvedCount: number;
-            worstStatus: "new" | "confirmed" | "resolved";
-        }>();
-        const merge = (uuid: string, status: "new" | "confirmed" | "resolved") => {
-            if (!uuid) return;
-            const current = summary.get(uuid) || {
-                total: 0,
-                newCount: 0,
-                confirmedCount: 0,
-                resolvedCount: 0,
-                worstStatus: "resolved" as const
-            };
-            current.total += 1;
-            if (status === "new") current.newCount += 1;
-            else if (status === "confirmed") current.confirmedCount += 1;
-            else current.resolvedCount += 1;
-
-            if (current.newCount > 0) current.worstStatus = "new";
-            else if (current.confirmedCount > 0) current.worstStatus = "confirmed";
-            else current.worstStatus = "resolved";
-            summary.set(uuid, current);
-        };
-
-        clashResults.forEach((item) => {
-            merge(item.aUuid, item.status);
-            merge(item.bUuid, item.status);
-        });
-
-        const out: Record<string, {
-            total: number;
-            newCount: number;
-            confirmedCount: number;
-            resolvedCount: number;
-            worstStatus: "new" | "confirmed" | "resolved";
-        }> = {};
-        summary.forEach((value, key) => {
-            out[key] = value;
-        });
-        return out;
-    }, [clashResults]);
+    const clashSummaryByUuid = useClashSummary(sceneMgr, clashResults);
     
     // 跟踪已完成首次加载的文件集,避免重复toast提示
     const completedFileSetsRef = useRef<Set<string>>(new Set());
@@ -499,43 +455,6 @@ export const ThreeViewer = ({
         applyClashModelOptionBounds();
     }, [applyClashModelOptionBounds]);
 
-    useEffect(() => {
-        if (!sceneMgr.current) return;
-        const mgr = sceneMgr.current;
-        const previouslyAnnotated = clashAnnotatedUuidsRef.current;
-        previouslyAnnotated.forEach((uuid) => {
-            const obj = mgr.contentGroup.getObjectByProperty("uuid", uuid) as any;
-            if (obj?.userData?.clash) delete obj.userData.clash;
-            const nodes = mgr.getStructureNodes(uuid) || [];
-            nodes.forEach((node: any) => {
-                if (node?.userData?.clash) delete node.userData.clash;
-            });
-        });
-
-        const nextAnnotated = new Set<string>();
-        Object.entries(clashSummaryByUuid).forEach(([uuid, stat]) => {
-            nextAnnotated.add(uuid);
-            const payload = {
-                total: stat.total,
-                new: stat.newCount,
-                confirmed: stat.confirmedCount,
-                resolved: stat.resolvedCount,
-                status: stat.worstStatus
-            };
-            const obj = mgr.contentGroup.getObjectByProperty("uuid", uuid) as any;
-            if (obj) {
-                if (!obj.userData) obj.userData = {};
-                obj.userData.clash = payload;
-            }
-            const nodes = mgr.getStructureNodes(uuid) || [];
-            nodes.forEach((node: any) => {
-                if (!node.userData) node.userData = {};
-                node.userData.clash = payload;
-            });
-        });
-        clashAnnotatedUuidsRef.current = nextAnnotated;
-    }, [clashSummaryByUuid]);
-    
     // 右键菜单状态
     const [contextMenu, setContextMenu] = useState<{
         x: number;
