@@ -4487,6 +4487,25 @@ export class SceneManager {
         if (!box.isEmpty()) this.fitBox(box, false, 1.14);
     }
 
+    getBoundsForObject(uuid: string) {
+        if (!uuid) return null;
+        const box = new THREE.Box3();
+        this.unionNodeBounds(uuid, box);
+        return box.isEmpty() ? null : box;
+    }
+
+    collectBoundsForUuids(uuids: string[]) {
+        const box = new THREE.Box3();
+        const unique = Array.from(new Set((uuids || []).filter(Boolean)));
+        unique.forEach((uuid) => this.unionNodeBounds(uuid, box));
+        return box;
+    }
+
+    fitViewToObjects(uuids: string[]) {
+        const box = this.collectBoundsForUuids(uuids);
+        if (!box.isEmpty()) this.fitBox(box, false, 1.14);
+    }
+
     fitBox(box: THREE.Box3, updateCameraPosition: boolean = true, paddingOverride?: number) {
         if (box.isEmpty()) {
             this.camera.zoom = 1;
