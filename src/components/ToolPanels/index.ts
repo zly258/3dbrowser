@@ -8,3 +8,4 @@ export { ScreenshotPanel } from './ScreenshotPanel';
 export { ViewpointPanel } from './ViewpointPanel';
 export { ExplodePanel } from './ExplodePanel';
 export { SearchPanel } from './SearchPanel';
+export { ClashPanel } from './ClashPanel';
