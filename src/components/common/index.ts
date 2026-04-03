@@ -35,3 +35,5 @@ export type { CheckboxProps } from './Checkbox';
 
 export { InputNumber } from './InputNumber';
 export type { InputNumberProps } from './InputNumber';
+
+export { PaginationControls } from './PaginationControls';

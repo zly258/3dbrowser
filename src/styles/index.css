@@ -1534,6 +1534,26 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   height: 20px;
 }
 
+.ui-page-nav-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ui-page-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ui-page-nav-indicator {
+  min-width: 64px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .ui-tree-locator-btn {
   width: 36px;
   min-width: 36px;
@@ -1620,7 +1640,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-family: 'Roboto Mono', 'Consolas', monospace;
 }
 
-/* Hide native number spinner in Chrome/Safari/Edge */
+/* 在 Chrome/Safari/Edge 中隐藏数字输入框原生微调按钮 */
 .ui-input-number .ui-input::-webkit-outer-spin-button,
 .ui-input-number .ui-input::-webkit-inner-spin-button {
   -webkit-appearance: none;

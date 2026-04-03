@@ -1,8 +1,6 @@
 import React, { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
 // @ts-ignore
 import * as THREE from "three";
-// @ts-ignore
-import { OBB } from "three/examples/jsm/math/OBB.js";
 import "./src/styles/index.css";
 import { SceneManager, MeasureType, SceneSettings, PerformancePreset, SceneChunkOptions } from "./src/utils/SceneManager";
 import { exportGLB, exportLMB } from "./src/utils/converter";
@@ -27,6 +25,8 @@ import { useFileLoadingFlow } from "./src/hooks/useFileLoadingFlow";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { cleanLoadingStatus } from "./src/viewer/fileLoading";
 import { buildSelectedPropertyGroups, PropertyGroups } from "./src/viewer/selectionProperties";
+import { usePropertySearch } from "./src/viewer/usePropertySearch";
+import { useClashCheck } from "./src/viewer/useClashCheck";
 
 const IS_DEV = typeof window !== "undefined" && (
     window.location.hostname === "localhost" ||
@@ -52,37 +52,6 @@ export interface ThreeViewerProps {
     performancePreset?: PerformancePreset;
     chunkOptions?: SceneChunkOptions;
 }
-
-type SearchOperator = "equals" | "contains" | "notContains" | "startsWith" | "endsWith";
-type SearchConnector = "AND" | "OR";
-
-type PropertySearchCondition = {
-    id: string;
-    propertyName: string;
-    operator: SearchOperator;
-    value: string;
-    connector?: SearchConnector;
-};
-
-type ClashResultItem = {
-    id: string;
-    pairKey: string;
-    aUuid: string;
-    bUuid: string;
-    aName: string;
-    bName: string;
-    overlapVolume: number;
-    status: "new" | "confirmed" | "resolved";
-};
-
-type ClashFilter = "ALL" | "NEW" | "CONFIRMED" | "RESOLVED";
-
-type ClashMeshInfo = {
-    uuid: string;
-    geometry: THREE.BufferGeometry;
-    matrixWorld: THREE.Matrix4;
-    triangleCount: number;
-};
 
 
 // --- 主应用 ---
@@ -148,6 +117,8 @@ export const ThreeViewer = ({
             setLang(defaultLang);
         }
     }, [defaultLang, lang, setLang]);
+
+    const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
     // 全站禁用原生右键菜单与常见鼠标手势（保留应用内自定义右键逻辑）
     useEffect(() => {
@@ -222,31 +193,6 @@ export const ThreeViewer = ({
     // 存储历史记录: { id, type, val }
     const [measureHistory, setMeasureHistory] = useState<any[]>([]);
     const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
-    const [searchConditions, setSearchConditions] = useState<PropertySearchCondition[]>([
-        { id: "cond_init", propertyName: "", operator: "contains", value: "" }
-    ]);
-    const [searchResults, setSearchResults] = useState<Array<{ uuid: string; name: string; matchedBy: string[] }>>([]);
-    const [searching, setSearching] = useState(false);
-    const [searchProgress, setSearchProgress] = useState(0);
-    const [searchStatus, setSearchStatus] = useState("");
-    const searchRunTokenRef = useRef(0);
-    const searchInFlightRef = useRef(false);
-    const [clashResults, setClashResults] = useState<ClashResultItem[]>([]);
-    const [clashRunning, setClashRunning] = useState(false);
-    const [clashProgress, setClashProgress] = useState(0);
-    const [clashStatus, setClashStatus] = useState("");
-    const [clashScannedCount, setClashScannedCount] = useState(0);
-    const [clashSetA, setClashSetA] = useState<string[]>([]);
-    const [clashSetB, setClashSetB] = useState<string[]>([]);
-    const [clashTolerance, setClashTolerance] = useState(0);
-    const [clashMinOverlapVolume, setClashMinOverlapVolume] = useState(0);
-    const [clashUseNarrowPhase, setClashUseNarrowPhase] = useState(true);
-    const [clashUseTrianglePhase, setClashUseTrianglePhase] = useState(false);
-    const [clashPairsScanned, setClashPairsScanned] = useState(0);
-    const [clashResultFilter, setClashResultFilter] = useState<ClashFilter>("ALL");
-    const clashRunTokenRef = useRef(0);
-    const clashInFlightRef = useRef(false);
-    const clashMeshInfoCacheRef = useRef<Map<string, ClashMeshInfo>>(new Map());
     const clashAnnotatedUuidsRef = useRef<Set<string>>(new Set());
 
     const [clipEnabled, setClipEnabled] = useState(false);
@@ -432,6 +378,44 @@ export const ThreeViewer = ({
         });
         return options;
     }, [treeRoot]);
+    const {
+        clashResults,
+        clashRunning,
+        clashProgress,
+        clashStatus,
+        clashScannedCount,
+        clashSetA,
+        clashSetB,
+        clashTolerance,
+        clashMinOverlapVolume,
+        clashUseNarrowPhase,
+        clashUseTrianglePhase,
+        clashPairsScanned,
+        clashResultFilter,
+        setClashSetA,
+        setClashSetB,
+        setClashTolerance,
+        setClashMinOverlapVolume,
+        setClashUseNarrowPhase,
+        setClashUseTrianglePhase,
+        setClashResultFilter,
+        handleRunClashCheck,
+        handleCancelClashCheck,
+        handleClearClashResults,
+        handleFocusClashResult,
+        handleUpdateClashResultStatus,
+        handleMarkFilteredClashStatus,
+        handleExportClashCsv,
+        resetClashState,
+        applyClashModelOptionBounds
+    } = useClashCheck({
+        sceneMgrRef: sceneMgr,
+        treeRoot,
+        clashModelOptions,
+        selectedUuids,
+        setSelectedUuids,
+        t
+    });
     const clashSummaryByUuid = useMemo(() => {
         const summary = new Map<string, {
             total: number;
@@ -512,10 +496,8 @@ export const ThreeViewer = ({
     }, [onManagerChunkProgress]);
 
     useEffect(() => {
-        const validIds = new Set(clashModelOptions.map((item) => item.id));
-        setClashSetA((prev) => prev.filter((id) => validIds.has(id)));
-        setClashSetB((prev) => prev.filter((id) => validIds.has(id)));
-    }, [clashModelOptions]);
+        applyClashModelOptionBounds();
+    }, [applyClashModelOptionBounds]);
 
     useEffect(() => {
         if (!sceneMgr.current) return;
@@ -608,8 +590,6 @@ export const ThreeViewer = ({
         setLocatedUuid(null);
         sceneMgr.current.clearLocateFocus();
     }, [hiddenUuids, isolatedUuids]);
-
-    const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
     // 全局错误捕获
     useEffect(() => {
@@ -1714,702 +1694,25 @@ export const ThreeViewer = ({
         updateTree();
     }, [selectedUuids, updateTree]);
 
-    const buildSearchPropertyBag = useCallback((uuid: string, obj: any) => {
-        const bag = new Map<string, string[]>();
-        const addValue = (key: string, value: any) => {
-            const normalizedKey = String(key || "").trim().toLowerCase();
-            if (!normalizedKey) return;
-            if (value === undefined || value === null) return;
-            const normalizedValue = String(value).trim();
-            if (!normalizedValue) return;
-            const next = bag.get(normalizedKey) || [];
-            next.push(normalizedValue);
-            bag.set(normalizedKey, next);
-        };
-
-        addValue("name", obj?.name);
-        addValue("type", obj?.type);
-        addValue("uuid", uuid);
-        addValue("bimid", sceneMgr.current?.getBimIdByUuid(uuid) || "");
-
-        const userData = (obj?.userData || {}) as Record<string, any>;
-        Object.entries(userData).forEach(([key, value]) => {
-            if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-                addValue(key, value);
-            } else if (Array.isArray(value)) {
-                value.forEach((item) => addValue(key, item));
-            }
-        });
-
-        const ifcMeta = (obj?.userData?.ifcMetadata || {}) as Record<string, any>;
-        Object.entries(ifcMeta).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-                value.forEach((item) => addValue(key, item));
-            } else {
-                addValue(key, value);
-            }
-        });
-
-        const nbimProps = sceneMgr.current?.getNbimProperties(uuid);
-        if (nbimProps && typeof nbimProps === "object") {
-            Object.entries(nbimProps).forEach(([key, value]) => {
-                if (Array.isArray(value)) {
-                    value.forEach((item) => addValue(key, item));
-                } else if (typeof value === "object" && value) {
-                    Object.entries(value as Record<string, any>).forEach(([subKey, subValue]) => {
-                        addValue(`${key}.${subKey}`, subValue);
-                        addValue(subKey, subValue);
-                    });
-                } else {
-                    addValue(key, value);
-                }
-            });
-        }
-
-        const nbimIfcGroups = sceneMgr.current?.getNbimIfcPropertyGroups(uuid, "normalized");
-        if (nbimIfcGroups && typeof nbimIfcGroups === "object") {
-            Object.entries(nbimIfcGroups).forEach(([groupName, groupEntries]) => {
-                if (!groupEntries || typeof groupEntries !== "object") return;
-                Object.entries(groupEntries).forEach(([fieldKey, fieldValue]) => {
-                    addValue(fieldKey, fieldValue);
-                    addValue(`${groupName}.${fieldKey}`, fieldValue);
-                });
-            });
-        }
-
-        return bag;
-    }, []);
-
-    const collectSearchCandidates = useCallback(() => {
-        const candidates: Array<{ uuid: string; name: string; source: any }> = [];
-        const visited = new Set<string>();
-
-        const walk = (nodes: any[]) => {
-            nodes.forEach((node) => {
-                const id = String(node?.id || node?.uuid || "");
-                if (!id || visited.has(id)) return;
-                visited.add(id);
-                const type = String(node?.type || "").toLowerCase();
-                if (type === "mesh" || type === "mESH".toLowerCase() || node?.bimId || node?.userData?.bimId) {
-                    candidates.push({
-                        uuid: id,
-                        name: node?.name || id,
-                        source: node
-                    });
-                }
-                if (Array.isArray(node?.children) && node.children.length > 0) {
-                    walk(node.children);
-                }
-            });
-        };
-
-        const root = sceneMgr.current?.structureRoot;
-        if (root?.children?.length) {
-            walk(root.children as any[]);
-        }
-
-        if (candidates.length === 0 && sceneMgr.current) {
-            sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
-                if (!(obj as THREE.Mesh).isMesh) return;
-                if (visited.has(obj.uuid)) return;
-                visited.add(obj.uuid);
-                candidates.push({
-                    uuid: obj.uuid,
-                    name: obj.name || obj.uuid,
-                    source: obj
-                });
-            });
-        }
-
-        return candidates;
-    }, []);
-
-    const evaluateCondition = useCallback((values: string[], operator: SearchOperator, query: string) => {
-        const normalizedQuery = query.toLowerCase();
-        return values.some((raw) => {
-            const value = raw.toLowerCase();
-            if (operator === "equals") return value === normalizedQuery;
-            if (operator === "contains") return value.includes(normalizedQuery);
-            if (operator === "notContains") return !value.includes(normalizedQuery);
-            if (operator === "startsWith") return value.startsWith(normalizedQuery);
-            if (operator === "endsWith") return value.endsWith(normalizedQuery);
-            return false;
-        });
-    }, []);
-
-    const handleRunPropertySearch = useCallback(async () => {
-        if (!sceneMgr.current) return;
-        if (searchInFlightRef.current) return;
-
-        const normalizedConditions = searchConditions.filter((item) => item.propertyName.trim() && item.value.trim());
-        if (normalizedConditions.length === 0) {
-            setSearchResults([]);
-            setSearching(false);
-            setSearchProgress(0);
-            setSearchStatus("");
-            setToast({ message: t("search_invalid_condition") || "请至少输入一组完整的搜索条件", type: "info" });
-            sceneMgr.current.highlightObjects(selectedUuids);
-            return;
-        }
-
-        const runToken = ++searchRunTokenRef.current;
-        const searchStartAt = performance.now();
-        searchInFlightRef.current = true;
-        setSearching(true);
-        setSearchProgress(0);
-        setSearchStatus(t("searching") || "搜索中...");
-
-        try {
-            const candidates = collectSearchCandidates();
-            const total = candidates.length;
-            const batchSize = 600;
-            const nextResults: Array<{ uuid: string; name: string; matchedBy: string[] }> = [];
-            let lastProgressAt = performance.now();
-            let cancelled = false;
-
-            for (let i = 0; i < candidates.length; i++) {
-                if (searchRunTokenRef.current !== runToken) {
-                    cancelled = true;
-                    setSearchStatus(t("search_cancelled") || "搜索已取消");
-                    break;
-                }
-                const item = candidates[i];
-                const uuid = item.uuid;
-                const bag = buildSearchPropertyBag(uuid, item.source);
-
-                let result: boolean | null = null;
-                const matchedBy: string[] = [];
-                normalizedConditions.forEach((condition, index) => {
-                    const key = condition.propertyName.trim().toLowerCase();
-                    const values = bag.get(key) || [];
-                    const matched = values.length > 0
-                        ? evaluateCondition(values, condition.operator, condition.value.trim())
-                        : false;
-                    if (matched) matchedBy.push(condition.propertyName.trim());
-                    if (index === 0 || result === null) result = matched;
-                    else if ((condition.connector || "AND") === "AND") result = Boolean(result) && matched;
-                    else result = Boolean(result) || matched;
-                });
-
-                if (result) {
-                    nextResults.push({ uuid, name: item.name || uuid, matchedBy: Array.from(new Set(matchedBy)) });
-                }
-
-                if ((i + 1) % batchSize === 0 || i === candidates.length - 1) {
-                    const now = performance.now();
-                    const progress = total > 0 ? ((i + 1) / total) * 100 : 100;
-                    if (now - lastProgressAt > 120 || i === candidates.length - 1) {
-                        setSearchProgress(progress);
-                        lastProgressAt = now;
-                    }
-                    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-                }
-            }
-
-            if (!cancelled) {
-                setSearchResults(nextResults);
-                sceneMgr.current.highlightObjects(nextResults.map((item) => item.uuid));
-                setSearchProgress(100);
-                setSearchStatus(`${t("search_results") || "结果"}: ${nextResults.length}`);
-            }
-        } finally {
-            const elapsed = performance.now() - searchStartAt;
-            const minVisibleMs = 220;
-            if (elapsed < minVisibleMs) {
-                await new Promise<void>((resolve) => window.setTimeout(resolve, minVisibleMs - elapsed));
-            }
-            setSearching(false);
-            searchInFlightRef.current = false;
-        }
-    }, [buildSearchPropertyBag, collectSearchCandidates, evaluateCondition, searchConditions, selectedUuids, t]);
-
-    const handleApplySearchResultHighlight = useCallback((uuid: string) => {
-        if (!sceneMgr.current) return;
-        const target = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
-        sceneMgr.current.fitViewToObject(uuid);
-        if (target) {
-            void handleSelect(target);
-            return;
-        }
-        setSelectedUuids([uuid]);
-        sceneMgr.current.highlightObjects([uuid]);
-    }, [handleSelect, setSelectedUuids]);
-
-    const handleClearSearchResult = useCallback(() => {
-        searchRunTokenRef.current++;
-        setSearchResults([]);
-        setSearching(false);
-        setSearchProgress(0);
-        setSearchStatus("");
-        searchInFlightRef.current = false;
-        if (!sceneMgr.current) return;
-        sceneMgr.current.highlightObjects(selectedUuids);
-    }, [selectedUuids]);
-
-    const handleCancelSearch = useCallback(() => {
-        if (!searchInFlightRef.current) return;
-        searchRunTokenRef.current++;
-        setSearchStatus(t("search_cancelling") || "正在取消搜索...");
-    }, [t]);
-
-    const collectClashCandidates = useCallback(() => {
-        if (!sceneMgr.current) return [] as Array<{ uuid: string; name: string; modelId: string; modelName: string }>;
-
-        const modelNameById = new Map<string, string>();
-        clashModelOptions.forEach((item) => {
-            modelNameById.set(item.id, item.name);
-        });
-        const candidates: Array<{ uuid: string; name: string; modelId: string; modelName: string }> = [];
-        const visited = new Set<string>();
-        const walk = (nodes: any[], owner?: { modelId: string; modelName: string }) => {
-            nodes.forEach((node) => {
-                if (!node || node.visible === false) return;
-                const id = String(node.id || node.uuid || "");
-                if (!id) return;
-                const nodeModelId = String(node?.object?.userData?.originalUuid || node?.userData?.originalUuid || owner?.modelId || "");
-                const nodeModelName = String(modelNameById.get(nodeModelId) || owner?.modelName || node?.name || nodeModelId || "");
-                const children = Array.isArray(node.children) ? node.children : [];
-                const isLeaf = children.length === 0;
-                const isMeshLike = String(node.type || "").toLowerCase() === "mesh";
-                if ((isMeshLike || isLeaf) && !visited.has(id)) {
-                    visited.add(id);
-                    candidates.push({
-                        uuid: id,
-                        name: String(node.name || id),
-                        modelId: nodeModelId,
-                        modelName: nodeModelName
-                    });
-                }
-                if (children.length > 0) {
-                    walk(children, {
-                        modelId: nodeModelId || owner?.modelId || "",
-                        modelName: nodeModelName || owner?.modelName || ""
-                    });
-                }
-            });
-        };
-
-        if (treeRoot.length > 0) {
-            walk(treeRoot as any[]);
-        }
-
-        if (candidates.length === 0 && sceneMgr.current) {
-            const resolveOwner = (obj: THREE.Object3D) => {
-                let current: THREE.Object3D | null = obj;
-                while (current) {
-                    const owner = current.userData?.originalUuid;
-                    if (owner) return String(owner);
-                    current = current.parent;
-                }
-                return "";
-            };
-            sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
-                if (!(obj as THREE.Mesh).isMesh || obj.visible === false) return;
-                if (visited.has(obj.uuid)) return;
-                visited.add(obj.uuid);
-                const ownerId = resolveOwner(obj);
-                candidates.push({
-                    uuid: obj.uuid,
-                    name: obj.name || obj.uuid,
-                    modelId: ownerId,
-                    modelName: modelNameById.get(ownerId) || ownerId || ""
-                });
-            });
-        }
-        return candidates;
-    }, [clashModelOptions, treeRoot]);
-
-    const getCandidateObb = useCallback((uuid: string) => {
-        if (!sceneMgr.current) return null;
-        const optimized = sceneMgr.current.optimizedMapping.get(uuid);
-        if (optimized && optimized.length > 0) {
-            const mapping = optimized[0];
-            const geometry = mapping.geometry || mapping.mesh.geometry;
-            if (!geometry) return null;
-            if (!geometry.boundingBox) geometry.computeBoundingBox();
-            if (!geometry.boundingBox) return null;
-            const localBox = geometry.boundingBox;
-            const center = localBox.getCenter(new THREE.Vector3());
-            const half = localBox.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-            const matrix = new THREE.Matrix4();
-            mapping.mesh.getMatrixAt(mapping.instanceId, matrix);
-            matrix.premultiply(mapping.mesh.matrixWorld);
-            const obb = new OBB(center.clone(), half.clone(), new THREE.Matrix3());
-            obb.applyMatrix4(matrix);
-            return obb;
-        }
-
-        const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid) as THREE.Object3D | null;
-        if (!obj) return null;
-        const mesh = obj as THREE.Mesh;
-        if (mesh.isMesh && mesh.geometry) {
-            if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-            if (!mesh.geometry.boundingBox) return null;
-            const localBox = mesh.geometry.boundingBox;
-            const center = localBox.getCenter(new THREE.Vector3());
-            const half = localBox.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-            const obb = new OBB(center.clone(), half.clone(), new THREE.Matrix3());
-            obb.applyMatrix4(mesh.matrixWorld);
-            return obb;
-        }
-        return null;
-    }, []);
-
-    const getClashMeshInfo = useCallback((uuid: string): ClashMeshInfo | null => {
-        if (!sceneMgr.current) return null;
-        const cached = clashMeshInfoCacheRef.current.get(uuid);
-        if (cached) return cached;
-
-        const optimized = sceneMgr.current.optimizedMapping.get(uuid);
-        if (optimized && optimized.length > 0) {
-            const mapping = optimized[0];
-            const geometry = mapping.geometry || mapping.mesh.geometry;
-            if (!geometry) return null;
-            const index = geometry.index;
-            const pos = geometry.attributes.position;
-            if (!pos) return null;
-            const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(pos.count / 3);
-            const matrixWorld = new THREE.Matrix4();
-            mapping.mesh.getMatrixAt(mapping.instanceId, matrixWorld);
-            matrixWorld.premultiply(mapping.mesh.matrixWorld);
-            const info: ClashMeshInfo = { uuid, geometry, matrixWorld, triangleCount };
-            clashMeshInfoCacheRef.current.set(uuid, info);
-            return info;
-        }
-
-        const obj = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid) as THREE.Object3D | null;
-        if (!obj) return null;
-        const mesh = obj as THREE.Mesh;
-        if (!mesh.isMesh || !mesh.geometry) return null;
-        const geometry = mesh.geometry;
-        const pos = geometry.attributes.position;
-        if (!pos) return null;
-        const index = geometry.index;
-        const triangleCount = index ? Math.floor(index.count / 3) : Math.floor(pos.count / 3);
-        const info: ClashMeshInfo = { uuid, geometry, matrixWorld: mesh.matrixWorld.clone(), triangleCount };
-        clashMeshInfoCacheRef.current.set(uuid, info);
-        return info;
-    }, []);
-
-    const collectTriangleCentersInBox = useCallback((meshInfo: ClashMeshInfo, box: THREE.Box3, maxCenters: number, maxTrianglesToScan: number) => {
-        const centers: THREE.Vector3[] = [];
-        const pos = meshInfo.geometry.attributes.position as THREE.BufferAttribute | undefined;
-        if (!pos) return centers;
-        const index = meshInfo.geometry.index;
-        const triCount = index ? Math.floor(index.count / 3) : Math.floor(pos.count / 3);
-        const scanCount = Math.min(triCount, maxTrianglesToScan);
-        const stride = triCount > scanCount ? Math.max(1, Math.floor(triCount / scanCount)) : 1;
-        const a = new THREE.Vector3();
-        const b = new THREE.Vector3();
-        const c = new THREE.Vector3();
-        const tri = new THREE.Triangle();
-
-        for (let ti = 0; ti < triCount && centers.length < maxCenters; ti += stride) {
-            const i0 = index ? index.getX(ti * 3) : ti * 3;
-            const i1 = index ? index.getX(ti * 3 + 1) : ti * 3 + 1;
-            const i2 = index ? index.getX(ti * 3 + 2) : ti * 3 + 2;
-            a.fromBufferAttribute(pos, i0).applyMatrix4(meshInfo.matrixWorld);
-            b.fromBufferAttribute(pos, i1).applyMatrix4(meshInfo.matrixWorld);
-            c.fromBufferAttribute(pos, i2).applyMatrix4(meshInfo.matrixWorld);
-            tri.set(a, b, c);
-            if (!tri.intersectsBox(box)) continue;
-            const center = new THREE.Vector3().copy(a).add(b).add(c).multiplyScalar(1 / 3);
-            centers.push(center);
-        }
-
-        return centers;
-    }, []);
-
-    const isPointInsideMeshByRaycast = useCallback((point: THREE.Vector3, meshInfo: ClashMeshInfo) => {
-        const pos = meshInfo.geometry.attributes.position as THREE.BufferAttribute | undefined;
-        if (!pos) return false;
-        const index = meshInfo.geometry.index;
-        const triCount = index ? Math.floor(index.count / 3) : Math.floor(pos.count / 3);
-        const maxTrianglesToScan = 12000;
-        const scanCount = Math.min(triCount, maxTrianglesToScan);
-        const stride = triCount > scanCount ? Math.max(1, Math.floor(triCount / scanCount)) : 1;
-
-        const origin = point.clone();
-        origin.x -= 1e-4;
-        const dir = new THREE.Vector3(1, 0, 0);
-        const ray = new THREE.Ray(origin, dir);
-        const hit = new THREE.Vector3();
-        const a = new THREE.Vector3();
-        const b = new THREE.Vector3();
-        const c = new THREE.Vector3();
-        let intersections = 0;
-
-        for (let ti = 0; ti < triCount; ti += stride) {
-            const i0 = index ? index.getX(ti * 3) : ti * 3;
-            const i1 = index ? index.getX(ti * 3 + 1) : ti * 3 + 1;
-            const i2 = index ? index.getX(ti * 3 + 2) : ti * 3 + 2;
-            a.fromBufferAttribute(pos, i0).applyMatrix4(meshInfo.matrixWorld);
-            b.fromBufferAttribute(pos, i1).applyMatrix4(meshInfo.matrixWorld);
-            c.fromBufferAttribute(pos, i2).applyMatrix4(meshInfo.matrixWorld);
-            const h = ray.intersectTriangle(a, b, c, false, hit);
-            if (!h) continue;
-            if (hit.x < origin.x) continue;
-            intersections++;
-        }
-
-        return intersections % 2 === 1;
-    }, []);
-
-    const passesTrianglePhase = useCallback((aUuid: string, bUuid: string, overlap: THREE.Box3) => {
-        const aInfo = getClashMeshInfo(aUuid);
-        const bInfo = getClashMeshInfo(bUuid);
-        if (!aInfo || !bInfo) return true;
-        if (aInfo.triangleCount <= 0 || bInfo.triangleCount <= 0) return true;
-
-        const triLimit = 30000;
-        if (aInfo.triangleCount > triLimit || bInfo.triangleCount > triLimit) return true;
-
-        const centersA = collectTriangleCentersInBox(aInfo, overlap, 4, 6000);
-        const centersB = collectTriangleCentersInBox(bInfo, overlap, 4, 6000);
-        if (centersA.length === 0 || centersB.length === 0) return false;
-
-        const aInsideB = centersA.some((center) => isPointInsideMeshByRaycast(center, bInfo));
-        if (aInsideB) return true;
-        const bInsideA = centersB.some((center) => isPointInsideMeshByRaycast(center, aInfo));
-        return bInsideA;
-    }, [collectTriangleCentersInBox, getClashMeshInfo, isPointInsideMeshByRaycast]);
-
-    const handleRunClashCheck = useCallback(async () => {
-        if (!sceneMgr.current || clashInFlightRef.current) return;
-        const runToken = ++clashRunTokenRef.current;
-        const startedAt = performance.now();
-        clashInFlightRef.current = true;
-        clashMeshInfoCacheRef.current.clear();
-        setClashRunning(true);
-        setClashProgress(0);
-        setClashStatus(t("clash_collecting") || "正在收集构件...");
-        setClashResults([]);
-        setClashPairsScanned(0);
-
-        try {
-            const rawCandidates = collectClashCandidates();
-            setClashScannedCount(rawCandidates.length);
-            if (rawCandidates.length < 2) {
-                setClashStatus(t("clash_insufficient_candidates") || "可检测构件不足（至少需要2个）");
-                return;
-            }
-
-            const bounded: Array<{ uuid: string; name: string; box: THREE.Box3; testBox: THREE.Box3; obb: OBB | null; modelId: string; modelName: string }> = [];
-            const boundsBatch = 240;
-            for (let i = 0; i < rawCandidates.length; i++) {
-                if (clashRunTokenRef.current !== runToken) {
-                    setClashStatus(t("search_cancelled") || "搜索已取消");
-                    return;
-                }
-                const item = rawCandidates[i];
-                const box = sceneMgr.current.getBoundsForObject(item.uuid);
-                if (box && !box.isEmpty()) {
-                    const testBox = box.clone();
-                    if (clashTolerance > 0) testBox.expandByScalar(clashTolerance);
-                    const obb = clashUseNarrowPhase ? getCandidateObb(item.uuid) : null;
-                    bounded.push({ ...item, box, testBox, obb });
-                }
-                if ((i + 1) % boundsBatch === 0 || i === rawCandidates.length - 1) {
-                    const p = rawCandidates.length > 0 ? ((i + 1) / rawCandidates.length) * 30 : 30;
-                    setClashProgress(p);
-                    setClashStatus(`${t("clash_collecting") || "正在收集构件..."} ${i + 1}/${rawCandidates.length}`);
-                    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-                }
-            }
-
-            if (bounded.length < 2) {
-                setClashStatus(t("clash_no_results") || "暂无碰撞结果");
-                setClashProgress(100);
-                return;
-            }
-
-            bounded.sort((a, b) => a.testBox.min.x - b.testBox.min.x);
-            setClashStatus(t("clash_running") || "正在执行碰撞检查...");
-
-            const maxResults = 2000;
-            const results: ClashResultItem[] = [];
-            const overlapBox = new THREE.Box3();
-            const n = bounded.length;
-            let pairChecks = 0;
-            const setAFilter = new Set(clashSetA);
-            const setBFilter = new Set(clashSetB);
-            const hasA = setAFilter.size > 0;
-            const hasB = setBFilter.size > 0;
-            const pairAllowed = (aModelId: string, bModelId: string) => {
-                if (hasA && hasB) {
-                    return (setAFilter.has(aModelId) && setBFilter.has(bModelId))
-                        || (setAFilter.has(bModelId) && setBFilter.has(aModelId));
-                }
-                if (hasA) return setAFilter.has(aModelId) || setAFilter.has(bModelId);
-                if (hasB) return setBFilter.has(aModelId) || setBFilter.has(bModelId);
-                return true;
-            };
-
-            for (let i = 0; i < n; i++) {
-                if (clashRunTokenRef.current !== runToken) {
-                    setClashStatus(t("search_cancelled") || "搜索已取消");
-                    return;
-                }
-
-                const a = bounded[i];
-                const aMaxX = a.testBox.max.x;
-                for (let j = i + 1; j < n; j++) {
-                    const b = bounded[j];
-                    if (b.testBox.min.x > aMaxX) break;
-                    if (!pairAllowed(a.modelId, b.modelId)) continue;
-                    pairChecks++;
-                    if (!a.testBox.intersectsBox(b.testBox)) continue;
-
-                    if (clashUseNarrowPhase && a.obb && b.obb) {
-                        const obbA = a.obb.clone();
-                        const obbB = b.obb.clone();
-                        if (clashTolerance > 0) {
-                            obbA.halfSize.addScalar(clashTolerance);
-                            obbB.halfSize.addScalar(clashTolerance);
-                        }
-                        if (!obbA.intersectsOBB(obbB, Number.EPSILON * 10)) continue;
-                    }
-                    overlapBox.copy(a.box).intersect(b.box);
-                    let overlapVolume = 0;
-                    if (!overlapBox.isEmpty()) {
-                        const overlapSize = overlapBox.getSize(new THREE.Vector3());
-                        overlapVolume = Math.max(0, overlapSize.x) * Math.max(0, overlapSize.y) * Math.max(0, overlapSize.z);
-                    }
-                    if (overlapVolume < clashMinOverlapVolume) continue;
-                    if (clashUseTrianglePhase) {
-                        if (overlapBox.isEmpty()) continue;
-                        const passed = passesTrianglePhase(a.uuid, b.uuid, overlapBox);
-                        if (!passed) continue;
-                    }
-                    const pairKey = [a.uuid, b.uuid].sort().join("::");
-                    results.push({
-                        id: `clash_${pairKey}_${results.length}`,
-                        pairKey,
-                        aUuid: a.uuid,
-                        bUuid: b.uuid,
-                        aName: a.name,
-                        bName: b.name,
-                        overlapVolume,
-                        status: "new"
-                    });
-                    if (results.length >= maxResults) break;
-                }
-
-                if (results.length >= maxResults) break;
-                if ((i + 1) % 50 === 0 || i === n - 1) {
-                    const p = 30 + ((i + 1) / n) * 70;
-                    setClashProgress(p);
-                    setClashPairsScanned(pairChecks);
-                    setClashStatus(`${t("clash_running") || "正在执行碰撞检查..."} ${i + 1}/${n}`);
-                    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-                }
-            }
-
-            results.sort((x, y) => y.overlapVolume - x.overlapVolume);
-            setClashResults((prev) => {
-                const statusByPair = new Map<string, ClashResultItem["status"]>();
-                prev.forEach((item) => statusByPair.set(item.pairKey, item.status));
-                return results.map((item) => ({
-                    ...item,
-                    status: statusByPair.get(item.pairKey) || "new"
-                }));
-            });
-            setClashPairsScanned(pairChecks);
-            setClashProgress(100);
-            setClashStatus(`${t("clash_results") || "碰撞结果"}: ${results.length}`);
-            if (results.length === 0) {
-                sceneMgr.current.clearLocateFocus();
-            }
-        } finally {
-            const elapsed = performance.now() - startedAt;
-            const minVisibleMs = 220;
-            if (elapsed < minVisibleMs) {
-                await new Promise<void>((resolve) => window.setTimeout(resolve, minVisibleMs - elapsed));
-            }
-            clashInFlightRef.current = false;
-            setClashRunning(false);
-        }
-    }, [clashMinOverlapVolume, clashSetA, clashSetB, clashTolerance, clashUseNarrowPhase, clashUseTrianglePhase, collectClashCandidates, getCandidateObb, passesTrianglePhase, t]);
-
-    const handleCancelClashCheck = useCallback(() => {
-        if (!clashInFlightRef.current) return;
-        clashRunTokenRef.current++;
-        setClashStatus(t("search_cancelling") || "正在取消搜索...");
-    }, [t]);
-
-    const handleClearClashResults = useCallback(() => {
-        clashRunTokenRef.current++;
-        clashInFlightRef.current = false;
-        setClashRunning(false);
-        setClashProgress(0);
-        setClashStatus("");
-        setClashScannedCount(0);
-        setClashPairsScanned(0);
-        setClashResultFilter("ALL");
-        setClashResults([]);
-        sceneMgr.current?.clearLocateFocus();
-        sceneMgr.current?.highlightObjects(selectedUuids);
-    }, [selectedUuids]);
-
-    const handleFocusClashResult = useCallback((item: ClashResultItem) => {
-        if (!sceneMgr.current) return;
-        const uuids = [item.aUuid, item.bUuid];
-        sceneMgr.current.setClashPairHighlight(item.aUuid, item.bUuid);
-        sceneMgr.current.fitViewToObjects(uuids);
-        setSelectedUuids(uuids);
-    }, [setSelectedUuids]);
-
-    const handleUpdateClashResultStatus = useCallback((id: string, nextStatus: ClashResultItem["status"]) => {
-        setClashResults((prev) => prev.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)));
-    }, []);
-
-    const handleMarkFilteredClashStatus = useCallback((nextStatus: ClashResultItem["status"]) => {
-        setClashResults((prev) => prev.map((item) => {
-            const matched =
-                clashResultFilter === "ALL"
-                    || (clashResultFilter === "NEW" && item.status === "new")
-                    || (clashResultFilter === "CONFIRMED" && item.status === "confirmed")
-                    || (clashResultFilter === "RESOLVED" && item.status === "resolved");
-            return matched ? { ...item, status: nextStatus } : item;
-        }));
-    }, [clashResultFilter]);
-
-    const handleExportClashCsv = useCallback(() => {
-        if (clashResults.length === 0) return;
-        const escapeCsv = (value: string | number) => {
-            const text = String(value ?? "");
-            if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
-                return `"${text.replace(/"/g, "\"\"")}"`;
-            }
-            return text;
-        };
-
-        const header = ["pairKey", "aUuid", "aName", "bUuid", "bName", "status", "overlapVolume"];
-        const lines = [header.join(",")];
-        clashResults.forEach((item) => {
-            lines.push([
-                escapeCsv(item.pairKey),
-                escapeCsv(item.aUuid),
-                escapeCsv(item.aName),
-                escapeCsv(item.bUuid),
-                escapeCsv(item.bName),
-                escapeCsv(item.status),
-                escapeCsv(item.overlapVolume.toFixed(6))
-            ].join(","));
-        });
-
-        const csv = "\uFEFF" + lines.join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const now = new Date();
-        const pad = (v: number) => String(v).padStart(2, "0");
-        const fileName = `clash_report_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-    }, [clashResults]);
+    const {
+        searchConditions,
+        setSearchConditions,
+        searchResults,
+        searching,
+        searchProgress,
+        searchStatus,
+        handleRunPropertySearch,
+        handleApplySearchResultHighlight,
+        handleClearSearchResult,
+        handleCancelSearch
+    } = usePropertySearch({
+        sceneMgrRef: sceneMgr,
+        selectedUuids,
+        setSelectedUuids,
+        onSelectObject: handleSelect,
+        t,
+        setToast
+    });
 
     const handleIsolateClashByStatus = useCallback((status: "new" | "confirmed") => {
         if (!sceneMgr.current) return;
@@ -2677,13 +1980,8 @@ export const ThreeViewer = ({
                     setSelectedUuids([]);
                     setLocatedUuid(null);
                     setSelectedProps(null);
-                    setSearchResults([]);
-                    setClashResults([]);
-                    setClashProgress(0);
-                    setClashStatus("");
-                    setClashScannedCount(0);
-                    setClashPairsScanned(0);
-                    setClashResultFilter("ALL");
+                    handleClearSearchResult();
+                    resetClashState();
                     ifcPropertyCacheRef.current.clear();
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
