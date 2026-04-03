@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Button, Checkbox, Select } from "../common";
-import { IconChevronLeft, IconChevronRight } from "../../theme/Icons";
+import { Button, Checkbox, PaginationControls, Select } from "../common";
 
 export interface ClashResultItem {
   id: string;
@@ -359,31 +358,14 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
         </div>
 
         {filteredResults.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Button
-                variant="ghost"
-                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                title={t("search_page_prev") || "上一页"}
-              >
-                <IconChevronLeft size={20} />
-              </Button>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 64, textAlign: "center" }}>
-                {currentPage}/{totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                title={t("search_page_next") || "下一页"}
-              >
-                <IconChevronRight size={20} />
-              </Button>
-            </div>
-          </div>
+          <PaginationControls
+            prevTitle={t("search_page_prev") || "上一页"}
+            nextTitle={t("search_page_next") || "下一页"}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
+            onNext={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          />
         )}
       </div>
     </FloatingPanel>

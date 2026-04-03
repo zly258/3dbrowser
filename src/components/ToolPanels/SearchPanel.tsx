@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Button, Select } from "../common";
-import { IconChevronLeft, IconChevronRight, IconClose } from "../../theme/Icons";
+import { Button, PaginationControls, Select } from "../common";
+import { IconClose } from "../../theme/Icons";
 
 export type SearchOperator = "equals" | "contains" | "notContains" | "startsWith" | "endsWith";
 export type SearchConnector = "AND" | "OR";
@@ -216,34 +216,19 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </div>
 
         {results.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Button
-                variant="ghost"
-                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                title={t("search_page_prev") || "上一页"}
-              >
-                <IconChevronLeft size={20} />
+          <PaginationControls
+            prevTitle={t("search_page_prev") || "上一页"}
+            nextTitle={t("search_page_next") || "下一页"}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
+            onNext={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            rightContent={
+              <Button className="ui-properties-action" onClick={onClearResult}>
+                {t("search_clear") || "清除结果"}
               </Button>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 64, textAlign: "center" }}>
-                {currentPage}/{totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage >= totalPages}
-                title={t("search_page_next") || "下一页"}
-              >
-                <IconChevronRight size={20} />
-              </Button>
-            </div>
-            <Button className="ui-properties-action" onClick={onClearResult}>
-              {t("search_clear") || "清除结果"}
-            </Button>
-          </div>
+            }
+          />
         )}
 
         {searching && (
