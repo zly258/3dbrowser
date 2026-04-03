@@ -1507,14 +1507,6 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-secondary);
 }
 
-.ui-tree-search-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
-  flex-shrink: 0;
-}
-
 .ui-icon-btn {
   width: 28px;
   min-width: 28px;
@@ -1554,27 +1546,58 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-secondary);
 }
 
-.ui-tree-locator-btn {
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  min-height: 36px;
-  padding: 0;
-  justify-content: center;
-  color: var(--text-primary);
+.ui-toolpanel-body {
+  position: relative;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.ui-toolpanel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-toolpanel-wrap {
+  flex-wrap: wrap;
+}
+
+.ui-toolpanel-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ui-toolpanel-caption {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ui-toolpanel-results-box {
   border: 1px solid var(--border-color);
-  background-color: var(--bg-panel);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
+  max-height: 220px;
+  overflow: auto;
 }
 
-.ui-tree-locator-btn:hover {
-  border-color: var(--border-hover);
+.ui-toolpanel-results-box-sm {
+  max-height: 160px;
 }
 
-.ui-tree-locator {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 6px;
+.ui-toolpanel-results-empty {
+  padding: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ui-result-item-secondary {
+  opacity: 0.7;
+  font-size: 11px;
 }
 
 .ui-search-clear:hover {

@@ -108,10 +108,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       autoHeight={true}
       theme={theme}
     >
-      <div style={{ position: "relative", padding: "12px", display: "flex", flexDirection: "column", gap: "10px", maxHeight: "68vh", overflow: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t("search_conditions") || "搜索条件"}</div>
-          <div style={{ display: "flex", gap: "8px" }}>
+      <div className="ui-toolpanel-body">
+        <div className="ui-toolpanel-row-between">
+          <div className="ui-toolpanel-caption">{t("search_conditions") || "搜索条件"}</div>
+          <div className="ui-toolpanel-row">
             <Button className="ui-properties-action" onClick={addCondition}>
               {t("search_add_condition") || "添加条件"}
             </Button>
@@ -177,9 +177,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           </div>
         ))}
 
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="ui-toolpanel-row-between ui-toolpanel-caption">
           <span>{t("search_results") || "搜索结果"}: {results.length}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div className="ui-toolpanel-row">
             <span>{t("search_page_size") || "每页"}</span>
             <Select
               value={String(pageSize)}
@@ -195,9 +195,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           </div>
         </div>
 
-        <div style={{ border: "1px solid var(--border-color)", borderRadius: "6px", maxHeight: "160px", overflow: "auto" }}>
+        <div className="ui-toolpanel-results-box ui-toolpanel-results-box-sm">
           {results.length === 0 ? (
-            <div style={{ padding: "10px", color: "var(--text-secondary)", fontSize: 12 }}>
+            <div className="ui-toolpanel-results-empty">
               {t("search_no_results") || "暂无结果"}
             </div>
           ) : (
@@ -209,7 +209,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 title={item.uuid}
               >
                 <span>{item.name || item.uuid}</span>
-                <span style={{ opacity: 0.7, fontSize: 11 }}>{item.matchedBy.join(", ")}</span>
+                <span className="ui-result-item-secondary">{item.matchedBy.join(", ")}</span>
               </button>
             ))
           )}
