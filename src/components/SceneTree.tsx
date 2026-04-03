@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { IconChevronRight, IconChevronLeft, IconChevronDown, IconClose, IconTarget } from "../theme/Icons";
-import { Button, Checkbox, Select } from "./common";
+import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
+import { Button, Checkbox } from "./common";
 import { ContextMenu } from "./ContextMenu";
 
 interface TreeNode {
@@ -29,16 +29,6 @@ interface IfcMetadata {
     typeName?: string;
     globalId?: string;
 }
-
-interface IfcFilterState {
-    storey: string;
-    elevation: string;
-    system: string;
-    category: string;
-    material: string;
-}
-
-type LocatorMode = "all" | "name" | "globalId" | "classification" | "typeName";
 
 const INVALID_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
 
@@ -118,22 +108,6 @@ const applyExpandedState = (nodes: TreeNode[], expandedMap: Map<string, boolean>
         children: applyExpandedState(node.children, expandedMap)
     }));
 
-const expandPathToUuid = (nodes: TreeNode[], targetUuid: string): [TreeNode[], boolean] => {
-    let found = false;
-    const nextNodes = nodes.map((node) => {
-        const [children, childFound] = expandPathToUuid(node.children, targetUuid);
-        const isSelf = node.uuid === targetUuid;
-        const isFound = isSelf || childFound;
-        if (isFound) found = true;
-        return {
-            ...node,
-            expanded: childFound ? true : node.expanded,
-            children
-        };
-    });
-    return [nextNodes, found];
-};
-
 const getRawChildren = (node: TreeNode | any): any[] => {
     const children = node?.object?.children ?? node?.children;
     return Array.isArray(children) ? children : [];
@@ -168,6 +142,13 @@ const ensureNodeChildrenLoaded = (node: TreeNode): TreeNode => {
     };
 };
 
+const rawTreeContainsUuid = (rawNode: any, targetUuid: string): boolean => {
+    if (!rawNode) return false;
+    if (rawNode.id === targetUuid || rawNode.uuid === targetUuid) return true;
+    const children = Array.isArray(rawNode.children) ? rawNode.children : [];
+    return children.some((child) => rawTreeContainsUuid(child, targetUuid));
+};
+
 const getNodeSearchText = (node: TreeNode | any) => {
     const source = node?.object ?? node;
     const meta = (source?.userData?.ifcMetadata || {}) as IfcMetadata;
@@ -177,6 +158,8 @@ const getNodeSearchText = (node: TreeNode | any) => {
         source?.bimId,
         source?.userData?.bimId,
         source?.userData?.expressID,
+        source?.userData?.ifcType,
+        source?.userData?.globalId,
         meta.storey,
         meta.category,
         meta.typeName,
@@ -190,51 +173,18 @@ const getNodeSearchText = (node: TreeNode | any) => {
         .toLowerCase();
 };
 
-const rawTreeContainsUuid = (rawNode: any, targetUuid: string): boolean => {
-    if (!rawNode) return false;
-    if (rawNode.id === targetUuid || rawNode.uuid === targetUuid) return true;
-    const children = Array.isArray(rawNode.children) ? rawNode.children : [];
-    return children.some((child) => rawTreeContainsUuid(child, targetUuid));
-};
-
-const getNodeLocatorText = (node: TreeNode | any, mode: LocatorMode) => {
-    const source = node?.object ?? node;
-    const meta = (source?.userData?.ifcMetadata || {}) as IfcMetadata;
-    const valuesByMode: Record<LocatorMode, Array<string | undefined | null | number>> = {
-        all: [
-            source?.name,
-            meta.globalId,
-            meta.typeName,
-            meta.category,
-            ...(meta.classifications || [])
-        ],
-        name: [source?.name],
-        globalId: [meta.globalId],
-        classification: meta.classifications || [],
-        typeName: [meta.typeName, meta.category]
-    };
-
-    return valuesByMode[mode]
-        .filter((value) => value !== undefined && value !== null && value !== "")
-        .join(" ")
-        .toLowerCase();
-};
-
 interface SceneTreeProps {
     t: (key: string) => string;
     treeRoot: TreeNode[];
     setTreeRoot: React.Dispatch<React.SetStateAction<TreeNode[]>>;
     selectedUuid: string | null;
     locatedUuid?: string | null;
-    selectedStorey?: string;
     onSelect: (uuid: string, obj: any) => void;
     onToggleVisibility: (uuid: string, visible: boolean) => void;
     onDelete?: (obj: any) => void;
     onIsolate?: (uuid: string) => void;
     onHide?: (uuid: string) => void;
     onShowAll?: () => void;
-    onApplyIfcFiltersToViewport?: (filters: IfcFilterState) => void;
-    onApplyStoreyWorkset?: (storeys: string[]) => void;
     onLocate?: (obj: any) => void;
     onClearLocate?: () => void;
     onLocateResultsChange?: (uuids: string[]) => void;
@@ -247,31 +197,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     setTreeRoot,
     selectedUuid,
     locatedUuid,
-    selectedStorey,
     onSelect,
     onToggleVisibility,
     onDelete,
     onIsolate,
     onHide,
     onShowAll,
-    onApplyIfcFiltersToViewport,
-    onApplyStoreyWorkset,
     onLocate,
     onClearLocate,
     onLocateResultsChange,
     locateResultUuids = []
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
-    const [locatorMode, setLocatorMode] = useState<LocatorMode>("all");
-    const [locatorQuery, setLocatorQuery] = useState("");
-    const [locatorIndex, setLocatorIndex] = useState(0);
-    const [filters, setFilters] = useState<IfcFilterState>({
-        storey: "",
-        elevation: "",
-        system: "",
-        category: "",
-        material: ""
-    });
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(400);
@@ -279,70 +216,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const selectionSourceRef = useRef<"tree" | "external" | null>(null);
     const searchExpandedStateRef = useRef<Map<string, boolean> | null>(null);
     const previousSearchQueryRef = useRef("");
-    const lastLocateResultsRef = useRef<string[]>([]);
-
-    const collectIfcOptions = (nodes: TreeNode[]) => {
-        const storeys = new Set<string>();
-        const systems = new Set<string>();
-        const categories = new Set<string>();
-        const materials = new Set<string>();
-        const elevations = new Set<number>();
-        let hasIfcModel = false;
-
-        const walk = (list: Array<TreeNode | any>) => {
-            list.forEach((entry) => {
-                const source = entry?.object ?? entry;
-                const meta = source?.userData?.ifcMetadata as IfcMetadata | undefined;
-                if (source?.userData?.isIFC || meta) hasIfcModel = true;
-                if (meta?.storey) storeys.add(meta.storey);
-                if (typeof meta?.elevation === "number" && Number.isFinite(meta.elevation)) elevations.add(meta.elevation);
-                if (meta?.category) categories.add(meta.category);
-                meta?.systems?.forEach((item) => systems.add(item));
-                meta?.materials?.forEach((item) => materials.add(item));
-                const rawChildren = getRawChildren(entry);
-                if (rawChildren.length > 0) walk(rawChildren);
-            });
-        };
-
-        walk(nodes);
-
-        const sort = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
-        return {
-            storeys: sort(storeys),
-            elevations: Array.from(elevations).sort((a, b) => a - b),
-            systems: sort(systems),
-            categories: sort(categories),
-            materials: sort(materials),
-            hasIfcModel
-        };
-    };
-
-    const ifcOptions = useMemo(() => collectIfcOptions(treeRoot), [treeRoot]);
-    const hasIfcFilters =
-        ifcOptions.storeys.length > 0 ||
-        ifcOptions.elevations.length > 0 ||
-        ifcOptions.systems.length > 0 ||
-        ifcOptions.categories.length > 0 ||
-        ifcOptions.materials.length > 0;
-    const hasIfcLocator = ifcOptions.hasIfcModel;
-    const hasActiveFilters = Object.values(filters).some(Boolean);
-    const selectedStoreyIndex = selectedStorey ? ifcOptions.storeys.indexOf(selectedStorey) : -1;
-    const adjacentStoreys = selectedStoreyIndex >= 0
-        ? ifcOptions.storeys.filter((_item, index) => Math.abs(index - selectedStoreyIndex) <= 1)
-        : [];
-    const canApplyCurrentStorey = Boolean(selectedStorey);
-    const canApplyAdjacentStoreys = adjacentStoreys.length > 1;
-
-    const matchesIfcFilters = (meta?: IfcMetadata) => {
-        if (!hasActiveFilters) return true;
-        if (!meta) return false;
-        if (filters.storey && meta.storey !== filters.storey) return false;
-        if (filters.elevation && String(meta.elevation) !== filters.elevation) return false;
-        if (filters.category && meta.category !== filters.category) return false;
-        if (filters.system && !(meta.systems || []).includes(filters.system)) return false;
-        if (filters.material && !(meta.materials || []).includes(filters.material)) return false;
-        return true;
-    };
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -406,17 +279,15 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
         const lowercaseQuery = query.toLowerCase();
         return nodes.reduce((acc: TreeNode[], node) => {
-            const meta = node.object?.userData?.ifcMetadata as IfcMetadata | undefined;
             const matchesQuery = !query || getNodeSearchText(node).includes(lowercaseQuery);
-            const matchesFilter = matchesIfcFilters(meta);
-            const sourceChildren = query || hasActiveFilters ? getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1)) : node.children;
+            const sourceChildren = query ? getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1)) : node.children;
             const filteredChildren = filterTree(sourceChildren, query);
-            if ((matchesQuery && matchesFilter) || filteredChildren.length > 0) {
+            if (matchesQuery || filteredChildren.length > 0) {
                 acc.push({
                     ...node,
-                    childrenLoaded: query || hasActiveFilters ? true : node.childrenLoaded,
+                    childrenLoaded: query ? true : node.childrenLoaded,
                     hasChildren: node.hasChildren ?? getRawChildren(node).length > 0,
-                    expanded: query || hasActiveFilters ? true : node.expanded,
+                    expanded: query ? true : node.expanded,
                     children: filteredChildren
                 });
             }
@@ -424,7 +295,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }, []);
     };
 
-    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery, filters, hasActiveFilters]);
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
     const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
     const firstSearchMatch = useMemo(() => {
         if (!searchQuery) return null;
@@ -439,14 +310,15 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }
         return null;
     }, [searchQuery, treeRoot]);
-    const locatorMatches = useMemo(() => {
-        if (!locatorQuery.trim()) return [];
-        const query = locatorQuery.trim().toLowerCase();
+
+    const searchMatches = useMemo(() => {
+        if (!searchQuery.trim()) return [] as TreeNode[];
+        const query = searchQuery.trim().toLowerCase();
         const results: TreeNode[] = [];
         const stack = [...treeRoot];
         while (stack.length > 0) {
             const node = stack.shift()!;
-            if (getNodeLocatorText(node, locatorMode).includes(query)) {
+            if (getNodeSearchText(node).includes(query)) {
                 results.push(node);
             }
             getRawChildren(node)
@@ -454,10 +326,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 .forEach((child) => stack.push(child));
         }
         return results;
-    }, [locatorMode, locatorQuery, treeRoot]);
-    const clampedLocatorIndex = locatorMatches.length > 0
-        ? Math.min(locatorIndex, locatorMatches.length - 1)
-        : 0;
+    }, [searchQuery, treeRoot]);
+
     const rowHeight = 24;
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
@@ -470,6 +340,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             selectionSourceRef.current = null;
         }
     }, [selectedUuid]);
+
+    useEffect(() => {
+        const nextLocateResults = searchQuery.trim() ? searchMatches.map((item) => item.uuid) : [];
+        onLocateResultsChange?.(nextLocateResults);
+    }, [searchMatches, searchQuery, onLocateResultsChange]);
 
     const toggleNode = (nodeUuid: string) => {
         const toggle = (nodes: TreeNode[]): TreeNode[] =>
@@ -513,45 +388,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         onLocate?.(firstSearchMatch.object);
     };
 
-    const handleLocateIfcMatch = (matchIndex = 0) => {
-        const target = locatorMatches[matchIndex];
-        if (!target) return;
-        onSelect(target.uuid, target.object);
-        onLocate?.(target.object);
-    };
-
-    useEffect(() => {
-        setLocatorIndex(0);
-    }, [locatorMode, locatorQuery]);
-
-    useEffect(() => {
-        if (!locatorQuery.trim()) {
-            onClearLocate?.();
-        }
-    }, [locatorQuery, onClearLocate]);
-
-    useEffect(() => {
-        const nextLocateResults = locatorQuery.trim()
-            ? locatorMatches.map((item) => item.uuid)
-            : [];
-        const prevLocateResults = lastLocateResultsRef.current;
-        const changed = prevLocateResults.length !== nextLocateResults.length ||
-            prevLocateResults.some((uuid, index) => uuid !== nextLocateResults[index]);
-
-        if (!changed) return;
-
-        lastLocateResultsRef.current = nextLocateResults;
-        onLocateResultsChange?.(nextLocateResults);
-    }, [locatorMatches, locatorQuery, onLocateResultsChange]);
-
-    useEffect(() => {
-        if (locatorMatches.length === 0 && locatorIndex !== 0) {
-            setLocatorIndex(0);
-        } else if (locatorMatches.length > 0 && locatorIndex > locatorMatches.length - 1) {
-            setLocatorIndex(locatorMatches.length - 1);
-        }
-    }, [locatorIndex, locatorMatches.length]);
-
     return (
         <div className="ui-tree-panel">
             <div className="ui-search-bar">
@@ -578,7 +414,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 {searchQuery && (
                     <div className="ui-tree-search-meta">
                         <span>
-                            {(t("search_results") || "结果")}: {flatData.length}
+                            {(t("search_results") || "结果")}: {searchMatches.length}
                         </span>
                         <Button
                             variant="ghost"
@@ -590,192 +426,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         </Button>
                     </div>
                 )}
-                {hasIfcLocator && (
-                    <div className="ui-tree-locator">
-                        <Select
-                            value={locatorMode}
-                            onChange={(value) => setLocatorMode(value as LocatorMode)}
-                            options={[
-                                { value: "all", label: t("ifc_locator_all") || "综合" },
-                                { value: "name", label: t("ifc_locator_name") || "名称" },
-                                { value: "globalId", label: t("ifc_locator_globalid") || "GlobalId" },
-                                { value: "classification", label: t("ifc_locator_classification") || "分类编码" },
-                                { value: "typeName", label: t("ifc_locator_type") || "类型" }
-                            ]}
-                            className="ui-input-compact"
-                        />
-                        <div className="ui-search-input-wrap">
-                            <input
-                                type="text"
-                                placeholder={t("ifc_locator_placeholder") || "按 IFC 标识定位..."}
-                                value={locatorQuery}
-                                onChange={(e) => {
-                                    setLocatorQuery(e.target.value);
-                                    setLocatorIndex(0);
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        handleLocateIfcMatch(clampedLocatorIndex);
-                                    }
-                                }}
-                                className="ui-input ui-input-compact"
-                            />
-                            {locatorQuery && (
-                                <button className="ui-search-clear" onClick={() => {
-                                    setLocatorQuery("");
-                                    setLocatorIndex(0);
-                                }}>
-                                    <IconClose width={14} height={14} />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {hasIfcLocator && locatorQuery && (
-                    <div className="ui-tree-search-meta">
-                        <span>
-                            {(t("ifc_locator_results") || "IFC结果")}: {locatorMatches.length}
-                            {locatorMatches.length > 0 ? ` (${clampedLocatorIndex + 1}/${locatorMatches.length})` : ""}
-                        </span>
-                        <div className="ui-tree-search-actions">
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action ui-icon-btn ui-tree-locator-btn"
-                                onClick={() => {
-                                    const nextIndex = Math.max(0, clampedLocatorIndex - 1);
-                                    setLocatorIndex(nextIndex);
-                                    handleLocateIfcMatch(nextIndex);
-                                }}
-                                disabled={locatorMatches.length === 0 || clampedLocatorIndex === 0}
-                                title={t("ifc_locator_prev") || "上一个"}
-                            >
-                                <IconChevronLeft size={18} />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action ui-icon-btn ui-tree-locator-btn"
-                                onClick={() => {
-                                    const nextIndex = Math.min(locatorMatches.length - 1, clampedLocatorIndex + 1);
-                                    setLocatorIndex(nextIndex);
-                                    handleLocateIfcMatch(nextIndex);
-                                }}
-                                disabled={locatorMatches.length === 0 || clampedLocatorIndex >= locatorMatches.length - 1}
-                                title={t("ifc_locator_next") || "下一个"}
-                            >
-                                <IconChevronRight size={18} />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action ui-icon-btn ui-tree-locator-btn"
-                                onClick={() => handleLocateIfcMatch(clampedLocatorIndex)}
-                                disabled={locatorMatches.length === 0}
-                                title={t("ifc_locator_action") || "定位构件"}
-                            >
-                                <IconTarget size={18} />
-                            </Button>
-                        </div>
-                    </div>
-                )}
             </div>
-
-            {hasIfcFilters && (
-                <div className="ui-tree-filters">
-                    <div className="ui-tree-filter-grid">
-                        <Select
-                            value={filters.storey}
-                            onChange={(value) => setFilters((prev) => ({ ...prev, storey: value }))}
-                            options={[
-                                { value: "", label: t("ifc_filter_storey") || "全部楼层" },
-                                ...ifcOptions.storeys.map((item) => ({ value: item, label: item }))
-                            ]}
-                            className="ui-input-compact"
-                        />
-                        <Select
-                            value={filters.system}
-                            onChange={(value) => setFilters((prev) => ({ ...prev, system: value }))}
-                            options={[
-                                { value: "", label: t("ifc_filter_system") || "全部系统" },
-                                ...ifcOptions.systems.map((item) => ({ value: item, label: item }))
-                            ]}
-                            className="ui-input-compact"
-                        />
-                        <Select
-                            value={filters.elevation}
-                            onChange={(value) => setFilters((prev) => ({ ...prev, elevation: value }))}
-                            options={[
-                                { value: "", label: t("ifc_filter_elevation") || "全部标高" },
-                                ...ifcOptions.elevations.map((item) => ({ value: String(item), label: String(item) }))
-                            ]}
-                            className="ui-input-compact"
-                        />
-                        <Select
-                            value={filters.category}
-                            onChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}
-                            options={[
-                                { value: "", label: t("ifc_filter_category") || "全部类别" },
-                                ...ifcOptions.categories.map((item) => ({ value: item, label: item }))
-                            ]}
-                            className="ui-input-compact"
-                        />
-                        <Select
-                            value={filters.material}
-                            onChange={(value) => setFilters((prev) => ({ ...prev, material: value }))}
-                            options={[
-                                { value: "", label: t("ifc_filter_material") || "全部材质" },
-                                ...ifcOptions.materials.map((item) => ({ value: item, label: item }))
-                            ]}
-                            className="ui-input-compact"
-                        />
-                    </div>
-                    {hasActiveFilters && (
-                        <div className="ui-tree-filter-actions">
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action"
-                                onClick={() => onApplyIfcFiltersToViewport?.(filters)}
-                            >
-                                {t("ifc_filter_apply_viewport") || "应用到视口"}
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action"
-                                onClick={() =>
-                                    setFilters({
-                                        storey: "",
-                                        elevation: "",
-                                        system: "",
-                                        category: "",
-                                        material: ""
-                                    })
-                                }
-                            >
-                                {t("ifc_filter_clear") || "清除筛选"}
-                            </Button>
-                        </div>
-                    )}
-                    {selectedStorey && (
-                        <div className="ui-tree-filter-actions ui-tree-workset-actions">
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action"
-                                onClick={() => onApplyStoreyWorkset?.([selectedStorey])}
-                                disabled={!canApplyCurrentStorey}
-                            >
-                                {t("ifc_workset_current") || "当前楼层"}
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="ui-properties-action"
-                                onClick={() => onApplyStoreyWorkset?.(adjacentStoreys)}
-                                disabled={!canApplyAdjacentStoreys}
-                            >
-                                {t("ifc_workset_adjacent") || "上下楼层"}
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            )}
 
             <div
                 ref={containerRef}
@@ -855,7 +506,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             label: t("locate_in_view") || "定位到视图",
                             onClick: () => onLocate?.(contextMenu.node.object)
                         },
-                        { divider: true },
+                        {
+                            divider: true
+                        },
                         {
                             label: t("expand_all"),
                             onClick: expandAll
@@ -872,6 +525,30 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                       onClick: () => onDelete?.(contextMenu.node.object)
                                   }
                               ]
+                            : []),
+                        ...(onHide
+                            ? [
+                                  {
+                                      label: t("hide_selected") || "隐藏选中",
+                                      onClick: () => onHide(contextMenu.node.uuid)
+                                  }
+                              ]
+                            : []),
+                        ...(onIsolate
+                            ? [
+                                  {
+                                      label: t("isolate_selection") || "隔离选择",
+                                      onClick: () => onIsolate(contextMenu.node.uuid)
+                                  }
+                              ]
+                            : []),
+                        ...(onShowAll
+                            ? [
+                                  {
+                                      label: t("show_all") || "显示全部",
+                                      onClick: onShowAll
+                                  }
+                              ]
                             : [])
                     ]}
                 />
@@ -879,5 +556,3 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         </div>
     );
 };
-
-

@@ -165,7 +165,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                             {!collapsed.has(group) &&
                                 Object.entries(props).map(([k, v]) => (
                                     <div key={k} className="ui-prop-row">
-                                        <div className="ui-prop-key" title={k}>
+                                        <div
+                                            className="ui-prop-key"
+                                            title={`${k} (${t("copied") || "点击复制"})`}
+                                            onClick={() => handleCopy(k)}
+                                            style={{ cursor: "copy" }}
+                                        >
                                             {k}
                                         </div>
                                         <div

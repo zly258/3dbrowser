@@ -10,7 +10,7 @@ import { getTranslation, Lang } from "./src/theme/Locales";
 // 组件
 import { Toolbar } from "./src/components/MenuBar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SunPanel, SettingsPanel, ExplodePanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SettingsPanel, ExplodePanel, SearchPanel, FloatingPanel } from "./src/components/ToolPanels";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
@@ -51,12 +51,15 @@ export interface ThreeViewerProps {
     chunkOptions?: SceneChunkOptions;
 }
 
-type IfcFilterState = {
-    storey: string;
-    elevation: string;
-    system: string;
-    category: string;
-    material: string;
+type SearchOperator = "equals" | "contains" | "notContains" | "startsWith" | "endsWith";
+type SearchConnector = "AND" | "OR";
+
+type PropertySearchCondition = {
+    id: string;
+    propertyName: string;
+    operator: SearchOperator;
+    value: string;
+    connector?: SearchConnector;
 };
 
 
@@ -161,7 +164,6 @@ export const ThreeViewer = ({
     const [locatedUuid, setLocatedUuid] = useState<string | null>(null);
     const [locateResultUuids, setLocateResultUuids] = useState<string[]>([]);
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
-    const [selectedIfcStorey, setSelectedIfcStorey] = useState<string>("");
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -179,7 +181,7 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
     
     // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode'>('none');
+    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'search' | 'boxSelect' | 'explode' | 'clash'>('none');
     const [explodeEnabled, setExplodeEnabled] = useState(false);
     const [explodeStrength, setExplodeStrength] = useState(32);
     const [explodeMode, setExplodeMode] = useState<'radial' | 'horizontal' | 'vertical'>('radial');
@@ -198,6 +200,15 @@ export const ThreeViewer = ({
     // 存储历史记录: { id, type, val }
     const [measureHistory, setMeasureHistory] = useState<any[]>([]);
     const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
+    const [searchConditions, setSearchConditions] = useState<PropertySearchCondition[]>([
+        { id: "cond_init", propertyName: "", operator: "contains", value: "" }
+    ]);
+    const [searchResults, setSearchResults] = useState<Array<{ uuid: string; name: string; matchedBy: string[] }>>([]);
+    const [searching, setSearching] = useState(false);
+    const [searchProgress, setSearchProgress] = useState(0);
+    const [searchStatus, setSearchStatus] = useState("");
+    const searchRunTokenRef = useRef(0);
+    const searchInFlightRef = useRef(false);
 
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
@@ -256,11 +267,7 @@ export const ThreeViewer = ({
             maxPixelRatio: 2,
             targetFps: 50,
             performanceMode: 'balanced',
-            sunEnabled: false,
-            sunLatitude: 0,
-            sunLongitude: 0,
-            sunTime: 12,
-            sunShadow: false,
+            backLightInt: 0.5,
             highlightColor: "#ff9f1c",
             highlightShowBox: false,
             clip: {
@@ -858,86 +865,6 @@ export const ThreeViewer = ({
         setTreeRoot(prev => update(prev));
     }, []);
 
-    const handleApplyIfcFiltersToViewport = useCallback((filters: IfcFilterState) => {
-        if (!sceneMgr.current) return;
-
-        const hasActiveFilters = Object.values(filters).some(Boolean);
-        if (!hasActiveFilters) {
-            handleShowAll();
-            return;
-        }
-
-        const matches: string[] = [];
-        sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
-            if (!(obj as THREE.Mesh).isMesh) return;
-            const meta = obj.userData?.ifcMetadata;
-            if (!meta) return;
-
-            if (filters.storey && meta.storey !== filters.storey) return;
-            if (filters.elevation && String(meta.elevation) !== filters.elevation) return;
-            if (filters.category && meta.category !== filters.category) return;
-            if (filters.system && !(meta.systems || []).includes(filters.system)) return;
-            if (filters.material && !(meta.materials || []).includes(filters.material)) return;
-            matches.push(obj.uuid);
-        });
-
-        if (matches.length === 0) {
-            setToast({
-                message: `${t("failed")}: ${t("no_matching_ifc_filter") || "没有匹配当前 IFC 筛选的构件"}`,
-                type: "info"
-            });
-            return;
-        }
-
-        sceneMgr.current.isolateObjects(matches);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set(matches));
-        setSelectedUuids([]);
-        setSelectedProps(null);
-        setSelectedIfcStorey("");
-        updateTree();
-        setToast({
-            message: `${t("ifc_filter_applied") || "已按 IFC 筛选隔离显示"}: ${matches.length}`,
-            type: "success"
-        });
-    }, [handleShowAll, t, updateTree]);
-
-    const handleApplyStoreyWorkset = useCallback((storeys: string[]) => {
-        if (!sceneMgr.current || storeys.length === 0) return;
-
-        const storeySet = new Set(storeys.filter(Boolean));
-        if (storeySet.size === 0) return;
-
-        const matches: string[] = [];
-        sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
-            if (!(obj as THREE.Mesh).isMesh) return;
-            const storey = obj.userData?.ifcMetadata?.storey;
-            if (storey && storeySet.has(storey)) {
-                matches.push(obj.uuid);
-            }
-        });
-
-        if (matches.length === 0) {
-            setToast({
-                message: `${t("failed")}: ${t("no_matching_ifc_filter") || "没有匹配当前 IFC 筛选的构件"}`,
-                type: "info"
-            });
-            return;
-        }
-
-        sceneMgr.current.isolateObjects(matches);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set(matches));
-        setSelectedUuids([]);
-        setSelectedProps(null);
-        setSelectedIfcStorey("");
-        updateTree();
-        setToast({
-            message: `${t("ifc_workset_applied") || "已按楼层工作集隔离显示"}: ${storeys.join(" / ")}`,
-            type: "success"
-        });
-    }, [t, updateTree]);
-
     const handleToggleVisibility = (uuid: string, visible: boolean) => {
         if (!sceneMgr.current) return;
         
@@ -1040,7 +967,6 @@ export const ThreeViewer = ({
 
     const handleClearSelection = () => {
         clearSelection();
-        setSelectedIfcStorey("");
         sceneMgr.current?.highlightObjects([]);
     };
 
@@ -1417,7 +1343,6 @@ export const ThreeViewer = ({
         if (!obj) {
             setSelectedUuids([]);
             setSelectedProps(null);
-            setSelectedIfcStorey("");
             sceneMgr.current.highlightObjects([]);
             return;
         }
@@ -1457,20 +1382,6 @@ export const ThreeViewer = ({
         }
 
         const target = realObj || obj; // 优先使用真实对象，否则使用传入的对象（可能是 StructureTreeNode）
-        const targetStorey =
-            target?.userData?.ifcMetadata?.storey ||
-            (target instanceof THREE.Object3D
-                ? (() => {
-                      let cursor: THREE.Object3D | null = target;
-                      while (cursor) {
-                          const storey = cursor.userData?.ifcMetadata?.storey;
-                          if (storey) return storey;
-                          cursor = cursor.parent;
-                      }
-                      return "";
-                  })()
-                : "");
-        setSelectedIfcStorey(targetStorey || "");
         const targetElevation =
             typeof target?.userData?.ifcMetadata?.elevation === "number"
                 ? target.userData.ifcMetadata.elevation
@@ -1630,12 +1541,9 @@ export const ThreeViewer = ({
     }, [handleSelect, updateTree]);
 
     const handleLocateResultsChange = useCallback((uuids: string[]) => {
-        setLocateResultUuids((prev) => {
-            if (prev.length === uuids.length && prev.every((uuid, index) => uuid === uuids[index])) {
-                return prev;
-            }
-            return uuids;
-        });
+        const changed = !(locateResultUuids.length === uuids.length && locateResultUuids.every((uuid, index) => uuid === uuids[index]));
+        if (!changed) return;
+        setLocateResultUuids(uuids);
         if (!sceneMgr.current) return;
         if (uuids.length === 0) {
             sceneMgr.current.clearLocateFocus();
@@ -1644,7 +1552,7 @@ export const ThreeViewer = ({
             setIsolatedUuids(new Set());
             updateTree();
         }
-    }, [updateTree]);
+    }, [locateResultUuids, updateTree]);
 
     const handleClearLocate = useCallback(() => {
         setLocatedUuid(null);
@@ -1656,6 +1564,238 @@ export const ThreeViewer = ({
         sceneMgr.current?.highlightObjects(selectedUuids);
         updateTree();
     }, [selectedUuids, updateTree]);
+
+    const buildSearchPropertyBag = useCallback((uuid: string, obj: any) => {
+        const bag = new Map<string, string[]>();
+        const addValue = (key: string, value: any) => {
+            const normalizedKey = String(key || "").trim().toLowerCase();
+            if (!normalizedKey) return;
+            if (value === undefined || value === null) return;
+            const normalizedValue = String(value).trim();
+            if (!normalizedValue) return;
+            const next = bag.get(normalizedKey) || [];
+            next.push(normalizedValue);
+            bag.set(normalizedKey, next);
+        };
+
+        addValue("name", obj?.name);
+        addValue("type", obj?.type);
+        addValue("uuid", uuid);
+        addValue("bimid", sceneMgr.current?.getBimIdByUuid(uuid) || "");
+
+        const userData = (obj?.userData || {}) as Record<string, any>;
+        Object.entries(userData).forEach(([key, value]) => {
+            if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+                addValue(key, value);
+            } else if (Array.isArray(value)) {
+                value.forEach((item) => addValue(key, item));
+            }
+        });
+
+        const ifcMeta = (obj?.userData?.ifcMetadata || {}) as Record<string, any>;
+        Object.entries(ifcMeta).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach((item) => addValue(key, item));
+            } else {
+                addValue(key, value);
+            }
+        });
+
+        const nbimProps = sceneMgr.current?.getNbimProperties(uuid);
+        if (nbimProps && typeof nbimProps === "object") {
+            Object.entries(nbimProps).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                    value.forEach((item) => addValue(key, item));
+                } else if (typeof value === "object" && value) {
+                    Object.entries(value as Record<string, any>).forEach(([subKey, subValue]) => {
+                        addValue(`${key}.${subKey}`, subValue);
+                        addValue(subKey, subValue);
+                    });
+                } else {
+                    addValue(key, value);
+                }
+            });
+        }
+
+        const nbimIfcGroups = sceneMgr.current?.getNbimIfcPropertyGroups(uuid, "normalized");
+        if (nbimIfcGroups && typeof nbimIfcGroups === "object") {
+            Object.entries(nbimIfcGroups).forEach(([groupName, groupEntries]) => {
+                if (!groupEntries || typeof groupEntries !== "object") return;
+                Object.entries(groupEntries).forEach(([fieldKey, fieldValue]) => {
+                    addValue(fieldKey, fieldValue);
+                    addValue(`${groupName}.${fieldKey}`, fieldValue);
+                });
+            });
+        }
+
+        return bag;
+    }, []);
+
+    const collectSearchCandidates = useCallback(() => {
+        const candidates: Array<{ uuid: string; name: string; source: any }> = [];
+        const visited = new Set<string>();
+
+        const walk = (nodes: any[]) => {
+            nodes.forEach((node) => {
+                const id = String(node?.id || node?.uuid || "");
+                if (!id || visited.has(id)) return;
+                visited.add(id);
+                const type = String(node?.type || "").toLowerCase();
+                if (type === "mesh" || type === "mESH".toLowerCase() || node?.bimId || node?.userData?.bimId) {
+                    candidates.push({
+                        uuid: id,
+                        name: node?.name || id,
+                        source: node
+                    });
+                }
+                if (Array.isArray(node?.children) && node.children.length > 0) {
+                    walk(node.children);
+                }
+            });
+        };
+
+        const root = sceneMgr.current?.structureRoot;
+        if (root?.children?.length) {
+            walk(root.children as any[]);
+        }
+
+        if (candidates.length === 0 && sceneMgr.current) {
+            sceneMgr.current.contentGroup.traverse((obj: THREE.Object3D) => {
+                if (!(obj as THREE.Mesh).isMesh) return;
+                if (visited.has(obj.uuid)) return;
+                visited.add(obj.uuid);
+                candidates.push({
+                    uuid: obj.uuid,
+                    name: obj.name || obj.uuid,
+                    source: obj
+                });
+            });
+        }
+
+        return candidates;
+    }, []);
+
+    const evaluateCondition = useCallback((values: string[], operator: SearchOperator, query: string) => {
+        const normalizedQuery = query.toLowerCase();
+        return values.some((raw) => {
+            const value = raw.toLowerCase();
+            if (operator === "equals") return value === normalizedQuery;
+            if (operator === "contains") return value.includes(normalizedQuery);
+            if (operator === "notContains") return !value.includes(normalizedQuery);
+            if (operator === "startsWith") return value.startsWith(normalizedQuery);
+            if (operator === "endsWith") return value.endsWith(normalizedQuery);
+            return false;
+        });
+    }, []);
+
+    const handleRunPropertySearch = useCallback(async () => {
+        if (!sceneMgr.current) return;
+        if (searchInFlightRef.current) return;
+
+        const normalizedConditions = searchConditions.filter((item) => item.propertyName.trim() && item.value.trim());
+        if (normalizedConditions.length === 0) {
+            setSearchResults([]);
+            setSearching(false);
+            setSearchProgress(0);
+            setSearchStatus("");
+            setToast({ message: t("search_invalid_condition") || "请至少输入一组完整的搜索条件", type: "info" });
+            sceneMgr.current.highlightObjects(selectedUuids);
+            return;
+        }
+
+        const runToken = ++searchRunTokenRef.current;
+        const searchStartAt = performance.now();
+        searchInFlightRef.current = true;
+        setSearching(true);
+        setSearchProgress(0);
+        setSearchStatus(t("searching") || "搜索中...");
+
+        try {
+            const candidates = collectSearchCandidates();
+            const total = candidates.length;
+            const batchSize = 600;
+            const nextResults: Array<{ uuid: string; name: string; matchedBy: string[] }> = [];
+            let lastProgressAt = performance.now();
+            let cancelled = false;
+
+            for (let i = 0; i < candidates.length; i++) {
+                if (searchRunTokenRef.current !== runToken) {
+                    cancelled = true;
+                    setSearchStatus(t("search_cancelled") || "搜索已取消");
+                    break;
+                }
+                const item = candidates[i];
+                const uuid = item.uuid;
+                const bag = buildSearchPropertyBag(uuid, item.source);
+
+                let result: boolean | null = null;
+                const matchedBy: string[] = [];
+                normalizedConditions.forEach((condition, index) => {
+                    const key = condition.propertyName.trim().toLowerCase();
+                    const values = bag.get(key) || [];
+                    const matched = values.length > 0
+                        ? evaluateCondition(values, condition.operator, condition.value.trim())
+                        : false;
+                    if (matched) matchedBy.push(condition.propertyName.trim());
+                    if (index === 0 || result === null) result = matched;
+                    else if ((condition.connector || "AND") === "AND") result = Boolean(result) && matched;
+                    else result = Boolean(result) || matched;
+                });
+
+                if (result) {
+                    nextResults.push({ uuid, name: item.name || uuid, matchedBy: Array.from(new Set(matchedBy)) });
+                }
+
+                if ((i + 1) % batchSize === 0 || i === candidates.length - 1) {
+                    const now = performance.now();
+                    const progress = total > 0 ? ((i + 1) / total) * 100 : 100;
+                    if (now - lastProgressAt > 120 || i === candidates.length - 1) {
+                        setSearchProgress(progress);
+                        lastProgressAt = now;
+                    }
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+                }
+            }
+
+            if (!cancelled) {
+                setSearchResults(nextResults);
+                sceneMgr.current.highlightObjects(nextResults.map((item) => item.uuid));
+                setSearchProgress(100);
+                setSearchStatus(`${t("search_results") || "结果"}: ${nextResults.length}`);
+            }
+        } finally {
+            const elapsed = performance.now() - searchStartAt;
+            const minVisibleMs = 220;
+            if (elapsed < minVisibleMs) {
+                await new Promise<void>((resolve) => window.setTimeout(resolve, minVisibleMs - elapsed));
+            }
+            setSearching(false);
+            searchInFlightRef.current = false;
+        }
+    }, [buildSearchPropertyBag, collectSearchCandidates, evaluateCondition, searchConditions, selectedUuids, t]);
+
+    const handleApplySearchResultHighlight = useCallback((uuid: string) => {
+        if (!sceneMgr.current) return;
+        sceneMgr.current.highlightObjects([uuid]);
+    }, []);
+
+    const handleClearSearchResult = useCallback(() => {
+        searchRunTokenRef.current++;
+        setSearchResults([]);
+        setSearching(false);
+        setSearchProgress(0);
+        setSearchStatus("");
+        searchInFlightRef.current = false;
+        if (!sceneMgr.current) return;
+        sceneMgr.current.highlightObjects(selectedUuids);
+    }, [selectedUuids]);
+
+    const handleCancelSearch = useCallback(() => {
+        if (!searchInFlightRef.current) return;
+        searchRunTokenRef.current++;
+        setSearchStatus(t("search_cancelling") || "正在取消搜索...");
+    }, [t]);
+
     const { processFiles, loadItemsIntoScene } = useFileLoadingFlow({
         managerRef: sceneMgr,
         sceneSettings,
@@ -1905,7 +2045,7 @@ export const ThreeViewer = ({
                     setSelectedUuids([]);
                     setLocatedUuid(null);
                     setSelectedProps(null);
-                    setSelectedIfcStorey("");
+                    setSearchResults([]);
                     ifcPropertyCacheRef.current.clear();
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
@@ -2047,7 +2187,6 @@ export const ThreeViewer = ({
                                 setTreeRoot={setTreeRoot}
                                 selectedUuid={selectedUuid}
                                 locatedUuid={locatedUuid}
-                                selectedStorey={selectedIfcStorey}
                                 onSelect={(_uuid, obj) => handleSelect(obj)}
                                 onToggleVisibility={handleToggleVisibility}
                                 onDelete={(obj) => {
@@ -2057,8 +2196,6 @@ export const ThreeViewer = ({
                                 onHide={handleHideObject}
                                 onIsolate={handleIsolateObject}
                                 onShowAll={handleShowAll}
-                                onApplyIfcFiltersToViewport={handleApplyIfcFiltersToViewport}
-                                onApplyStoreyWorkset={handleApplyStoreyWorkset}
                                 onLocate={handleLocateObject}
                                 onClearLocate={handleClearLocate}
                                 onLocateResultsChange={handleLocateResultsChange}
@@ -2234,14 +2371,37 @@ export const ThreeViewer = ({
                         />
                     )}
 
-                    {activeTool === 'sun' && (
-                        <SunPanel 
+                    {activeTool === 'search' && (
+                        <SearchPanel
                             t={t}
-                            settings={sceneSettings}
-                            onUpdate={handleSettingsUpdate}
                             onClose={() => setActiveTool('none')}
+                            conditions={searchConditions}
+                            results={searchResults}
+                            searching={searching}
+                            searchProgress={searchProgress}
+                            searchStatus={searchStatus}
+                            onConditionsChange={setSearchConditions}
+                            onSearch={() => void handleRunPropertySearch()}
+                            onCancelSearch={handleCancelSearch}
+                            onApplyResultHighlight={handleApplySearchResultHighlight}
+                            onClearResult={handleClearSearchResult}
                             theme={theme}
                         />
+                    )}
+
+                    {activeTool === 'clash' && (
+                        <FloatingPanel
+                            title={t("tb_clash") || "碰撞检查"}
+                            onClose={() => setActiveTool('none')}
+                            width={320}
+                            autoHeight={true}
+                            storageId="tool_clash"
+                            theme={theme}
+                        >
+                            <div style={{ padding: "12px", color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.6 }}>
+                                {t("clash_placeholder") || "碰撞检查将在下一期实现。本期已预留工具入口与结果面板结构。"} 
+                            </div>
+                        </FloatingPanel>
                     )}
 
                     {activeTool === 'explode' && (
