@@ -1,12 +1,17 @@
-export type PropertyGroups = Record<string, Record<string, string>>;
+import {
+    buildPropertyGroupsFromRecord,
+    createPropertyEntries,
+    type PropertyGroupInput,
+    type PropertyGroups
+} from "./propertyIndex";
 
 interface BuildSelectedPropertyGroupsArgs {
     basicLabel: string;
     geoLabel: string;
     basicProps: Record<string, string>;
     geoProps: Record<string, string>;
-    ifcProps?: PropertyGroups | null;
-    nbimProps?: Record<string, string> | null;
+    ifcProps?: Record<string, PropertyGroupInput> | null;
+    nbimProps?: PropertyGroupInput | null;
     nbimLabel?: string;
 }
 
@@ -19,17 +24,26 @@ export function buildSelectedPropertyGroups({
     nbimProps,
     nbimLabel = "BIM 属性"
 }: BuildSelectedPropertyGroupsArgs): PropertyGroups {
-    const groups: PropertyGroups = {
-        [basicLabel]: basicProps,
-        [geoLabel]: geoProps
-    };
+    const groups: PropertyGroups = [
+        {
+            name: basicLabel,
+            items: createPropertyEntries(basicLabel, basicProps, "basic")
+        },
+        {
+            name: geoLabel,
+            items: createPropertyEntries(geoLabel, geoProps, "geometry")
+        }
+    ];
 
     if (ifcProps) {
-        Object.assign(groups, ifcProps);
+        groups.push(...buildPropertyGroupsFromRecord(ifcProps, "ifc"));
     }
 
     if (nbimProps) {
-        groups[nbimLabel] = nbimProps;
+        groups.push({
+            name: nbimLabel,
+            items: createPropertyEntries(nbimLabel, nbimProps, "nbim")
+        });
     }
 
     return groups;

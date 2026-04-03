@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export interface InputNumberProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
     value: number;
@@ -20,24 +20,56 @@ export const InputNumber: React.FC<InputNumberProps> = ({
     style,
     ...props
 }) => {
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let val = parseFloat(e.target.value);
-        if (isNaN(val)) return;
+    const [text, setText] = useState(() => String(value));
+
+    useEffect(() => {
+        setText(String(value));
+    }, [value]);
+
+    const clampValue = (nextValue: number) => {
+        let val = nextValue;
         if (min !== undefined) val = Math.max(min, val);
         if (max !== undefined) val = Math.min(max, val);
-        onChange(val);
+        return val;
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const nextText = e.target.value;
+        setText(nextText);
+        if (nextText.trim() === '') return;
+
+        const parsed = parseFloat(nextText);
+        if (isNaN(parsed)) return;
+        onChange(clampValue(parsed));
+    };
+
+    const handleBlur = () => {
+        if (text.trim() === '') {
+            setText(String(value));
+            return;
+        }
+        const parsed = parseFloat(text);
+        if (isNaN(parsed)) {
+            setText(String(value));
+            return;
+        }
+        const clamped = clampValue(parsed);
+        setText(String(clamped));
+        if (clamped !== value) {
+            onChange(clamped);
+        }
     };
 
     const stepUp = () => {
-        let val = value + step;
-        if (max !== undefined) val = Math.min(max, val);
-        onChange(val);
+        const nextValue = clampValue(value + step);
+        setText(String(nextValue));
+        onChange(nextValue);
     };
 
     const stepDown = () => {
-        let val = value - step;
-        if (min !== undefined) val = Math.max(min, val);
-        onChange(val);
+        const nextValue = clampValue(value - step);
+        setText(String(nextValue));
+        onChange(nextValue);
     };
 
     return (
@@ -52,8 +84,9 @@ export const InputNumber: React.FC<InputNumberProps> = ({
         >
             <input
                 type="number"
-                value={value}
+                value={text}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 min={min}
                 max={max}
                 step={step}

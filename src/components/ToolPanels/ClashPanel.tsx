@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Button, Checkbox, PaginationControls, Select } from "../common";
+import { Button, Checkbox, InputNumber, PaginationControls, Select } from "../common";
 
 export interface ClashResultItem {
   id: string;
@@ -230,24 +230,24 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{t("clash_tolerance") || "容差"}</div>
-            <input
-              className="ui-input ui-input-compact"
-              type="number"
+            <InputNumber
+              className="ui-input-compact"
               value={Number.isFinite(tolerance) ? tolerance : 0}
               min={0}
               step={0.001}
-              onChange={(e) => onToleranceChange(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(value) => onToleranceChange(Math.max(0, value || 0))}
+              style={{ width: "100%" }}
             />
           </div>
           <div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{t("clash_min_overlap") || "最小重叠体积"}</div>
-            <input
-              className="ui-input ui-input-compact"
-              type="number"
+            <InputNumber
+              className="ui-input-compact"
               value={Number.isFinite(minOverlapVolume) ? minOverlapVolume : 0}
               min={0}
               step={0.000001}
-              onChange={(e) => onMinOverlapVolumeChange(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(value) => onMinOverlapVolumeChange(Math.max(0, value || 0))}
+              style={{ width: "100%" }}
             />
           </div>
         </div>

@@ -24,7 +24,8 @@ import { useChunkProgress } from "./src/hooks/useChunkProgress";
 import { useFileLoadingFlow } from "./src/hooks/useFileLoadingFlow";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { cleanLoadingStatus } from "./src/viewer/fileLoading";
-import { buildSelectedPropertyGroups, PropertyGroups } from "./src/viewer/selectionProperties";
+import { buildSelectedPropertyGroups } from "./src/viewer/selectionProperties";
+import { createPropertyEntries, type PropertyGroupInput, type PropertyGroups } from "./src/viewer/propertyIndex";
 import { usePropertySearch } from "./src/viewer/usePropertySearch";
 import { useClashCheck } from "./src/viewer/useClashCheck";
 import { useClashSummary } from "./src/viewer/useClashSummary";
@@ -298,7 +299,7 @@ export const ThreeViewer = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
-    const ifcPropertyCacheRef = useRef<Map<string, PropertyGroups>>(new Map());
+    const ifcPropertyCacheRef = useRef<Map<string, Record<string, PropertyGroupInput>>>(new Map());
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
     const mouseMoveRafRef = useRef<number | null>(null);
@@ -1436,7 +1437,7 @@ export const ThreeViewer = ({
 
         const basicProps: Record<string, string> = {};
         const geoProps: Record<string, string> = {};
-        let ifcGroups: PropertyGroups | null = null;
+        let ifcGroups: Record<string, PropertyGroupInput> | null = null;
 
         const wrappedId = sceneMgr.current?.getBimIdByUuid(focusUuid) || focusUuid;
         basicProps[t("prop_id")] = wrappedId;
@@ -1554,18 +1555,22 @@ export const ThreeViewer = ({
             basicProps,
             geoProps,
             ifcProps: mergedIfcGroups,
-            nbimProps
+            nbimProps: null
         });
 
         const clashSummary = clashSummaryByUuid[focusUuid];
         if (clashSummary) {
-            selectedGroups[t("pg_clash") || "碰撞状态"] = {
-                [t("clash_group_all") || "全部"]: String(clashSummary.total),
-                [t("clash_group_new") || "新建"]: String(clashSummary.newCount),
-                [t("clash_group_confirmed") || "已确认"]: String(clashSummary.confirmedCount),
-                [t("clash_group_resolved") || "已解决"]: String(clashSummary.resolvedCount),
-                [t("prop_status") || "状态"]: t(`clash_group_${clashSummary.worstStatus}`) || clashSummary.worstStatus
-            };
+            const clashLabel = t("pg_clash") || "碰撞状态";
+            selectedGroups.push({
+                name: clashLabel,
+                items: createPropertyEntries(clashLabel, [
+                    { key: t("clash_group_all") || "全部", value: String(clashSummary.total) },
+                    { key: t("clash_group_new") || "新建", value: String(clashSummary.newCount) },
+                    { key: t("clash_group_confirmed") || "已确认", value: String(clashSummary.confirmedCount) },
+                    { key: t("clash_group_resolved") || "已解决", value: String(clashSummary.resolvedCount) },
+                    { key: t("prop_status") || "状态", value: t(`clash_group_${clashSummary.worstStatus}`) || clashSummary.worstStatus }
+                ].map((item, index) => ({ ...item, id: `clash-summary::${index}` })))
+            });
         }
 
         setSelectedProps(selectedGroups);

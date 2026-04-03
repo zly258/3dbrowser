@@ -103,7 +103,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     <FloatingPanel
       title={t("tb_search") || "属性搜索"}
       onClose={onClose}
-      width={500}
+      width={420}
       storageId="tool_search"
       autoHeight={true}
       theme={theme}
@@ -127,7 +127,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             style={{
               padding: "2px 0",
               display: "grid",
-              gridTemplateColumns: index > 0 ? "72px 1fr 96px 1fr 26px" : "1fr 96px 1fr 26px",
+              gridTemplateColumns: index > 0 ? "64px minmax(0, 1fr) 92px minmax(0, 1fr) 24px" : "minmax(0, 1fr) 92px minmax(0, 1fr) 24px",
               gap: "6px",
               alignItems: "center"
             }}
@@ -206,7 +206,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 key={item.uuid}
                 className="ui-search-result-item"
                 onClick={() => onApplyResultHighlight(item.uuid)}
-                title={item.uuid}
+                title={`${item.uuid}\n${item.matchedBy.join("\n")}`}
               >
                 <span>{item.name || item.uuid}</span>
                 <span className="ui-result-item-secondary">{item.matchedBy.join(", ")}</span>

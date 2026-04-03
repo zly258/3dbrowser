@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { IconChevronRight, IconChevronDown, IconCopy } from "../theme/Icons";
-
-type PropertyGroups = Record<string, Record<string, string>>;
+import { filterPropertyGroups, serializePropertyGroups, type PropertyGroups } from "../viewer/propertyIndex";
 
 interface PropertiesPanelProps {
     t: (key: string) => string;
@@ -55,38 +54,24 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
         }
     };
 
-    const serializeGroups = (groups: PropertyGroups) =>
-        Object.entries(groups)
-            .map(([group, props]) =>
-                [`[${group}]`, ...Object.entries(props).map(([key, value]) => `${key}: ${value}`)].join("\n")
-            )
-            .join("\n\n");
-
     const filteredProps = useMemo(() => {
-        if (!currentGroups || !searchQuery) return currentGroups;
-
-        const query = searchQuery.toLowerCase();
-        const result: PropertyGroups = {};
-
-        Object.entries(currentGroups).forEach(([group, props]) => {
-            const filteredGroupProps: Record<string, string> = {};
-            Object.entries(props).forEach(([k, v]) => {
-                if (group.toLowerCase().includes(query) || k.toLowerCase().includes(query) || String(v).toLowerCase().includes(query)) {
-                    filteredGroupProps[k] = v;
-                }
-            });
-
-            if (Object.keys(filteredGroupProps).length > 0) {
-                result[group] = filteredGroupProps;
-            }
-        });
-
-        return result;
+        if (!currentGroups) return null;
+        return filterPropertyGroups(currentGroups, searchQuery);
     }, [currentGroups, searchQuery]);
 
-    const groupCount = filteredProps ? Object.keys(filteredProps).length : 0;
+    useEffect(() => {
+        if (!filteredProps || !searchQuery) return;
+        const matchedGroups = new Set(filteredProps.map((group) => group.name));
+        setCollapsed((prev) => {
+            const next = new Set(prev);
+            matchedGroups.forEach((groupName) => next.delete(groupName));
+            return next;
+        });
+    }, [filteredProps, searchQuery]);
+
+    const groupCount = filteredProps ? filteredProps.length : 0;
     const itemCount = filteredProps
-        ? Object.values(filteredProps).reduce((sum, props) => sum + Object.keys(props).length, 0)
+        ? filteredProps.reduce((sum, group) => sum + group.items.length, 0)
         : 0;
 
     return (
@@ -113,7 +98,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                         <div className="ui-properties-actions">
                             <button
                                 className="ui-properties-action"
-                                onClick={() => currentGroups && handleCopy(serializeGroups(currentGroups))}
+                                onClick={() => currentGroups && handleCopy(serializePropertyGroups(currentGroups))}
                                 disabled={!currentGroups}
                                 title={t("copy_all_props") || "复制全部"}
                                 style={{
@@ -136,25 +121,23 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
 
             <div className="flex-1 overflow-y-auto">
                 {filteredProps ? (
-                    Object.entries(filteredProps).map(([group, props]) => (
-                        <div key={group}>
-                            <div className={`ui-prop-group${collapsed.has(group) ? ' collapsed' : ''}`} onClick={() => toggleGroup(group)}>
-                                <span>{group}</span>
+                    filteredProps.map((group) => (
+                        <div key={group.name}>
+                            <div className={`ui-prop-group${collapsed.has(group.name) ? ' collapsed' : ''}`} onClick={() => toggleGroup(group.name)}>
+                                <span>{group.name}</span>
                                 <div className="ui-prop-group-actions">
                                     <button
                                         className="ui-prop-copy"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleCopy(
-                                                [`[${group}]`, ...Object.entries(props).map(([k, v]) => `${k}: ${v}`)].join("\n")
-                                            );
+                                            handleCopy([`[${group.name}]`, ...group.items.map((item) => `${item.key}: ${item.value}`)].join("\n"));
                                         }}
                                         title={t("copy_group_props") || "复制组"}
                                     >
                                         <IconCopy size={12} />
                                     </button>
                                     <span style={{ opacity: 0.6, display: "flex", alignItems: "center", marginLeft: 4 }}>
-                                        {collapsed.has(group) ? (
+                                        {collapsed.has(group.name) ? (
                                             <IconChevronRight width={14} height={14} />
                                         ) : (
                                             <IconChevronDown width={14} height={14} />
@@ -162,24 +145,24 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                     </span>
                                 </div>
                             </div>
-                            {!collapsed.has(group) &&
-                                Object.entries(props).map(([k, v]) => (
-                                    <div key={k} className="ui-prop-row">
+                            {!collapsed.has(group.name) &&
+                                group.items.map((item) => (
+                                    <div key={item.id} className="ui-prop-row">
                                         <div
                                             className="ui-prop-key"
-                                            title={`${k} (${t("copied") || "点击复制"})`}
-                                            onClick={() => handleCopy(k)}
+                                            title={`${item.path} (${t("copied") || "点击复制"})`}
+                                            onClick={() => handleCopy(item.key)}
                                             style={{ cursor: "copy" }}
                                         >
-                                            {k}
+                                            {item.key}
                                         </div>
                                         <div
                                             className="ui-prop-value"
-                                            title={String(v)}
-                                            onClick={() => handleCopy(String(v))}
+                                            title={`${item.value}\n${item.path}`}
+                                            onClick={() => handleCopy(item.value)}
                                             style={{ cursor: "copy" }}
                                         >
-                                            {String(v)}
+                                            {item.value}
                                         </div>
                                     </div>
                                 ))}
