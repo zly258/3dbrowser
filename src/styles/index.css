@@ -1395,6 +1395,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background-color: var(--bg-active);
 }
 
+.ui-statusbar-tag.active {
+  background-color: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
+}
+
 .ui-statusbar-tag-compact {
   gap: 4px;
   padding: 2px 6px;
@@ -1514,6 +1520,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   min-width: 28px;
   padding: 0;
   justify-content: center;
+}
+
+.ui-page-nav-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+}
+
+.ui-page-nav-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .ui-tree-locator-btn {

@@ -220,24 +220,24 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Button
                 variant="ghost"
-                className="ui-properties-action ui-icon-btn"
+                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
                 onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage <= 1}
                 title={t("search_page_prev") || "上一页"}
               >
-                <IconChevronLeft size={16} />
+                <IconChevronLeft size={20} />
               </Button>
               <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 64, textAlign: "center" }}>
                 {currentPage}/{totalPages}
               </span>
               <Button
                 variant="ghost"
-                className="ui-properties-action ui-icon-btn"
+                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
                 onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                 disabled={currentPage >= totalPages}
                 title={t("search_page_next") || "下一页"}
               >
-                <IconChevronRight size={16} />
+                <IconChevronRight size={20} />
               </Button>
             </div>
             <Button className="ui-properties-action" onClick={onClearResult}>
