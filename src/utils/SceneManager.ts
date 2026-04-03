@@ -38,6 +38,7 @@ export interface MeasurementRecord {
 export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
+    backLightInt?: number;
     bgColor: string;
     highlightColor?: string;
     highlightShowBox?: boolean;
@@ -57,12 +58,6 @@ export interface SceneSettings {
     maxPixelRatio?: number;
     targetFps?: number;
     performanceMode?: 'balanced' | 'smooth' | 'quality';
-    // 光照模拟参数
-    sunLatitude?: number;   // 纬度 (-90 ~ 90)
-    sunLongitude?: number;  // 经度 (-180 ~ 180)
-    sunTime?: number;       // 时间 (0-24，12为正午)
-    sunEnabled?: boolean;   // 是否启用太阳光模拟
-    sunShadow?: boolean;    // 是否显示阴影
 }
 
 export interface StructureTreeNode {
@@ -135,7 +130,6 @@ export class SceneManager {
     ambientLight: THREE.AmbientLight;
     dirLight: THREE.DirectionalLight;
     backLight: THREE.DirectionalLight;
-    sunLight: THREE.DirectionalLight; // 太阳光（用于光照模拟）
 
     // 结构树
     structureRoot: StructureTreeNode = { id: 'root', name: 'Root', type: 'Group', children: [] };
@@ -216,6 +210,7 @@ export class SceneManager {
         performanceMode: 'balanced',
         highlightColor: "#ff9f1c",
         highlightShowBox: false,
+        backLightInt: 0.5,
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
     };
 
@@ -560,28 +555,9 @@ export class SceneManager {
         this.dirLight = new THREE.DirectionalLight(0xfffcf6, this.settings.dirInt);
         this.dirLight.position.set(60, 45, 110);
         this.scene.add(this.dirLight);
-        this.backLight = new THREE.DirectionalLight(0xe9eef6, 0.5);
+        this.backLight = new THREE.DirectionalLight(0xe9eef6, this.settings.backLightInt ?? 0.5);
         this.backLight.position.set(-40, -35, 30);
         this.scene.add(this.backLight);
-
-        // 太阳光（光照模拟）
-        this.sunLight = new THREE.DirectionalLight(0xfff4e5, 1.5);
-        this.sunLight.position.set(100, 100, 50);
-        this.sunLight.visible = false;
-        // 启用阴影
-        this.sunLight.castShadow = true;
-        this.sunLight.shadow.mapSize.width = 2048;
-        this.sunLight.shadow.mapSize.height = 2048;
-        this.sunLight.shadow.camera.near = 0.1;
-        this.sunLight.shadow.camera.far = 500;
-        this.sunLight.shadow.camera.left = -100;
-        this.sunLight.shadow.camera.right = 100;
-        this.sunLight.shadow.camera.top = 100;
-        this.sunLight.shadow.camera.bottom = -100;
-        this.sunLight.shadow.bias = -0.0005;
-        this.sunLight.shadow.normalBias = 0.02;
-        this.scene.add(this.sunLight);
-        this.scene.add(this.sunLight.target);
 
         // 选择辅助器
         const box = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
@@ -658,6 +634,7 @@ export class SceneManager {
         // 应用光照
         this.ambientLight.intensity = this.settings.ambientInt;
         this.dirLight.intensity = this.settings.dirInt;
+        this.backLight.intensity = this.settings.backLightInt ?? 0.5;
 
         // 应用渲染色彩链路
         this.renderer.outputColorSpace = this.settings.colorSpace === 'linear'
@@ -669,13 +646,6 @@ export class SceneManager {
                 ? THREE.NeutralToneMapping
                 : THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.settings.exposure ?? 1;
-
-        // 应用光照模拟（太阳光）
-        if (newSettings.sunEnabled !== undefined || newSettings.sunLatitude !== undefined ||
-            newSettings.sunLongitude !== undefined || newSettings.sunTime !== undefined ||
-            newSettings.sunShadow !== undefined) {
-            this.updateSunPosition();
-        }
 
         // 应用背景
         this.renderer.setClearColor(this.settings.bgColor);
@@ -700,139 +670,8 @@ export class SceneManager {
             this.checkCullingAndLoad();
         }
 
-        if (newSettings.shadowQuality !== undefined || newSettings.sunShadow !== undefined) {
-            this.updateSunShadow();
-        }
-
         // 如果不忙则强制渲染
         this.renderer.render(this.scene, this.camera);
-    }
-
-    // 根据经纬度和时间计算太阳位置
-    private updateSunPosition() {
-        const lat = this.settings.sunLatitude || 0;
-        const lng = this.settings.sunLongitude || 0;
-        const time = this.settings.sunTime !== undefined ? this.settings.sunTime : 12;
-        const enabled = this.settings.sunEnabled !== false;
-        let bounds = this.computeTotalBounds(true);
-        if (bounds.isEmpty()) {
-            bounds = this.computeTotalBounds(false);
-        }
-        const center = !bounds.isEmpty() ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3();
-        const size = !bounds.isEmpty() ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(100, 100, 100);
-        const sceneSpan = Math.max(size.x, size.y, size.z, 100);
-
-        this.sunLight.visible = enabled;
-
-        if (!enabled) {
-            // 如果禁用太阳光，降低方向光强度作为补偿
-            this.dirLight.intensity = this.settings.dirInt;
-            this.ambientLight.intensity = this.settings.ambientInt;
-            this.backLight.intensity = 0.5;
-            return;
-        }
-
-        // 计算太阳位置
-        // 将时间转换为角度（12点为0度，每小时15度）
-        const hourAngle = (time - 12) * 15 * (Math.PI / 180);
-
-        // 纬度转换为弧度
-        const latRad = lat * (Math.PI / 180);
-
-        // 太阳高度角（简化计算，假设春分/秋分）
-        // 一天中太阳高度变化
-        const sunElevation = 90 - Math.abs(lat) + 23.5 * Math.sin((time - 6) * 15 * (Math.PI / 180));
-        const elevationRad = sunElevation * (Math.PI / 180);
-
-        // 太阳方位角
-        const azimuthAngle = hourAngle + (lng * Math.PI / 180);
-
-        // 计算太阳位置（相对于场景中心）
-        const distance = Math.max(sceneSpan * 2.2, 120);
-        const x = distance * Math.cos(elevationRad) * Math.sin(azimuthAngle);
-        const y = distance * Math.sin(elevationRad);
-        const z = distance * Math.cos(elevationRad) * Math.cos(azimuthAngle);
-
-        this.sunLight.position.set(center.x + x, center.y + Math.max(y, sceneSpan * 0.15), center.z + z);
-        this.sunLight.target.position.copy(center);
-        this.sunLight.target.updateMatrixWorld();
-
-        // 调整太阳光强度（根据高度角）
-        const intensity = Math.max(0.2, Math.sin(elevationRad)) * 2;
-        this.sunLight.intensity = intensity;
-
-        // 太阳光颜色：早晨/傍晚偏橙红，中午偏黄白
-        const sunColor = new THREE.Color();
-        if (time < 7 || time > 18) {
-            // 早晚：橙红色
-            sunColor.setHex(0xffaa66);
-        } else if (time < 9 || time > 16) {
-            // 早晨/傍晚：金黄色
-            sunColor.setHex(0xffcc88);
-        } else {
-            // 中午：暖白色
-            sunColor.setHex(0xfff4e5);
-        }
-        this.sunLight.color = sunColor;
-
-        // 降低方向光强度，避免过曝
-        this.dirLight.intensity = this.settings.dirInt * 0.18;
-        this.ambientLight.intensity = this.settings.ambientInt * 0.65;
-        this.backLight.intensity = 0.22;
-
-        // 处理阴影
-        this.updateSunShadow(bounds, center, sceneSpan);
-    }
-
-    // 更新阴影设置
-    private updateSunShadow(bounds?: THREE.Box3, center?: THREE.Vector3, sceneSpan?: number) {
-        const shadowEnabled = this.settings.shadowQuality !== 'off' &&
-            this.settings.sunShadow === true &&
-            this.settings.sunEnabled !== false;
-        const shadowMapSize = this.settings.shadowQuality === 'high'
-            ? 4096
-            : this.settings.shadowQuality === 'low'
-                ? 1024
-                : 2048;
-
-        if (shadowEnabled) {
-            // 启用渲染器阴影
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            this.sunLight.shadow.mapSize.width = shadowMapSize;
-            this.sunLight.shadow.mapSize.height = shadowMapSize;
-            this.sunLight.shadow.bias = -0.00015;
-            this.sunLight.shadow.normalBias = 0.02;
-
-            const effectiveBounds = bounds && !bounds.isEmpty() ? bounds : this.computeTotalBounds(true);
-            const effectiveCenter = center || (!effectiveBounds.isEmpty() ? effectiveBounds.getCenter(new THREE.Vector3()) : new THREE.Vector3());
-            const effectiveSize = sceneSpan || (!effectiveBounds.isEmpty() ? effectiveBounds.getSize(new THREE.Vector3()).length() : 100);
-            const radius = Math.max(effectiveSize * 0.7, 40);
-
-            this.sunLight.shadow.camera.left = -radius;
-            this.sunLight.shadow.camera.right = radius;
-            this.sunLight.shadow.camera.top = radius;
-            this.sunLight.shadow.camera.bottom = -radius;
-            this.sunLight.shadow.camera.near = 0.5;
-            this.sunLight.shadow.camera.far = Math.max(radius * 6, 500);
-            this.sunLight.shadow.camera.updateProjectionMatrix();
-
-            // 遍历场景中的物体启用阴影
-            this.contentGroup.traverse((obj) => {
-                if ((obj as THREE.Mesh).isMesh) {
-                    const mesh = obj as THREE.Mesh;
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
-                }
-            });
-
-            this.sunLight.castShadow = true;
-            this.sunLight.target.position.copy(effectiveCenter);
-            this.sunLight.target.updateMatrixWorld();
-        } else {
-            this.renderer.shadowMap.enabled = false;
-            this.sunLight.castShadow = false;
-        }
     }
 
     createCircleTexture() {
@@ -970,33 +809,10 @@ export class SceneManager {
         this.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
     }
 
-    private isSunShadowConfigured() {
-        return this.settings.shadowQuality !== 'off'
-            && this.settings.sunShadow === true
-            && this.settings.sunEnabled !== false;
-    }
-
     private updateInteractionPerformance(now: number) {
-        const mode = this.settings.performanceMode ?? 'balanced';
-        const shadowConfigured = this.isSunShadowConfigured();
-        const allowShadowDowngrade = mode !== 'quality';
-        if (this.isCameraMoving) {
-            if (allowShadowDowngrade && shadowConfigured && this.renderer.shadowMap.enabled) {
-                this.renderer.shadowMap.enabled = false;
-                this.interactionShadowDowngraded = true;
-            }
-            return;
-        }
-
-        if (!this.interactionShadowDowngraded) return;
-        if (!shadowConfigured) {
+        if (this.interactionShadowDowngraded && now >= this.interactionShadowRestoreAt) {
             this.interactionShadowDowngraded = false;
-            return;
         }
-        if (now < this.interactionShadowRestoreAt) return;
-
-        this.renderer.shadowMap.enabled = true;
-        this.interactionShadowDowngraded = false;
     }
 
     private initHardwareProfile() {
@@ -3394,6 +3210,9 @@ export class SceneManager {
 
         const chunkOffset = this.globalOffset.lengthSq() > 0 ? this.globalOffset.clone().negate() : null;
         const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
+        if (chunkEntries.length === 0) {
+            throw new Error("NBIM 文件没有可渲染分块，可能格式有问题");
+        }
         this.applyNbimScaleTuning(chunkEntries.length);
         const deferredGhostSpecs: Array<{ chunkId: string; bounds: THREE.Box3 }> = [];
         const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
@@ -3401,6 +3220,9 @@ export class SceneManager {
             : GHOST_VISIBLE_FIRST_BATCH;
         for (let i = 0; i < chunkEntries.length; i++) {
             const c = chunkEntries[i];
+            if (!c?.bounds || typeof c.byteOffset !== "number" || typeof c.byteLength !== "number") {
+                throw new Error("NBIM 分块数据不完整，可能格式有问题");
+            }
             const bounds = new THREE.Box3(
                 new THREE.Vector3(c.bounds.min.x, c.bounds.min.y, c.bounds.min.z),
                 new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)

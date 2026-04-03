@@ -10,7 +10,7 @@ import {
     ColorPicker
 } from "../common";
 
-type SettingsTab = "general" | "viewport" | "highlight";
+type SettingsTab = "general" | "lighting" | "viewport" | "highlight";
 
 /**
  * Row - 设置面板中的行布局组件
@@ -69,6 +69,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
   const tabOptions = [
     { value: "general", label: t("setting_general") || "通用" },
+    { value: "lighting", label: t("st_lighting") || "光照" },
     { value: "viewport", label: t("st_viewport") || "视口" },
     { value: "highlight", label: t("st_highlight") || "高亮" }
   ];
@@ -126,6 +127,61 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 checked={showStats}
                 onChange={(v) => setShowStats(v)}
               />
+            </Row>
+          </div>
+        )}
+
+        {activeTab === "lighting" && (
+          <div className="mb-2" style={{ padding: '0 6px' }}>
+            <Row label={t("st_ambient") || "环境光"} labelWidth="90px" stretch={true}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Slider
+                    min={0}
+                    max={4}
+                    step={0.05}
+                    value={settings.ambientInt || 0}
+                    onChange={(value) => onUpdate({ ambientInt: value })}
+                  />
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '42px', textAlign: 'right' }}>
+                  {(settings.ambientInt || 0).toFixed(2)}
+                </div>
+              </div>
+            </Row>
+
+            <Row label={t("st_dir") || "主光"} labelWidth="90px" stretch={true}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Slider
+                    min={0}
+                    max={4}
+                    step={0.05}
+                    value={settings.dirInt || 0}
+                    onChange={(value) => onUpdate({ dirInt: value })}
+                  />
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '42px', textAlign: 'right' }}>
+                  {(settings.dirInt || 0).toFixed(2)}
+                </div>
+              </div>
+            </Row>
+
+            <Row label={t("st_back") || "背光"} labelWidth="90px" stretch={true}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Slider
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={settings.backLightInt ?? 0.5}
+                    onChange={(value) => onUpdate({ backLightInt: value })}
+                  />
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '42px', textAlign: 'right' }}>
+                  {(settings.backLightInt ?? 0.5).toFixed(2)}
+                </div>
+              </div>
             </Row>
           </div>
         )}

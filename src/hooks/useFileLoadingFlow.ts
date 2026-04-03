@@ -62,8 +62,19 @@ export function useFileLoadingFlow({
         try {
             await loadItemsIntoScene(items);
             updateTree();
+            const hasNbim = items.some((item) => {
+                const path = typeof item === "string" ? item : item.name;
+                return path.toLowerCase().endsWith(".nbim");
+            });
+            if (hasNbim) {
+                const stats = managerRef.current.getStats?.();
+                if (stats && stats.meshes <= 0) {
+                    throw new Error("NBIM 加载完成但没有可渲染外形，请检查文件格式或分块数据");
+                }
+            } else {
+                managerRef.current?.fitView(false);
+            }
             setStatus(t("success"));
-            managerRef.current?.fitView(false);
         } catch (err) {
             setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: "error" });

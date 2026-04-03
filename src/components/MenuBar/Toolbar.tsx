@@ -5,7 +5,7 @@ import {
     IconFile, IconDownload, IconMaximize,
     IconRuler, IconScissors, IconSettings, IconInfo,
     IconTrash2, IconMousePointer, IconBox, IconList,
-    IconActivity, IconCamera, IconEye, IconSun, IconSelectAll,
+    IconActivity, IconCamera, IconEye, IconSearch, IconSelectAll, IconTarget,
     IconLayers, IconImage, IconExplode,
     IconViewTop, IconViewBottom, IconViewFront, IconViewBack, IconViewLeft, IconViewRight,
     IconViewSW, IconViewSE, IconViewNE, IconViewNW,
@@ -28,8 +28,8 @@ interface MenuBarProps {
     displayMode?: 'solid' | 'transparent';
     pickEnabled?: boolean;
     setPickEnabled?: (enabled: boolean) => void;
-    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode';
-    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'sun' | 'boxSelect' | 'explode') => void;
+    activeTool?: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'search' | 'boxSelect' | 'explode' | 'clash';
+    setActiveTool?: (tool: 'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'search' | 'boxSelect' | 'explode' | 'clash') => void;
     showOutline?: boolean;
     setShowOutline?: (show: boolean) => void;
     showProps?: boolean;
@@ -284,12 +284,21 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                             theme={theme}
                         />
                     )}
-                    {!isHidden('sun') && (
+                    {!isHidden('search') && (
                         <ImageButton
-                            icon={<IconSun />}
-                            label={t('tb_sun')}
-                            active={props.activeTool === 'sun'}
-                            onClick={() => props.setActiveTool?.(props.activeTool === 'sun' ? 'none' : 'sun')}
+                            icon={<IconSearch />}
+                            label={t('tb_search') || '搜索'}
+                            active={props.activeTool === 'search'}
+                            onClick={() => props.setActiveTool?.(props.activeTool === 'search' ? 'none' : 'search')}
+                            theme={theme}
+                        />
+                    )}
+                    {!isHidden('clash') && (
+                        <ImageButton
+                            icon={<IconTarget />}
+                            label={t('tb_clash') || '碰撞'}
+                            active={props.activeTool === 'clash'}
+                            onClick={() => props.setActiveTool?.(props.activeTool === 'clash' ? 'none' : 'clash')}
                             theme={theme}
                         />
                     )}
