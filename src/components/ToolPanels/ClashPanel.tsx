@@ -141,12 +141,12 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
       autoHeight={true}
       theme={theme}
     >
-      <div style={{ position: "relative", padding: "12px", display: "flex", flexDirection: "column", gap: "10px", maxHeight: "68vh", overflow: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+      <div className="ui-toolpanel-body">
+        <div className="ui-toolpanel-row-between">
+          <div className="ui-toolpanel-caption">
             {t("clash_scope_visible") || "范围：当前可见构件"} | {t("clash_candidates") || "候选"}: {scannedCount}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="ui-toolpanel-row">
             {!running ? (
               <Button className="ui-properties-action" onClick={onRun}>
                 {t("clash_run") || "开始检查"}
@@ -164,7 +164,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             </Button>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="ui-toolpanel-row ui-toolpanel-wrap">
           <Button className="ui-properties-action" onClick={() => onIsolateByStatus("new")} disabled={counts.new === 0}>
             {t("clash_isolate_new") || "仅看新建"}
           </Button>
@@ -278,9 +278,9 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           <div className="ui-progress-fill" style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
         </div>
 
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="ui-toolpanel-row-between ui-toolpanel-caption">
           <span>{t("clash_results") || "碰撞结果"}: {filteredResults.length}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div className="ui-toolpanel-row">
             <span>{t("search_page_size") || "每页"}</span>
             <Select
               value={String(pageSize)}
@@ -322,9 +322,9 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           </Button>
         </div>
 
-        <div style={{ border: "1px solid var(--border-color)", borderRadius: "6px", maxHeight: "220px", overflow: "auto" }}>
+        <div className="ui-toolpanel-results-box">
           {filteredResults.length === 0 ? (
-            <div style={{ padding: "10px", color: "var(--text-secondary)", fontSize: 12 }}>
+            <div className="ui-toolpanel-results-empty">
               {t("clash_no_results") || "暂无碰撞结果"}
             </div>
           ) : (
@@ -336,8 +336,8 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 title={`${item.aUuid} <> ${item.bUuid}`}
               >
                 <span>{item.aName || item.aUuid} {" <> "} {item.bName || item.bUuid}</span>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ opacity: 0.7, fontSize: 11 }}>
+                <div className="ui-toolpanel-row-between">
+                  <span className="ui-result-item-secondary">
                     {(t("clash_overlap_volume") || "重叠体积")}: {item.overlapVolume.toFixed(6)}
                   </span>
                   <Select
