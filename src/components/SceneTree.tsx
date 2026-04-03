@@ -217,7 +217,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     clashSummaryByUuid = {}
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
-    const [clashOnlyMode, setClashOnlyMode] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(400);
@@ -289,14 +288,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const lowercaseQuery = query.toLowerCase();
         return nodes.reduce((acc: TreeNode[], node) => {
             const matchesQuery = !query || getNodeSearchText(node).includes(lowercaseQuery);
-            const sourceChildren = (query || clashOnlyMode)
+            const sourceChildren = query
                 ? getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1))
                 : node.children;
             const filteredChildren = filterTree(sourceChildren, query);
-            const hasClash = !!clashSummaryByUuid[node.uuid];
-            const includeByClash = !clashOnlyMode || hasClash || filteredChildren.length > 0;
             const includeByQuery = !query || matchesQuery || filteredChildren.length > 0;
-            if (includeByClash && includeByQuery) {
+            if (includeByQuery) {
                 acc.push({
                     ...node,
                     childrenLoaded: query ? true : node.childrenLoaded,
@@ -309,7 +306,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }, []);
     };
 
-    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery, clashOnlyMode, clashSummaryByUuid]);
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
     const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
     const firstSearchMatch = useMemo(() => {
         if (!searchQuery) return null;
@@ -445,14 +442,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             <IconClose width={14} height={14} />
                         </button>
                     )}
-                </div>
-                <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                        className={`ui-statusbar-tag ui-statusbar-tag-compact ${clashOnlyMode ? "active" : ""}`}
-                        onClick={() => setClashOnlyMode((prev) => !prev)}
-                    >
-                        {t("tree_clash_only") || "仅显示冲突节点"}
-                    </button>
                 </div>
                 {searchQuery && (
                     <div className="ui-tree-search-meta">
