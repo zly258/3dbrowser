@@ -5,12 +5,16 @@ import { IconChevronLeft, IconChevronRight } from "../../theme/Icons";
 
 export interface ClashResultItem {
   id: string;
+  pairKey: string;
   aUuid: string;
   bUuid: string;
   aName: string;
   bName: string;
   overlapVolume: number;
+  status: "new" | "confirmed" | "resolved";
 }
+
+type ClashFilter = "ALL" | "NEW" | "CONFIRMED" | "RESOLVED";
 
 interface ClashPanelProps {
   t: (key: string) => string;
@@ -21,6 +25,7 @@ interface ClashPanelProps {
   scannedCount: number;
   pairsScanned: number;
   results: ClashResultItem[];
+  resultFilter: ClashFilter;
   modelOptions: Array<{ id: string; name: string }>;
   setA: string[];
   setB: string[];
@@ -37,6 +42,12 @@ interface ClashPanelProps {
   onRun: () => void;
   onCancel: () => void;
   onClear: () => void;
+  onExportCsv: () => void;
+  onIsolateByStatus: (status: "new" | "confirmed") => void;
+  onRestoreVisibility: () => void;
+  onResultFilterChange: (next: ClashFilter) => void;
+  onUpdateResultStatus: (id: string, status: ClashResultItem["status"]) => void;
+  onMarkFilteredStatus: (status: ClashResultItem["status"]) => void;
   onSetASelectAll: () => void;
   onSetAClear: () => void;
   onSetBSelectAll: () => void;
@@ -54,6 +65,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   scannedCount,
   pairsScanned,
   results,
+  resultFilter,
   modelOptions,
   setA,
   setB,
@@ -70,6 +82,12 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   onRun,
   onCancel,
   onClear,
+  onExportCsv,
+  onIsolateByStatus,
+  onRestoreVisibility,
+  onResultFilterChange,
+  onUpdateResultStatus,
+  onMarkFilteredStatus,
   onSetASelectAll,
   onSetAClear,
   onSetBSelectAll,
@@ -84,10 +102,27 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
     setPage(1);
   }, [results.length, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(results.length / pageSize));
+  const counts = useMemo(() => {
+    const c = { all: results.length, new: 0, confirmed: 0, resolved: 0 };
+    results.forEach((item) => {
+      if (item.status === "new") c.new += 1;
+      else if (item.status === "confirmed") c.confirmed += 1;
+      else if (item.status === "resolved") c.resolved += 1;
+    });
+    return c;
+  }, [results]);
+
+  const filteredResults = useMemo(() => {
+    if (resultFilter === "NEW") return results.filter((item) => item.status === "new");
+    if (resultFilter === "CONFIRMED") return results.filter((item) => item.status === "confirmed");
+    if (resultFilter === "RESOLVED") return results.filter((item) => item.status === "resolved");
+    return results;
+  }, [resultFilter, results]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
-  const pageItems = useMemo(() => results.slice(pageStart, pageStart + pageSize), [results, pageStart, pageSize]);
+  const pageItems = useMemo(() => filteredResults.slice(pageStart, pageStart + pageSize), [filteredResults, pageStart, pageSize]);
   const setAIds = useMemo(() => new Set(setA), [setA]);
   const setBIds = useMemo(() => new Set(setB), [setB]);
 
@@ -125,7 +160,21 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             <Button className="ui-properties-action" onClick={onClear}>
               {t("clash_clear") || "清空结果"}
             </Button>
+            <Button className="ui-properties-action" onClick={onExportCsv} disabled={results.length === 0}>
+              {t("clash_export_csv") || "导出 CSV"}
+            </Button>
           </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <Button className="ui-properties-action" onClick={() => onIsolateByStatus("new")} disabled={counts.new === 0}>
+            {t("clash_isolate_new") || "仅看新建"}
+          </Button>
+          <Button className="ui-properties-action" onClick={() => onIsolateByStatus("confirmed")} disabled={counts.confirmed === 0}>
+            {t("clash_isolate_confirmed") || "仅看已确认"}
+          </Button>
+          <Button className="ui-properties-action" onClick={onRestoreVisibility}>
+            {t("show_all") || "显示全部"}
+          </Button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -231,7 +280,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
         </div>
 
         <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>{t("clash_results") || "碰撞结果"}: {results.length}</span>
+          <span>{t("clash_results") || "碰撞结果"}: {filteredResults.length}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span>{t("search_page_size") || "每页"}</span>
             <Select
@@ -248,8 +297,34 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           </div>
         </div>
 
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "ALL" ? "active" : ""}`} onClick={() => onResultFilterChange("ALL")}>
+            {(t("clash_group_all") || "全部")} ({counts.all})
+          </button>
+          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "NEW" ? "active" : ""}`} onClick={() => onResultFilterChange("NEW")}>
+            {(t("clash_group_new") || "新建")} ({counts.new})
+          </button>
+          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "CONFIRMED" ? "active" : ""}`} onClick={() => onResultFilterChange("CONFIRMED")}>
+            {(t("clash_group_confirmed") || "已确认")} ({counts.confirmed})
+          </button>
+          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "RESOLVED" ? "active" : ""}`} onClick={() => onResultFilterChange("RESOLVED")}>
+            {(t("clash_group_resolved") || "已解决")} ({counts.resolved})
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("confirmed")} disabled={filteredResults.length === 0}>
+            {t("clash_mark_confirmed") || "当前组标记已确认"}
+          </Button>
+          <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("resolved")} disabled={filteredResults.length === 0}>
+            {t("clash_mark_resolved") || "当前组标记已解决"}
+          </Button>
+          <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("new")} disabled={filteredResults.length === 0}>
+            {t("clash_mark_new") || "当前组标记新建"}
+          </Button>
+        </div>
+
         <div style={{ border: "1px solid var(--border-color)", borderRadius: "6px", maxHeight: "220px", overflow: "auto" }}>
-          {results.length === 0 ? (
+          {filteredResults.length === 0 ? (
             <div style={{ padding: "10px", color: "var(--text-secondary)", fontSize: 12 }}>
               {t("clash_no_results") || "暂无碰撞结果"}
             </div>
@@ -262,37 +337,50 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 title={`${item.aUuid} <> ${item.bUuid}`}
               >
                 <span>{item.aName || item.aUuid} {" <> "} {item.bName || item.bUuid}</span>
-                <span style={{ opacity: 0.7, fontSize: 11 }}>
-                  {(t("clash_overlap_volume") || "重叠体积")}: {item.overlapVolume.toFixed(6)}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ opacity: 0.7, fontSize: 11 }}>
+                    {(t("clash_overlap_volume") || "重叠体积")}: {item.overlapVolume.toFixed(6)}
+                  </span>
+                  <Select
+                    value={item.status}
+                    onChange={(value) => onUpdateResultStatus(item.id, value as ClashResultItem["status"])}
+                    options={[
+                      { value: "new", label: t("clash_group_new") || "新建" },
+                      { value: "confirmed", label: t("clash_group_confirmed") || "已确认" },
+                      { value: "resolved", label: t("clash_group_resolved") || "已解决" }
+                    ]}
+                    className="ui-input-compact"
+                    style={{ minWidth: 88 }}
+                  />
+                </div>
               </button>
             ))
           )}
         </div>
 
-        {results.length > 0 && (
+        {filteredResults.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Button
                 variant="ghost"
-                className="ui-properties-action ui-icon-btn"
+                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
                 onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                 disabled={currentPage <= 1}
                 title={t("search_page_prev") || "上一页"}
               >
-                <IconChevronLeft size={16} />
+                <IconChevronLeft size={20} />
               </Button>
               <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 64, textAlign: "center" }}>
                 {currentPage}/{totalPages}
               </span>
               <Button
                 variant="ghost"
-                className="ui-properties-action ui-icon-btn"
+                className="ui-properties-action ui-icon-btn ui-page-nav-btn"
                 onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                 disabled={currentPage >= totalPages}
                 title={t("search_page_next") || "下一页"}
               >
-                <IconChevronRight size={16} />
+                <IconChevronRight size={20} />
               </Button>
             </div>
           </div>

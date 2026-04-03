@@ -145,6 +145,9 @@ export class SceneManager {
     private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
     private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
+    private clashPairObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
+    private clashPairInstanceColorCache = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
+    private clashPairUuids = new Set<string>();
     private highlightPulseColor = new THREE.Color("#ffffff");
     private explodeEnabled = false;
     private explodeStrength = 0;
@@ -3293,6 +3296,7 @@ export class SceneManager {
         debugLog("SceneManager", "开始清空场景...");
         this.cancelDeferredStructureBuild();
         this.resetExplode();
+        this.clearLocateFocus();
 
         try {
             // 1. 深度清理 contentGroup
@@ -3859,7 +3863,127 @@ export class SceneManager {
         this.explodeInstanceStates.clear();
     }
 
+    clearClashPairHighlight() {
+        this.clashPairObjectMaterialCache.forEach((material, uuid) => {
+            const obj = this.contentGroup.getObjectByProperty("uuid", uuid) as (THREE.Mesh & { isBatchedMesh?: boolean }) | null;
+            if (!obj || (!obj.isMesh && !(obj as any).isBatchedMesh)) return;
+            (obj as any).material = material;
+        });
+        this.clashPairObjectMaterialCache.clear();
+        this.clashPairInstanceColorCache.forEach(({ mesh, instanceId, originalColor }) => {
+            mesh.setColorAt(instanceId, new THREE.Color(originalColor));
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        });
+        this.clashPairInstanceColorCache.clear();
+        this.clashPairUuids.clear();
+    }
+
+    setClashPairHighlight(
+        aUuid: string,
+        bUuid: string,
+        colorAHex: string = "#ff4d4f",
+        colorBHex: string = "#1890ff"
+    ) {
+        const normalizedA = String(aUuid || "").trim();
+        const normalizedB = String(bUuid || "").trim();
+        if (!normalizedA || !normalizedB) {
+            this.clearClashPairHighlight();
+            this.requestRender();
+            return;
+        }
+
+        this.clearLocateFocus();
+        this.clearClashPairHighlight();
+
+        const aTargets = this.expandLocateTargets([normalizedA]);
+        const bTargets = this.expandLocateTargets([normalizedB]);
+        const colorA = new THREE.Color(colorAHex);
+        const colorB = new THREE.Color(colorBHex);
+
+        this.contentGroup.traverse((child) => {
+            const mesh = child as THREE.Mesh;
+            if (!mesh.isMesh || !mesh.material) return;
+            const side = aTargets.has(child.uuid) ? "A" : bTargets.has(child.uuid) ? "B" : null;
+            if (!side) return;
+            if (!this.clashPairObjectMaterialCache.has(child.uuid)) {
+                this.clashPairObjectMaterialCache.set(child.uuid, mesh.material);
+            }
+            const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            const tintColor = side === "A" ? colorA : colorB;
+            const nextMaterials = sourceMaterials.map((material) => {
+                if (!material) return material;
+                const cloned = material.clone() as THREE.Material & {
+                    color?: THREE.Color;
+                    emissive?: THREE.Color;
+                    transparent?: boolean;
+                    opacity?: number;
+                    depthWrite?: boolean;
+                };
+                if ("transparent" in cloned) cloned.transparent = false;
+                if ("opacity" in cloned) cloned.opacity = 1;
+                if ("depthWrite" in cloned) cloned.depthWrite = true;
+                if ("color" in cloned && cloned.color) {
+                    cloned.color.copy(cloned.color.clone().lerp(tintColor, 0.86));
+                }
+                if ("emissive" in cloned && cloned.emissive) {
+                    cloned.emissive.copy(tintColor.clone().multiplyScalar(0.36));
+                }
+                cloned.needsUpdate = true;
+                return cloned;
+            });
+            mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
+        });
+
+        const originalColorByInstance = new Map<string, number>();
+        this.optimizedMapping.forEach((mappings) => {
+            mappings.forEach((mapping) => {
+                originalColorByInstance.set(`${mapping.mesh.uuid}:${mapping.instanceId}`, mapping.originalColor);
+            });
+        });
+
+        this.contentGroup.traverse((child) => {
+            const batched = child as THREE.BatchedMesh & { userData?: any };
+            if (!(child as any).isBatchedMesh) return;
+            const batchIdToUuid = batched.userData?.batchIdToUuid as Map<number, string> | undefined;
+            if (!batchIdToUuid || batchIdToUuid.size === 0) return;
+            let touched = false;
+            batchIdToUuid.forEach((instanceUuid, instanceId) => {
+                const side = aTargets.has(instanceUuid) ? "A" : bTargets.has(instanceUuid) ? "B" : null;
+                if (!side) return;
+                const key = `${batched.uuid}:${instanceId}`;
+                if (!this.clashPairInstanceColorCache.has(key)) {
+                    const mappedOriginalColor = originalColorByInstance.get(key);
+                    if (typeof mappedOriginalColor === "number") {
+                        this.clashPairInstanceColorCache.set(key, {
+                            mesh: batched,
+                            instanceId,
+                            originalColor: mappedOriginalColor
+                        });
+                    } else {
+                        const currentColor = new THREE.Color();
+                        batched.getColorAt(instanceId, currentColor);
+                        this.clashPairInstanceColorCache.set(key, {
+                            mesh: batched,
+                            instanceId,
+                            originalColor: currentColor.getHex()
+                        });
+                    }
+                }
+                const origin = this.clashPairInstanceColorCache.get(key)?.originalColor;
+                if (typeof origin !== "number") return;
+                const tintColor = side === "A" ? colorA : colorB;
+                batched.setColorAt(instanceId, new THREE.Color(origin).lerp(tintColor, 0.88));
+                touched = true;
+            });
+            if (touched && batched.instanceColor) batched.instanceColor.needsUpdate = true;
+        });
+
+        this.clashPairUuids = new Set([normalizedA, normalizedB]);
+        this.requestRender();
+    }
+
     clearLocateFocus() {
+        this.clearClashPairHighlight();
         this.locateObjectMaterialCache.forEach((material, uuid) => {
             const obj = this.contentGroup.getObjectByProperty("uuid", uuid) as (THREE.Mesh & { isBatchedMesh?: boolean }) | null;
             if (!obj || (!obj.isMesh && !(obj as any).isBatchedMesh)) return;
@@ -3915,6 +4039,7 @@ export class SceneManager {
     }
 
     setLocateResultSet(uuids: string[], focusUuid: string | null = null) {
+        this.clearClashPairHighlight();
         const normalized = Array.from(new Set(uuids.filter(Boolean)));
         if (normalized.length === 0) {
             this.clearLocateFocus();
@@ -4093,6 +4218,9 @@ export class SceneManager {
     }
 
     highlightObjects(uuids: string[]) {
+        if (this.clashPairUuids.size > 0) {
+            this.clearClashPairHighlight();
+        }
         const target = new Set(uuids.filter(Boolean));
 
         const restoreOne = (id: string) => {
@@ -5661,6 +5789,7 @@ export class SceneManager {
     dispose() {
         this.disposed = true;
         this.cancelDeferredStructureBuild();
+        this.clearLocateFocus();
         this.animateFramePending = false;
         if (this.animationFrameId !== null) {
             cancelAnimationFrame(this.animationFrameId);

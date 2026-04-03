@@ -66,12 +66,16 @@ type PropertySearchCondition = {
 
 type ClashResultItem = {
     id: string;
+    pairKey: string;
     aUuid: string;
     bUuid: string;
     aName: string;
     bName: string;
     overlapVolume: number;
+    status: "new" | "confirmed" | "resolved";
 };
+
+type ClashFilter = "ALL" | "NEW" | "CONFIRMED" | "RESOLVED";
 
 type ClashMeshInfo = {
     uuid: string;
@@ -239,9 +243,11 @@ export const ThreeViewer = ({
     const [clashUseNarrowPhase, setClashUseNarrowPhase] = useState(true);
     const [clashUseTrianglePhase, setClashUseTrianglePhase] = useState(false);
     const [clashPairsScanned, setClashPairsScanned] = useState(0);
+    const [clashResultFilter, setClashResultFilter] = useState<ClashFilter>("ALL");
     const clashRunTokenRef = useRef(0);
     const clashInFlightRef = useRef(false);
     const clashMeshInfoCacheRef = useRef<Map<string, ClashMeshInfo>>(new Map());
+    const clashAnnotatedUuidsRef = useRef<Set<string>>(new Set());
 
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
@@ -426,6 +432,51 @@ export const ThreeViewer = ({
         });
         return options;
     }, [treeRoot]);
+    const clashSummaryByUuid = useMemo(() => {
+        const summary = new Map<string, {
+            total: number;
+            newCount: number;
+            confirmedCount: number;
+            resolvedCount: number;
+            worstStatus: "new" | "confirmed" | "resolved";
+        }>();
+        const merge = (uuid: string, status: "new" | "confirmed" | "resolved") => {
+            if (!uuid) return;
+            const current = summary.get(uuid) || {
+                total: 0,
+                newCount: 0,
+                confirmedCount: 0,
+                resolvedCount: 0,
+                worstStatus: "resolved" as const
+            };
+            current.total += 1;
+            if (status === "new") current.newCount += 1;
+            else if (status === "confirmed") current.confirmedCount += 1;
+            else current.resolvedCount += 1;
+
+            if (current.newCount > 0) current.worstStatus = "new";
+            else if (current.confirmedCount > 0) current.worstStatus = "confirmed";
+            else current.worstStatus = "resolved";
+            summary.set(uuid, current);
+        };
+
+        clashResults.forEach((item) => {
+            merge(item.aUuid, item.status);
+            merge(item.bUuid, item.status);
+        });
+
+        const out: Record<string, {
+            total: number;
+            newCount: number;
+            confirmedCount: number;
+            resolvedCount: number;
+            worstStatus: "new" | "confirmed" | "resolved";
+        }> = {};
+        summary.forEach((value, key) => {
+            out[key] = value;
+        });
+        return out;
+    }, [clashResults]);
     
     // 跟踪已完成首次加载的文件集,避免重复toast提示
     const completedFileSetsRef = useRef<Set<string>>(new Set());
@@ -465,6 +516,43 @@ export const ThreeViewer = ({
         setClashSetA((prev) => prev.filter((id) => validIds.has(id)));
         setClashSetB((prev) => prev.filter((id) => validIds.has(id)));
     }, [clashModelOptions]);
+
+    useEffect(() => {
+        if (!sceneMgr.current) return;
+        const mgr = sceneMgr.current;
+        const previouslyAnnotated = clashAnnotatedUuidsRef.current;
+        previouslyAnnotated.forEach((uuid) => {
+            const obj = mgr.contentGroup.getObjectByProperty("uuid", uuid) as any;
+            if (obj?.userData?.clash) delete obj.userData.clash;
+            const nodes = mgr.getStructureNodes(uuid) || [];
+            nodes.forEach((node: any) => {
+                if (node?.userData?.clash) delete node.userData.clash;
+            });
+        });
+
+        const nextAnnotated = new Set<string>();
+        Object.entries(clashSummaryByUuid).forEach(([uuid, stat]) => {
+            nextAnnotated.add(uuid);
+            const payload = {
+                total: stat.total,
+                new: stat.newCount,
+                confirmed: stat.confirmedCount,
+                resolved: stat.resolvedCount,
+                status: stat.worstStatus
+            };
+            const obj = mgr.contentGroup.getObjectByProperty("uuid", uuid) as any;
+            if (obj) {
+                if (!obj.userData) obj.userData = {};
+                obj.userData.clash = payload;
+            }
+            const nodes = mgr.getStructureNodes(uuid) || [];
+            nodes.forEach((node: any) => {
+                if (!node.userData) node.userData = {};
+                node.userData.clash = payload;
+            });
+        });
+        clashAnnotatedUuidsRef.current = nextAnnotated;
+    }, [clashSummaryByUuid]);
     
     // 右键菜单状态
     const [contextMenu, setContextMenu] = useState<{
@@ -1570,6 +1658,17 @@ export const ThreeViewer = ({
             nbimProps
         });
 
+        const clashSummary = clashSummaryByUuid[focusUuid];
+        if (clashSummary) {
+            selectedGroups[t("pg_clash") || "碰撞状态"] = {
+                [t("clash_group_all") || "全部"]: String(clashSummary.total),
+                [t("clash_group_new") || "新建"]: String(clashSummary.newCount),
+                [t("clash_group_confirmed") || "已确认"]: String(clashSummary.confirmedCount),
+                [t("clash_group_resolved") || "已解决"]: String(clashSummary.resolvedCount),
+                [t("prop_status") || "状态"]: t(`clash_group_${clashSummary.worstStatus}`) || clashSummary.worstStatus
+            };
+        }
+
         setSelectedProps(selectedGroups);
     };
 
@@ -1826,8 +1925,15 @@ export const ThreeViewer = ({
 
     const handleApplySearchResultHighlight = useCallback((uuid: string) => {
         if (!sceneMgr.current) return;
+        const target = sceneMgr.current.contentGroup.getObjectByProperty("uuid", uuid);
+        sceneMgr.current.fitViewToObject(uuid);
+        if (target) {
+            void handleSelect(target);
+            return;
+        }
+        setSelectedUuids([uuid]);
         sceneMgr.current.highlightObjects([uuid]);
-    }, []);
+    }, [handleSelect, setSelectedUuids]);
 
     const handleClearSearchResult = useCallback(() => {
         searchRunTokenRef.current++;
@@ -2175,13 +2281,16 @@ export const ThreeViewer = ({
                         const passed = passesTrianglePhase(a.uuid, b.uuid, overlapBox);
                         if (!passed) continue;
                     }
+                    const pairKey = [a.uuid, b.uuid].sort().join("::");
                     results.push({
-                        id: `clash_${a.uuid}_${b.uuid}_${results.length}`,
+                        id: `clash_${pairKey}_${results.length}`,
+                        pairKey,
                         aUuid: a.uuid,
                         bUuid: b.uuid,
                         aName: a.name,
                         bName: b.name,
-                        overlapVolume
+                        overlapVolume,
+                        status: "new"
                     });
                     if (results.length >= maxResults) break;
                 }
@@ -2197,7 +2306,14 @@ export const ThreeViewer = ({
             }
 
             results.sort((x, y) => y.overlapVolume - x.overlapVolume);
-            setClashResults(results);
+            setClashResults((prev) => {
+                const statusByPair = new Map<string, ClashResultItem["status"]>();
+                prev.forEach((item) => statusByPair.set(item.pairKey, item.status));
+                return results.map((item) => ({
+                    ...item,
+                    status: statusByPair.get(item.pairKey) || "new"
+                }));
+            });
             setClashPairsScanned(pairChecks);
             setClashProgress(100);
             setClashStatus(`${t("clash_results") || "碰撞结果"}: ${results.length}`);
@@ -2229,6 +2345,7 @@ export const ThreeViewer = ({
         setClashStatus("");
         setClashScannedCount(0);
         setClashPairsScanned(0);
+        setClashResultFilter("ALL");
         setClashResults([]);
         sceneMgr.current?.clearLocateFocus();
         sceneMgr.current?.highlightObjects(selectedUuids);
@@ -2237,10 +2354,79 @@ export const ThreeViewer = ({
     const handleFocusClashResult = useCallback((item: ClashResultItem) => {
         if (!sceneMgr.current) return;
         const uuids = [item.aUuid, item.bUuid];
-        sceneMgr.current.setLocateResultSet(uuids, item.aUuid);
+        sceneMgr.current.setClashPairHighlight(item.aUuid, item.bUuid);
         sceneMgr.current.fitViewToObjects(uuids);
         setSelectedUuids(uuids);
     }, [setSelectedUuids]);
+
+    const handleUpdateClashResultStatus = useCallback((id: string, nextStatus: ClashResultItem["status"]) => {
+        setClashResults((prev) => prev.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)));
+    }, []);
+
+    const handleMarkFilteredClashStatus = useCallback((nextStatus: ClashResultItem["status"]) => {
+        setClashResults((prev) => prev.map((item) => {
+            const matched =
+                clashResultFilter === "ALL"
+                    || (clashResultFilter === "NEW" && item.status === "new")
+                    || (clashResultFilter === "CONFIRMED" && item.status === "confirmed")
+                    || (clashResultFilter === "RESOLVED" && item.status === "resolved");
+            return matched ? { ...item, status: nextStatus } : item;
+        }));
+    }, [clashResultFilter]);
+
+    const handleExportClashCsv = useCallback(() => {
+        if (clashResults.length === 0) return;
+        const escapeCsv = (value: string | number) => {
+            const text = String(value ?? "");
+            if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
+                return `"${text.replace(/"/g, "\"\"")}"`;
+            }
+            return text;
+        };
+
+        const header = ["pairKey", "aUuid", "aName", "bUuid", "bName", "status", "overlapVolume"];
+        const lines = [header.join(",")];
+        clashResults.forEach((item) => {
+            lines.push([
+                escapeCsv(item.pairKey),
+                escapeCsv(item.aUuid),
+                escapeCsv(item.aName),
+                escapeCsv(item.bUuid),
+                escapeCsv(item.bName),
+                escapeCsv(item.status),
+                escapeCsv(item.overlapVolume.toFixed(6))
+            ].join(","));
+        });
+
+        const csv = "\uFEFF" + lines.join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const pad = (v: number) => String(v).padStart(2, "0");
+        const fileName = `clash_report_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [clashResults]);
+
+    const handleIsolateClashByStatus = useCallback((status: "new" | "confirmed") => {
+        if (!sceneMgr.current) return;
+        const uuids = Array.from(new Set(
+            clashResults
+                .filter((item) => item.status === status)
+                .flatMap((item) => [item.aUuid, item.bUuid])
+                .filter(Boolean)
+        ));
+        if (uuids.length === 0) return;
+        sceneMgr.current.clearLocateFocus();
+        sceneMgr.current.isolateObjects(uuids);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set(uuids));
+        updateTree();
+        sceneMgr.current.fitViewToObjects(uuids);
+    }, [clashResults, updateTree]);
 
     const { processFiles, loadItemsIntoScene } = useFileLoadingFlow({
         managerRef: sceneMgr,
@@ -2497,6 +2683,7 @@ export const ThreeViewer = ({
                     setClashStatus("");
                     setClashScannedCount(0);
                     setClashPairsScanned(0);
+                    setClashResultFilter("ALL");
                     ifcPropertyCacheRef.current.clear();
                     setMeasureHistory([]);
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
@@ -2651,6 +2838,7 @@ export const ThreeViewer = ({
                                 onClearLocate={handleClearLocate}
                                 onLocateResultsChange={handleLocateResultsChange}
                                 locateResultUuids={locateResultUuids}
+                                clashSummaryByUuid={clashSummaryByUuid}
                             />
                         </div>
                         {/* Resize handle */}
@@ -2850,6 +3038,7 @@ export const ThreeViewer = ({
                             scannedCount={clashScannedCount}
                             pairsScanned={clashPairsScanned}
                             results={clashResults}
+                            resultFilter={clashResultFilter}
                             modelOptions={clashModelOptions}
                             setA={clashSetA}
                             setB={clashSetB}
@@ -2866,6 +3055,12 @@ export const ThreeViewer = ({
                             onRun={() => void handleRunClashCheck()}
                             onCancel={handleCancelClashCheck}
                             onClear={handleClearClashResults}
+                            onExportCsv={handleExportClashCsv}
+                            onIsolateByStatus={handleIsolateClashByStatus}
+                            onRestoreVisibility={handleShowAll}
+                            onResultFilterChange={setClashResultFilter}
+                            onUpdateResultStatus={handleUpdateClashResultStatus}
+                            onMarkFilteredStatus={handleMarkFilteredClashStatus}
                             onSetASelectAll={() => setClashSetA(clashModelOptions.map((item) => item.id))}
                             onSetAClear={() => setClashSetA([])}
                             onSetBSelectAll={() => setClashSetB(clashModelOptions.map((item) => item.id))}

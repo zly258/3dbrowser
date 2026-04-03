@@ -189,6 +189,13 @@ interface SceneTreeProps {
     onClearLocate?: () => void;
     onLocateResultsChange?: (uuids: string[]) => void;
     locateResultUuids?: string[];
+    clashSummaryByUuid?: Record<string, {
+        total: number;
+        newCount: number;
+        confirmedCount: number;
+        resolvedCount: number;
+        worstStatus: "new" | "confirmed" | "resolved";
+    }>;
 }
 
 export const SceneTree: React.FC<SceneTreeProps> = ({
@@ -206,9 +213,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     onLocate,
     onClearLocate,
     onLocateResultsChange,
-    locateResultUuids = []
+    locateResultUuids = [],
+    clashSummaryByUuid = {}
 }) => {
     const [searchQuery, setSearchQuery] = useState("");
+    const [clashOnlyMode, setClashOnlyMode] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(400);
@@ -280,9 +289,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         const lowercaseQuery = query.toLowerCase();
         return nodes.reduce((acc: TreeNode[], node) => {
             const matchesQuery = !query || getNodeSearchText(node).includes(lowercaseQuery);
-            const sourceChildren = query ? getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1)) : node.children;
+            const sourceChildren = (query || clashOnlyMode)
+                ? getRawChildren(node).map((child) => createTreeNodeFromRaw(child, node.depth + 1))
+                : node.children;
             const filteredChildren = filterTree(sourceChildren, query);
-            if (matchesQuery || filteredChildren.length > 0) {
+            const hasClash = !!clashSummaryByUuid[node.uuid];
+            const includeByClash = !clashOnlyMode || hasClash || filteredChildren.length > 0;
+            const includeByQuery = !query || matchesQuery || filteredChildren.length > 0;
+            if (includeByClash && includeByQuery) {
                 acc.push({
                     ...node,
                     childrenLoaded: query ? true : node.childrenLoaded,
@@ -295,7 +309,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }, []);
     };
 
-    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery, clashOnlyMode, clashSummaryByUuid]);
     const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
     const firstSearchMatch = useMemo(() => {
         if (!searchQuery) return null;
@@ -388,6 +402,27 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         onLocate?.(firstSearchMatch.object);
     };
 
+    const getClashBadge = (uuid: string) => {
+        const summary = clashSummaryByUuid[uuid];
+        if (!summary) return null;
+        if (summary.worstStatus === "new") {
+            return {
+                label: `${t("clash_group_new") || "新建"} ${summary.newCount}`,
+                color: "var(--error)"
+            };
+        }
+        if (summary.worstStatus === "confirmed") {
+            return {
+                label: `${t("clash_group_confirmed") || "已确认"} ${summary.confirmedCount}`,
+                color: "var(--warning, #f59e0b)"
+            };
+        }
+        return {
+            label: `${t("clash_group_resolved") || "已解决"} ${summary.resolvedCount}`,
+            color: "var(--success)"
+        };
+    };
+
     return (
         <div className="ui-tree-panel">
             <div className="ui-search-bar">
@@ -410,6 +445,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             <IconClose width={14} height={14} />
                         </button>
                     )}
+                </div>
+                <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                        className={`ui-statusbar-tag ui-statusbar-tag-compact ${clashOnlyMode ? "active" : ""}`}
+                        onClick={() => setClashOnlyMode((prev) => !prev)}
+                    >
+                        {t("tree_clash_only") || "仅显示冲突节点"}
+                    </button>
                 </div>
                 {searchQuery && (
                     <div className="ui-tree-search-meta">
@@ -473,9 +516,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                     style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
                                 />
 
-                                <div className="ui-tree-label">
-                                    {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-                                        <span>
+                                 <div className="ui-tree-label">
+                                     {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                         <span>
                                             {node.name.split(new RegExp(`(${searchQuery})`, "gi")).map((part, index) =>
                                                 part.toLowerCase() === searchQuery.toLowerCase() ? (
                                                     <span key={index} className="ui-search-hit">
@@ -486,12 +529,34 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                                 )
                                             )}
                                         </span>
-                                    ) : (
-                                        node.name
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                                     ) : (
+                                         node.name
+                                     )}
+                                     {(() => {
+                                         const badge = getClashBadge(node.uuid);
+                                         if (!badge) return null;
+                                         return (
+                                             <span
+                                                 style={{
+                                                     marginLeft: 6,
+                                                     padding: "0 6px",
+                                                     borderRadius: 10,
+                                                     border: `1px solid ${badge.color}`,
+                                                     color: badge.color,
+                                                     fontSize: 10,
+                                                     lineHeight: "16px",
+                                                     display: "inline-flex",
+                                                     alignItems: "center",
+                                                     verticalAlign: "middle"
+                                                 }}
+                                             >
+                                                 {badge.label}
+                                             </span>
+                                         );
+                                     })()}
+                                 </div>
+                             </div>
+                         ))}
                     </div>
                 </div>
             </div>
