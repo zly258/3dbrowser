@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ProgressCallback, TFunc } from "../theme/Locales";
+import type { PropertyListItemInput } from "../viewer/propertyIndex";
 
 type IfcRuntime = {
     ifcApi: any;
@@ -1089,16 +1090,33 @@ export const loadIFC = async (
     };
 
     const collectPsetData = (psetIDs: number[], rawKeyPrefix = "") => {
-        const normalizedGroups: Record<string, Record<string, string>> = {};
-        const rawGroups: Record<string, Record<string, string>> = {};
+        const normalizedGroups: Record<string, PropertyListItemInput[]> = {};
+        const rawGroups: Record<string, PropertyListItemInput[]> = {};
         let quantityGroupCount = 0;
 
         const ensureGroup = (
-            target: Record<string, Record<string, string>>,
+            target: Record<string, PropertyListItemInput[]>,
             groupName: string
         ) => {
-            if (!target[groupName]) target[groupName] = {};
+            if (!target[groupName]) target[groupName] = [];
             return target[groupName];
+        };
+
+        const appendGroupEntry = (
+            target: Record<string, PropertyListItemInput[]>,
+            groupName: string,
+            key: string,
+            value: unknown,
+            rawKey?: string
+        ) => {
+            const displayValue = formatDisplayValue(value);
+            if (displayValue === '' || displayValue === null || displayValue === undefined) return;
+            ensureGroup(target, groupName).push({
+                key,
+                rawKey,
+                value: displayValue,
+                id: `${groupName}::${key}::${ensureGroup(target, groupName).length}`
+            });
         };
 
         for (const psetID of psetIDs) {
@@ -1111,15 +1129,10 @@ export const loadIFC = async (
                 const rawGroupName = `${rawKeyPrefix}${psetBaseName}`;
 
                 if (pset.HasProperties) {
-                    const normalizedGroup = ensureGroup(normalizedGroups, normalizedGroupName);
-                    const rawGroup = ensureGroup(rawGroups, rawGroupName);
-                    normalizedGroup["类型"] = pset.is_a;
-                    rawGroup["is_a"] = pset.is_a;
-
-                    if (pset.Description?.value) {
-                        normalizedGroup["描述"] = formatDisplayValue(pset.Description.value);
-                        rawGroup["Description"] = formatDisplayValue(pset.Description.value);
-                    }
+                    appendGroupEntry(normalizedGroups, normalizedGroupName, "类型", pset.is_a, "is_a");
+                    appendGroupEntry(rawGroups, rawGroupName, "is_a", pset.is_a);
+                    appendGroupEntry(normalizedGroups, normalizedGroupName, "描述", pset.Description?.value, "Description");
+                    appendGroupEntry(rawGroups, rawGroupName, "Description", pset.Description?.value);
 
                     for (const propRef of pset.HasProperties) {
                         const propID = propRef.value;
@@ -1128,26 +1141,26 @@ export const loadIFC = async (
 
                         const propName = prop.Name.value;
                         if (prop.NominalValue) {
-                            normalizedGroup[getFriendlyName(propName)] = formatDisplayValue(prop.NominalValue.value);
-                            rawGroup[propName] = formatDisplayValue(prop.NominalValue.value);
+                            appendGroupEntry(normalizedGroups, normalizedGroupName, getFriendlyName(propName), prop.NominalValue.value, propName);
+                            appendGroupEntry(rawGroups, rawGroupName, propName, prop.NominalValue.value);
                             continue;
                         }
 
                         const flattenedNormalized = flattenAndFormatProperties(prop, "", getFriendlyName);
                         const flattenedRaw = flattenAndFormatProperties(prop, "", getRawDisplayName);
                         Object.entries(flattenedNormalized).forEach(([key, value]) => {
-                            normalizedGroup[`${getFriendlyName(propName)}.${key}`] = String(value);
+                            appendGroupEntry(normalizedGroups, normalizedGroupName, `${getFriendlyName(propName)}.${key}`, value, `${propName}.${key}`);
                         });
                         Object.entries(flattenedRaw).forEach(([key, value]) => {
-                            rawGroup[`${propName}.${key}`] = String(value);
+                            appendGroupEntry(rawGroups, rawGroupName, `${propName}.${key}`, value);
                         });
                     }
                 }
 
                 if (pset.Quantities) {
                     quantityGroupCount += 1;
-                    const normalizedGroup = ensureGroup(normalizedGroups, `${normalizedGroupName}.数量`);
-                    const rawGroup = ensureGroup(rawGroups, `${rawGroupName}.Quantities`);
+                    const normalizedQuantityGroupName = `${normalizedGroupName}.数量`;
+                    const rawQuantityGroupName = `${rawGroupName}.Quantities`;
 
                     pset.Quantities.forEach((quant: any) => {
                         const quantity = resolveExpressId(quant) ? getLineCached(quant.value) : quant;
@@ -1165,8 +1178,8 @@ export const loadIFC = async (
 
                         valueTypes.forEach((valueKey) => {
                             if (quantity[valueKey]?.value === undefined) return;
-                            normalizedGroup[`${getFriendlyName(quantityName)}.${getFriendlyName(valueKey)}`] = formatDisplayValue(quantity[valueKey].value);
-                            rawGroup[`${quantityName}.${valueKey}`] = formatDisplayValue(quantity[valueKey].value);
+                            appendGroupEntry(normalizedGroups, normalizedQuantityGroupName, `${getFriendlyName(quantityName)}.${getFriendlyName(valueKey)}`, quantity[valueKey].value, `${quantityName}.${valueKey}`);
+                            appendGroupEntry(rawGroups, rawQuantityGroupName, `${quantityName}.${valueKey}`, quantity[valueKey].value);
                         });
                     });
                 }
@@ -1185,29 +1198,35 @@ export const loadIFC = async (
     // 附加自定义属性管理器
     rootGroup.userData.ifcManager = {
         getItemProperties: async (_id: number, expressID: number) => {
-            const normalizedGroups: Record<string, Record<string, string>> = {};
-            const rawGroups: Record<string, Record<string, string>> = {};
+            const normalizedGroups: Record<string, PropertyListItemInput[]> = {};
+            const rawGroups: Record<string, PropertyListItemInput[]> = {};
             const addGroupEntry = (
-                target: Record<string, Record<string, string>>,
+                target: Record<string, PropertyListItemInput[]>,
                 groupName: string,
                 key: string,
-                value: any
+                value: any,
+                rawKey?: string
             ) => {
                 if (value === '' || value === null || value === undefined) return;
-                if (!target[groupName]) target[groupName] = {};
-                target[groupName][key] = String(value);
+                if (!target[groupName]) target[groupName] = [];
+                target[groupName].push({
+                    key,
+                    rawKey,
+                    value: String(value),
+                    id: `${groupName}::${key}::${target[groupName].length}`
+                });
             };
 
             let entity: any = null;
             try {
                 entity = getLineCached(expressID);
                 if (entity) {
-                    addGroupEntry(normalizedGroups, "IFC 标识", "ExpressID", expressID);
-                    addGroupEntry(normalizedGroups, "IFC 标识", "类型", entity.is_a || 'Unknown');
-                    addGroupEntry(normalizedGroups, "IFC 标识", "全局ID", entity.GlobalId?.value || '');
-                    addGroupEntry(normalizedGroups, "IFC 标识", "名称", entity.Name?.value || '');
-                    addGroupEntry(normalizedGroups, "IFC 标识", "描述", entity.Description?.value || '');
-                    addGroupEntry(normalizedGroups, "IFC 标识", "标签", entity.Tag?.value || '');
+                    addGroupEntry(normalizedGroups, "IFC 标识", "ExpressID", expressID, "expressID");
+                    addGroupEntry(normalizedGroups, "IFC 标识", "类型", entity.is_a || 'Unknown', "is_a");
+                    addGroupEntry(normalizedGroups, "IFC 标识", "全局ID", entity.GlobalId?.value || '', "GlobalId");
+                    addGroupEntry(normalizedGroups, "IFC 标识", "名称", entity.Name?.value || '', "Name");
+                    addGroupEntry(normalizedGroups, "IFC 标识", "描述", entity.Description?.value || '', "Description");
+                    addGroupEntry(normalizedGroups, "IFC 标识", "标签", entity.Tag?.value || '', "Tag");
 
                     addGroupEntry(rawGroups, "IFC Entity", "expressID", expressID);
                     addGroupEntry(rawGroups, "IFC Entity", "is_a", entity.is_a || 'Unknown');
@@ -1219,7 +1238,7 @@ export const loadIFC = async (
                     Object.keys(entity).forEach(key => {
                         if (['expressID', 'is_a', 'type', 'ID', 'GlobalId', 'Name', 'Description', 'Tag'].includes(key)) return;
                         const value = formatDisplayValue(entity[key]);
-                        addGroupEntry(normalizedGroups, "IFC 标识", getFriendlyName(key), value);
+                        addGroupEntry(normalizedGroups, "IFC 标识", getFriendlyName(key), value, key);
                         addGroupEntry(rawGroups, "IFC Entity", key, value);
                     });
                 }
@@ -1253,10 +1272,10 @@ export const loadIFC = async (
                 if (typePropertySets.length > 0) {
                     const parsed = collectPsetData(typePropertySets, "TYPE:");
                     Object.entries(parsed.normalizedGroups).forEach(([groupName, props]) => {
-                        normalizedGroups[`Type Properties · ${groupName}`] = props;
+                        normalizedGroups[`Type Properties · ${groupName}`] = props.map((item) => ({ ...item }));
                     });
                     Object.entries(parsed.rawGroups).forEach(([groupName, props]) => {
-                        rawGroups[`TYPE:${groupName}`] = props;
+                        rawGroups[`TYPE:${groupName}`] = props.map((item) => ({ ...item }));
                     });
                 }
             }

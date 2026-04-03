@@ -20,6 +20,7 @@ import {
     type SceneManagerOptions,
     resolveSceneChunkOptions
 } from "./scene/types";
+import type { PropertyGroupInput } from "../viewer/propertyIndex";
 
 const CHUNK_PROGRESS_REPORT_INTERVAL_MS = 48;
 const NBIM_CHUNK_REGISTRATION_BATCH = 220;
@@ -3442,7 +3443,7 @@ export class SceneManager {
         return flatProps;
     }
 
-    getNbimIfcPropertyGroups(id: string, mode: "raw" | "normalized" = "raw"): Record<string, Record<string, string>> | null {
+    getNbimIfcPropertyGroups(id: string, mode: "raw" | "normalized" = "raw"): Record<string, PropertyGroupInput> | null {
         const node = this.resolveNbimNode(id);
         if (!node || !node.bimId) return null;
         const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
@@ -3455,9 +3456,9 @@ export class SceneManager {
         const rawGroups = entry.ifcRawGroups;
         const normalizedGroups = entry.ifcNormalizedGroups;
         if (mode === "normalized") {
-            return (normalizedGroups || rawGroups || null) as Record<string, Record<string, string>> | null;
+            return (normalizedGroups || rawGroups || null) as Record<string, PropertyGroupInput> | null;
         }
-        return (rawGroups || normalizedGroups || null) as Record<string, Record<string, string>> | null;
+        return (rawGroups || normalizedGroups || null) as Record<string, PropertyGroupInput> | null;
     }
 
     setAllVisibility(visible: boolean) {
