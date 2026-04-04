@@ -7,27 +7,14 @@ export interface ColorPickerProps {
 }
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({ value, onChange, style }) => (
-    <div className="flex items-center gap-2" style={style}>
+    <div className="ui-color-picker" style={style}>
         <input
             type="color"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            style={{
-                width: '28px',
-                height: '28px',
-                padding: 0,
-                border: '1px solid var(--border-color)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                backgroundColor: 'transparent',
-            }}
+            className="ui-color-picker-input"
         />
-        <span
-            style={{
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-            }}
-        >
+        <span className="ui-color-picker-value">
             {value}
         </span>
     </div>

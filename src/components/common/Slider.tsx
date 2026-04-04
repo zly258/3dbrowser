@@ -64,16 +64,10 @@ export const Slider: React.FC<SliderProps> = ({
     return (
         <div
             ref={sliderRef}
-            className="ui-slider"
+            className={`ui-slider ui-slider-control ${disabled ? 'ui-slider-control-disabled' : 'ui-slider-control-interactive'}`}
             style={{
-                opacity: disabled ? 0.5 : 1,
                 width: '100%',
                 minWidth: 0,
-                height: '24px',
-                position: 'relative',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
                 ...style
             }}
             onMouseDown={handleMouseDown}
@@ -81,23 +75,12 @@ export const Slider: React.FC<SliderProps> = ({
             {/* 滑块轨道背景 */}
             <div
                 className="ui-slider-track"
-                style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '6px',
-                    backgroundColor: 'var(--border-color)',
-                    borderRadius: '3px',
-                }}
             />
             {/* 滑块进度填充 */}
             <div
                 className="ui-slider-progress"
                 style={{
-                    position: 'absolute',
                     width: `${percentage}%`,
-                    height: '6px',
-                    backgroundColor: 'var(--accent)',
-                    borderRadius: '3px',
                 }}
             />
             {/* 滑块拖拽手柄 */}
@@ -105,15 +88,7 @@ export const Slider: React.FC<SliderProps> = ({
                 className="ui-slider-thumb"
                 style={{
                     left: `${percentage}%`,
-                    width: '16px',
-                    height: '16px',
-                    backgroundColor: 'var(--bg-primary)',
-                    border: `2px solid var(--accent)`,
-                    borderRadius: '50%',
                     cursor: disabled ? 'not-allowed' : 'default',
-                    position: 'absolute',
-                    transform: 'translateX(-50%)',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
             />
         </div>

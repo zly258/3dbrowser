@@ -74,13 +74,8 @@ export const InputNumber: React.FC<InputNumberProps> = ({
 
     return (
         <div 
-            className={`ui-input-number ${className}`} 
-            style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center',
-                position: 'relative',
-                ...style 
-            }}
+            className={`ui-input-number ui-input-number-root ${className}`} 
+            style={style}
         >
             <input
                 type="number"
@@ -90,47 +85,20 @@ export const InputNumber: React.FC<InputNumberProps> = ({
                 min={min}
                 max={max}
                 step={step}
-                className="ui-input"
-                style={{ 
-                    paddingRight: unit ? '24px' : '48px',
-                    textAlign: 'right'
-                }}
+                className={`ui-input ui-input-number-input ${unit ? 'ui-input-number-input-with-unit' : 'ui-input-number-input-with-controls'}`}
                 {...props}
             />
             {unit && (
-                <span style={{ 
-                    position: 'absolute', 
-                    right: '32px', 
-                    fontSize: '11px', 
-                    color: 'var(--text-muted)' 
-                }}>
+                <span className="ui-input-number-unit">
                     {unit}
                 </span>
             )}
-            <div className="ui-input-number-controls" style={{
-                position: 'absolute',
-                right: '4px',
-                display: 'flex',
-                flexDirection: 'column',
-                height: 'calc(100% - 8px)',
-                gap: '2px'
-            }}>
+            <div className="ui-input-number-controls">
                 <button 
                     onClick={stepUp}
                     className="ui-input-number-btn"
                     title="Increase"
-                    style={{
-                        flex: 1,
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: '0 4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '8px'
-                    }}
+                    style={{ flex: 1 }}
                 >
                     ▲
                 </button>
@@ -138,18 +106,7 @@ export const InputNumber: React.FC<InputNumberProps> = ({
                     onClick={stepDown}
                     className="ui-input-number-btn"
                     title="Decrease"
-                    style={{
-                        flex: 1,
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: '0 4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '8px'
-                    }}
+                    style={{ flex: 1 }}
                 >
                     ▼
                 </button>

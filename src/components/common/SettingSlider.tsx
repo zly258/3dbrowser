@@ -63,51 +63,26 @@ export const SettingSlider: React.FC<SettingSliderProps> = ({
     /**
      * 处理鼠标移动事件（hover效果）
      */
-    const handleMouseMove = useCallback((e: React.MouseEvent) => {
-        if (!sliderRef.current) return;
-        const rect = sliderRef.current.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        // 可以添加hover效果
-    }, []);
-
     return (
-        <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0, width: '100%', ...style }}>
+        <div className="ui-setting-slider" style={style}>
             {/* 滑块主体 */}
             <div
                 ref={sliderRef}
-                className="ui-slider"
+                className="ui-slider ui-slider-control ui-slider-control-interactive"
                 style={{
                     flex: 1,
                     minWidth: 0,
-                    height: '24px',
-                    position: 'relative',
                     width: '100%',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
                 }}
                 onMouseDown={handleMouseDown}
             >
                 {/* 滑块轨道背景 */}
-                <div
-                    className="ui-slider-track"
-                    style={{
-                        position: 'absolute',
-                        width: '100%',
-                        height: '6px',
-                        backgroundColor: 'var(--border-color)',
-                        borderRadius: '3px',
-                    }}
-                />
+                <div className="ui-slider-track" />
                 {/* 滑块进度填充 */}
                 <div
                     className="ui-slider-progress"
                     style={{
-                        position: 'absolute',
                         width: `${percentage}%`,
-                        height: '6px',
-                        backgroundColor: 'var(--accent)',
-                        borderRadius: '3px',
                         transition: 'width 0.05s',
                     }}
                 />
@@ -116,29 +91,13 @@ export const SettingSlider: React.FC<SettingSliderProps> = ({
                     className="ui-slider-thumb"
                     style={{
                         left: `${percentage}%`,
-                        width: '16px',
-                        height: '16px',
-                        backgroundColor: 'var(--bg-primary)',
-                        border: `2px solid var(--accent)`,
-                        borderRadius: '50%',
                         cursor: 'default',
-                        position: 'absolute',
-                        transform: 'translateX(-50%)',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                     }}
                 />
             </div>
             {/* 数值显示 */}
             {showValue && (
-                <span
-                    style={{
-                        fontSize: '12px',
-                        color: 'var(--text-primary)',
-                        minWidth: '40px',
-                        textAlign: 'right',
-                        flexShrink: 0,
-                    }}
-                >
+                <span className="ui-setting-slider-value">
                     {step < 1 ? value.toFixed(1) : value}
                 </span>
             )}
