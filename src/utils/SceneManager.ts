@@ -29,7 +29,10 @@ import {
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import { getObjectGeometryDataFromScene } from "./sceneManagerGeometry";
 import {
+    applyNbimGlobalBounds,
+    appendNbimStructure,
     buildExportStructureTree,
+    buildNbimQuickStats,
     collectIfcModelReferences,
     collectNbimBimProperties,
     countStructureRenderableNodes,
@@ -37,6 +40,7 @@ import {
     deriveDefaultNbimStem,
     encodeNbimManifest,
     groupNbimPropertiesByOwner,
+    populateNbimNodeMappings,
     prepareNbimExportChunks,
     sanitizeDisplayLabel
 } from "./sceneManagerNbim";
@@ -2888,38 +2892,24 @@ export class SceneManager {
 
         this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
 
-        // 设置或更新场景包围盒
-        if (manifest.globalBounds) {
-            const newBounds = new THREE.Box3(
-                new THREE.Vector3(manifest.globalBounds.min.x, manifest.globalBounds.min.y, manifest.globalBounds.min.z),
-                new THREE.Vector3(manifest.globalBounds.max.x, manifest.globalBounds.max.y, manifest.globalBounds.max.z)
-            );
-
-            // 处理大坐标偏移
-            if (this.globalOffset.length() === 0) {
-                newBounds.getCenter(this.globalOffset);
-                debugLog("SceneManager/NBIM", "初始化全局偏移", this.globalOffset);
-            }
-
-            if (this.precomputedBounds.isEmpty()) {
-                this.precomputedBounds.copy(newBounds);
-            } else {
-                this.precomputedBounds.union(newBounds);
-            }
-            this.sceneBounds.copy(this.precomputedBounds);
+        const boundsState = applyNbimGlobalBounds({
+            globalBounds: manifest.globalBounds,
+            precomputedBounds: this.precomputedBounds,
+            sceneBounds: this.sceneBounds,
+            globalOffset: this.globalOffset
+        });
+        this.precomputedBounds.copy(boundsState.precomputedBounds);
+        this.sceneBounds.copy(boundsState.sceneBounds);
+        this.globalOffset.copy(boundsState.globalOffset);
+        if (boundsState.initializedOffset) {
+            debugLog("SceneManager/NBIM", "初始化全局偏移", this.globalOffset);
         }
 
         const modelRoot = manifest.structureTree;
-        if (!this.structureRoot.children) this.structureRoot.children = [];
-
-        // 不要增加额外的 root 节点，直接将内容加入 structureRoot
-        if (modelRoot) {
-            if (modelRoot.children && modelRoot.name === 'Root') {
-                this.structureRoot.children.push(...modelRoot.children);
-            } else {
-                this.structureRoot.children.push(modelRoot);
-            }
-        }
+        appendNbimStructure({
+            structureRoot: this.structureRoot,
+            modelRoot
+        });
 
         const rootId = modelRoot?.id || fileId;
         const manifestBimProperties = (manifest?.bimProperties && typeof manifest.bimProperties === "object")
@@ -2929,11 +2919,11 @@ export class SceneManager {
         // 从属性键中提取实际 owner（格式 "<owner>::<bimId>"）
         const { defaultOwner, grouped } = groupNbimPropertiesByOwner(manifestBimProperties, rootId);
         grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
-        const quickStats = manifest.stats || {
-            meshes: countStructureRenderableNodes(modelRoot),
-            faces: 0,
-            memory: parseFloat(((manifest.chunks || []).reduce((sum: number, chunk: any) => sum + (chunk.byteLength || 0), 0) / (1024 * 1024)).toFixed(2))
-        };
+        const quickStats = buildNbimQuickStats({
+            manifestStats: manifest.stats,
+            modelRoot,
+            chunks: manifest.chunks
+        });
         this.registerOriginalStats(rootId, quickStats);
 
         // 为 NBIM 创建一个容器组
@@ -2945,23 +2935,12 @@ export class SceneManager {
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
 
-        // 增量构建节点映射
-        if (modelRoot) {
-            const traverse = (node: StructureTreeNode) => {
-                if (!node.userData) node.userData = {};
-                const nodeOriginalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : defaultOwner;
-                node.userData.originalUuid = nodeOriginalUuid;
-                if (!this.nodeMap.has(node.id)) this.nodeMap.set(node.id, []);
-                this.nodeMap.get(node.id)!.push(node);
-                if (node.bimId) {
-                    const key = `${nodeOriginalUuid}::${node.bimId}`;
-                    if (!this.bimIdToNodeIds.has(key)) this.bimIdToNodeIds.set(key, []);
-                    this.bimIdToNodeIds.get(key)!.push(node.id);
-                }
-                if (node.children) node.children.forEach(traverse);
-            };
-            traverse(modelRoot);
-        }
+        populateNbimNodeMappings({
+            modelRoot,
+            defaultOwner,
+            nodeMap: this.nodeMap,
+            bimIdToNodeIds: this.bimIdToNodeIds
+        });
 
         // 注册分块
         if (onProgress) onProgress(30, "正在初始化分块...");
