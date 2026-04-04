@@ -29,10 +29,7 @@ import {
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import { getObjectGeometryDataFromScene } from "./sceneManagerGeometry";
 import {
-    applyNbimGlobalBounds,
-    appendNbimStructure,
     buildExportStructureTree,
-    buildNbimQuickStats,
     collectIfcModelReferences,
     collectNbimBimProperties,
     countStructureRenderableNodes,
@@ -40,10 +37,16 @@ import {
     deriveDefaultNbimStem,
     encodeNbimManifest,
     groupNbimPropertiesByOwner,
-    populateNbimNodeMappings,
     prepareNbimExportChunks,
     sanitizeDisplayLabel
 } from "./sceneManagerNbim";
+import {
+    applyNbimGlobalBounds,
+    appendNbimStructure,
+    buildNbimQuickStats,
+    populateNbimNodeMappings,
+    registerNbimChunks
+} from "./sceneManagerNbimLoad";
 import {
     applyClearLocateFocus,
     applyHighlightObjects,
@@ -2945,65 +2948,25 @@ export class SceneManager {
         // 注册分块
         if (onProgress) onProgress(30, "正在初始化分块...");
 
-        const chunkOffset = this.globalOffset.lengthSq() > 0 ? this.globalOffset.clone().negate() : null;
         const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
-        if (chunkEntries.length === 0) {
-            throw new Error("NBIM 文件没有可渲染分块，可能格式有问题");
-        }
         this.applyNbimScaleTuning(chunkEntries.length);
-        const deferredGhostSpecs: Array<{ chunkId: string; bounds: THREE.Box3 }> = [];
         const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
             ? Number.MAX_SAFE_INTEGER
             : GHOST_VISIBLE_FIRST_BATCH;
-        for (let i = 0; i < chunkEntries.length; i++) {
-            const c = chunkEntries[i];
-            if (!c?.bounds || typeof c.byteOffset !== "number" || typeof c.byteLength !== "number") {
-                throw new Error("NBIM 分块数据不完整，可能格式有问题");
-            }
-            const bounds = new THREE.Box3(
-                new THREE.Vector3(c.bounds.min.x, c.bounds.min.y, c.bounds.min.z),
-                new THREE.Vector3(c.bounds.max.x, c.bounds.max.y, c.bounds.max.z)
-            );
-
-            // 关键：将包围盒也平移到偏移后的局部空间，否则视锥体裁剪会失败
-            if (chunkOffset) {
-                bounds.translate(chunkOffset);
-            }
-
-            const chunkId = c.id;
-            const center = bounds.getCenter(new THREE.Vector3());
-            const paddedBounds = bounds.clone();
-            const padSize = bounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
-            paddedBounds.expandByVector(padSize);
-            this.registerChunk({
-                id: chunkId,
-                bounds: bounds,
-                paddedBounds,
-                _padding: this.chunkPadding,
-                center,
-                loaded: false,
-                byteOffset: c.byteOffset,
-                byteLength: c.byteLength,
-                nbimFileId: fileId,
-                groupName: `optimized_${rootId}`,
-                originalUuid: c.originalUuid ? String(c.originalUuid) : rootId
-            });
-
-            if (i < immediateGhostLimit) {
-                const edges = this.createGhostLine(`ghost_${chunkId}`, bounds);
-                this.ghostGroup.add(edges);
-            } else {
-                deferredGhostSpecs.push({ chunkId, bounds });
-            }
-            if ((i + 1) % NBIM_CHUNK_REGISTRATION_BATCH === 0) {
-                if (onProgress) {
-                    const ratio = Math.max(0, Math.min(1, (i + 1) / chunkEntries.length));
-                    const progress = 30 + Math.round(ratio * 40);
-                    onProgress(progress, "正在初始化分块...");
-                }
-                await this.yieldToMainThread();
-            }
-        }
+        const { deferredGhostSpecs } = await registerNbimChunks({
+            chunkEntries,
+            globalOffset: this.globalOffset,
+            chunkPadding: this.chunkPadding,
+            rootId,
+            fileId,
+            immediateGhostLimit,
+            registrationBatchSize: NBIM_CHUNK_REGISTRATION_BATCH,
+            onProgress,
+            registerChunk: (chunk) => this.registerChunk(chunk),
+            createGhostLine: (name, bounds) => this.createGhostLine(name, bounds),
+            addGhostLine: (line) => this.ghostGroup.add(line),
+            yieldToMainThread: () => this.yieldToMainThread()
+        });
         if (deferredGhostSpecs.length > 0) {
             void this.createChunkGhostsProgressively(deferredGhostSpecs);
         }
