@@ -11,9 +11,9 @@
   --bg-selected: rgba(161, 201, 255, 0.16);
 
   /* Border & Outline */
-  --border-color: #3C3842;
-  --border-hover: #938F99;
-  --border-light: #36343B;
+  --border-color: #4A4652;
+  --border-hover: #A39DAA;
+  --border-light: #54505A;
 
   /* Text */
   --text-primary: #E6E1E5;
@@ -35,9 +35,9 @@
   --info: #A8C7FA;
 
   /* Elevation (MD3 Shadows) */
-  --shadow-sm: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
-  --shadow-md: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0px 1px 2px rgba(12, 16, 22, 0.18);
+  --shadow-md: 0px 4px 12px rgba(12, 16, 22, 0.18);
+  --shadow-lg: 0px 10px 24px rgba(12, 16, 22, 0.22);
 
   /* Scrollbar */
   --scrollbar-track: #1C1B1F;
@@ -73,9 +73,9 @@
   --bg-selected: rgba(0, 97, 164, 0.16);
 
   /* Border & Outline */
-  --border-color: #9A949E;
-  --border-hover: #49454F;
-  --border-light: #E7E0EC;
+  --border-color: #B6B0BA;
+  --border-hover: #7D7883;
+  --border-light: #ECE6EF;
 
   /* Text */
   --text-primary: #1C1B1F;
@@ -97,9 +97,9 @@
   --info: #0061A4;
 
   /* Elevation (MD3 Shadows) */
-  --shadow-sm: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0px 1px 2px rgba(32, 36, 44, 0.08);
+  --shadow-md: 0px 6px 18px rgba(32, 36, 44, 0.12);
+  --shadow-lg: 0px 12px 28px rgba(32, 36, 44, 0.14);
 
   /* Scrollbar */
   --scrollbar-track: #F4F4F5;
@@ -1285,7 +1285,6 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-sidebar {
   display: flex;
   flex-direction: column;
-  border-color: var(--border-color);
   background-color: var(--bg-panel);
   z-index: 10;
   position: relative;
@@ -1349,8 +1348,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  border: 1px solid var(--border-color);
-  animation: fadeInDown 0.3s ease-out;
+  border: 1px solid var(--border-light);
 }
 
 .ui-toast-dot {
@@ -1396,7 +1394,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-context-menu {
   position: fixed;
   background-color: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   z-index: 10000;
@@ -1427,7 +1425,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-context-menu-divider {
   height: 1px;
-  background-color: var(--border-color);
+  background-color: var(--border-light);
   margin: 4px 0;
 }
 
@@ -2261,7 +2259,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   background-color: var(--bg-primary);
 }
@@ -2403,7 +2401,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(38, 44, 54, 0.46);
   border: none;
   border-radius: 4px;
   color: rgba(255, 255, 255, 0.8);
@@ -2444,7 +2442,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(24, 28, 34, 0.54);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2453,7 +2451,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-error-content {
   background-color: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   display: flex;
@@ -2472,7 +2470,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .ui-error-header-danger {
@@ -2528,11 +2526,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .dark .ui-loading-overlay {
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: rgba(22, 26, 32, 0.72);
 }
 
 .light .ui-loading-overlay {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(248, 250, 255, 0.76);
 }
 
 .ui-loading-box {
@@ -2540,7 +2538,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background-color: var(--bg-panel);
   padding: 20px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-lg);
   color: var(--text-primary);
 }

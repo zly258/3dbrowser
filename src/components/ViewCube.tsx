@@ -21,7 +21,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh', theme
     const mouse = useRef(new THREE.Vector2());
     const hoveredPart = useRef<THREE.Mesh | null>(null);
 
-    const cubeSize = sceneMgr?.settings?.viewCubeSize || 100;
+    const cubeSize = sceneMgr?.settings?.viewCubeSize || 120;
     const t = (key: string) => getTranslation(lang as Lang, key);
 
     useEffect(() => {
