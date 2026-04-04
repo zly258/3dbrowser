@@ -1581,12 +1581,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolpanel-results-box {
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  max-height: 220px;
+  max-height: 280px;
   overflow: auto;
+  background: var(--bg-panel);
 }
 
 .ui-toolpanel-results-box-sm {
-  max-height: 160px;
+  max-height: 220px;
 }
 
 .ui-toolpanel-results-empty {
@@ -1698,6 +1699,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   padding: 8px;
   border-radius: var(--radius-md);
   background: var(--bg-hover);
+  border: 1px solid var(--border-light);
   min-width: 0;
 }
 
@@ -1736,6 +1738,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background-color: var(--bg-hover);
 }
 
+.ui-search-result-item:last-child {
+  border-bottom: none;
+}
+
 .ui-search-result-main {
   flex: 1;
   min-width: 0;
@@ -1747,6 +1753,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   gap: 4px;
   cursor: pointer;
+  padding: 0;
+  font: inherit;
 }
 
 .ui-mode-tray {
@@ -1768,6 +1776,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border: 1px solid var(--border-light);
   font-size: 11px;
   color: var(--text-primary);
+  box-shadow: none;
 }
 
 .ui-mode-pill button {
@@ -1779,6 +1788,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   padding: 0;
 }
 
+.ui-mode-pill button:hover {
+  color: var(--accent-hover);
+}
+
 .ui-viewpoint-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1787,6 +1800,15 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   background: var(--bg-hover);
+}
+
+.ui-toolpanel-body .ui-btn,
+.ui-toolpanel-body .ui-statusbar-tag,
+.ui-search-result-item,
+.ui-selection-summary-card,
+.ui-viewpoint-options,
+.ui-toolpanel-results-box {
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .ui-viewpoint-flags {
@@ -1804,6 +1826,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: var(--bg-hover);
   color: var(--text-secondary);
   font-size: 10px;
+}
+
+.ui-properties-toolbar,
+.ui-selection-summary,
+.ui-search-bar {
+  background: linear-gradient(180deg, var(--bg-panel) 0%, color-mix(in srgb, var(--bg-panel) 92%, var(--bg-hover)) 100%);
 }
 
 /* 在 Chrome/Safari/Edge 中隐藏数字输入框原生微调按钮 */

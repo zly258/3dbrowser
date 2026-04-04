@@ -580,30 +580,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                   }
                               ]
                             : []),
-                        ...(onHide
-                            ? [
-                                  {
-                                      label: t("hide_selected") || "隐藏选中",
-                                      onClick: () => onHide(contextMenu.node.uuid)
-                                  }
-                              ]
-                            : []),
-                        ...(onIsolate
-                            ? [
-                                  {
-                                      label: t("isolate_selection") || "隔离选择",
-                                      onClick: () => onIsolate(contextMenu.node.uuid)
-                                  }
-                              ]
-                            : []),
-                        ...(onShowAll
-                            ? [
-                                  {
-                                      label: t("show_all") || "显示全部",
-                                      onClick: onShowAll
-                                  }
-                              ]
-                            : [])
                     ]}
                 />
             )}
