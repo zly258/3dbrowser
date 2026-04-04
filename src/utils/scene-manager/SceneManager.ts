@@ -21,6 +21,14 @@ import {
     createInitialBoxSelectState
 } from "./boxSelect";
 import {
+    collectPrefetchCandidates,
+    enqueueChunkPrefetch as enqueueChunkPrefetchItems,
+    getChunkReadCacheKey as getChunkReadCacheKeyValue,
+    hasValidChunkBinaryRange as hasValidChunkBinaryRangeValue,
+    readChunkBuffer as readChunkBufferValue,
+    touchChunkReadCache as touchChunkReadCacheOrder
+} from "./chunkIO";
+import {
     computeChunkFrameBudget,
     isMovingPeripheralChunk as isMovingPeripheralChunkRule,
     reportChunkProgressIfNeeded,
@@ -1000,18 +1008,15 @@ export class SceneManager {
     }
 
     private getChunkReadCacheKey(chunk: any) {
-        return `${chunk.nbimFileId || "local"}:${chunk.byteOffset || 0}:${chunk.byteLength || 0}`;
+        return getChunkReadCacheKeyValue(chunk);
     }
 
     private hasValidChunkBinaryRange(chunk: any) {
-        return Number.isFinite(chunk?.byteOffset)
-            && Number.isFinite(chunk?.byteLength)
-            && chunk.byteLength > 0;
+        return hasValidChunkBinaryRangeValue(chunk);
     }
 
     private touchChunkReadCache(cacheKey: string) {
-        this.chunkReadCacheOrder = this.chunkReadCacheOrder.filter((key) => key !== cacheKey);
-        this.chunkReadCacheOrder.push(cacheKey);
+        this.chunkReadCacheOrder = touchChunkReadCacheOrder(this.chunkReadCacheOrder, cacheKey);
     }
 
     private putChunkReadCache(cacheKey: string, buffer: ArrayBuffer) {
@@ -1025,49 +1030,41 @@ export class SceneManager {
     }
 
     private async readChunkBuffer(chunk: any) {
-        const cacheKey = this.getChunkReadCacheKey(chunk);
-        const cached = this.chunkReadCache.get(cacheKey);
-        if (cached) {
-            this.touchChunkReadCache(cacheKey);
-            return cached.slice(0);
-        }
-        const file = this.nbimFiles.get(chunk.nbimFileId);
-        if (!file) throw new Error(`NBIM file not found for chunk: ${chunk.id}`);
-        const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
-        this.putChunkReadCache(cacheKey, buffer.slice(0));
-        return buffer;
+        const result = await readChunkBufferValue({
+            chunk,
+            nbimFiles: this.nbimFiles,
+            chunkReadCache: this.chunkReadCache,
+            chunkReadCacheOrder: this.chunkReadCacheOrder,
+            chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize
+        });
+        this.chunkReadCacheOrder = result.chunkReadCacheOrder;
+        return result.buffer;
     }
 
     private enqueueChunkPrefetch(chunkIds: string[]) {
-        if (this.resolvedChunkOptions.chunkPrefetchWindow <= 0) return;
-        for (const chunkId of chunkIds) {
-            if (this.prefetchQueueSet.has(chunkId)) continue;
-            if (this.prefetchInFlight.has(chunkId)) continue;
-            this.prefetchQueue.push(chunkId);
-            this.prefetchQueueSet.add(chunkId);
-        }
+        this.prefetchQueue = enqueueChunkPrefetchItems({
+            chunkIds,
+            chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
+            prefetchQueue: this.prefetchQueue,
+            prefetchQueueSet: this.prefetchQueueSet,
+            prefetchInFlight: this.prefetchInFlight
+        });
     }
 
     private schedulePrefetchFromVisibleChunks(visibleChunks: any[]) {
-        if (this.resolvedChunkOptions.chunkPrefetchWindow <= 0) return;
-        if (this.prefetchPaused || this.isCameraMoving) return;
-        if (visibleChunks.length === 0) return;
-
-        const windowSize = this.resolvedChunkOptions.chunkPrefetchWindow;
-        const toPrefetch: string[] = [];
-        for (let i = 0; i < visibleChunks.length && toPrefetch.length < windowSize; i++) {
-            const pivot = visibleChunks[(this.prefetchRoundRobinCursor + i) % visibleChunks.length];
-            const pivotIndex = this.getChunkIndex(pivot.id);
-            if (pivotIndex < 0) continue;
-            const nextChunk = this.chunks[pivotIndex + 1];
-            if (!nextChunk || nextChunk.loaded || this.processingChunks.has(nextChunk.id)) continue;
-            if (!nextChunk.nbimFileId || !this.hasValidChunkBinaryRange(nextChunk)) continue;
-            const cacheKey = this.getChunkReadCacheKey(nextChunk);
-            if (this.chunkReadCache.has(cacheKey)) continue;
-            toPrefetch.push(nextChunk.id);
-        }
-        this.prefetchRoundRobinCursor++;
-        this.enqueueChunkPrefetch(toPrefetch);
+        const result = collectPrefetchCandidates({
+            visibleChunks,
+            chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
+            prefetchPaused: this.prefetchPaused,
+            isCameraMoving: this.isCameraMoving,
+            prefetchRoundRobinCursor: this.prefetchRoundRobinCursor,
+            chunks: this.chunks,
+            processingChunks: this.processingChunks,
+            chunkReadCache: this.chunkReadCache,
+            getChunkIndex: (chunkId) => this.getChunkIndex(chunkId)
+        });
+        this.prefetchRoundRobinCursor = result.prefetchRoundRobinCursor;
+        this.enqueueChunkPrefetch(result.chunkIds);
         void this.processPrefetchQueue();
     }
 
