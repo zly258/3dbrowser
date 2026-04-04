@@ -21,6 +21,13 @@ import {
     createInitialBoxSelectState
 } from "./boxSelect";
 import {
+    computeChunkFrameBudget,
+    isMovingPeripheralChunk as isMovingPeripheralChunkRule,
+    reportChunkProgressIfNeeded,
+    selectChunkRuntimeProfile,
+    updatePeripheralRefreshWindow
+} from "./chunkScheduling";
+import {
     applySetClipHelperOptions,
     applySetupClipping,
     applyUpdateClippingPlanes,
@@ -1485,23 +1492,27 @@ export class SceneManager {
     }
 
     private reportChunkProgress() {
-        const now = performance.now();
-        const total = this.chunks.length;
-        const loaded = this.chunkLoadedCount;
-        const changed = loaded !== this.lastReportedProgress.loaded || total !== this.lastReportedProgress.total;
-        const shouldFlush = total === 0 || (total > 0 && loaded >= total);
-        const intervalReached = (now - this.lastChunkProgressReportAt) >= CHUNK_PROGRESS_REPORT_INTERVAL_MS;
-        if (this.onChunkProgress && changed && (intervalReached || shouldFlush)) {
-            this.lastReportedProgress = { loaded, total };
-            this.lastChunkProgressReportAt = now;
-            this.onChunkProgress(loaded, total);
+        const result = reportChunkProgressIfNeeded({
+            now: performance.now(),
+            total: this.chunks.length,
+            loaded: this.chunkLoadedCount,
+            lastReportedProgress: this.lastReportedProgress,
+            lastChunkProgressReportAt: this.lastChunkProgressReportAt
+        });
+        if (this.onChunkProgress && result.shouldNotify) {
+            this.lastReportedProgress = result.nextProgress;
+            this.lastChunkProgressReportAt = result.nextReportedAt;
+            this.onChunkProgress(result.nextProgress.loaded, result.nextProgress.total);
         }
     }
 
     private getChunkRuntimeProfile(chunkCount = this.chunks.length): ChunkRuntimeProfile {
-        if (chunkCount > 2000) return this.chunkRuntimeProfiles.massive;
-        if (chunkCount > 600) return this.chunkRuntimeProfiles.balanced;
-        return this.chunkRuntimeProfiles.compact;
+        return selectChunkRuntimeProfile({
+            chunkCount,
+            compact: this.chunkRuntimeProfiles.compact,
+            balanced: this.chunkRuntimeProfiles.balanced,
+            massive: this.chunkRuntimeProfiles.massive
+        });
     }
 
     private isInPostMoveRecovery(now: number) {
@@ -1539,43 +1550,15 @@ export class SceneManager {
         profile: ChunkRuntimeProfile,
         warmupExtra: number
     ) {
-        if (this.forceMaxChunkLoadSpeed) {
-            return this.maxChunkLoadsPerFrame + warmupExtra;
-        }
-
-        const mode = this.settings.performanceMode ?? 'balanced';
-        const chunkCount = this.chunks.length;
-        const isHugeScene = chunkCount > 2000;
-        const isLargeScene = chunkCount > 600;
-
-        if (phase === 'moving') {
-            const baseMovingBudget = Math.max(
-                profile.movingLoadBudgetMin,
-                Math.min(profile.movingLoadBudgetMax, Math.floor(this.maxChunkLoadsPerFrame / 4))
-            );
-            if (mode === 'smooth') {
-                if (isHugeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.35));
-                if (isLargeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.5));
-                return Math.max(1, Math.floor(baseMovingBudget * 0.7));
-            }
-            if (isHugeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.55));
-            if (isLargeScene) return Math.max(1, Math.floor(baseMovingBudget * 0.75));
-            return baseMovingBudget;
-        }
-
-        if (phase === 'recovery') {
-            const recoveryBudget = Math.max(
-                profile.recoveryLoadBudgetMin,
-                Math.min(
-                    profile.recoveryLoadBudgetMax,
-                    Math.floor(this.maxChunkLoadsPerFrame * profile.recoveryLoadBudgetRatio)
-                )
-            );
-            const recoveryBoost = mode === 'smooth' ? Math.max(2, Math.floor(recoveryBudget * 0.6)) : 0;
-            return recoveryBudget + recoveryBoost + warmupExtra;
-        }
-
-        return this.maxChunkLoadsPerFrame + warmupExtra;
+        return computeChunkFrameBudget({
+            forceMaxChunkLoadSpeed: this.forceMaxChunkLoadSpeed,
+            maxChunkLoadsPerFrame: this.maxChunkLoadsPerFrame,
+            performanceMode: this.settings.performanceMode ?? 'balanced',
+            chunkCount: this.chunks.length,
+            phase,
+            profile,
+            warmupExtra
+        });
     }
 
     private isMovingPeripheralChunk(
@@ -1584,9 +1567,12 @@ export class SceneManager {
         forwardness: number,
         profile: ChunkRuntimeProfile
     ) {
-        return centrality < profile.movingCoreCentralityThreshold
-            && pixelSize < profile.movingCorePixelThreshold
-            && forwardness < profile.movingCoreForwardThreshold;
+        return isMovingPeripheralChunkRule({
+            centrality,
+            pixelSize,
+            forwardness,
+            profile
+        });
     }
 
     private shouldRefreshPeripheralChunk(
@@ -1595,26 +1581,18 @@ export class SceneManager {
         totalChunks: number,
         profile: ChunkRuntimeProfile
     ) {
-        if (!this.isCameraMoving || totalChunks === 0) return true;
-        if (now - this.movingPeripheralLastRefreshAt >= profile.movingPeripheralRefreshMs) {
-            const batchSize = Math.min(
-                totalChunks,
-                Math.max(profile.movingPeripheralMinBatchSize, Math.ceil(totalChunks * profile.movingPeripheralBatchRatio))
-            );
-            this.movingPeripheralCursor = (this.movingPeripheralCursor + batchSize) % totalChunks;
-            this.movingPeripheralLastRefreshAt = now;
-        }
-
-        const batchSize = Math.min(
+        const result = updatePeripheralRefreshWindow({
+            now,
+            isCameraMoving: this.isCameraMoving,
+            chunkIndex,
             totalChunks,
-            Math.max(profile.movingPeripheralMinBatchSize, Math.ceil(totalChunks * profile.movingPeripheralBatchRatio))
-        );
-        const start = this.movingPeripheralCursor;
-        const end = start + batchSize;
-        if (end <= totalChunks) {
-            return chunkIndex >= start && chunkIndex < end;
-        }
-        return chunkIndex >= start || chunkIndex < (end % totalChunks);
+            profile,
+            movingPeripheralCursor: this.movingPeripheralCursor,
+            movingPeripheralLastRefreshAt: this.movingPeripheralLastRefreshAt
+        });
+        this.movingPeripheralCursor = result.movingPeripheralCursor;
+        this.movingPeripheralLastRefreshAt = result.movingPeripheralLastRefreshAt;
+        return result.shouldRefresh;
     }
 
     private checkCullingAndLoad(now = performance.now()) {
