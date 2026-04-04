@@ -25,6 +25,7 @@ import { useSceneStats } from "./src/hooks/useSceneStats";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { useViewerSelection } from "./src/hooks/useViewerSelection";
 import { useViewerActions } from "./src/hooks/useViewerActions";
+import { useViewerFileActions } from "./src/hooks/useViewerFileActions";
 import { useViewerTools } from "./src/hooks/useViewerTools";
 import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
@@ -1147,105 +1148,28 @@ export const ThreeViewer = ({
         completedFileSetsRef
     });
 
-    const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files?.length) return;
-        await processFiles(Array.from(e.target.files) as File[]);
-        e.target.value = ""; 
-    };
-
-    const handleBatchConvert = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files?.length || !sceneMgr.current) return;
-        const files = Array.from(e.target.files) as File[];
-        e.target.value = "";
-
-        const invalid = files.filter(f => f.name.toLowerCase().endsWith('.nbim'));
-        if (invalid.length > 0) {
-            setToast({ message: t("unsupported_format"), type: 'info' });
-            return;
-        }
-
-        (sceneMgr.current as any).setChunkLoadingEnabled?.(false);
-        (sceneMgr.current as any).setContentVisible?.(false);
-
-        setLoading(true);
-        setStatus(t("processing") + "...");
-        setProgress(0);
-        setActiveTool('none');
-
-        try {
-            await sceneMgr.current.clear();
-            setSelectedUuids([]);
-            setSelectedProps(null);
-            resetMeasurementState();
-            updateTree();
-
-            await loadItemsIntoScene(files);
-            updateTree();
-
-            setStatus(t("processing") + "...");
-            await sceneMgr.current.exportNbim();
-            setStatus(t("success"));
-            setToast({ message: t("success"), type: 'success' });
-        } catch (err) {
-            console.error("[ThreeViewer] handleBatchConvert error:", err);
-            setStatus(t("failed"));
-            setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
-        } finally {
-            try {
-                await sceneMgr.current?.clear();
-                updateTree();
-            } catch {}
-            (sceneMgr.current as any).setChunkLoadingEnabled?.(true);
-            (sceneMgr.current as any).setContentVisible?.(true);
-            setLoading(false);
-        }
-    };
-
-    const handleOpenUrl = async () => {
-        const url = window.prompt(t("menu_open_url"), "http://");
-        if (!url || !url.startsWith("http")) return;
-        
-        if (IS_DEV) console.log("[ThreeViewer] handleOpenUrl called with:", url);
-        setLoading(true);
-        setStatus(t("processing") + "...");
-        try {
-            await processFiles([url]);
-        } catch (err) {
-            console.error("[ThreeViewer] handleOpenUrl error:", err);
-            setStatus(t("failed"));
-            setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: 'error' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
-
-    const handleDrop = async (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const files = Array.from(e.dataTransfer.files) as File[];
-            const supportedExtensions = ['.lmb', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3mf', '.stp', '.step', '.igs', '.iges'];
-            
-            const validFiles = files.filter((file: File) => {
-                const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-                return supportedExtensions.includes(ext);
-            });
-
-            if (validFiles.length < files.length) {
-                setToast({ message: t("unsupported_format"), type: 'info' });
-            }
-
-            if (validFiles.length > 0) {
-                await processFiles(validFiles);
-            }
-        }
-    };
+    const {
+        handleOpenFiles,
+        handleBatchConvert,
+        handleOpenUrl,
+        handleDragOver,
+        handleDrop
+    } = useViewerFileActions({
+        sceneMgrRef: sceneMgr,
+        t,
+        processFiles,
+        loadItemsIntoScene,
+        setLoading,
+        setStatus,
+        setProgress,
+        setToast,
+        setActiveTool,
+        setSelectedUuids,
+        setSelectedProps,
+        resetMeasurementState,
+        updateTree,
+        isDev: IS_DEV
+    });
 
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
 
