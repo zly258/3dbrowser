@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ProgressCallback, TFunc } from "../theme/Locales";
+import { ProgressCallback, TFunc } from "../theme/locales";
 import type { PropertyListItemInput } from "../viewer/propertyIndex";
 
 type IfcRuntime = {

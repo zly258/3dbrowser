@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { SceneManager } from "../utils/SceneManager";
-import { getTranslation, Lang } from "../theme/Locales";
-import { ThemeColors } from "../theme/Styles";
+import { getTranslation, Lang } from "../theme/locales";
+import { ThemeColors } from "../theme/styles";
 
 interface ViewCubeProps {
     sceneMgr: SceneManager | null;
