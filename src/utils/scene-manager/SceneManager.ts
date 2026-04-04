@@ -28,6 +28,7 @@ import {
     readChunkBuffer as readChunkBufferValue,
     touchChunkReadCache as touchChunkReadCacheOrder
 } from "./chunkIO";
+import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
     computeChunkFrameBudget,
@@ -1720,37 +1721,35 @@ export class SceneManager {
             this.cullingScanCursor = (startIndex + totalChunks) % Math.max(totalChunks, 1);
         }
 
-        // 卸载策略
-        if (!this.isCameraMoving && loadedChunks.length > this.maxLoadedChunks) {
-            loadedChunks.sort((a, b) => b.center.distanceToSquared(cameraPos) - a.center.distanceToSquared(cameraPos));
-
-            let unloadedCount = 0;
-            const targetUnload = loadedChunks.length - this.maxLoadedChunks;
-
-            for (const c of loadedChunks) {
-                if (unloadedCount >= targetUnload) break;
-                const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
-                if (now - lastTouchedAt < this.chunkResidencyMs) continue;
-                if (!c.mesh || !c.mesh.visible) {
-                    this.unloadChunk(c);
-                    unloadedCount++;
-                }
-            }
+        const unloadTargets = selectChunksToUnload({
+            isCameraMoving: this.isCameraMoving,
+            loadedChunks,
+            maxLoadedChunks: this.maxLoadedChunks,
+            cameraPos,
+            now,
+            chunkResidencyMs: this.chunkResidencyMs
+        });
+        for (const chunk of unloadTargets) {
+            this.unloadChunk(chunk);
         }
 
-        if (toLoad.length > 0 && performance.now() >= this.chunkLoadResumeAt) {
-            // 按优先级排序
-            toLoad.sort((a, b) => b.priority - a.priority);
-
-            const available = this.maxConcurrentChunkLoads - this.processingChunks.size;
-            const warmupExtra = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget
-                ? this.warmupChunkBoost
-                : 0;
-            const frameBudget = this.getChunkFrameBudget(phase, profile, warmupExtra);
-            const count = Math.min(available, frameBudget, toLoad.length);
-            for (let i = 0; i < count; i++) {
-                this.loadChunk(toLoad[i]);
-            }
+        const loadPlan = planChunkLoads({
+            toLoad,
+            now: performance.now(),
+            chunkLoadResumeAt: this.chunkLoadResumeAt,
+            maxConcurrentChunkLoads: this.maxConcurrentChunkLoads,
+            processingChunkCount: this.processingChunks.size,
+            chunkWarmupActive: this.chunkWarmupActive,
+            chunkLoadedCount: this.chunkLoadedCount,
+            initialChunkLoadTarget: this.initialChunkLoadTarget,
+            warmupChunkBoost: this.warmupChunkBoost,
+            getChunkFrameBudget: (nextPhase, nextProfile, warmupExtra) =>
+                this.getChunkFrameBudget(nextPhase, nextProfile, warmupExtra),
+            phase,
+            profile
+        });
+        for (const chunk of loadPlan) {
+            this.loadChunk(chunk);
         }
 
         this.schedulePrefetchFromVisibleChunks(loadedChunks);
