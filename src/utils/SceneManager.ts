@@ -29,6 +29,15 @@ import {
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import { getObjectGeometryDataFromScene } from "./sceneManagerGeometry";
 import {
+    buildExportStructureTree,
+    countStructureRenderableNodes,
+    createNbimContainerGroup,
+    deriveDefaultNbimStem,
+    encodeNbimManifest,
+    groupNbimPropertiesByOwner,
+    sanitizeDisplayLabel
+} from "./sceneManagerNbim";
+import {
     applyClearLocateFocus,
     applyHighlightObjects,
     applySetLocateResultSet
@@ -107,18 +116,6 @@ interface ChunkRuntimeProfile {
     recoveryLoadBudgetMin: number;
     recoveryLoadBudgetMax: number;
     recoveryLoadBudgetRatio: number;
-}
-
-const INVALID_DISPLAY_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
-
-function sanitizeDisplayLabel(...candidates: Array<string | null | undefined>) {
-    for (const candidate of candidates) {
-        if (typeof candidate !== "string") continue;
-        const trimmed = candidate.trim();
-        if (INVALID_DISPLAY_LABELS.has(trimmed.toLowerCase())) continue;
-        return trimmed;
-    }
-    return "";
 }
 
 export class SceneManager {
@@ -871,17 +868,6 @@ export class SceneManager {
             faces: Math.floor(faces),
             memory: parseFloat(memory.toFixed(2))
         };
-    }
-
-    private countStructureRenderableNodes(node: StructureTreeNode | undefined): number {
-        if (!node) return 0;
-        let count = node.type === 'Mesh' ? 1 : 0;
-        if (node.children) {
-            for (const child of node.children) {
-                count += this.countStructureRenderableNodes(child);
-            }
-        }
-        return count;
     }
 
     private async estimateNbimStats(file: File, chunks: any[], version: number) {
@@ -2972,83 +2958,12 @@ export class SceneManager {
             },
             chunks: exportChunks,
             stats: this.originalStats,
-            structureTree: (() => {
-                const sanitizeUserData = (ud: any) => {
-                    if (!ud || typeof ud !== 'object') return undefined;
-                    const out: any = {};
-                    if (ud.originalUuid !== undefined) out.originalUuid = String(ud.originalUuid);
-                    if (ud.expressID !== undefined) out.expressID = ud.expressID;
-                    if (ud.modelID !== undefined) out.modelID = ud.modelID;
-                    return Object.keys(out).length > 0 ? out : undefined;
-                };
-
-                // 用 mesh name 作为节点 id，重复时加 _N 后缀
-                const usedIds = new Set<string>();
-                const assignId = (rawName: string | undefined, fallback: string): string => {
-                    const base = (rawName && rawName.trim()) ? rawName.trim() : fallback;
-                    if (!usedIds.has(base)) { usedIds.add(base); return base; }
-                    let n = 2;
-                    while (usedIds.has(`${base}_${n}`)) n++;
-                    const id = `${base}_${n}`;
-                    usedIds.add(id);
-                    return id;
-                };
-
-                const srcRoot: any = this.structureRoot;
-                const rootId = assignId(srcRoot?.name, srcRoot?.id ?? "Root");
-                const rootCopy: any = {
-                    id: rootId,
-                    name: srcRoot?.name,
-                    type: srcRoot?.type,
-                    visible: srcRoot?.visible !== false,
-                    children: []
-                };
-                if (srcRoot?.bimId !== undefined) rootCopy.bimId = srcRoot.bimId;
-                if (srcRoot?.chunkId !== undefined) rootCopy.chunkId = srcRoot.chunkId;
-                const rootUd = sanitizeUserData(srcRoot?.userData);
-                if (rootUd) rootCopy.userData = rootUd;
-
-                const stack: Array<{ src: any; dst: any }> = [{ src: srcRoot, dst: rootCopy }];
-                while (stack.length > 0) {
-                    const { src, dst } = stack.pop()!;
-                    const children = Array.isArray(src?.children) ? src.children : [];
-                    for (const child of children) {
-                        const childId = assignId(child?.name, child?.id ?? "Node");
-                        const childCopy: any = {
-                            id: childId,
-                            name: child?.name,
-                            type: child?.type,
-                            visible: child?.visible !== false,
-                            children: []
-                        };
-                        if (child?.bimId !== undefined) childCopy.bimId = child.bimId;
-                        if (child?.chunkId !== undefined) childCopy.chunkId = child.chunkId;
-                        const ud = sanitizeUserData(child?.userData);
-                        if (ud) childCopy.userData = ud;
-                        dst.children.push(childCopy);
-                        stack.push({ src: child, dst: childCopy });
-                    }
-                }
-                return rootCopy;
-            })(),
+            structureTree: buildExportStructureTree(this.structureRoot),
             bimIdTable,
             bimProperties
         };
 
-        let manifestStr: string;
-        try {
-            manifestStr = JSON.stringify(manifest);
-        } catch (e) {
-            const minimalManifest = {
-                globalBounds: manifest.globalBounds,
-                chunks: manifest.chunks,
-                structureTree: { id: this.structureRoot.id, name: this.structureRoot.name, type: this.structureRoot.type, children: this.structureRoot.children ? [] : [] },
-                bimIdTable: manifest.bimIdTable,
-                bimProperties: {}
-            };
-            manifestStr = JSON.stringify(minimalManifest);
-        }
-        const manifestBytes = new TextEncoder().encode(manifestStr);
+        const manifestBytes = encodeNbimManifest(manifest, this.structureRoot);
 
         const header = new ArrayBuffer(1024);
         const dv = new DataView(header);
@@ -3063,26 +2978,7 @@ export class SceneManager {
         const url = URL.createObjectURL(finalBlob);
         const a = document.createElement('a');
         a.href = url;
-        const deriveDefaultStem = () => {
-            const names: string[] = [];
-            this.contentGroup.children.forEach((child) => {
-                if (child.userData?.isOptimizedGroup) return;
-                if (child.name.startsWith("optimized_")) return;
-                const rawName =
-                    (typeof child.userData?.modelName === "string" ? child.userData.modelName : "") ||
-                    (child.children?.[0]?.name || "") ||
-                    child.name;
-                const baseName = sanitizeFileStem(stripFileExtension(rawName));
-                if (baseName) names.push(baseName);
-            });
-            const uniqueNames = Array.from(new Set(names));
-            if (uniqueNames.length === 1) return uniqueNames[0];
-            const now = new Date();
-            const pad = (v: number) => String(v).padStart(2, "0");
-            const suffix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-            return `批量导出_${suffix}`;
-        };
-        const defaultStem = deriveDefaultStem();
+        const defaultStem = deriveDefaultNbimStem(this.contentGroup);
         const resolvedName = sanitizeFileStem(stripFileExtension((fileName || "").trim()) || defaultStem);
         a.download = `${resolvedName}.nbim`;
         a.click();
@@ -3148,48 +3044,21 @@ export class SceneManager {
             : {};
 
         // 从属性键中提取实际 owner（格式 "<owner>::<bimId>"）
-        const propKeys = Object.keys(manifestBimProperties);
-        const ownerSet = new Set<string>();
-        propKeys.forEach(k => {
-            const i = k.indexOf("::");
-            if (i > 0) ownerSet.add(k.slice(0, i));
-        });
-
-        // 确定节点 traverse 时使用的 fallback owner
-        // 优先用属性键中的实际 owner（单一 owner 情况），否则用 rootId
-        const defaultOwner = ownerSet.size === 1 ? [...ownerSet][0] : rootId;
-
-        // 存储属性 map：按 owner 分组
-        if (ownerSet.size >= 1) {
-            if (ownerSet.size === 1) {
-                this.nbimPropsByOriginalUuid.set(defaultOwner, manifestBimProperties);
-            } else {
-                const grouped = new Map<string, Record<string, any>>();
-                propKeys.forEach(k => {
-                    const i = k.indexOf("::");
-                    const owner = i > 0 ? k.slice(0, i) : rootId;
-                    if (!grouped.has(owner)) grouped.set(owner, {});
-                    grouped.get(owner)![k] = manifestBimProperties[k];
-                });
-                grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
-            }
-        } else {
-            this.nbimPropsByOriginalUuid.set(rootId, manifestBimProperties);
-        }
+        const { defaultOwner, grouped } = groupNbimPropertiesByOwner(manifestBimProperties, rootId);
+        grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
         const quickStats = manifest.stats || {
-            meshes: this.countStructureRenderableNodes(modelRoot),
+            meshes: countStructureRenderableNodes(modelRoot),
             faces: 0,
             memory: parseFloat(((manifest.chunks || []).reduce((sum: number, chunk: any) => sum + (chunk.byteLength || 0), 0) / (1024 * 1024)).toFixed(2))
         };
         this.registerOriginalStats(rootId, quickStats);
 
         // 为 NBIM 创建一个容器组
-        const fileGroup = new THREE.Group();
-        fileGroup.name = `file_${rootId}`;
-        fileGroup.userData.originalUuid = rootId;
-        const fileBaseName = sanitizeFileStem(stripFileExtension(file.name));
-        const modelRootName = typeof modelRoot?.name === "string" && modelRoot.name !== "Root" ? modelRoot.name : "";
-        fileGroup.userData.modelName = sanitizeFileStem(sanitizeDisplayLabel(modelRootName, fileBaseName, rootId) || fileBaseName);
+        const fileGroup = createNbimContainerGroup({
+            fileName: file.name,
+            modelRootName: typeof modelRoot?.name === "string" ? modelRoot.name : "",
+            rootId
+        });
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
 
