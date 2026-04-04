@@ -1,6 +1,6 @@
 import React from "react";
 import { TFunc } from "../theme/Locales";
-import { FloatingPanel } from "./ToolPanels/FloatingPanel";
+import { FloatingPanel } from "./tool-panels/FloatingPanel";
 
 interface ConfirmModalProps {
     isOpen: boolean;

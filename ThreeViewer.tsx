@@ -7,9 +7,9 @@ import { themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
 // 组件
-import { Toolbar } from "./src/components/MenuBar";
+import { Toolbar } from "./src/components/menu-bar";
 import { SceneTree } from "./src/components/SceneTree";
-import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SettingsPanel, ExplodePanel, SearchPanel, ClashPanel } from "./src/components/ToolPanels";
+import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SettingsPanel, ExplodePanel, SearchPanel, ClashPanel } from "./src/components/tool-panels";
 import { LoadingOverlay } from "./src/components/LoadingOverlay";
 import { PropertiesPanel } from "./src/components/PropertiesPanel";
 import { ConfirmModal } from "./src/components/ConfirmModal";
