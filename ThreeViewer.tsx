@@ -25,6 +25,7 @@ import { useSceneStats } from "./src/hooks/useSceneStats";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { useViewerSelection } from "./src/hooks/useViewerSelection";
 import { useViewerActions } from "./src/hooks/useViewerActions";
+import { useViewerCanvasInteractions } from "./src/hooks/useViewerCanvasInteractions";
 import { useViewerFileActions } from "./src/hooks/useViewerFileActions";
 import { useViewerLayout } from "./src/hooks/useViewerLayout";
 import { useViewerTools } from "./src/hooks/useViewerTools";
@@ -285,10 +286,6 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const ifcPropertyCacheRef = useRef<Map<string, Record<string, PropertyGroupInput>>>(new Map());
-    const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
-    const mouseMoveRafRef = useRef<number | null>(null);
-    const pendingMousePointRef = useRef<{ x: number; y: number } | null>(null);
-
     const {
         leftWidth,
         rightWidth,
@@ -634,6 +631,7 @@ export const ThreeViewer = ({
 
     const handleClearSelection = () => {
         clearSelection();
+        setSelectedProps(null);
         sceneMgr.current?.highlightObjects([]);
     };
 
@@ -682,196 +680,6 @@ export const ThreeViewer = ({
 
         loadInitial();
     }, [mgrInstance, initialFiles]);
-
-    // --- 逻辑事件挂钩 ---
-
-    useEffect(() => {
-        const mgr = sceneMgr.current;
-        if (!mgr) return;
-        
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const clickMoveThreshold = 6;
-
-        const handleMouseDown = (e: MouseEvent) => {
-            pointerDownRef.current = {
-                x: e.clientX,
-                y: e.clientY,
-                moved: false,
-                button: e.button
-            };
-        };
-
-        const handleClick = (e: MouseEvent) => {
-            const pointerState = pointerDownRef.current;
-            if (!pointerState || pointerState.button !== 0 || pointerState.moved) {
-                pointerDownRef.current = null;
-                return;
-            }
-            pointerDownRef.current = null;
-
-            // 框选模式下不处理 click（由 pointer 事件处理）
-            if (activeTool === 'boxSelect') return;
-
-            // 测量点击
-            if (activeTool === 'measure') {
-                if (measureType !== 'none') {
-                    // 如果选择了测量类型，优先进行测量点拾取
-                    const intersect = mgr.getRayIntersects(e.clientX, e.clientY);
-                    if (intersect) {
-                        // 体积测量：记录模型 UUID
-                        const modelUuid = (intersect.object as any).uuid;
-                        const record = mgr.addMeasurePoint(intersect.point, modelUuid);
-                        return; // 已经处理了测量点，不再尝试选中旧测量线
-                    }
-                }
-
-                // 只有在没点中模型点，或者没选择测量类型时，才尝试选中已有的测量线进行高亮或操作
-                const mId = mgr.pickMeasurement(e.clientX, e.clientY);
-                if (mId) {
-                    setHighlightedMeasureId(mId);
-                    mgr.highlightMeasurement(mId);
-                    return;
-                }
-
-                // 如果什么都没点中，清除高亮
-                setHighlightedMeasureId(null);
-                mgr.highlightMeasurement(null);
-                return;
-            }
-            if(pickEnabled) {
-                const result = mgr.pick(e.clientX, e.clientY);
-                handleSelect(result ? result.object : null, result ? result.intersect : null, e.ctrlKey);
-            }
-        };
-
-        const handleMouseMove = (e: MouseEvent) => {
-            if (pointerDownRef.current && !pointerDownRef.current.moved) {
-                const dx = e.clientX - pointerDownRef.current.x;
-                const dy = e.clientY - pointerDownRef.current.y;
-                if ((dx * dx + dy * dy) > (clickMoveThreshold * clickMoveThreshold)) {
-                    pointerDownRef.current.moved = true;
-                }
-            }
-            if (activeTool === 'measure') {
-                mgr.updateMeasureHover(e.clientX, e.clientY);
-                setMousePos(null);
-                return;
-            }
-            // 拖拽浏览时跳过射线检测，减少卡顿与抖动。
-            if (e.buttons !== 0) {
-                pendingMousePointRef.current = null;
-                if (mouseMoveRafRef.current !== null) {
-                    cancelAnimationFrame(mouseMoveRafRef.current);
-                    mouseMoveRafRef.current = null;
-                }
-                setMousePos(null);
-                return;
-            }
-
-            pendingMousePointRef.current = { x: e.clientX, y: e.clientY };
-            if (mouseMoveRafRef.current !== null) return;
-
-            mouseMoveRafRef.current = requestAnimationFrame(() => {
-                mouseMoveRafRef.current = null;
-                const pending = pendingMousePointRef.current;
-                if (!pending) return;
-                const intersect = mgr.getRayIntersects(pending.x, pending.y);
-                if (intersect) {
-                    setMousePos(intersect.point);
-                } else {
-                    setMousePos(null);
-                }
-            });
-        };
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
-                handleUndoVisibility();
-                return;
-            }
-            if (e.key === 'Escape') {
-                if (activeTool === 'measure' && measureType !== 'none') {
-                    setMeasureType('none');
-                    mgr.startMeasurement('none');
-                }
-                if (activeTool === 'boxSelect') {
-                    mgr.cancelBoxSelect();
-                    setActiveTool('none');
-                }
-                setSelectedUuids([]);
-                setSelectedProps(null);
-                mgr.highlightObjects([]);
-            }
-        };
-
-        canvas.addEventListener("mousedown", handleMouseDown);
-        canvas.addEventListener("click", handleClick);
-        canvas.addEventListener("mousemove", handleMouseMove);
-        canvas.addEventListener("contextmenu", handleContextMenu);
-        window.addEventListener("keydown", handleKeyDown);
-
-        return () => {
-            if (mouseMoveRafRef.current !== null) {
-                cancelAnimationFrame(mouseMoveRafRef.current);
-                mouseMoveRafRef.current = null;
-            }
-            pendingMousePointRef.current = null;
-            canvas.removeEventListener("mousedown", handleMouseDown);
-            canvas.removeEventListener("click", handleClick);
-            canvas.removeEventListener("mousemove", handleMouseMove);
-            canvas.removeEventListener("contextmenu", handleContextMenu);
-            window.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [handleContextMenu, handleUndoVisibility, pickEnabled, selectedUuids, activeTool, measureType]);
-
-    // 框选事件处理
-    useEffect(() => {
-        const mgr = sceneMgr.current;
-        if (!mgr || activeTool !== 'boxSelect') return;
-
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        // 进入框选模式：禁用左键旋转
-        mgr.controls.mouseButtons.LEFT = undefined as any;
-
-        const onPointerDown = (e: PointerEvent) => {
-            if (e.button !== 0) return; // 仅左键
-            mgr.startBoxSelect(e.clientX, e.clientY);
-        };
-
-        const onPointerMove = (e: PointerEvent) => {
-            mgr.updateBoxSelect(e.clientX, e.clientY);
-        };
-
-        const onPointerUp = (e: PointerEvent) => {
-            if (e.button !== 0) return;
-            const uuids = mgr.endBoxSelect();
-            if (uuids.length > 0) {
-                const nextUuids = e.shiftKey
-                    ? [...new Set([...selectedUuids, ...uuids])]
-                    : uuids;
-                setSelectedUuids(nextUuids);
-                mgr.highlightObjects(nextUuids);
-            }
-        };
-
-        canvas.addEventListener('pointerdown', onPointerDown);
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-
-        return () => {
-            canvas.removeEventListener('pointerdown', onPointerDown);
-            window.removeEventListener('pointermove', onPointerMove);
-            window.removeEventListener('pointerup', onPointerUp);
-            // 恢复左键旋转
-            if (mgr.controls) {
-                mgr.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-            }
-            mgr.cancelBoxSelect();
-        };
-    }, [activeTool]);
 
     // 设置同步
     const handleSettingsUpdate = (newSettings: Partial<SceneSettings>) => {
@@ -1020,6 +828,25 @@ export const ThreeViewer = ({
         resetMeasurementState,
         updateTree,
         isDev: IS_DEV
+    });
+
+    useViewerCanvasInteractions({
+        sceneMgrRef: sceneMgr,
+        canvasRef,
+        activeTool,
+        setActiveTool: setActiveTool as React.Dispatch<React.SetStateAction<string>>,
+        measureType,
+        setMeasureType,
+        pickEnabled,
+        selectedUuids,
+        setSelectedUuids,
+        setSelectedProps,
+        setMousePos,
+        setHighlightedMeasureId,
+        handleSelect,
+        handleContextMenu,
+        handleUndoVisibility,
+        clearSelectionState: handleClearSelection
     });
 
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
