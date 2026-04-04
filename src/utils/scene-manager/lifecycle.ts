@@ -83,3 +83,4 @@ export function disposeSceneManagerResources(context: SceneManagerDisposeContext
     context.ghostMaterial.dispose();
     context.renderer.dispose();
 }
+

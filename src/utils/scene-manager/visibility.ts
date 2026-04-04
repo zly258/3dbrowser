@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { StructureTreeNode } from "./sceneManagerTypes";
+import type { StructureTreeNode } from "./types";
 
 type OptimizedMappingEntry = {
     mesh: THREE.BatchedMesh;
@@ -240,3 +240,4 @@ export function applyIsolateObjects(
         needsRender: true
     };
 }
+

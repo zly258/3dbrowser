@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import type { StructureTreeNode } from "./sceneManagerTypes";
-import { countStructureRenderableNodes } from "./sceneManagerNbim";
+import type { StructureTreeNode } from "./types";
+import { countStructureRenderableNodes } from "./nbim";
 
 export function applyNbimGlobalBounds(options: {
     globalBounds?: {
@@ -210,3 +210,4 @@ export function finalizeNbimLoad(options: {
         shouldEstimateStats: !hasManifestStats && hasManifestChunks
     };
 }
+

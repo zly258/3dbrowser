@@ -1,6 +1,6 @@
 import type * as THREE from "three";
-import { estimateTextureMemoryMb } from "./scene/stats";
-import type { SceneManagerStats } from "./sceneManagerTypes";
+import { estimateTextureMemoryMb } from "../scene/stats";
+import type { SceneManagerStats } from "./types";
 
 interface SceneManagerStatsContext {
     renderer: THREE.WebGLRenderer;
@@ -32,3 +32,5 @@ export function collectSceneManagerStats(context: SceneManagerStatsContext): Sce
         pixelRatio: Number(context.activePixelRatio.toFixed(2))
     };
 }
+
+

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { MeasurementRecord, MeasureType } from "./sceneManagerTypes";
+import type { MeasurementRecord, MeasureType } from "./types";
 
 type MeasurementState = {
     measureType: MeasureType;
@@ -402,3 +402,4 @@ export function applyPickMeasurement(
 
     return object.name.startsWith("measure_") ? object.name : null;
 }
+
