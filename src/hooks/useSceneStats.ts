@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { SceneManager } from "../utils/SceneManager";
-import type { SceneManagerStats } from "../utils/sceneManagerTypes";
+import type { SceneManagerStats } from "../utils/scene-manager/types";
 
 interface UseSceneStatsOptions {
     mgrInstance: SceneManager | null;
@@ -28,3 +28,4 @@ export function useSceneStats({ mgrInstance, showStats, setStats }: UseSceneStat
         };
     }, [mgrInstance, setStats, showStats]);
 }
+

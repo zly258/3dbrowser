@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { StructureTreeNode } from "./sceneManagerTypes";
+import type { StructureTreeNode } from "./types";
 
 type PickChunk = {
     loaded?: boolean;
@@ -224,3 +224,4 @@ export function selectInteractablesByScreenRect(
 
     return selected;
 }
+

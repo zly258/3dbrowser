@@ -228,3 +228,4 @@ export function isBoxClippedByPlanes(planes: THREE.Plane[], box: THREE.Box3): bo
     }
     return false;
 }
+

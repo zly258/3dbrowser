@@ -123,3 +123,4 @@ export function applyEndBoxSelect(
         selected: selectByScreenRect(x1, y1, x2, y2)
     };
 }
+

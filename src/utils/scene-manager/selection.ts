@@ -1,5 +1,5 @@
-import type { PropertyGroupInput } from "../viewer/propertyIndex";
-import type { StructureTreeNode } from "./sceneManagerTypes";
+import type { PropertyGroupInput } from "../../viewer/propertyIndex";
+import type { StructureTreeNode } from "./types";
 
 interface ResolveBimIdByUuidArgs {
     uuid: string;
@@ -95,3 +95,4 @@ export function resolveNbimIfcPropertyGroups(
     }
     return (rawGroups || normalizedGroups || null) as Record<string, PropertyGroupInput> | null;
 }
+

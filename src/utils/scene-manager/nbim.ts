@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { sanitizeFileStem, stripFileExtension } from "../viewer/exportNaming";
-import type { StructureTreeNode } from "./sceneManagerTypes";
+import { sanitizeFileStem, stripFileExtension } from "../../viewer/exportNaming";
+import type { StructureTreeNode } from "./types";
 
 const INVALID_DISPLAY_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
 
@@ -434,3 +434,4 @@ export async function prepareNbimExportChunks(options: {
         currentOffset
     };
 }
+

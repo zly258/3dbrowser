@@ -388,3 +388,4 @@ export function applySetLocateResultSet(
 
     return applyHighlightObjects(context, context.state.locateFocusUuid ? [context.state.locateFocusUuid] : []);
 }
+
