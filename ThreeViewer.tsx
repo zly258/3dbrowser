@@ -26,6 +26,7 @@ import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { useViewerSelection } from "./src/hooks/useViewerSelection";
 import { useViewerActions } from "./src/hooks/useViewerActions";
 import { useViewerFileActions } from "./src/hooks/useViewerFileActions";
+import { useViewerLayout } from "./src/hooks/useViewerLayout";
 import { useViewerTools } from "./src/hooks/useViewerTools";
 import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
@@ -273,25 +274,11 @@ export const ThreeViewer = ({
         if (propShowStats !== undefined) setShowStats(propShowStats);
     }, [propShowStats, setShowStats]);
 
-    useEffect(() => {
-        if (propShowOutline !== undefined) setShowOutline(propShowOutline);
-    }, [propShowOutline, setShowOutline]);
-
-    useEffect(() => {
-        if (propShowProperties !== undefined) setShowProps(propShowProperties);
-    }, [propShowProperties, setShowProps]);
-
     // Confirmation Modal State
     const [confirmState, setConfirmState] = useState<ViewerConfirmState>({ isOpen: false, title: "", message: "", action: () => {} });
 
     // About Modal State
     const [isAboutOpen, setIsAboutOpen] = useState(false);
-
-    // Layout State (Resizable Panels)
-    const [leftWidth, setLeftWidth] = useState(260);
-    const [rightWidth, setRightWidth] = useState(300);
-    const resizingLeft = useRef(false);
-    const resizingRight = useRef(false);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
@@ -300,6 +287,18 @@ export const ThreeViewer = ({
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
     const mouseMoveRafRef = useRef<number | null>(null);
     const pendingMousePointRef = useRef<{ x: number; y: number } | null>(null);
+
+    const {
+        leftWidth,
+        rightWidth,
+        resizingLeft,
+        resizingRight
+    } = useViewerLayout({
+        propShowOutline,
+        propShowProperties,
+        setShowOutline,
+        setShowProps
+    });
 
     const handleThemeModeChange = useCallback((nextThemeMode: 'dark' | 'light') => {
         setThemeMode(nextThemeMode);
@@ -501,29 +500,6 @@ export const ThreeViewer = ({
             setStatus(getTranslation(lang, 'ready'));
         }
     }, [lang]);
-
-    // --- 面板尺寸调整逻辑 ---
-    useEffect(() => {
-        const handleMove = (e: MouseEvent) => {
-            if (resizingLeft.current) {
-                setLeftWidth(Math.max(150, Math.min(500, e.clientX)));
-            }
-            if (resizingRight.current) {
-                const newW = window.innerWidth - e.clientX;
-                setRightWidth(Math.max(200, Math.min(600, newW)));
-            }
-        };
-        const handleUp = () => {
-            resizingLeft.current = false;
-            resizingRight.current = false;
-        };
-        window.addEventListener('mousemove', handleMove);
-        window.addEventListener('mouseup', handleUp);
-        return () => {
-            window.removeEventListener('mousemove', handleMove);
-            window.removeEventListener('mouseup', handleUp);
-        };
-    }, []);
 
     // --- 格式化辅助函数 ---
     const formatNumber = (num: number) => {
