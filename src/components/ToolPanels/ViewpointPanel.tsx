@@ -2,14 +2,15 @@ import React, { useEffect, useState } from "react";
 import { Button } from "../common";
 import { FloatingPanel } from "./FloatingPanel";
 import { IconTrash2 } from "../../theme/Icons";
+import type { ViewpointRecord } from "../../viewer/types";
 
 interface ViewpointPanelProps {
     t: any;
     onClose?: () => void;
-    viewpoints: any[];
+    viewpoints: ViewpointRecord[];
     onSave: (name: string, replaceId?: string) => void;
     onUpdateName: (id: string, name: string) => void;
-    onLoad: (viewpoint: any) => void;
+    onLoad: (viewpoint: ViewpointRecord) => void;
     onDelete: (id: string) => void;
     onOverwrite: (id: string) => void;
     theme: any;
@@ -34,7 +35,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
 
     useEffect(() => {
         setEditingNames(
-            viewpoints.reduce((acc: Record<string, string>, vp: any) => {
+            viewpoints.reduce((acc: Record<string, string>, vp) => {
                 acc[vp.id] = vp.name;
                 return acc;
             }, {})
@@ -53,7 +54,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
         if (!nextName) {
             setEditingNames((prev) => ({
                 ...prev,
-                [id]: viewpoints.find((vp: any) => vp.id === id)?.name || ""
+                [id]: viewpoints.find((vp) => vp.id === id)?.name || ""
             }));
             return;
         }
@@ -97,7 +98,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                         </div>
                     ) : (
                         <div className="ui-viewpoint-grid">
-                            {viewpoints.map((vp: any) => (
+                            {viewpoints.map((vp) => (
                                 <div key={vp.id} className="ui-viewpoint-card-v2">
                                     {/* 图片区域 */}
                                     <div

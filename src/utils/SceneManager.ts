@@ -13,64 +13,26 @@ import { deriveInitialRuntimeFromHardware } from "./scene/chunkRuntime";
 import { debugLog, debugWarn } from "./scene/debugLogger";
 import { stableExplodeDirection } from "./scene/explode";
 import { readNbimHeader, readNbimManifest, type NbimManifest } from "./scene/nbimIO";
-import { estimateTextureMemoryMb } from "./scene/stats";
+import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
+import { collectSceneManagerStats } from "./sceneManagerStats";
 import {
     type PerformancePreset,
     type SceneChunkOptions,
     type SceneManagerOptions,
     resolveSceneChunkOptions
 } from "./scene/types";
+import {
+    type MeasurementRecord,
+    type MeasureType,
+    type SceneManagerStats,
+    type SceneSettings,
+    type StructureTreeNode
+} from "./sceneManagerTypes";
 import type { PropertyGroupInput } from "../viewer/propertyIndex";
 
 const CHUNK_PROGRESS_REPORT_INTERVAL_MS = 48;
 const NBIM_CHUNK_REGISTRATION_BATCH = 220;
 const GHOST_VISIBLE_FIRST_BATCH = 180;
-
-export type MeasureType = 'dist' | 'angle' | 'coord' | 'none';
-
-export interface MeasurementRecord {
-    id: string;
-    type: string;
-    val: string;
-    group: THREE.Group;
-    modelUuid?: string; // 关联的模型 UUID
-}
-
-export interface SceneSettings {
-    ambientInt: number;
-    dirInt: number;
-    backLightInt?: number;
-    bgColor: string;
-    highlightColor?: string;
-    highlightShowBox?: boolean;
-    clip?: {
-        helperVisible?: boolean;
-        helperOpacity?: number;
-    };
-    viewCubeSize?: number;
-    frustumCulling?: boolean;
-    maxRenderDistance?: number;
-    colorSpace?: 'srgb' | 'linear';
-    toneMapping?: 'none' | 'aces' | 'neutral';
-    exposure?: number;
-    shadowQuality?: 'off' | 'low' | 'medium' | 'high';
-    adaptiveQuality?: boolean;
-    minPixelRatio?: number;
-    maxPixelRatio?: number;
-    targetFps?: number;
-    performanceMode?: 'balanced' | 'smooth' | 'quality';
-}
-
-export interface StructureTreeNode {
-    id: string;
-    name: string;
-    type: 'Mesh' | 'Group';
-    children?: StructureTreeNode[];
-    bimId?: string;
-    chunkId?: string;
-    visible?: boolean;
-    userData?: any;
-}
 
 type ExplodeMode = 'radial' | 'horizontal' | 'vertical';
 
@@ -5771,77 +5733,63 @@ export class SceneManager {
         return false;
     }
 
-    getStats() {
-        const drawCalls = this.renderer.info.render.calls;
-        const textureMemory = estimateTextureMemoryMb(this.contentGroup);
-        return {
-            meshes: this.originalStats.meshes,
-            faces: this.originalStats.faces,
-            memory: parseFloat(this.originalStats.memory.toFixed(2)),
-            textureMemory,
-            drawCalls,
-            chunksLoaded: this.chunkLoadedCount,
-            chunksTotal: this.chunks.length,
-            chunksQueued: this.processingChunks.size,
-            pixelRatio: Number(this.activePixelRatio.toFixed(2))
-        };
+    getStats(): SceneManagerStats {
+        return collectSceneManagerStats({
+            renderer: this.renderer,
+            contentGroup: this.contentGroup,
+            originalStats: this.originalStats,
+            chunkLoadedCount: this.chunkLoadedCount,
+            chunksLength: this.chunks.length,
+            processingChunkCount: this.processingChunks.size,
+            activePixelRatio: this.activePixelRatio
+        });
     }
 
     dispose() {
         this.disposed = true;
-        this.cancelDeferredStructureBuild();
-        this.clearLocateFocus();
         this.animateFramePending = false;
-        if (this.animationFrameId !== null) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-        if (this.logicTimer) clearInterval(this.logicTimer);
-        for (const worker of this.workers) {
-            try {
-                worker.terminate();
-            } catch (error) {
-                console.warn("Worker terminate failed:", error);
+        disposeSceneManagerResources({
+            cancelDeferredStructureBuild: () => this.cancelDeferredStructureBuild(),
+            clearLocateFocus: () => this.clearLocateFocus(),
+            releaseGhostLine: (line) => this.releaseGhostLine(line),
+            clearChunkCache: () => this.clearChunkCache(),
+            controls: this.controls,
+            selectionBox: this.selectionBox,
+            highlightMesh: this.highlightMesh,
+            tempMarker: this.tempMarker,
+            dotTexture: this.dotTexture,
+            sharedMaterial: this.sharedMaterial,
+            ghostEdgesGeometry: this.ghostEdgesGeometry,
+            ghostMaterial: this.ghostMaterial,
+            renderer: this.renderer,
+            ghostGroup: this.ghostGroup,
+            workers: this.workers,
+            workerQueue: this.workerQueue,
+            logicTimer: this.logicTimer,
+            animationFrameId: this.animationFrameId,
+            onAnimationFrameDisposed: () => {
+                this.animationFrameId = null;
+            },
+            onWorkersDisposed: () => {
+                this.workers = [];
+                this.activeWorkerCount = 0;
+            },
+            onQueuesReset: () => {
+                this.processingChunks.clear();
+                this.cancelledChunkIds.clear();
+                this.prefetchQueue = [];
+                this.prefetchQueueSet.clear();
+                this.prefetchInFlight.clear();
+                this.chunkReadCache.clear();
+                this.chunkReadCacheOrder = [];
+            },
+            onStateCachesReset: () => {
+                this.highlightedUuids.clear();
+                this.locateResultSet.clear();
+                this.fastPreviewModels.clear();
+                this.ghostMeshPool.length = 0;
             }
-        }
-        this.workers = [];
-        if (this.workerQueue.length > 0) {
-            const pending = this.workerQueue.splice(0, this.workerQueue.length);
-            pending.forEach((task) => task.reject(new Error("SceneManager disposed")));
-        }
-        this.activeWorkerCount = 0;
-        this.processingChunks.clear();
-        this.cancelledChunkIds.clear();
-        this.prefetchQueue = [];
-        this.prefetchQueueSet.clear();
-        this.prefetchInFlight.clear();
-        this.chunkReadCache.clear();
-        this.chunkReadCacheOrder = [];
-        this.highlightedUuids.clear();
-        this.locateResultSet.clear();
-        this.fastPreviewModels.clear();
-        this.clearChunkCache();
-        while (this.ghostGroup.children.length > 0) {
-            const ghost = this.ghostGroup.children[0];
-            this.ghostGroup.remove(ghost);
-            this.releaseGhostLine(ghost as THREE.LineSegments);
-        }
-        this.ghostMeshPool.length = 0;
-        this.controls.dispose();
-        if (this.selectionBox.geometry) this.selectionBox.geometry.dispose();
-        const selectionMat = this.selectionBox.material as THREE.Material | THREE.Material[];
-        (Array.isArray(selectionMat) ? selectionMat : [selectionMat]).forEach((m) => m?.dispose?.());
-        if (this.highlightMesh.geometry) this.highlightMesh.geometry.dispose();
-        const highlightMat = this.highlightMesh.material as THREE.Material | THREE.Material[];
-        (Array.isArray(highlightMat) ? highlightMat : [highlightMat]).forEach((m) => m?.dispose?.());
-        if (this.tempMarker.geometry) this.tempMarker.geometry.dispose();
-        const tempMarkerMat = this.tempMarker.material as THREE.Material | THREE.Material[];
-        (Array.isArray(tempMarkerMat) ? tempMarkerMat : [tempMarkerMat]).forEach((m) => m?.dispose?.());
-        this.dotTexture.dispose();
-        this.sharedMaterial.dispose();
-        this.ghostEdgesGeometry.dispose();
-        this.ghostMaterial.dispose();
-        this.renderer.dispose();
+        });
     }
 }
 
@@ -5858,3 +5806,4 @@ function sanitizeFileStem(name: string) {
 }
 
 export type { PerformancePreset, SceneChunkOptions, SceneManagerOptions };
+export type { MeasurementRecord, MeasureType, SceneManagerStats, SceneSettings, StructureTreeNode };
