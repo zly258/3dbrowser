@@ -20,6 +20,12 @@ import {
     applyUpdateBoxSelect,
     createInitialBoxSelectState
 } from "./sceneManagerBoxSelect";
+import {
+    applySetClipHelperOptions,
+    applySetupClipping,
+    applyUpdateClippingPlanes,
+    isBoxClippedByPlanes
+} from "./sceneManagerClipping";
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import {
     applyClearLocateFocus,
@@ -3518,6 +3524,31 @@ export class SceneManager {
         this.boxSelectState = state;
     }
 
+    private getClippingContext() {
+        return {
+            renderer: this.renderer,
+            clipHelpersGroup: this.clipHelpersGroup,
+            state: {
+                clippingPlanes: this.clippingPlanes,
+                clipPlaneHelpers: this.clipPlaneHelpers,
+                clipHelperVisible: this.clipHelperVisible,
+                clipHelperOpacity: this.clipHelperOpacity
+            }
+        };
+    }
+
+    private syncClippingState(state: {
+        clippingPlanes: THREE.Plane[];
+        clipPlaneHelpers: THREE.Mesh[];
+        clipHelperVisible: boolean;
+        clipHelperOpacity: number;
+    }) {
+        this.clippingPlanes = state.clippingPlanes;
+        this.clipPlaneHelpers = state.clipPlaneHelpers;
+        this.clipHelperVisible = state.clipHelperVisible;
+        this.clipHelperOpacity = state.clipHelperOpacity;
+    }
+
     setAllVisibility(visible: boolean) {
         const result = applySetAllVisibility(this.getVisibilityContext(), visible);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
@@ -4634,82 +4665,13 @@ export class SceneManager {
     // --- 剖切逻辑 ---
 
     setupClipping() {
-        this.clippingPlanes = [
-            new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),
-            new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0),
-            new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
-            new THREE.Plane(new THREE.Vector3(0, -1, 0), 0),
-            new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
-            new THREE.Plane(new THREE.Vector3(0, 0, -1), 0),
-        ];
-        this.renderer.clippingPlanes = [];
-
-        // 创建剖切面辅助可视化（隐藏）
-        const colors = [0xff0000, 0xff0000, 0x00ff00, 0x00ff00, 0x0000ff, 0x0000ff];
-        this.clipPlaneHelpers = [];
-        this.clipHelpersGroup.clear();
-
-        for (let i = 0; i < 6; i++) {
-            const geom = new THREE.PlaneGeometry(1, 1);
-            const mat = new THREE.MeshBasicMaterial({
-                color: colors[i],
-                transparent: true,
-                opacity: this.clipHelperOpacity,
-                side: THREE.DoubleSide,
-                depthWrite: false,
-                polygonOffset: true,
-                polygonOffsetFactor: -4,
-                polygonOffsetUnits: -4,
-                clippingPlanes: []
-            });
-            const mesh = new THREE.Mesh(geom, mat);
-            mesh.visible = false; // 始终隐藏剖切指示面
-            mesh.renderOrder = 9999;
-
-            // 添加边框（也隐藏）
-            const edges = new THREE.EdgesGeometry(geom);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-                color: colors[i],
-                transparent: true,
-                opacity: Math.min(1, this.clipHelperOpacity + 0.08),
-                depthWrite: false
-            }));
-            line.visible = false; // 隐藏边框
-            line.renderOrder = 10000;
-            mesh.add(line);
-
-            this.clipPlaneHelpers.push(mesh);
-            this.clipHelpersGroup.add(mesh);
-        }
+        const result = applySetupClipping(this.getClippingContext());
+        this.syncClippingState(result.state);
     }
 
     setClipHelperOptions(options: { visible?: boolean; opacity?: number }) {
-        if (typeof options.visible === "boolean") {
-            this.clipHelperVisible = options.visible;
-        }
-        if (typeof options.opacity === "number" && !Number.isNaN(options.opacity)) {
-            this.clipHelperOpacity = THREE.MathUtils.clamp(options.opacity, 0.05, 0.35);
-        }
-
-        this.clipPlaneHelpers.forEach((helper) => {
-            const surfaceMat = helper.material as THREE.MeshBasicMaterial;
-            surfaceMat.opacity = this.clipHelperOpacity;
-            surfaceMat.needsUpdate = true;
-
-            helper.children.forEach((child) => {
-                const lineMat = (child as THREE.LineSegments).material as THREE.LineBasicMaterial;
-                if (lineMat) {
-                    lineMat.opacity = Math.min(1, this.clipHelperOpacity + 0.08);
-                    lineMat.needsUpdate = true;
-                }
-            });
-        });
-
-        if (!this.clipHelperVisible || this.renderer.clippingPlanes.length === 0) {
-            this.clipPlaneHelpers.forEach((helper) => {
-                helper.visible = false;
-            });
-        }
+        const result = applySetClipHelperOptions(this.getClippingContext(), options);
+        this.syncClippingState(result.state);
     }
 
     setClippingEnabled(enabled: boolean) {
@@ -4721,86 +4683,9 @@ export class SceneManager {
     }
 
     updateClippingPlanes(bounds: THREE.Box3, values: { x: number[], y: number[], z: number[] }, active: { x: boolean, y: boolean, z: boolean }) {
-        if (bounds.isEmpty()) return;
-        const { min, max } = bounds;
-        const size = max.clone().sub(min);
-        const center = bounds.getCenter(new THREE.Vector3());
-
-        // 辅助面大小：设置为包围盒对角线长度，既足够大又避免过大导致精度问题
-        const diagonal = size.length();
-        const helperSize = diagonal > 0 ? diagonal * 1.2 : 1000;
-
-        const xMin = min.x + (values.x[0] / 100) * size.x;
-        const xMax = min.x + (values.x[1] / 100) * size.x;
-        const yMin = min.y + (values.y[0] / 100) * size.y;
-        const yMax = min.y + (values.y[1] / 100) * size.y;
-        const zMin = min.z + (values.z[0] / 100) * size.z;
-        const zMax = min.z + (values.z[1] / 100) * size.z;
-
-        const isEnabled = this.renderer.clippingPlanes.length > 0;
-
-        // X 轴
-        if (active.x) {
-            this.clippingPlanes[0].constant = -xMin;
-            this.clippingPlanes[1].constant = xMax;
-
-            this.updatePlaneHelper(0, new THREE.Vector3(1, 0, 0), xMin, center, helperSize, isEnabled);
-            this.updatePlaneHelper(1, new THREE.Vector3(-1, 0, 0), xMax, center, helperSize, isEnabled);
-        } else {
-            this.clippingPlanes[0].constant = Infinity;
-            this.clippingPlanes[1].constant = Infinity;
-            this.clipPlaneHelpers[0].visible = false;
-            this.clipPlaneHelpers[1].visible = false;
-        }
-
-        // Y 轴
-        if (active.y) {
-            this.clippingPlanes[2].constant = -yMin;
-            this.clippingPlanes[3].constant = yMax;
-
-            this.updatePlaneHelper(2, new THREE.Vector3(0, 1, 0), yMin, center, helperSize, isEnabled);
-            this.updatePlaneHelper(3, new THREE.Vector3(0, -1, 0), yMax, center, helperSize, isEnabled);
-        } else {
-            this.clippingPlanes[2].constant = Infinity;
-            this.clippingPlanes[3].constant = Infinity;
-            this.clipPlaneHelpers[2].visible = false;
-            this.clipPlaneHelpers[3].visible = false;
-        }
-
-        // Z 轴
-        if (active.z) {
-            this.clippingPlanes[4].constant = -zMin;
-            this.clippingPlanes[5].constant = zMax;
-
-            this.updatePlaneHelper(4, new THREE.Vector3(0, 0, 1), zMin, center, helperSize, isEnabled);
-            this.updatePlaneHelper(5, new THREE.Vector3(0, 0, -1), zMax, center, helperSize, isEnabled);
-        } else {
-            this.clippingPlanes[4].constant = Infinity;
-            this.clippingPlanes[5].constant = Infinity;
-            this.clipPlaneHelpers[4].visible = false;
-            this.clipPlaneHelpers[5].visible = false;
-        }
-        this.requestRender();
-    }
-
-    private updatePlaneHelper(idx: number, normal: THREE.Vector3, dist: number, center: THREE.Vector3, size: number, isEnabled: boolean) {
-        const helper = this.clipPlaneHelpers[idx];
-        if (!helper) return;
-
-        helper.visible = isEnabled && this.clipHelperVisible;
-        helper.scale.set(size, size, 1);
-
-        // 设置位置：在对应轴向上设置为 dist，增加一个微小的偏移量 (1mm) 以减少与模型表面的闪烁
-        const pos = new THREE.Vector3(center.x, center.y, center.z);
-        const epsilon = 0.001;
-        if (normal.x !== 0) pos.x = dist + (normal.x * epsilon);
-        else if (normal.y !== 0) pos.y = dist + (normal.y * epsilon);
-        else if (normal.z !== 0) pos.z = dist + (normal.z * epsilon);
-
-        helper.position.copy(pos);
-
-        // 设置旋转使其面向法线
-        helper.lookAt(pos.clone().add(normal));
+        const result = applyUpdateClippingPlanes(this.getClippingContext(), bounds, values, active);
+        this.syncClippingState(result.state);
+        if (result.needsRender) this.requestRender();
     }
 
     /**
@@ -4808,23 +4693,7 @@ export class SceneManager {
      * 如果包围盒完全在任意一个激活的剖切面的“背面”，则认为被裁剪
      */
     private isBoxClipped(box: THREE.Box3): boolean {
-        for (const plane of this.clippingPlanes) {
-            if (plane.constant === Infinity) continue;
-
-            // 获取包围盒在平面法线方向上的最大点
-            // 如果最大点都在平面负方向，说明整个盒子都在平面外
-            const planeNormal = plane.normal;
-            const maxPoint = new THREE.Vector3(
-                planeNormal.x > 0 ? box.max.x : box.min.x,
-                planeNormal.y > 0 ? box.max.y : box.min.y,
-                planeNormal.z > 0 ? box.max.z : box.min.z
-            );
-
-            if (plane.distanceToPoint(maxPoint) < 0) {
-                return true;
-            }
-        }
-        return false;
+        return isBoxClippedByPlanes(this.clippingPlanes, box);
     }
 
     getStats(): SceneManagerStats {
