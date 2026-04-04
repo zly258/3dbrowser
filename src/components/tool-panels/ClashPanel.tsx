@@ -176,18 +176,18 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           </Button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <div style={{ border: "1px solid var(--border-color)", borderRadius: 6, padding: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={{ fontSize: 12 }}>{t("clash_set_a") || "模型集 A"}</div>
-              <div style={{ display: "flex", gap: 6 }}>
+        <div className="ui-toolpanel-grid ui-toolpanel-grid-2">
+          <div className="ui-selection-box">
+            <div className="ui-selection-box-header">
+              <div className="ui-toolpanel-caption-strong">{t("clash_set_a") || "模型集 A"}</div>
+              <div className="ui-selection-box-actions">
                 <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetASelectAll}>{t("select_all") || "全选"}</button>
                 <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetAClear}>{t("search_clear") || "清空"}</button>
               </div>
             </div>
-            <div style={{ maxHeight: 92, overflow: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="ui-selection-box-list">
               {modelOptions.length === 0 ? (
-                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("clash_no_models") || "暂无模型"}</div>
+                <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">{t("clash_no_models") || "暂无模型"}</div>
               ) : (
                 modelOptions.map((item) => (
                   <Checkbox
@@ -201,17 +201,17 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
               )}
             </div>
           </div>
-          <div style={{ border: "1px solid var(--border-color)", borderRadius: 6, padding: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={{ fontSize: 12 }}>{t("clash_set_b") || "模型集 B"}</div>
-              <div style={{ display: "flex", gap: 6 }}>
+          <div className="ui-selection-box">
+            <div className="ui-selection-box-header">
+              <div className="ui-toolpanel-caption-strong">{t("clash_set_b") || "模型集 B"}</div>
+              <div className="ui-selection-box-actions">
                 <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetBSelectAll}>{t("select_all") || "全选"}</button>
                 <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetBClear}>{t("search_clear") || "清空"}</button>
               </div>
             </div>
-            <div style={{ maxHeight: 92, overflow: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="ui-selection-box-list">
               {modelOptions.length === 0 ? (
-                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t("clash_no_models") || "暂无模型"}</div>
+                <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">{t("clash_no_models") || "暂无模型"}</div>
               ) : (
                 modelOptions.map((item) => (
                   <Checkbox
@@ -227,9 +227,9 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div className="ui-toolpanel-grid ui-toolpanel-grid-2">
           <div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{t("clash_tolerance") || "容差"}</div>
+            <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_tolerance") || "容差"}</div>
             <InputNumber
               className="ui-input-compact"
               value={Number.isFinite(tolerance) ? tolerance : 0}
@@ -240,7 +240,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{t("clash_min_overlap") || "最小重叠体积"}</div>
+            <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_min_overlap") || "最小重叠体积"}</div>
             <InputNumber
               className="ui-input-compact"
               value={Number.isFinite(minOverlapVolume) ? minOverlapVolume : 0}
@@ -251,7 +251,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             />
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="ui-toolpanel-row-between">
           <Checkbox
             checked={useNarrowPhase}
             onChange={onUseNarrowPhaseChange}
@@ -259,7 +259,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             labelStyle={{ fontSize: 12 }}
           />
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="ui-toolpanel-row-between">
           <Checkbox
             checked={useTrianglePhase}
             onChange={onUseTrianglePhaseChange}
@@ -268,13 +268,13 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           />
         </div>
 
-        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        <div className="ui-toolpanel-caption">
           {status || (running ? (t("clash_running") || "正在执行碰撞检查...") : (t("clash_ready") || "准备就绪"))}
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+        <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">
           {(t("clash_pairs_scanned") || "已扫描对数")}: {pairsScanned}
         </div>
-        <div className="ui-progress-bar" style={{ width: "100%" }}>
+        <div className="ui-progress-bar ui-progress-bar-full">
           <div className="ui-progress-fill" style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
         </div>
 
@@ -296,7 +296,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div className="ui-inline-actions ui-inline-actions-wrap">
           <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "ALL" ? "active" : ""}`} onClick={() => onResultFilterChange("ALL")}>
             {(t("clash_group_all") || "全部")} ({counts.all})
           </button>
@@ -310,7 +310,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             {(t("clash_group_resolved") || "已解决")} ({counts.resolved})
           </button>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="ui-inline-actions ui-inline-actions-wrap">
           <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("confirmed")} disabled={filteredResults.length === 0}>
             {t("clash_mark_confirmed") || "当前组标记已确认"}
           </Button>
