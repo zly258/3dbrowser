@@ -3,7 +3,6 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 import * as THREE from "three";
 import "./src/styles/index.css";
 import { SceneManager, SceneSettings, PerformancePreset, SceneChunkOptions } from "./src/utils/SceneManager";
-import { exportGLB, exportLMB } from "./src/utils/converter";
 import { themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
 
@@ -25,10 +24,10 @@ import { useFileLoadingFlow } from "./src/hooks/useFileLoadingFlow";
 import { useSceneStats } from "./src/hooks/useSceneStats";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { useViewerSelection } from "./src/hooks/useViewerSelection";
+import { useViewerActions } from "./src/hooks/useViewerActions";
 import { useViewerTools } from "./src/hooks/useViewerTools";
 import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
-import { cleanLoadingStatus } from "./src/viewer/fileLoading";
 import { sanitizeFileStem, stripFileExtension } from "./src/viewer/exportNaming";
 import type { PropertyGroupInput, PropertyGroups } from "./src/viewer/propertyIndex";
 import type { ViewerConfirmState, ViewerErrorState, ViewerToast } from "./src/viewer/types";
@@ -1121,6 +1120,33 @@ export const ThreeViewer = ({
         setErrorState
     });
 
+    const {
+        getDefaultExportFileName,
+        handleExport,
+        handleClear,
+        handleScreenshot
+    } = useViewerActions({
+        sceneMgrRef: sceneMgr,
+        t,
+        setLoading,
+        setProgress,
+        setStatus,
+        setToast,
+        setActiveTool,
+        setConfirmState,
+        setSelectedUuids,
+        setSelectedProps,
+        setChunkProgress,
+        resetLocateState,
+        clearSearchResult: handleClearSearchResult,
+        resetClashState,
+        resetMeasurementState,
+        resetExplodeState,
+        updateTree,
+        ifcPropertyCacheRef: ifcPropertyCacheRef as React.MutableRefObject<Map<string, Record<string, unknown>>>,
+        completedFileSetsRef
+    });
+
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
         await processFiles(Array.from(e.target.files) as File[]);
@@ -1221,182 +1247,7 @@ export const ThreeViewer = ({
         }
     };
 
-    const getExportModelNames = useCallback(() => {
-        if (!sceneMgr.current) return [] as string[];
-        const content = sceneMgr.current.contentGroup;
-        const names: string[] = [];
-        content.children.forEach((child: THREE.Object3D) => {
-            if (child.userData?.isOptimizedGroup) return;
-            if (child.name.startsWith("optimized_")) return;
-            const rawName =
-                (typeof child.userData?.modelName === "string" ? child.userData.modelName : "") ||
-                (child.children?.[0]?.name || "") ||
-                child.name;
-            const baseName = sanitizeFileStem(stripFileExtension(rawName));
-            if (baseName) names.push(baseName);
-        });
-        return Array.from(new Set(names));
-    }, []);
-    const getDefaultExportFileName = useCallback((format: string) => {
-        const modelNames = getExportModelNames();
-        if (modelNames.length === 1) {
-            return modelNames[0];
-        }
-        const now = new Date();
-        const pad = (v: number) => String(v).padStart(2, "0");
-        const suffix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        return `${t("export_batch_name") || "批量导出"}_${suffix}`;
-    }, [getExportModelNames, t]);
-    const resolveExportFilename = (format: string, requestedName?: string) => {
-        const fallback = getDefaultExportFileName(format);
-        const stem = sanitizeFileStem(stripFileExtension((requestedName || "").trim()) || fallback);
-        return `${stem}.${format}`;
-    };
-
-    // New unified Export Handler
-    const handleExport = async (format: string, requestedName: string) => {
-        if (!sceneMgr.current) return;
-        
-        const content = sceneMgr.current.contentGroup;
-        const resolvedFileName = resolveExportFilename(format, requestedName);
-        const resolvedStem = stripFileExtension(resolvedFileName);
-        
-        // NBIM 导出直接由 SceneManager 处理
-        if (format === 'nbim') {
-            if (content.children.length === 0) { 
-                setToast({ message: t("no_models"), type: 'info' });
-                return; 
-            }
-            setLoading(true);
-            setStatus(t("processing") + "...");
-            setActiveTool('none');
-            setTimeout(async () => {
-                try {
-                    await sceneMgr.current?.exportNbim(resolvedStem);
-                    setToast({ message: t("success"), type: 'success' });
-                } catch (e) {
-                    console.error(e);
-                    setToast({ message: t("failed") + ": " + (e as Error).message, type: 'error' });
-                } finally {
-                    setLoading(false);
-                }
-            }, 100);
-            return;
-        }
-
-        // 收集所有原始模型进行导出（非优化组）
-        const modelsToExport = content.children.filter((c: THREE.Object3D) => !c.userData.isOptimizedGroup);
-        if (modelsToExport.length === 0) { 
-            setToast({ message: t("no_models"), type: 'info' });
-            return; 
-        }
-
-        // 创建一个临时组用于导出，包含所有要导出的模型
-        const exportGroup = new THREE.Group();
-        modelsToExport.forEach((m: THREE.Object3D) => exportGroup.add(m.clone()));
-        
-        setLoading(true);
-        setProgress(0);
-        setStatus(t("processing") + "...");
-        setActiveTool('none'); // Close panel
-
-        setTimeout(async () => {
-            try {
-                let blob: Blob | null = null;
-                const filename = resolvedFileName;
-
-                if (format === 'glb') {
-                    blob = await exportGLB(exportGroup);
-                } else if (format === 'lmb') {
-                    blob = await exportLMB(exportGroup, (msg) => setStatus(cleanLoadingStatus(msg)));
-                }
-
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    setToast({ message: t("success"), type: 'success' });
-                }
-            } catch(e) {
-                console.error(e); 
-                setToast({ message: t("failed") + ": " + (e as Error).message, type: 'error' });
-            } finally {
-                setLoading(false);
-                setProgress(0);
-            }
-        }, 100);
-    };
-
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
-    
-    const handleClear = async () => {
-        if (!sceneMgr.current) return;
-        
-        setConfirmState({
-            isOpen: true,
-            title: t("op_clear"),
-            message: t("confirm_clear"),
-            action: async () => {
-                setLoading(true);
-                setProgress(0);
-                setStatus(t("op_clear") + "...");
-                
-                try {
-                    await sceneMgr.current?.clear();
-                    setSelectedUuids([]);
-                    resetLocateState();
-                    setSelectedProps(null);
-                    handleClearSearchResult();
-                    resetClashState();
-                    ifcPropertyCacheRef.current.clear();
-                    resetMeasurementState();
-                    setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
-                    completedFileSetsRef.current.clear(); // 清除已完成的文件集记录
-                    resetExplodeState();
-                    updateTree();
-                    setStatus(t("ready"));
-                } catch (error) {
-                    console.error("清空场景失败:", error);
-                } finally {
-                    setLoading(false);
-                }
-            }
-        });
-    };
-
-    const handleScreenshot = (mode: 'scene' | 'transparent' = 'scene') => {
-        if (!sceneMgr.current) return;
-        try {
-            const renderer = sceneMgr.current.renderer;
-            const scene = sceneMgr.current.scene;
-            const previousBackground = scene.background;
-
-            if (mode === 'transparent') {
-                scene.background = null;
-                renderer.setClearAlpha(0);
-            } else {
-                renderer.setClearAlpha(1);
-            }
-
-            renderer.render(scene, sceneMgr.current.camera);
-            const dataUrl = sceneMgr.current.canvas.toDataURL("image/png");
-            const a = document.createElement("a");
-            a.href = dataUrl;
-            a.download = mode === 'transparent' ? "screenshot-transparent.png" : "screenshot.png";
-            a.click();
-
-            scene.background = previousBackground;
-            renderer.setClearAlpha(1);
-            renderer.render(scene, sceneMgr.current.camera);
-            setToast({ message: t("success"), type: 'success' });
-        } catch (e) {
-            console.error(e);
-            setToast({ message: t("failed"), type: 'error' });
-        }
-    };
 
     const handleDisplayModeChange = (mode: 'solid' | 'transparent') => {
         if (!sceneMgr.current) return;
