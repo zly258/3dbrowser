@@ -14,6 +14,14 @@ import { debugLog, debugWarn } from "./scene/debugLogger";
 import { stableExplodeDirection } from "./scene/explode";
 import { readNbimHeader, readNbimManifest, type NbimManifest } from "./scene/nbimIO";
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
+import {
+    resolveBimIdByUuid,
+    resolveNbimFlatProperties,
+    resolveNbimIfcPropertyGroups,
+    resolveNbimNode,
+    resolveSelectionUuid as resolveSceneSelectionUuid,
+    resolveNodeUuidByBimId as resolveSceneNodeUuidByBimId
+} from "./sceneManagerSelection";
 import { collectSceneManagerStats } from "./sceneManagerStats";
 import {
     type PerformancePreset,
@@ -3352,75 +3360,40 @@ export class SceneManager {
     }
 
     getBimIdByUuid(uuid: string): string | null {
-        const nodes = this.nodeMap.get(uuid);
-        if (nodes && nodes.length > 0 && nodes[0].bimId) {
-            return nodes[0].bimId;
-        }
-
-        // 在 bimIdToNodeIds 中查找对应关联（以 node.id 关联）
-        for (const [key, nodeIds] of this.bimIdToNodeIds.entries()) {
-            if (nodeIds.includes(uuid)) {
-                const parts = key.split("::");
-                return parts.length > 1 ? parts[1] : null;
-            }
-        }
-
-        return null;
+        return resolveBimIdByUuid({
+            uuid,
+            nodeMap: this.nodeMap,
+            bimIdToNodeIds: this.bimIdToNodeIds
+        });
     }
 
 
     resolveNodeUuidByBimId(bimId: string): string | null {
-        for (const [key, nodeIds] of this.bimIdToNodeIds.entries()) {
-            if (key.endsWith(`::${bimId}`) && nodeIds.length > 0) {
-                return nodeIds[0];
-            }
-        }
-        return null;
+        return resolveSceneNodeUuidByBimId(bimId, this.bimIdToNodeIds);
     }
 
     resolveSelectionUuid(rawUuid: string): string {
-        if (this.nodeMap.has(rawUuid)) return rawUuid;
-        // 防止包含mesh_前缀时转 bimId 再查找
-        const mapped = this.resolveNodeUuidByBimId(rawUuid);
-        return mapped || rawUuid;
+        return resolveSceneSelectionUuid(rawUuid, this.nodeMap, this.bimIdToNodeIds);
     }
 
     private resolveNbimNode(id: string): StructureTreeNode | null {
-        const direct = this.nodeMap.get(id);
-        if (direct && direct.length > 0) return direct[0];
-        return null;
+        return resolveNbimNode(id, this.nodeMap);
     }
 
     getNbimProperties(id: string): any | null {
-        const node = this.resolveNbimNode(id);
-        if (!node || !node.bimId) return null;
-        const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
-        if (!originalUuid) return null;
-        const map = this.nbimPropsByOriginalUuid.get(originalUuid);
-        if (!map) return null;
-        const key = `${originalUuid}::${node.bimId}`;
-        const entry = map[key];
-        if (!entry || typeof entry !== "object") return entry || null;
-        const { ifcRawGroups, ifcNormalizedGroups, ...flatProps } = entry;
-        return flatProps;
+        return resolveNbimFlatProperties({
+            id,
+            nodeMap: this.nodeMap,
+            nbimPropsByOriginalUuid: this.nbimPropsByOriginalUuid
+        });
     }
 
     getNbimIfcPropertyGroups(id: string, mode: "raw" | "normalized" = "raw"): Record<string, PropertyGroupInput> | null {
-        const node = this.resolveNbimNode(id);
-        if (!node || !node.bimId) return null;
-        const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
-        if (!originalUuid) return null;
-        const map = this.nbimPropsByOriginalUuid.get(originalUuid);
-        if (!map) return null;
-        const key = `${originalUuid}::${node.bimId}`;
-        const entry = map[key];
-        if (!entry || typeof entry !== "object") return null;
-        const rawGroups = entry.ifcRawGroups;
-        const normalizedGroups = entry.ifcNormalizedGroups;
-        if (mode === "normalized") {
-            return (normalizedGroups || rawGroups || null) as Record<string, PropertyGroupInput> | null;
-        }
-        return (rawGroups || normalizedGroups || null) as Record<string, PropertyGroupInput> | null;
+        return resolveNbimIfcPropertyGroups({
+            id,
+            nodeMap: this.nodeMap,
+            nbimPropsByOriginalUuid: this.nbimPropsByOriginalUuid
+        }, mode);
     }
 
     setAllVisibility(visible: boolean) {
