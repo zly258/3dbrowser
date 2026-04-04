@@ -20,6 +20,11 @@ import {
     applySetLocateResultSet
 } from "./sceneManagerHighlight";
 import {
+    applyGetRayIntersects,
+    ensureInteractableList,
+    selectInteractablesByScreenRect
+} from "./sceneManagerPicking";
+import {
     resolveBimIdByUuid,
     resolveNbimFlatProperties,
     resolveNbimIfcPropertyGroups,
@@ -3438,11 +3443,30 @@ export class SceneManager {
         };
     }
 
+    private getPickingContext() {
+        return {
+            canvas: this.canvas,
+            camera: this.camera,
+            raycaster: this.raycaster,
+            mouse: this.mouse,
+            contentGroup: this.contentGroup,
+            chunks: this.chunks,
+            nodeMap: this.nodeMap,
+            interactableList: this.interactableList,
+            interactableListValid: this.interactableListValid
+        };
+    }
+
     private syncHighlightState(state: { highlightedUuids: Set<string>; locateResultSet: Set<string>; locateFocusUuid: string | null; lastSelectedUuid: string | null; }) {
         this.highlightedUuids = state.highlightedUuids;
         this.locateResultSet = state.locateResultSet;
         this.locateFocusUuid = state.locateFocusUuid;
         this.lastSelectedUuid = state.lastSelectedUuid;
+    }
+
+    private syncPickingState(state: { interactableList: THREE.Object3D[]; interactableListValid: boolean; }) {
+        this.interactableList = state.interactableList;
+        this.interactableListValid = state.interactableListValid;
     }
 
     setAllVisibility(visible: boolean) {
@@ -3871,103 +3895,9 @@ export class SceneManager {
     }
 
     getRayIntersects(clientX: number, clientY: number): THREE.Intersection | null {
-        const rect = this.canvas.getBoundingClientRect();
-        this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
-        if (!this.interactableListValid) {
-            this.interactableList = [];
-
-            // 优化：优先从已加载的分块中收集网格，避免昂贵的 traverse
-            if (this.chunks.length > 0) {
-                this.chunks.forEach(c => {
-                    if (c.loaded && c.mesh && c.mesh.visible) {
-                        this.interactableList.push(c.mesh);
-                    }
-                });
-            }
-
-            // 收集非分块加载的可见普通 Mesh 或 Group 中的内容
-            // 限制遍历深度以提高性能
-            const traverseLimit = (o: THREE.Object3D, depth: number) => {
-                if (depth > 10) return;
-                if (!o.visible) return;
-
-                // 跳过已经被分块系统处理的对象
-                if ((o as any).userData.chunkId) return;
-
-                if ((o as THREE.Mesh).isMesh || (o as any).isBatchedMesh) {
-                    if (!o.userData.isOptimized) {
-                        this.interactableList.push(o);
-                    }
-                } else if (o.children.length > 0) {
-                    for (const child of o.children) {
-                        traverseLimit(child, depth + 1);
-                    }
-                }
-            };
-
-            // 遍历内容组
-            for (const child of this.contentGroup.children) {
-                // 如果是优化组，跳过它（已经在上面通过 chunks 处理过了）
-                if (child.userData.isOptimizedGroup) continue;
-                traverseLimit(child, 0);
-            }
-
-            this.interactableListValid = true;
-        }
-
-        const intersects = this.raycaster.intersectObjects(this.interactableList, false);
-        if (intersects.length > 0) {
-            const hit = intersects[0];
-            // 如果拾取到的是 BatchedMesh，我们需要将其转换为原始 Object3D 或 Proxy
-            if ((hit.object as any).isBatchedMesh) {
-                const bm = hit.object as THREE.BatchedMesh;
-                // 兼容不同版本的 Three.js 拾取结果字段
-                const batchId = (hit as any).batchId !== undefined ? (hit as any).batchId : (hit as any).instanceId;
-
-                if (batchId !== undefined) {
-                    const originalUuid = (bm.userData.batchIdToUuid as Map<number, string>)?.get(batchId);
-                    if (originalUuid) {
-                        const originalObj = this.contentGroup.getObjectByProperty("uuid", originalUuid);
-                        if (originalObj) {
-                            (hit as any).object = originalObj;
-                        } else {
-                            // NBIM 模式下可能没有原始对象，返回一个更健壮的 Proxy Object
-                            // 模拟基础的 Object3D 方法以防止 UI 端处理报错
-                            const nodes = this.nodeMap.get(originalUuid);
-                            const node = nodes?.[0];
-                            const proxy = new THREE.Object3D();
-                            proxy.uuid = originalUuid;
-                            if (node) {
-                                proxy.name = node.name;
-                                (proxy as any).type = node.type;
-                                (proxy as any).isMesh = node.type === 'Mesh';
-                            }
-
-                            // 覆盖 getWorldPosition 以返回实例位置
-                            proxy.getWorldPosition = (v: THREE.Vector3) => {
-                                const mat = new THREE.Matrix4();
-                                bm.getMatrixAt(batchId, mat);
-                                mat.premultiply(bm.matrixWorld);
-                                return v.setFromMatrixPosition(mat);
-                            };
-
-                            // 覆盖 getPosition (针对某些 UI 组件)
-                            const mat = new THREE.Matrix4();
-                            bm.getMatrixAt(batchId, mat);
-                            proxy.position.setFromMatrixPosition(mat);
-
-                            (hit as any).object = proxy;
-                        }
-                    }
-                }
-            }
-            return hit;
-        }
-        return null;
+        const result = applyGetRayIntersects(this.getPickingContext(), clientX, clientY);
+        this.syncPickingState(result.state);
+        return result.intersect;
     }
 
     computeTotalBounds(onlyVisible: boolean = false, forceRecompute: boolean = false): THREE.Box3 {
@@ -4937,112 +4867,18 @@ export class SceneManager {
      * 通过屏幕矩形选择对象
      */
     private selectByScreenRect(x1: number, y1: number, x2: number, y2: number): string[] {
-        // 确保 interactableList 已更新
-        if (!this.interactableListValid) {
-            this.getRayIntersects(0, 0); // 触发 rebuild
-        }
-
-        // 规范化坐标：x1,y1 是左下角，x2,y2 是右上角
-        const minX = Math.min(x1, x2);
-        const maxX = Math.max(x1, x2);
-        const minY = Math.min(y1, y2);
-        const maxY = Math.max(y1, y2);
-
-        // 从相机获取原始投影矩阵
-        const originalMatrix = this.camera.projectionMatrix.clone();
-
-        // 创建新的投影矩阵，限制到指定的屏幕矩形
-        const newMatrix = new THREE.Matrix4();
-
-        // PerspectiveCamera 的原始投影矩阵参数：
-        // f = 1 / tan(fov/2), aspect = width/height
-        // 矩阵结构：
-        // [f/aspect, 0, 0, 0]
-        // [0, f, 0, 0]
-        // [0, 0, (far+near)/(near-far), (2*far*near)/(near-far)]
-        // [0, 0, -1, 0]
-
-        // 我们需要缩放 NDC 坐标以匹配选择框
-        // NDC 范围：[-1, 1]，宽=2，高=2
-        // 选择框范围：[minX, maxX], [minY, maxY]
-        // 缩放因子：selectWidth/2, selectHeight/2
-
-        const selectWidth = maxX - minX;
-        const selectHeight = maxY - minY;
-        const scaleX = selectWidth / 2;
-        const scaleY = selectHeight / 2;
-
-        const centerX = (maxX + minX) / 2;
-        const centerY = (maxY + minY) / 2;
-
-        // 创建变换矩阵：先平移，再缩放
-        // 平移：将中心点移到原点
-        const translateMatrix = new THREE.Matrix4().makeTranslation(-centerX, -centerY, 0);
-        // 缩放：缩放到 [-1, 1] 范围
-        const scaleMatrix = new THREE.Matrix4().makeScale(1 / scaleX, 1 / scaleY, 1);
-
-        // 组合：先缩放，后平移（因为我们缩放的是 NDC 空间）
-        // 修正：我们需要先将 NDC 坐标映射到选择框，然后再映射回 [-1,1]
-        // 正确的顺序是：平移（去掉偏移）-> 缩放（归一化到 [-1,1]）
-
-        // 变换矩阵用于修改投影矩阵
-        newMatrix.multiplyMatrices(scaleMatrix, translateMatrix);
-
-        // 将变换应用到原始投影矩阵
-        const modifiedProjectionMatrix = newMatrix.multiply(originalMatrix);
-
-        // 创建 Frustum
-        const frustum = new THREE.Frustum();
-        const viewMatrix = this.camera.matrixWorldInverse;
-        // 正确的顺序：先视图矩阵，再投影矩阵
-        // 因为 Three.js 中矩阵乘法是从右到左应用的
-        const projViewMatrix = modifiedProjectionMatrix.clone().multiply(viewMatrix);
-        frustum.setFromProjectionMatrix(projViewMatrix);
-
-        const selected: string[] = [];
-        const box = new THREE.Box3();
-        const tmpMat = new THREE.Matrix4();
-
-        for (const obj of this.interactableList) {
-            // 处理 BatchedMesh：检查每个 instance
-            if ((obj as any).isBatchedMesh) {
-                const bm = obj as THREE.BatchedMesh;
-                const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string> | undefined;
-                const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
-
-                if (!batchIdToUuid || !batchIdToGeometry) continue;
-
-                for (const [batchId, uuid] of batchIdToUuid) {
-                    try {
-                        const geometry = batchIdToGeometry.get(batchId);
-                        if (!geometry) continue;
-
-                        // 计算实例的世界边界框
-                        bm.getMatrixAt(batchId, tmpMat);
-                        tmpMat.premultiply(bm.matrixWorld);
-
-                        const geoBox = new THREE.Box3();
-                        if (!geometry.boundingBox) geometry.computeBoundingBox();
-                        geoBox.copy(geometry.boundingBox).applyMatrix4(tmpMat);
-
-                        if (frustum.intersectsBox(geoBox)) {
-                            selected.push(uuid);
-                        }
-                    } catch (e) {
-                        // skip invalid instances
-                    }
-                }
-                continue;
-            }
-
-            // 处理普通 Mesh
-            box.setFromObject(obj);
-            if (frustum.intersectsBox(box)) {
-                selected.push(obj.uuid);
-            }
-        }
-
-        return selected;
+        const pickingState = ensureInteractableList(this.getPickingContext());
+        this.syncPickingState(pickingState);
+        return selectInteractablesByScreenRect(
+            {
+                camera: this.camera,
+                interactableList: this.interactableList
+            },
+            x1,
+            y1,
+            x2,
+            y2
+        );
     }
 
     removeMeasurement(id: string) {
