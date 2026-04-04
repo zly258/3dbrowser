@@ -15,6 +15,11 @@ import { stableExplodeDirection } from "./scene/explode";
 import { readNbimHeader, readNbimManifest, type NbimManifest } from "./scene/nbimIO";
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import {
+    applyClearLocateFocus,
+    applyHighlightObjects,
+    applySetLocateResultSet
+} from "./sceneManagerHighlight";
+import {
     resolveBimIdByUuid,
     resolveNbimFlatProperties,
     resolveNbimIfcPropertyGroups,
@@ -23,6 +28,11 @@ import {
     resolveNodeUuidByBimId as resolveSceneNodeUuidByBimId
 } from "./sceneManagerSelection";
 import { collectSceneManagerStats } from "./sceneManagerStats";
+import {
+    applyIsolateObjects,
+    applySetAllVisibility,
+    applySetObjectVisibility
+} from "./sceneManagerVisibility";
 import {
     type PerformancePreset,
     type SceneChunkOptions,
@@ -3396,31 +3406,50 @@ export class SceneManager {
         }, mode);
     }
 
-    setAllVisibility(visible: boolean) {
-        const setNodeVisible = (n: StructureTreeNode) => {
-            n.visible = visible;
-            if (n.children) n.children.forEach(setNodeVisible);
+    private getVisibilityContext() {
+        return {
+            scene: this.scene,
+            contentGroup: this.contentGroup,
+            structureRoot: this.structureRoot,
+            nodeMap: this.nodeMap,
+            optimizedMapping: this.optimizedMapping,
+            highlightedUuids: this.highlightedUuids
         };
-        if (this.structureRoot.children) this.structureRoot.children.forEach(setNodeVisible);
+    }
 
-        this.optimizedMapping.forEach((mappings) => {
-            mappings.forEach(m => {
-                m.mesh.setVisibleAt(m.instanceId, visible);
-            });
-        });
+    private getHighlightContext() {
+        return {
+            contentGroup: this.contentGroup,
+            selectionBox: this.selectionBox,
+            highlightMesh: this.highlightMesh,
+            optimizedMapping: this.optimizedMapping,
+            settings: this.settings,
+            state: {
+                highlightedUuids: this.highlightedUuids,
+                locateResultSet: this.locateResultSet,
+                locateFocusUuid: this.locateFocusUuid,
+                lastSelectedUuid: this.lastSelectedUuid
+            },
+            locateMaterialCache: this.locateMaterialCache,
+            locateObjectMaterialCache: this.locateObjectMaterialCache,
+            locateDimmedInstances: this.locateDimmedInstances,
+            clearClashPairHighlight: () => this.clearClashPairHighlight(),
+            nodeMap: this.nodeMap
+        };
+    }
 
-        this.contentGroup.traverse(o => {
-            if (o.name === "Helpers" || o.name === "Measure") return;
-            if ((o as THREE.Mesh).isMesh && o.userData.isOptimized) {
-                o.visible = false;
-                return;
-            }
-            o.visible = visible;
-        });
+    private syncHighlightState(state: { highlightedUuids: Set<string>; locateResultSet: Set<string>; locateFocusUuid: string | null; lastSelectedUuid: string | null; }) {
+        this.highlightedUuids = state.highlightedUuids;
+        this.locateResultSet = state.locateResultSet;
+        this.locateFocusUuid = state.locateFocusUuid;
+        this.lastSelectedUuid = state.lastSelectedUuid;
+    }
 
-        this.updateSceneBounds();
-        this.refreshExplodeState();
-        this.requestRender();
+    setAllVisibility(visible: boolean) {
+        const result = applySetAllVisibility(this.getVisibilityContext(), visible);
+        if (result.needsBoundsUpdate) this.updateSceneBounds();
+        if (result.needsExplodeRefresh) this.refreshExplodeState();
+        if (result.needsRender) this.requestRender();
     }
 
     hideObjects(uuids: string[]) {
@@ -3428,170 +3457,33 @@ export class SceneManager {
     }
 
     isolateObjects(uuids: string[]) {
-        // 1. 先隐藏所有对象
-        this.setAllVisibility(false);
-
-        // 2. 显示所有选中的对象及其子对象
-        const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
-
-        uuids.forEach(uuid => {
-            // 使用 setObjectVisibility 来确保父节点也可见
-            this.setObjectVisibility(uuid, true);
-
-            // 递归显示所有子对象
-            const nodes = this.nodeMap.get(uuid);
-            if (nodes) {
-                nodes.forEach(node => {
-                    const showChildrenRecursive = (n: StructureTreeNode) => {
-                        if (n.id !== uuid) {
-                            this.setObjectVisibility(n.id, true);
-                        }
-                        if (n.children) {
-                            n.children.forEach(showChildrenRecursive);
-                        }
-                    };
-                    showChildrenRecursive(node);
-                });
-            }
-
-            // 收集受影响的 BatchedMesh
-            const mappings = this.optimizedMapping.get(uuid);
-            if (mappings) {
-                mappings.forEach(m => {
-                    affectedBatchedMeshes.add(m.mesh);
-                });
-            }
-        });
-
-        // 3. 确保所有相关的 BatchedMesh 及其父节点可见
-        affectedBatchedMeshes.forEach(bm => {
-            bm.visible = true;
-            // 确保父节点可见
-            let parent = bm.parent;
-            while (parent && parent !== this.scene) {
-                parent.visible = true;
-                parent = parent.parent;
-            }
-        });
-
-        // 4. 同时确保所有非优化对象的父节点也可见
-        uuids.forEach(uuid => {
-            const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-            if (obj) {
-                let parent = obj.parent;
-                while (parent && parent !== this.scene) {
-                    parent.visible = true;
-                    parent = parent.parent;
+        const result = applyIsolateObjects(
+            this.getVisibilityContext(),
+            uuids,
+            (uuid, visible, showParents) => {
+                const inner = applySetObjectVisibility(this.getVisibilityContext(), uuid, visible, showParents);
+                if (inner.nextHighlightedUuids) {
+                    const highlightContext = this.getHighlightContext();
+                    const highlightResult = applyHighlightObjects(highlightContext, inner.nextHighlightedUuids);
+                    this.syncHighlightState(highlightContext.state);
+                    if (highlightResult.needsRender) this.requestRender();
                 }
             }
-        });
-
-        // 5. 更新状态
+        );
         this.interactableListValid = false;
-        this.updateSceneBounds();
-        this.refreshExplodeState();
-        this.requestRender();
+        if (result.needsBoundsUpdate) this.updateSceneBounds();
+        if (result.needsExplodeRefresh) this.refreshExplodeState();
+        if (result.needsRender) this.requestRender();
     }
 
     setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
-        // 更新结构树中的状态 (可能存在多个节点指向同一个 UUID)
-        const nodes = this.nodeMap.get(uuid);
-        if (nodes) {
-            nodes.forEach(node => {
-                const setVisibleRecursive = (n: StructureTreeNode) => {
-                    n.visible = visible;
-                    if (n.children) n.children.forEach(setVisibleRecursive);
-
-                    // 如果该子节点也有其他映射，同步更新它们
-                    const otherNodes = this.nodeMap.get(n.id);
-                    if (otherNodes) {
-                        otherNodes.forEach(on => on.visible = visible);
-                    }
-                };
-                setVisibleRecursive(node);
-            });
+        const result = applySetObjectVisibility(this.getVisibilityContext(), uuid, visible, showParents);
+        if (result.nextHighlightedUuids) {
+            this.highlightObjects(result.nextHighlightedUuids);
         }
-
-        const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-
-        // 如果设置为可见，确保所有父节点也可见
-        if (visible && obj && showParents) {
-            let parent = obj.parent;
-            while (parent && parent !== this.scene) {
-                parent.visible = true;
-                parent = parent.parent;
-            }
-        }
-
-        if (!visible) {
-            // 如果隐藏的对象（或其子对象）当前被高亮，则取消高亮
-            const idsToUnhighlight: string[] = [];
-            if (this.highlightedUuids.has(uuid)) {
-                idsToUnhighlight.push(uuid);
-            }
-
-            // 检查子对象
-            if (obj) {
-                obj.traverse(child => {
-                    if (this.highlightedUuids.has(child.uuid)) {
-                        idsToUnhighlight.push(child.uuid);
-                    }
-                });
-            } else if (nodes && nodes.length > 0) {
-                const findHighlightedRecursive = (n: StructureTreeNode) => {
-                    if (this.highlightedUuids.has(n.id)) idsToUnhighlight.push(n.id);
-                    if (n.children) n.children.forEach(findHighlightedRecursive);
-                };
-                findHighlightedRecursive(nodes[0]);
-            }
-
-            if (idsToUnhighlight.length > 0) {
-                const nextHighlighted = new Set(this.highlightedUuids);
-                idsToUnhighlight.forEach(id => nextHighlighted.delete(id));
-                this.highlightObjects(Array.from(nextHighlighted));
-            }
-        }
-
-        if (!obj) {
-            // 如果在 contentGroup 中找不到，可能已经被优化掉了
-            // 我们尝试直接根据 node 递归更新 mappings
-            if (nodes && nodes.length > 0) {
-                const updateMappingsRecursive = (n: StructureTreeNode) => {
-                    const mappings = this.optimizedMapping.get(n.id);
-                    if (mappings) {
-                        mappings.forEach(m => {
-                            m.mesh.setVisibleAt(m.instanceId, visible);
-                        });
-                    }
-                    if (n.children) n.children.forEach(updateMappingsRecursive);
-                };
-                updateMappingsRecursive(nodes[0]); // 只需要递归一个分支来更新物理对象
-            }
-            return;
-        }
-
-        obj.traverse(o => {
-            if (o.name !== "Helpers" && o.name !== "Measure") {
-                // 如果是原始网格，我们保持它不可见（因为我们使用 BatchedMesh 渲染）
-                if ((o as THREE.Mesh).isMesh && o.userData.isOptimized) {
-                    o.visible = false;
-                } else {
-                    o.visible = visible;
-                }
-
-                // 更新对应的 BatchedMesh 实例可见性
-                const mappings = this.optimizedMapping.get(o.uuid);
-                if (mappings) {
-                    mappings.forEach(m => {
-                        m.mesh.setVisibleAt(m.instanceId, visible);
-                    });
-                }
-            }
-        });
-
         this.interactableListValid = false;
-        this.updateSceneBounds();
-        this.requestRender();
+        if (result.needsBoundsUpdate) this.updateSceneBounds();
+        if (result.needsRender) this.requestRender();
     }
 
     highlightObject(uuid: string | null) {
@@ -3919,30 +3811,10 @@ export class SceneManager {
     }
 
     clearLocateFocus() {
-        this.clearClashPairHighlight();
-        this.locateObjectMaterialCache.forEach((material, uuid) => {
-            const obj = this.contentGroup.getObjectByProperty("uuid", uuid) as (THREE.Mesh & { isBatchedMesh?: boolean }) | null;
-            if (!obj || (!obj.isMesh && !(obj as any).isBatchedMesh)) return;
-            (obj as any).material = material;
-        });
-        this.locateObjectMaterialCache.clear();
-        this.locateMaterialCache.clear();
-        this.locateDimmedInstances.forEach(({ mesh, instanceId, originalColor }) => {
-            mesh.setColorAt(instanceId, new THREE.Color(originalColor));
-            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-        });
-        this.locateDimmedInstances.clear();
-        this.locateResultSet.clear();
-        this.locateFocusUuid = null;
-        this.highlightObjects([]);
-    }
-
-    private hasSameLocateResultSet(uuids: string[]) {
-        if (this.locateResultSet.size !== uuids.length) return false;
-        for (const uuid of uuids) {
-            if (!this.locateResultSet.has(uuid)) return false;
-        }
-        return true;
+        const context = this.getHighlightContext();
+        const result = applyClearLocateFocus(context);
+        this.syncHighlightState(context.state);
+        if (result.needsRender) this.requestRender();
     }
 
     private expandLocateTargets(ids: string[]) {
@@ -3969,180 +3841,11 @@ export class SceneManager {
         return expanded;
     }
 
-    private updateLocateFocusHighlight(uuid: string | null) {
-        this.locateFocusUuid = uuid;
-        this.highlightObject(uuid);
-    }
-
     setLocateResultSet(uuids: string[], focusUuid: string | null = null) {
-        this.clearClashPairHighlight();
-        const normalized = Array.from(new Set(uuids.filter(Boolean)));
-        if (normalized.length === 0) {
-            this.clearLocateFocus();
-            return;
-        }
-        const selectedSet = new Set(normalized);
-
-        const expandedTargets = this.expandLocateTargets(normalized);
-        const expandedList = Array.from(expandedTargets);
-
-        if (this.hasSameLocateResultSet(expandedList)) {
-            const nextFocus = focusUuid && this.locateResultSet.has(focusUuid) ? focusUuid : expandedList[0];
-            this.updateLocateFocusHighlight(nextFocus);
-            return;
-        }
-
-        this.clearLocateFocus();
-        const resultSet = expandedTargets;
-        this.locateResultSet = resultSet;
-        this.locateFocusUuid = focusUuid && resultSet.has(focusUuid) ? focusUuid : expandedList[0];
-        const focusKey = this.locateFocusUuid;
-
-        const dimmedColor = new THREE.Color("#b7bec9");
-        const accentColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
-        this.contentGroup.traverse((child) => {
-            const mesh = child as THREE.Mesh;
-            if (!mesh.isMesh || !mesh.material) return;
-            if (!this.locateObjectMaterialCache.has(child.uuid)) {
-                this.locateObjectMaterialCache.set(child.uuid, mesh.material);
-            }
-            const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            const isMatched = resultSet.has(child.uuid);
-            const isFocus = isMatched && focusKey !== null && child.uuid === focusKey;
-            const nextMaterials = sourceMaterials.map((material) => {
-                if (!material) return material;
-                const cloned = material.clone() as THREE.Material & {
-                    transparent?: boolean;
-                    opacity?: number;
-                    depthWrite?: boolean;
-                    color?: THREE.Color;
-                    emissive?: THREE.Color;
-                    roughness?: number;
-                    metalness?: number;
-                };
-                if ("transparent" in cloned) cloned.transparent = false;
-                if ("opacity" in cloned) cloned.opacity = 1;
-                if ("depthWrite" in cloned) cloned.depthWrite = true;
-                if ("color" in cloned && cloned.color) {
-                    const baseColor = cloned.color.clone();
-                    if (isMatched) {
-                        const tint = isFocus ? 0.93 : 0.76;
-                        cloned.color.copy(baseColor.lerp(accentColor, tint));
-                    } else {
-                        cloned.transparent = true;
-                        cloned.opacity = 0.18;
-                        cloned.depthWrite = false;
-                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.84));
-                    }
-                }
-                if ("emissive" in cloned && cloned.emissive) {
-                    if (isMatched) {
-                        cloned.emissive.copy(accentColor.clone().multiplyScalar(isFocus ? 0.4 : 0.12));
-                    } else {
-                        cloned.emissive.set(0x000000);
-                    }
-                }
-                if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
-                if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
-                cloned.needsUpdate = true;
-                return cloned;
-            });
-            mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
-        });
-
-        // NBIM / BatchedMesh 路径：按 originalUuid 维度应用“目标高亮 + 其他透明灰”
-        this.contentGroup.traverse((child) => {
-            const batched = child as THREE.Object3D & {
-                isBatchedMesh?: boolean;
-                material?: THREE.Material | THREE.Material[];
-                userData?: any;
-            };
-            if (!batched.isBatchedMesh || !batched.material) return;
-
-            if (!this.locateObjectMaterialCache.has(child.uuid)) {
-                this.locateObjectMaterialCache.set(child.uuid, batched.material);
-            }
-            const owner = batched.userData?.originalUuid ? String(batched.userData.originalUuid) : "";
-            const batchIdToUuid = batched.userData?.batchIdToUuid as Map<number, string> | undefined;
-            let hasMatchedInstance = false;
-            let hasFocusInstance = false;
-            if (batchIdToUuid && batchIdToUuid.size > 0) {
-                for (const instanceUuid of batchIdToUuid.values()) {
-                    if (!hasMatchedInstance && resultSet.has(instanceUuid)) hasMatchedInstance = true;
-                    if (!hasFocusInstance && focusKey !== null && instanceUuid === focusKey) hasFocusInstance = true;
-                    if (hasMatchedInstance && hasFocusInstance) break;
-                }
-            }
-            const ownerExplicitSelected = owner ? selectedSet.has(owner) : false;
-            const isMatched = resultSet.has(child.uuid) || hasMatchedInstance || ownerExplicitSelected;
-            const isFocus =
-                (this.locateFocusUuid !== null && this.locateFocusUuid === child.uuid) ||
-                hasFocusInstance ||
-                (ownerExplicitSelected && this.locateFocusUuid !== null && this.locateFocusUuid === owner);
-            const sourceMaterials = Array.isArray(batched.material) ? batched.material : [batched.material];
-
-            const nextMaterials = sourceMaterials.map((material) => {
-                if (!material) return material;
-                const cloned = material.clone() as THREE.Material & {
-                    transparent?: boolean;
-                    opacity?: number;
-                    depthWrite?: boolean;
-                    color?: THREE.Color;
-                    emissive?: THREE.Color;
-                    roughness?: number;
-                    metalness?: number;
-                };
-                if ("transparent" in cloned) cloned.transparent = false;
-                if ("opacity" in cloned) cloned.opacity = 1;
-                if ("depthWrite" in cloned) cloned.depthWrite = true;
-
-                if ("color" in cloned && cloned.color) {
-                    const baseColor = cloned.color.clone();
-                    if (isMatched) {
-                        const tint = isFocus ? 0.92 : 0.7;
-                        cloned.color.copy(baseColor.lerp(accentColor, tint));
-                    } else {
-                        cloned.transparent = true;
-                        cloned.opacity = 0.16;
-                        cloned.depthWrite = false;
-                        cloned.color.copy(baseColor.lerp(dimmedColor, 0.86));
-                    }
-                }
-                if ("emissive" in cloned && cloned.emissive) {
-                    if (isMatched) {
-                        cloned.emissive.copy(accentColor.clone().multiplyScalar(isFocus ? 0.36 : 0.12));
-                    } else {
-                        cloned.emissive.set(0x000000);
-                    }
-                }
-                if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
-                if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
-                cloned.needsUpdate = true;
-                return cloned;
-            });
-            (batched as any).material = Array.isArray(batched.material) ? nextMaterials : nextMaterials[0];
-        });
-
-        this.optimizedMapping.forEach((mappings, originalUuid) => {
-            const isMatched = resultSet.has(originalUuid);
-            const isFocus = isMatched && focusKey !== null && originalUuid === focusKey;
-            mappings.forEach((mapping) => {
-                const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
-                this.locateDimmedInstances.set(key, {
-                    mesh: mapping.mesh,
-                    instanceId: mapping.instanceId,
-                    originalColor: mapping.originalColor
-                });
-                const sourceColor = new THREE.Color(mapping.originalColor);
-                const tint = isFocus ? 0.93 : isMatched ? 0.76 : 0.82;
-                const target = isMatched ? accentColor : dimmedColor;
-                mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(target, tint));
-                if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
-            });
-        });
-
-        this.updateLocateFocusHighlight(this.locateFocusUuid);
-        this.requestRender();
+        const context = this.getHighlightContext();
+        const result = applySetLocateResultSet(context, uuids, focusUuid);
+        this.syncHighlightState(context.state);
+        if (result.needsRender) this.requestRender();
     }
 
     setLocateFocus(uuid: string | null) {
@@ -4154,133 +3857,10 @@ export class SceneManager {
     }
 
     highlightObjects(uuids: string[]) {
-        if (this.clashPairUuids.size > 0) {
-            this.clearClashPairHighlight();
-        }
-        const target = new Set(uuids.filter(Boolean));
-
-        const restoreOne = (id: string) => {
-            const mappings = this.optimizedMapping.get(id);
-            if (mappings) {
-                mappings.forEach(m => {
-                    m.mesh.setColorAt(m.instanceId, new THREE.Color(m.originalColor));
-                    if (m.mesh.instanceColor) {
-                        m.mesh.instanceColor.needsUpdate = true;
-                    }
-                });
-            }
-        };
-
-        const applyOne = (id: string) => {
-            const mappings = this.optimizedMapping.get(id);
-            if (mappings) {
-                mappings.forEach(m => {
-                    const highlightColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
-                    m.mesh.setColorAt(m.instanceId, highlightColor);
-                    if (m.mesh.instanceColor) {
-                        m.mesh.instanceColor.needsUpdate = true;
-                    }
-                });
-            }
-        };
-
-        const preserveLocateTint = this.locateResultSet.size > 0;
-        if (!preserveLocateTint) {
-            for (const prev of this.highlightedUuids) {
-                if (!target.has(prev)) restoreOne(prev);
-            }
-            for (const next of target) {
-                if (!this.highlightedUuids.has(next)) applyOne(next);
-            }
-        }
-
-        this.highlightedUuids = target;
-        this.selectionBox.visible = false;
-        this.highlightMesh.visible = false;
-        this.lastSelectedUuid = uuids.length > 0 ? uuids[uuids.length - 1] : null;
-
-        if (target.size === 0) {
-            this.requestRender();
-            return;
-        }
-
-        const union = new THREE.Box3();
-        const tmpBox = new THREE.Box3();
-        const tmpMat = new THREE.Matrix4();
-
-        const addObjectBounds = (id: string) => {
-            const mappings = this.optimizedMapping.get(id);
-            if (mappings && mappings.length > 0) {
-                const m = mappings[0];
-                if (m.geometry) {
-                    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-                    tmpBox.copy(m.geometry.boundingBox!);
-                    m.mesh.getMatrixAt(m.instanceId, tmpMat);
-                    tmpMat.premultiply(m.mesh.matrixWorld);
-                    tmpBox.applyMatrix4(tmpMat);
-                    union.union(tmpBox);
-                }
-                return;
-            }
-
-            const obj = this.contentGroup.getObjectByProperty("uuid", id);
-            if (!obj) return;
-            obj.updateMatrixWorld(true);
-            if (obj.userData.boundingBox) {
-                tmpBox.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
-            } else {
-                tmpBox.setFromObject(obj);
-            }
-            union.union(tmpBox);
-        };
-
-        for (const id of target) addObjectBounds(id);
-
-        if (!union.isEmpty()) {
-            this.selectionBox.box.copy(union);
-            const locatingFocus = !!(this.locateFocusUuid && target.has(this.locateFocusUuid));
-            if (locatingFocus) {
-                const pad = Math.max(union.getSize(new THREE.Vector3()).length() * 0.048, 0.22);
-                this.selectionBox.box.expandByScalar(pad);
-            }
-            this.selectionBox.visible = locatingFocus || !!this.settings.highlightShowBox;
-        }
-
-        const focusId = this.lastSelectedUuid;
-        if (!focusId) {
-            this.requestRender();
-            return;
-        }
-
-        const focusMappings = this.optimizedMapping.get(focusId);
-        if (focusMappings && focusMappings.length > 0) {
-            // 优化网格使用实例着色进行高亮，避免与外壳高亮叠加产生“双高亮”视觉。
-            this.highlightMesh.visible = false;
-            this.requestRender();
-            return;
-        }
-
-        const focusObj = this.contentGroup.getObjectByProperty("uuid", focusId);
-        if (!focusObj) {
-            this.requestRender();
-            return;
-        }
-        if ((focusObj as THREE.Mesh).isMesh) {
-            focusObj.updateMatrixWorld(true);
-            this.highlightMesh.geometry = (focusObj as THREE.Mesh).geometry;
-
-            const worldPos = new THREE.Vector3();
-            const worldQuat = new THREE.Quaternion();
-            const worldScale = new THREE.Vector3();
-            focusObj.matrixWorld.decompose(worldPos, worldQuat, worldScale);
-            worldScale.multiplyScalar(1.035);
-
-            this.highlightMesh.position.copy(worldPos);
-            this.highlightMesh.quaternion.copy(worldQuat);
-            this.highlightMesh.scale.copy(worldScale);
-            this.highlightMesh.visible = true;
-        }
-        this.requestRender();
+        const context = this.getHighlightContext();
+        const result = applyHighlightObjects(context, uuids);
+        this.syncHighlightState(context.state);
+        if (result.needsRender) this.requestRender();
     }
 
     pick(clientX: number, clientY: number): { object: THREE.Object3D, intersect: THREE.Intersection } | null {
