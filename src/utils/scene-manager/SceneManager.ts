@@ -34,6 +34,7 @@ import {
     resolveChunkMeshForLoad
 } from "./chunkExecution";
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
+import { processChunkWorkerQueue, queueChunkWorkerTask, type ChunkWorkerTask } from "./chunkWorkerPool";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
     computeChunkFrameBudget,
@@ -314,7 +315,7 @@ export class SceneManager {
 
     // Worker 池
     private workers: Worker[] = [];
-    private workerQueue: { resolve: Function, reject: Function, data: any, transferables: any[] }[] = [];
+    private workerQueue: ChunkWorkerTask[] = [];
     private activeWorkerCount = 0;
     private maxWorkers = 4; // 限制固定为 4 个，平衡性能与系统开销
     private readonly options: SceneManagerOptions;
@@ -1773,50 +1774,30 @@ export class SceneManager {
     }
 
     private async runWorkerTask(data: any, transferables: any[]): Promise<any> {
-        return new Promise((resolve, reject) => {
-            this.workerQueue.push({ resolve, reject, data, transferables });
-            this.processWorkerQueue();
+        return queueChunkWorkerTask({
+            workerQueue: this.workerQueue,
+            data,
+            transferables,
+            processQueue: () => this.processWorkerQueue()
         });
     }
 
     private processWorkerQueue() {
-        if (this.activeWorkerCount >= this.maxWorkers || this.workerQueue.length === 0) return;
-
-        const task = this.workerQueue.shift()!;
-        this.activeWorkerCount++;
-
-        let worker = this.workers.pop();
-        if (!worker) {
-            // @ts-ignore
-            worker = new Worker(new URL('../chunkWorker.ts', import.meta.url), { type: 'module' });
-        }
-
-        const onMessage = (e: MessageEvent) => {
-            worker!.removeEventListener('message', onMessage);
-            worker!.removeEventListener('error', onError);
-            this.workers.push(worker!);
-            this.activeWorkerCount--;
-
-            if (e.data.type === 'success') {
-                task.resolve(e.data.result);
-            } else {
-                task.reject(new Error(e.data.error));
-            }
-            this.processWorkerQueue();
-        };
-
-        const onError = (e: ErrorEvent) => {
-            worker!.removeEventListener('message', onMessage);
-            worker!.removeEventListener('error', onError);
-            // 发生错误时不重用该 worker
-            this.activeWorkerCount--;
-            task.reject(new Error(e.message));
-            this.processWorkerQueue();
-        };
-
-        worker.addEventListener('message', onMessage);
-        worker.addEventListener('error', onError);
-        worker.postMessage(task.data, task.transferables);
+        processChunkWorkerQueue({
+            activeWorkerCount: this.activeWorkerCount,
+            maxWorkers: this.maxWorkers,
+            workerQueue: this.workerQueue,
+            workers: this.workers,
+            createWorker: () => {
+                // @ts-ignore
+                return new Worker(new URL('../chunkWorker.ts', import.meta.url), { type: 'module' });
+            },
+            getActiveWorkerCount: () => this.activeWorkerCount,
+            onActiveWorkerCountChange: (count) => {
+                this.activeWorkerCount = count;
+            },
+            processQueue: () => this.processWorkerQueue()
+        });
     }
 
     private unloadChunk(chunk: any) {

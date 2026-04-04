@@ -1,9 +1,6 @@
 import type * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-
-interface WorkerTask {
-    reject: Function;
-}
+import { disposeChunkWorkerPool, type ChunkWorkerTask } from "./chunkWorkerPool";
 
 interface SceneManagerDisposeContext {
     cancelDeferredStructureBuild: () => void;
@@ -21,7 +18,7 @@ interface SceneManagerDisposeContext {
     renderer: THREE.WebGLRenderer;
     ghostGroup: THREE.Group;
     workers: Worker[];
-    workerQueue: WorkerTask[];
+    workerQueue: ChunkWorkerTask[];
     logicTimer: ReturnType<typeof setInterval> | null;
     animationFrameId: number | null;
     onAnimationFrameDisposed: () => void;
@@ -49,18 +46,11 @@ export function disposeSceneManagerResources(context: SceneManagerDisposeContext
         clearInterval(context.logicTimer);
     }
 
-    for (const worker of context.workers) {
-        try {
-            worker.terminate();
-        } catch (error) {
-            console.warn("Worker terminate failed:", error);
-        }
-    }
-
-    if (context.workerQueue.length > 0) {
-        const pending = context.workerQueue.splice(0, context.workerQueue.length);
-        pending.forEach((task) => task.reject(new Error("SceneManager disposed")));
-    }
+    disposeChunkWorkerPool({
+        workers: context.workers,
+        workerQueue: context.workerQueue,
+        rejectReason: "SceneManager disposed"
+    });
     context.onWorkersDisposed();
 
     context.onQueuesReset();
