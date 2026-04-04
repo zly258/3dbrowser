@@ -1663,6 +1663,149 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-family: 'Roboto Mono', 'Consolas', monospace;
 }
 
+.ui-selection-summary {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ui-selection-summary-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-selection-summary-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ui-selection-summary-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ui-selection-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ui-selection-summary-card {
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  min-width: 0;
+}
+
+.ui-selection-summary-key {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.ui-selection-summary-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-search-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ui-search-result-item {
+  width: 100%;
+  border-bottom: 1px solid var(--border-light);
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.ui-search-result-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.ui-search-result-main {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.ui-mode-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-color);
+}
+
+.ui-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.ui-mode-pill button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+}
+
+.ui-viewpoint-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  padding: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+}
+
+.ui-viewpoint-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+
+.ui-viewpoint-flags span {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
 /* 在 Chrome/Safari/Edge 中隐藏数字输入框原生微调按钮 */
 .ui-input-number .ui-input::-webkit-outer-spin-button,
 .ui-input-number .ui-input::-webkit-inner-spin-button {

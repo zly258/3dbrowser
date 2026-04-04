@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { SceneManager } from "../utils/SceneManager";
-import type { ViewpointRecord, ViewerConfirmState, ViewerToast } from "../viewer/types";
+import type { ViewpointRecord, ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerToast } from "../viewer/types";
 
 interface UseViewpointsOptions {
     currentFileSetId: string;
@@ -9,6 +9,8 @@ interface UseViewpointsOptions {
     setToast: Dispatch<SetStateAction<ViewerToast | null>>;
     setConfirmState: Dispatch<SetStateAction<ViewerConfirmState>>;
     t: (key: string) => string;
+    captureStateSnapshot: (options: ViewpointSaveOptions) => ViewpointStateSnapshot;
+    restoreStateSnapshot: (snapshot?: ViewpointStateSnapshot) => Promise<void> | void;
 }
 
 export function useViewpoints({
@@ -16,7 +18,9 @@ export function useViewpoints({
     sceneMgrRef,
     setToast,
     setConfirmState,
-    t
+    t,
+    captureStateSnapshot,
+    restoreStateSnapshot
 }: UseViewpointsOptions) {
     const [viewpoints, setViewpoints] = useState<ViewpointRecord[]>([]);
 
@@ -70,7 +74,12 @@ export function useViewpoints({
         }
     }, [sceneMgrRef]);
 
-    const handleSaveViewpoint = useCallback((customName?: string, replaceId?: string) => {
+    const handleSaveViewpoint = useCallback((customName?: string, saveOptions: ViewpointSaveOptions = {
+        visibility: true,
+        selection: true,
+        clip: true,
+        explode: true
+    }, replaceId?: string) => {
         const manager = sceneMgrRef.current;
         if (!manager || !currentFileSetId) {
             setToast({ message: t("no_models"), type: "info" });
@@ -85,28 +94,39 @@ export function useViewpoints({
         const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
         const cameraState = manager.getCameraState();
         const image = captureViewThumbnail();
+        const stateSnapshot = captureStateSnapshot(saveOptions);
         const nextViewpoints = replaceId
-            ? viewpoints.map((viewpoint) => viewpoint.id === replaceId ? { ...viewpoint, name, cameraState, image } : viewpoint)
-            : [...viewpoints, { id: Date.now().toString(), name, cameraState, image }];
+            ? viewpoints.map((viewpoint) => viewpoint.id === replaceId ? { ...viewpoint, name, cameraState, image, saveOptions, stateSnapshot } : viewpoint)
+            : [...viewpoints, { id: Date.now().toString(), name, cameraState, image, saveOptions, stateSnapshot }];
 
         persistViewpoints(nextViewpoints);
         setToast({ message: t("success"), type: "success" });
-    }, [captureViewThumbnail, currentFileSetId, persistViewpoints, sceneMgrRef, setToast, t, viewpoints]);
+    }, [captureStateSnapshot, captureViewThumbnail, currentFileSetId, persistViewpoints, sceneMgrRef, setToast, t, viewpoints]);
 
     const handleUpdateViewpointName = useCallback((id: string, newName: string) => {
         persistViewpoints(viewpoints.map((viewpoint) => viewpoint.id === id ? { ...viewpoint, name: newName } : viewpoint));
     }, [persistViewpoints, viewpoints]);
 
-    const handleLoadViewpoint = useCallback((viewpoint: ViewpointRecord) => {
+    const handleLoadViewpoint = useCallback(async (viewpoint: ViewpointRecord) => {
         if (!viewpoint.cameraState) return;
         sceneMgrRef.current?.setCameraState(viewpoint.cameraState);
+        await restoreStateSnapshot(viewpoint.stateSnapshot);
         setToast({ message: `${t("viewpoint_loading")}: ${viewpoint.name}`, type: "info" });
-    }, [sceneMgrRef, setToast, t]);
+    }, [restoreStateSnapshot, sceneMgrRef, setToast, t]);
 
     const handleOverwriteViewpoint = useCallback((id: string) => {
         const viewpoint = viewpoints.find((item) => item.id === id);
         if (!viewpoint) return;
-        handleSaveViewpoint(viewpoint.name, id);
+        handleSaveViewpoint(
+            viewpoint.name,
+            viewpoint.saveOptions || {
+                visibility: true,
+                selection: true,
+                clip: true,
+                explode: true
+            },
+            id
+        );
     }, [handleSaveViewpoint, viewpoints]);
 
     const handleDeleteViewpoint = useCallback((id: string) => {
