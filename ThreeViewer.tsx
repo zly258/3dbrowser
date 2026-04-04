@@ -22,10 +22,15 @@ import { IconClose, IconSun, IconMoon, IconActivity, IconBox, IconGrid } from ".
 import { usePersistentState } from "./src/hooks/usePersistentState";
 import { useChunkProgress } from "./src/hooks/useChunkProgress";
 import { useFileLoadingFlow } from "./src/hooks/useFileLoadingFlow";
+import { useSceneStats } from "./src/hooks/useSceneStats";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
+import { useViewerSelection } from "./src/hooks/useViewerSelection";
+import { useViewpoints } from "./src/hooks/useViewpoints";
+import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
 import { cleanLoadingStatus } from "./src/viewer/fileLoading";
-import { buildSelectedPropertyGroups } from "./src/viewer/selectionProperties";
-import { createPropertyEntries, type PropertyGroupInput, type PropertyGroups } from "./src/viewer/propertyIndex";
+import { sanitizeFileStem, stripFileExtension } from "./src/viewer/exportNaming";
+import type { PropertyGroupInput, PropertyGroups } from "./src/viewer/propertyIndex";
+import type { ViewerConfirmState, ViewerErrorState, ViewerToast } from "./src/viewer/types";
 import { usePropertySearch } from "./src/viewer/usePropertySearch";
 import { useClashCheck } from "./src/viewer/useClashCheck";
 import { useClashSummary } from "./src/viewer/useClashSummary";
@@ -156,8 +161,6 @@ export const ThreeViewer = ({
         setSelectedUuids,
         clearSelection
     } = useSceneSelection();
-    const [locatedUuid, setLocatedUuid] = useState<string | null>(null);
-    const [locateResultUuids, setLocateResultUuids] = useState<string[]>([]);
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
@@ -187,7 +190,6 @@ export const ThreeViewer = ({
     const [displayMode, setDisplayMode] = useState<'solid' | 'transparent'>('solid');
     
     // Viewpoint State
-    const [viewpoints, setViewpoints] = useState<any[]>([]);
     const [currentFileSetId, setCurrentFileSetId] = useState<string>("");
     
     // Measure State
@@ -280,12 +282,7 @@ export const ThreeViewer = ({
     }, [propShowProperties, setShowProps]);
 
     // Confirmation Modal State
-    const [confirmState, setConfirmState] = useState<{
-        isOpen: boolean;
-        title: string;
-        message: string;
-        action: () => void;
-    }>({ isOpen: false, title: "", message: "", action: () => {} });
+    const [confirmState, setConfirmState] = useState<ViewerConfirmState>({ isOpen: false, title: "", message: "", action: () => {} });
 
     // About Modal State
     const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -428,15 +425,10 @@ export const ThreeViewer = ({
     }, [currentFileSetId]);
 
     // Error State
-    const [errorState, setErrorState] = useState<{
-        isOpen: boolean;
-        title: string;
-        message: string;
-        detail?: string;
-    }>({ isOpen: false, title: "", message: "" });
+    const [errorState, setErrorState] = useState<ViewerErrorState>({ isOpen: false, title: "", message: "" });
 
     // Toast Message State
-    const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+    const [toast, setToast] = useState<ViewerToast | null>(null);
 
     const { onManagerChunkProgress } = useChunkProgress({
         fileSetIdRef: currentFileSetIdRef,
@@ -451,6 +443,12 @@ export const ThreeViewer = ({
     const handleManagerChunkProgress = useCallback((loaded: number, total: number) => {
         onManagerChunkProgress(loaded, total);
     }, [onManagerChunkProgress]);
+
+    useSceneStats({
+        mgrInstance,
+        showStats,
+        setStats
+    });
 
     useEffect(() => {
         applyClashModelOptionBounds();
@@ -471,6 +469,7 @@ export const ThreeViewer = ({
 
     // Visibility undo stack
     const visibilityStackRef = useRef<{uuid: string, visible: boolean}[][]>([]);
+    const resetLocateStateRef = useRef<() => void>(() => {});
     
     // 隐藏选中的对象
     const handleHideSelected = useCallback(() => {
@@ -507,55 +506,9 @@ export const ThreeViewer = ({
             setIsolatedUuids(new Set());
             updateTree();
         }
-        setLocatedUuid(null);
+        resetLocateStateRef.current();
         sceneMgr.current.clearLocateFocus();
     }, [hiddenUuids, isolatedUuids]);
-
-    // 全局错误捕获
-    useEffect(() => {
-        const handleError = (event: ErrorEvent) => {
-            // Ignore empty errors or ResizeObserver loop limit errors
-            const message = event.message || "";
-            if (!message && !event.error) return;
-            if (message.includes("ResizeObserver loop completed") || 
-                message.includes("ResizeObserver loop limit") ||
-                message.includes("texImage3D: FLIP_Y or PREMULTIPLY_ALPHA")) {
-                return;
-            }
-            
-            console.error("Global Error:", event.error || message);
-            setErrorState({
-                isOpen: true,
-                title: t("failed"),
-                message: message || "An unexpected error occurred",
-                detail: event.error?.stack || ""
-            });
-        };
-        const handleRejection = (event: PromiseRejectionEvent) => {
-            if (!event.reason) return;
-            
-            const message = event.reason?.message || String(event.reason);
-            if (message.includes("ResizeObserver loop completed") || 
-                message.includes("ResizeObserver loop limit") ||
-                message.includes("texImage3D: FLIP_Y or PREMULTIPLY_ALPHA")) {
-                return;
-            }
-
-            console.error("Unhandled Rejection:", event.reason);
-            setErrorState({
-                isOpen: true,
-                title: t("failed"),
-                message: message || "A promise was rejected without reason",
-                detail: event.reason?.stack || ""
-            });
-        };
-        window.addEventListener('error', handleError);
-        window.addEventListener('unhandledrejection', handleRejection);
-        return () => {
-            window.removeEventListener('error', handleError);
-            window.removeEventListener('unhandledrejection', handleRejection);
-        };
-    }, [lang, t]);
 
     // Update status when lang changes if status is "Ready" (or equivalent)
     useEffect(() => {
@@ -600,209 +553,20 @@ export const ThreeViewer = ({
         return mb.toFixed(1) + ' MB';
     };
 
-    // --- 视点管理逻辑 ---
-    useEffect(() => {
-        if (!currentFileSetId) {
-            setViewpoints([]);
-            return;
-        }
-        try {
-            const key = `viewpoints_${currentFileSetId}`;
-            const saved = localStorage.getItem(key);
-            if (saved) {
-                setViewpoints(JSON.parse(saved));
-            } else {
-                setViewpoints([]);
-            }
-        } catch (e) {
-            console.error("Failed to load viewpoints", e);
-            setViewpoints([]);
-        }
-    }, [currentFileSetId]);
-
-    const persistViewpoints = useCallback((nextViewpoints: any[]) => {
-        if (!currentFileSetId) return;
-        setViewpoints(nextViewpoints);
-        try {
-            localStorage.setItem(`viewpoints_${currentFileSetId}`, JSON.stringify(nextViewpoints));
-        } catch (e) {
-            console.error("Failed to persist viewpoints", e);
-        }
-    }, [currentFileSetId]);
-
-    const captureViewThumbnail = useCallback(() => {
-        if (!sceneMgr.current) return "";
-
-        let image = "";
-        try {
-            sceneMgr.current.renderer.render(sceneMgr.current.scene, sceneMgr.current.camera);
-            const srcCanvas = sceneMgr.current.canvas;
-            const srcWidth = srcCanvas.width;
-            const srcHeight = srcCanvas.height;
-            const scale = Math.min(640 / srcWidth, 360 / srcHeight);
-            const dstWidth = Math.round(srcWidth * scale);
-            const dstHeight = Math.round(srcHeight * scale);
-
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = dstWidth;
-            tempCanvas.height = dstHeight;
-            const ctx = tempCanvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(srcCanvas, 0, 0, dstWidth, dstHeight);
-                image = tempCanvas.toDataURL("image/jpeg", 0.92);
-            }
-        } catch (e) {
-            console.error("Failed to capture thumbnail", e);
-        }
-        return image;
-    }, []);
-
-    const handleSaveViewpoint = useCallback((customName?: string, replaceId?: string) => {
-        if (!sceneMgr.current || !currentFileSetId) {
-            setToast({ message: t("no_models"), type: 'info' });
-            return;
-        }
-
-        // 检查场景中是否有模型
-        const hasModels = sceneMgr.current.contentGroup.children.length > 0;
-        if (!hasModels) {
-            setToast({ message: t("no_models"), type: 'info' });
-            return;
-        }
-
-        const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
-        const cameraState = sceneMgr.current.getCameraState();
-        const image = captureViewThumbnail();
-
-        const nextViewpoints = replaceId
-            ? viewpoints.map((vp) => vp.id === replaceId ? { ...vp, name, cameraState, image } : vp)
-            : [
-                ...viewpoints,
-                {
-                    id: Date.now().toString(),
-                    name,
-                    cameraState,
-                    image
-                }
-            ];
-
-        persistViewpoints(nextViewpoints);
-        setToast({ message: t("success"), type: 'success' });
-    }, [captureViewThumbnail, currentFileSetId, persistViewpoints, t, viewpoints]);
-
-    const handleUpdateViewpointName = useCallback((id: string, newName: string) => {
-        const nextViewpoints = viewpoints.map(v => v.id === id ? { ...v, name: newName } : v);
-        persistViewpoints(nextViewpoints);
-    }, [persistViewpoints, viewpoints]);
-
-    const handleLoadViewpoint = useCallback((vp: any) => {
-        if (!sceneMgr.current || !vp.cameraState) return;
-        sceneMgr.current.setCameraState(vp.cameraState);
-        setToast({ message: `${t("viewpoint_loading")}: ${vp.name}`, type: 'info' });
-    }, [t]);
-
-    const handleOverwriteViewpoint = useCallback((id: string) => {
-        const viewpoint = viewpoints.find((vp) => vp.id === id);
-        if (!viewpoint) return;
-        handleSaveViewpoint(viewpoint.name, id);
-    }, [handleSaveViewpoint, viewpoints]);
-
-    const handleDeleteViewpoint = useCallback((id: string) => {
-        const viewpoint = viewpoints.find((vp) => vp.id === id);
-        setConfirmState({
-            isOpen: true,
-            title: t("viewpoint_title"),
-            message: `${t("confirm_delete")} "${viewpoint?.name || "Viewpoint"}"?`,
-            action: () => {
-                const nextViewpoints = viewpoints.filter(v => v.id !== id);
-                persistViewpoints(nextViewpoints);
-            }
-        });
-    }, [persistViewpoints, t, viewpoints]);
-
-    // 1. 使用 ResizeObserver 处理容器尺寸变化
-    useEffect(() => {
-        if (!viewportRef.current || !mgrInstance) return;
-        
-        const observer = new ResizeObserver((entries) => {
-             if (!entries || entries.length === 0) return;
-             
-             const { width, height } = entries[0].contentRect;
-             if (width === 0 || height === 0) return;
-
-             requestAnimationFrame(() => {
-                if (mgrInstance) {
-                    mgrInstance.resize(width, height);
-                }
-             });
-        });
-        
-        observer.observe(viewportRef.current);
-
-        // 额外的 window resize 监听作为兜底
-        const handleWindowResize = () => {
-            if (mgrInstance && viewportRef.current) {
-                const rect = viewportRef.current.getBoundingClientRect();
-                mgrInstance.resize(rect.width, rect.height);
-            }
-        };
-        window.addEventListener('resize', handleWindowResize);
-
-        return () => {
-            observer.disconnect();
-            window.removeEventListener('resize', handleWindowResize);
-        };
-    }, [mgrInstance]);
-
-    // 2. 全局拖拽支持
-    useEffect(() => {
-        const handleDragOver = (e: DragEvent) => {
-            if (!allowDragOpen) return;
-            e.preventDefault();
-            e.stopPropagation();
-        };
-
-        const handleDrop = async (e: DragEvent) => {
-            if (!allowDragOpen) return;
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-                const files = Array.from(e.dataTransfer.files);
-                // 检查格式支持
-                const supportedExtensions = ['.lmb', '.glb', '.gltf', '.ifc', '.nbim', '.fbx', '.obj', '.stl', '.ply', '.3ds', '.dae', '.stp', '.step', '.igs', '.iges'];
-                const unsupportedFiles = files.filter(f => {
-                    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
-                    return !supportedExtensions.includes(ext);
-                });
-
-                if (unsupportedFiles.length > 0) {
-                    setToast({ 
-                        message: `${t("failed")}: 不支持的格式 - ${unsupportedFiles.map(f => f.name).join(', ')}`, 
-                        type: 'error' 
-                    });
-                }
-
-                const supportedFiles = files.filter(f => {
-                    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
-                    return supportedExtensions.includes(ext);
-                });
-
-                if (supportedFiles.length > 0) {
-                    // 调用加载逻辑
-                    await processFiles(supportedFiles);
-                }
-            }
-        };
-
-        window.addEventListener('dragover', handleDragOver);
-        window.addEventListener('drop', handleDrop);
-
-        return () => {
-            window.removeEventListener('dragover', handleDragOver);
-            window.removeEventListener('drop', handleDrop);
-        };
-    }, [lang, allowDragOpen, t]);
+    const {
+        viewpoints,
+        handleSaveViewpoint,
+        handleUpdateViewpointName,
+        handleLoadViewpoint,
+        handleOverwriteViewpoint,
+        handleDeleteViewpoint
+    } = useViewpoints({
+        currentFileSetId,
+        sceneMgrRef: sceneMgr,
+        setToast,
+        setConfirmState,
+        t
+    });
 
     // 3. 当布局状态变化时强制触发一次 resize
     useEffect(() => {
@@ -1045,24 +809,6 @@ export const ThreeViewer = ({
             manager.dispose();
         };
     }, []); 
-
-    useEffect(() => {
-        if (!mgrInstance || !showStats) return;
-
-        const updateStats = () => {
-            if (document.visibilityState !== 'visible') return;
-            setStats(mgrInstance.getStats());
-        };
-
-        updateStats();
-        const statsInterval = window.setInterval(updateStats, 1000);
-        document.addEventListener('visibilitychange', updateStats);
-
-        return () => {
-            window.clearInterval(statsInterval);
-            document.removeEventListener('visibilitychange', updateStats);
-        };
-    }, [mgrInstance, showStats]);
 
     // --- Effect for Initial Files ---
     useEffect(() => {
@@ -1374,249 +1120,29 @@ export const ThreeViewer = ({
 
 
     // --- 处理函数 ---
-
-    const handleSelect = async (obj: any, _intersect?: THREE.Intersection | null, isMultiSelect: boolean = false) => {
-        if (!sceneMgr.current) return;
-        
-        if (!obj) {
-            setSelectedUuids([]);
-            setSelectedProps(null);
-            sceneMgr.current.highlightObjects([]);
-            return;
-        }
-
-        // 统一处理 UUID (兼容 Object3D 和 StructureTreeNode)
-        const rawUuid = obj.uuid || obj.id;
-        const uuid = sceneMgr.current ? sceneMgr.current.resolveSelectionUuid(rawUuid) : rawUuid;
-        if (!uuid) return;
-
-        const nextUuids = isMultiSelect
-            ? (selectedUuids.includes(uuid) ? selectedUuids.filter(id => id !== uuid) : [...selectedUuids, uuid])
-            : [uuid];
-        setSelectedUuids(nextUuids);
-        sceneMgr.current.highlightObjects(nextUuids);
-        
-        const focusUuid = nextUuids.length > 0 ? nextUuids[nextUuids.length - 1] : null;
-        if (!focusUuid) {
-            setSelectedProps(null);
-            return;
-        }
-        
-        if (propOnSelect) propOnSelect(focusUuid, obj);
-        
-        // 尝试获取真实的 Object3D 以获得更多几何信息
-        let realObj = focusUuid === uuid && obj instanceof THREE.Object3D
-            ? obj
-            : sceneMgr.current.contentGroup.getObjectByProperty("uuid", focusUuid);
-        if (!realObj) {
-            const nodes = sceneMgr.current.getStructureNodes(focusUuid);
-            if (nodes && nodes.length > 0) realObj = nodes[0] as any;
-        }
-        
-        // 如果还是没找到，可能是优化后的对象，尝试从 SceneManager 获取
-        if (!realObj && sceneMgr.current) {
-            // 如果是 NBIM 模式，可能只能得到一个代理对象
-            // 我们在 getRayIntersects 中已经处理了代理对象的创建
-        }
-
-        const target = realObj || obj; // 优先使用真实对象，否则使用传入的对象（可能是 StructureTreeNode）
-        const targetElevation =
-            typeof target?.userData?.ifcMetadata?.elevation === "number"
-                ? target.userData.ifcMetadata.elevation
-                : (target instanceof THREE.Object3D
-                    ? (() => {
-                        let cursor: THREE.Object3D | null = target;
-                        while (cursor) {
-                            const elevation = cursor.userData?.ifcMetadata?.elevation;
-                            if (typeof elevation === "number" && Number.isFinite(elevation)) return elevation;
-                            cursor = cursor.parent;
-                        }
-                        return undefined;
-                    })()
-                    : undefined);
-
-        const basicProps: Record<string, string> = {};
-        const geoProps: Record<string, string> = {};
-        let ifcGroups: Record<string, PropertyGroupInput> | null = null;
-
-        const wrappedId = sceneMgr.current?.getBimIdByUuid(focusUuid) || focusUuid;
-        basicProps[t("prop_id")] = wrappedId;
-        basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
-        if (typeof targetElevation === "number" && Number.isFinite(targetElevation)) {
-            basicProps[t("prop_storey_elevation") || "楼层标高"] = String(targetElevation);
-        }
-        
-        if (target.getWorldPosition) {
-            const worldPos = new THREE.Vector3();
-            target.getWorldPosition(worldPos);
-            geoProps[t("prop_pos")] = `${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)}`;
-        }
-        
-        if (target.isMesh || target.type === 'Mesh') {
-             // 几何信息
-             if (target instanceof THREE.Mesh) {
-                const box = new THREE.Box3().setFromObject(target);
-                const size = new THREE.Vector3();
-                box.getSize(size);
-                geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
-                
-                if (target.geometry) {
-                    geoProps[t("prop_vert")] = (target.geometry.attributes.position?.count || 0).toLocaleString();
-                    if(target.geometry.index) {
-                        geoProps[t("prop_tri")] = (target.geometry.index.count / 3).toLocaleString();
-                    } else {
-                        geoProps[t("prop_tri")] = ((target.geometry.attributes.position?.count || 0) / 3).toLocaleString();
-                    }
-                }
-             } else if (target.userData?.boundingBox) {
-                const size = new THREE.Vector3();
-                target.userData.boundingBox.getSize(size);
-                geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
-             }
-             
-             if (target.isInstancedMesh) {
-                 geoProps[t("prop_inst")] = target.count.toLocaleString();
-             }
-
-            // --- 面积和体积计算 ---            
-            const geometryData = sceneMgr.current.getObjectGeometryData(focusUuid);
-            if (geometryData.area > 0) {
-                geoProps[t("prop_area")] = geometryData.area.toFixed(3);
-            }
-            if (geometryData.volume > 0) {
-                geoProps[t("prop_volume")] = geometryData.volume.toFixed(3);
-            }
-
-        } else if (target.userData?.boundingBox) {
-             const size = new THREE.Vector3();
-             target.userData.boundingBox.getSize(size);
-             geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
-        }
-
-        // --- IFC 属性获取逻辑 ---
-        const resolveIfcContext = (candidate: any) => {
-            let cursor = candidate instanceof THREE.Object3D ? candidate : null;
-            let expressID: number | undefined = candidate?.userData?.expressID;
-
-            while (cursor) {
-                if (cursor.userData?.expressID !== undefined && expressID === undefined) {
-                    expressID = cursor.userData.expressID;
-                }
-                if (cursor.userData?.ifcManager && cursor.userData?.modelID !== undefined) {
-                    return {
-                        ifcRoot: cursor,
-                        expressID
-                    };
-                }
-                cursor = cursor.parent;
-            }
-
-            return null;
-        };
-
-        const ifcContext = resolveIfcContext(target);
-        if (ifcContext?.ifcRoot && ifcContext.expressID !== undefined) {
-            try {
-                const cacheKey = `${ifcContext.ifcRoot.userData.modelID}:${ifcContext.expressID}`;
-                ifcGroups = ifcPropertyCacheRef.current.get(cacheKey) || null;
-                if (!ifcGroups) {
-                    const ifcMgr = ifcContext.ifcRoot.userData.ifcManager;
-                    const ifcProps = await ifcMgr.getItemProperties(ifcContext.ifcRoot.userData.modelID, ifcContext.expressID);
-                    ifcGroups = ifcProps?.rawGroups || ifcProps?.groups || ifcProps?.normalizedGroups || null;
-                    if (ifcGroups) {
-                        ifcPropertyCacheRef.current.set(cacheKey, ifcGroups);
-                    }
-                }
-            } catch (e) {
-                console.error("IFC Props Error", e);
-            }
-        }
-
-        const nbimProps = sceneMgr.current.getNbimProperties(focusUuid);
-        const nbimIfcGroups = sceneMgr.current.getNbimIfcPropertyGroups(focusUuid, "raw");
-
-        if (IS_DEV && nbimProps && Object.keys(nbimProps).length > 0) {
-            console.group(`NBIM 选中属性: ${focusUuid}`);
-            console.log(nbimProps);
-            console.log(JSON.stringify(nbimProps, null, 2));
-            console.groupEnd();
-        }
-
-        if (IS_DEV && nbimIfcGroups) {
-            console.group(`NBIM IFC 组属性: ${focusUuid}`);
-            console.log(nbimIfcGroups);
-            console.log(JSON.stringify(nbimIfcGroups, null, 2));
-            console.groupEnd();
-        }
-        const mergedIfcGroups = ifcGroups || nbimIfcGroups || null;
-        const selectedGroups = buildSelectedPropertyGroups({
-            basicLabel: t("pg_basic"),
-            geoLabel: t("pg_geo"),
-            basicProps,
-            geoProps,
-            ifcProps: mergedIfcGroups,
-            nbimProps: null
-        });
-
-        const clashSummary = clashSummaryByUuid[focusUuid];
-        if (clashSummary) {
-            const clashLabel = t("pg_clash") || "碰撞状态";
-            selectedGroups.push({
-                name: clashLabel,
-                items: createPropertyEntries(clashLabel, [
-                    { key: t("clash_group_all") || "全部", value: String(clashSummary.total) },
-                    { key: t("clash_group_new") || "新建", value: String(clashSummary.newCount) },
-                    { key: t("clash_group_confirmed") || "已确认", value: String(clashSummary.confirmedCount) },
-                    { key: t("clash_group_resolved") || "已解决", value: String(clashSummary.resolvedCount) },
-                    { key: t("prop_status") || "状态", value: t(`clash_group_${clashSummary.worstStatus}`) || clashSummary.worstStatus }
-                ].map((item, index) => ({ ...item, id: `clash-summary::${index}` })))
-            });
-        }
-
-        setSelectedProps(selectedGroups);
-    };
-
-    const handleLocateObject = useCallback((obj: any) => {
-        if (!sceneMgr.current || !obj) return;
-        const uuid = obj.uuid || obj.id;
-        if (!uuid) return;
-
-        setLocatedUuid(uuid);
-        // 定位统一走“隔离 + 视图聚焦”，避免全场景材质克隆导致卡顿
-        sceneMgr.current.clearLocateFocus();
-        sceneMgr.current.isolateObjects([uuid]);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set([uuid]));
-        updateTree();
-
-        sceneMgr.current.fitViewToObject(uuid);
-        void handleSelect(obj);
-    }, [handleSelect, updateTree]);
-
-    const handleLocateResultsChange = useCallback((uuids: string[]) => {
-        const changed = !(locateResultUuids.length === uuids.length && locateResultUuids.every((uuid, index) => uuid === uuids[index]));
-        if (!changed) return;
-        setLocateResultUuids(uuids);
-        if (!sceneMgr.current) return;
-        if (uuids.length === 0) {
-            sceneMgr.current.clearLocateFocus();
-            sceneMgr.current.setAllVisibility(true);
-            setHiddenUuids(new Set());
-            setIsolatedUuids(new Set());
-            updateTree();
-        }
-    }, [locateResultUuids, updateTree]);
-
-    const handleClearLocate = useCallback(() => {
-        setLocatedUuid(null);
-        setLocateResultUuids([]);
-        sceneMgr.current?.clearLocateFocus();
-        sceneMgr.current?.setAllVisibility(true);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set());
-        sceneMgr.current?.highlightObjects(selectedUuids);
-        updateTree();
-    }, [selectedUuids, updateTree]);
+    const {
+        locatedUuid,
+        locateResultUuids,
+        resetLocateState,
+        handleSelect,
+        handleLocateObject,
+        handleLocateResultsChange,
+        handleClearLocate
+    } = useViewerSelection({
+        sceneMgrRef: sceneMgr,
+        selectedUuids,
+        setSelectedUuids,
+        setSelectedProps,
+        setHiddenUuids,
+        setIsolatedUuids,
+        updateTree,
+        propOnSelect,
+        ifcPropertyCacheRef,
+        clashSummaryByUuid,
+        t,
+        isDev: IS_DEV
+    });
+    resetLocateStateRef.current = resetLocateState;
 
     const {
         searchConditions,
@@ -1666,6 +1192,16 @@ export const ThreeViewer = ({
         setProgress,
         setToast,
         updateTree
+    });
+
+    useViewportLifecycle({
+        allowDragOpen,
+        mgrInstance,
+        viewportRef,
+        t,
+        processFiles,
+        setToast,
+        setErrorState
     });
 
     const handleOpenFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1768,14 +1304,6 @@ export const ThreeViewer = ({
         }
     };
 
-    const stripFileExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
-    const sanitizeFileStem = (name: string) => {
-        const sanitized = name
-            .replace(/[\\/:*?"<>|]/g, "_")
-            .replace(/\s+/g, " ")
-            .trim();
-        return sanitized || "model";
-    };
     const getExportModelNames = useCallback(() => {
         if (!sceneMgr.current) return [] as string[];
         const content = sceneMgr.current.contentGroup;
@@ -1902,7 +1430,7 @@ export const ThreeViewer = ({
                 try {
                     await sceneMgr.current?.clear();
                     setSelectedUuids([]);
-                    setLocatedUuid(null);
+                    resetLocateState();
                     setSelectedProps(null);
                     handleClearSearchResult();
                     resetClashState();
