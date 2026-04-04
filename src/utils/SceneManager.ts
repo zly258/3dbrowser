@@ -20,6 +20,13 @@ import {
     applySetLocateResultSet
 } from "./sceneManagerHighlight";
 import {
+    applyAddMeasurePoint,
+    applyClearMeasurementPreview,
+    applyFinalizeMeasurement,
+    applyUpdateMeasureHover,
+    applyUpdateMeasurePreview
+} from "./sceneManagerMeasurement";
+import {
     applyGetRayIntersects,
     ensureInteractableList,
     selectInteractablesByScreenRect
@@ -3469,6 +3476,38 @@ export class SceneManager {
         this.interactableListValid = state.interactableListValid;
     }
 
+    private getMeasurementContext() {
+        return {
+            measureGroup: this.measureGroup,
+            tempMarker: this.tempMarker,
+            dotTexture: this.dotTexture,
+            measureRecords: this.measureRecords,
+            state: {
+                measureType: this.measureType,
+                currentMeasurePoints: this.currentMeasurePoints,
+                currentMeasureModelUuid: this.currentMeasureModelUuid,
+                previewLine: this.previewLine,
+                previewPolygon: this.previewPolygon
+            },
+            getRayIntersects: (clientX: number, clientY: number) => this.getRayIntersects(clientX, clientY),
+            onMeasureUpdate: this.onMeasureUpdate
+        };
+    }
+
+    private syncMeasurementState(state: {
+        measureType: MeasureType;
+        currentMeasurePoints: THREE.Vector3[];
+        currentMeasureModelUuid: string | null;
+        previewLine: THREE.Line | null;
+        previewPolygon: THREE.LineLoop | null;
+    }) {
+        this.measureType = state.measureType;
+        this.currentMeasurePoints = state.currentMeasurePoints;
+        this.currentMeasureModelUuid = state.currentMeasureModelUuid;
+        this.previewLine = state.previewLine;
+        this.previewPolygon = state.previewPolygon;
+    }
+
     setAllVisibility(visible: boolean) {
         const result = applySetAllVisibility(this.getVisibilityContext(), visible);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
@@ -4342,214 +4381,32 @@ export class SceneManager {
     }
 
     addMeasurePoint(point: THREE.Vector3, modelUuid?: string): { id: string, type: string, val: string } | null {
-        if (this.measureType === 'none') return null;
-
-        // 如果传入了模型 UUID，则记录到当前测量中
-        if (modelUuid) {
-            this.currentMeasureModelUuid = modelUuid;
-        }
-
-        this.currentMeasurePoints.push(point);
-        // 临时点标记只在预览阶段显示，finalize 时会清除预览并重新生成正式点
-        this.addMarker(point, this.measureGroup);
-
-        // 检查完成状态
-        if (this.measureType === 'dist' && this.currentMeasurePoints.length === 2) {
-            return this.finalizeMeasurement();
-        } else if (this.measureType === 'angle' && this.currentMeasurePoints.length === 3) {
-            return this.finalizeMeasurement();
-        } else if (this.measureType === 'coord') {
-            return this.finalizeMeasurement();
-        }
-
-        this.updateMeasurePreview(); // 统一调用预览更新
-        this.requestRender();
-        return null;
+        const context = this.getMeasurementContext();
+        const result = applyAddMeasurePoint(context, point, modelUuid);
+        this.syncMeasurementState(result.state);
+        if (result.needsRender) this.requestRender();
+        return result.completed ?? null;
     }
 
     private updateMeasurePreview(hoverPoint?: THREE.Vector3) {
-        if (this.previewLine) {
-            this.measureGroup.remove(this.previewLine);
-            this.previewLine = null;
-        }
-        if (this.previewPolygon) {
-            this.measureGroup.remove(this.previewPolygon);
-            this.previewPolygon = null;
-        }
-
-        const points = [...this.currentMeasurePoints];
-        if (hoverPoint) points.push(hoverPoint);
-        if (points.length < 2) return;
-
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineDashedMaterial({
-            color: 0xff0000,
-            dashSize: 5,
-            gapSize: 2,
-            depthTest: false
-        });
-
-        this.previewLine = new THREE.Line(geometry, material);
-        this.previewLine.computeLineDistances();
-        this.previewLine.renderOrder = 998;
-        this.measureGroup.add(this.previewLine);
+        const context = this.getMeasurementContext();
+        const result = applyUpdateMeasurePreview(context, hoverPoint);
+        this.syncMeasurementState(result.state);
     }
 
     updateMeasureHover(clientX: number, clientY: number) {
-        if (this.measureType === 'none') {
-            this.tempMarker.visible = false;
-            return;
-        }
-
-        const intersect = this.getRayIntersects(clientX, clientY);
-        if (intersect) {
-            const p = intersect.point;
-            const attr = this.tempMarker.geometry.attributes.position as THREE.BufferAttribute;
-            attr.setXYZ(0, p.x, p.y, p.z);
-            attr.needsUpdate = true;
-            this.tempMarker.visible = true;
-
-            if (this.currentMeasurePoints.length > 0) {
-                this.updateMeasurePreview(p);
-            }
-        } else {
-            this.tempMarker.visible = false;
-            if (this.previewLine) this.previewLine.visible = false;
-        }
-        this.requestRender();
+        const context = this.getMeasurementContext();
+        const result = applyUpdateMeasureHover(context, clientX, clientY);
+        this.syncMeasurementState(result.state);
+        if (result.needsRender) this.requestRender();
     }
 
     finalizeMeasurement() {
-        const id = `measure_${Date.now()}`;
-        const group = new THREE.Group();
-        group.name = id;
-
-        this.currentMeasurePoints.forEach(p => this.addMarker(p, group));
-
-        let valStr = "";
-        let displayVal = "";
-        let typeStr = this.measureType;
-        let labelPos = new THREE.Vector3();
-
-        if (this.measureType === 'dist') {
-            const p1 = this.currentMeasurePoints[0];
-            const p2 = this.currentMeasurePoints[1];
-            const dist = p1.distanceTo(p2);
-
-            const dx = Math.abs(p2.x - p1.x);
-            const dy = Math.abs(p2.y - p1.y);
-            const dz = Math.abs(p2.z - p1.z);
-
-            displayVal = dist.toFixed(3);
-            valStr = `${displayVal} (Δx:${dx.toFixed(2)}, Δy:${dy.toFixed(2)}, Δz:${dz.toFixed(2)})`;
-            this.addLine(this.currentMeasurePoints, group);
-            labelPos.copy(p1).add(p2).multiplyScalar(0.5);
-        } else if (this.measureType === 'angle') {
-            const p1 = this.currentMeasurePoints[0];
-            const center = this.currentMeasurePoints[1];
-            const p2 = this.currentMeasurePoints[2];
-            const v1 = p1.clone().sub(center).normalize();
-            const v2 = p2.clone().sub(center).normalize();
-            const angle = v1.angleTo(v2) * (180 / Math.PI);
-            displayVal = angle.toFixed(2) + "°";
-            valStr = displayVal;
-            this.addLine(this.currentMeasurePoints, group);
-            labelPos.copy(center);
-        } else {
-            const p = this.currentMeasurePoints[0];
-            displayVal = `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
-            valStr = displayVal;
-            labelPos.copy(p);
-        }
-
-        // 添加数字显示标签
-        const label = this.createLabel(displayVal, labelPos);
-        group.add(label);
-
-        this.measureGroup.add(group);
-        this.measureRecords.set(id, {
-            id,
-            type: typeStr,
-            val: valStr,
-            group,
-            modelUuid: this.currentMeasureModelUuid || undefined
-        });
-
-        this.currentMeasurePoints = [];
-        this.currentMeasureModelUuid = null;
-        this.clearMeasurementPreview();
-
-        if (this.onMeasureUpdate) {
-            this.onMeasureUpdate(Array.from(this.measureRecords.values()));
-        }
-
-        this.requestRender();
-        return { id, type: typeStr, val: valStr };
-    }
-
-    private createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return new THREE.Sprite();
-
-        // 提高分辨率以获得更清晰的文字
-        const fontSize = 48;
-        const padding = 24;
-        ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
-        const textWidth = ctx.measureText(text).width;
-
-        canvas.width = textWidth + padding * 2;
-        canvas.height = fontSize + padding;
-
-        // 绘制带阴影的背景
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 10;
-        ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
-
-        const radius = 8;
-        // @ts-ignore
-        if (ctx.roundRect) {
-            // @ts-ignore
-            ctx.roundRect(5, 5, canvas.width - 10, canvas.height - 10, radius);
-        } else {
-            ctx.rect(5, 5, canvas.width - 10, canvas.height - 10);
-        }
-        ctx.fill();
-
-        // 绘制边框
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = '#ff0000';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // 绘制文字
-        ctx.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-
-        const spriteMaterial = new THREE.SpriteMaterial({
-            map: texture,
-            depthTest: false,
-            sizeAttenuation: false // 关键：使文字不受相机缩放影响
-        });
-
-        const sprite = new THREE.Sprite(spriteMaterial);
-        sprite.position.copy(position);
-
-        // 由于 sizeAttenuation 为 false，scale 现在代表在屏幕空间占用的比例 (0.0 到 1.0)
-        // 设定一个合适的大小，例如占据屏幕高度的 10%
-        const baseScale = 0.5;
-        sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
-        sprite.renderOrder = 1001;
-        sprite.userData = { type: 'label' };
-
-        return sprite;
+        const context = this.getMeasurementContext();
+        const result = applyFinalizeMeasurement(context);
+        this.syncMeasurementState(result.state);
+        if (result.needsRender) this.requestRender();
+        return result.completed ?? null;
     }
 
     highlightMeasurement(id: string | null) {
@@ -4599,72 +4456,6 @@ export class SceneManager {
             }
         }
         return null;
-    }
-
-    addMarker(point: THREE.Vector3, parent: THREE.Object3D) {
-        const markerGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([point.x, point.y, point.z], 3));
-        const markerMat = new THREE.PointsMaterial({ color: 0xff0000, size: 8, map: this.dotTexture, transparent: true, alphaTest: 0.5, depthTest: false });
-        const marker = new THREE.Points(markerGeo, markerMat);
-        marker.renderOrder = 999;
-        parent.add(marker);
-    }
-
-    addLine(points: THREE.Vector3[], parent: THREE.Object3D) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ color: 0xff0000, depthTest: false, linewidth: 2 });
-        const line = new THREE.Line(geometry, material);
-        line.renderOrder = 998;
-        parent.add(line);
-    }
-
-    private addLineLoop(points: THREE.Vector3[], parent: THREE.Object3D) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ color: 0xff0000, depthTest: false, linewidth: 2 });
-        const line = new THREE.LineLoop(geometry, material);
-        line.renderOrder = 998;
-        parent.add(line);
-    }
-
-    private addPolygonFill(points: THREE.Vector3[], parent: THREE.Object3D) {
-        if (points.length < 3) return;
-        // 使用 ShapeGeometry 创建填充面
-        const shape = new THREE.Shape();
-        // 将3D点投影到拟合平面上
-        const v1 = new THREE.Vector3().subVectors(points[1], points[0]);
-        const v2 = new THREE.Vector3().subVectors(points[2], points[0]);
-        const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
-        // 建立局部2D坐标系
-        const tangent = v1.normalize();
-        const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
-        const origin = points[0];
-        // 将所有点投影到2D
-        const toLocal = (p: THREE.Vector3): [number, number] => {
-            const d = new THREE.Vector3().subVectors(p, origin);
-            return [d.dot(tangent), d.dot(bitangent)];
-        };
-        shape.moveTo(...toLocal(points[0]));
-        for (let i = 1; i < points.length; i++) {
-            shape.lineTo(...toLocal(points[i]));
-        }
-        shape.closePath();
-        const geometry = new THREE.ShapeGeometry(shape);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xff0000,
-            transparent: true,
-            opacity: 0.15,
-            depthTest: false,
-            side: THREE.DoubleSide,
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.renderOrder = 997;
-        // 将mesh放到拟合平面的世界空间位置
-        const matrix = new THREE.Matrix4();
-        matrix.makeBasis(tangent, bitangent, normal);
-        matrix.setPosition(origin);
-        mesh.matrixAutoUpdate = false;
-        mesh.matrix.copy(matrix);
-        mesh.applyMatrix4(matrix);
-        parent.add(mesh);
     }
 
     private computeGeometryVolume(geometry: THREE.BufferGeometry, mesh: THREE.Mesh, instanceId?: number): number {
@@ -4907,23 +4698,9 @@ export class SceneManager {
     }
 
     clearMeasurementPreview() {
-        this.currentMeasurePoints = [];
-        if (this.previewLine) {
-            this.measureGroup.remove(this.previewLine);
-            this.previewLine = null;
-        }
-        if (this.previewPolygon) {
-            this.measureGroup.remove(this.previewPolygon);
-            this.previewPolygon = null;
-        }
-        this.tempMarker.visible = false;
-        // 清理
-        for (let i = this.measureGroup.children.length - 1; i >= 0; i--) {
-            const child = this.measureGroup.children[i];
-            if (!child.name.startsWith("measure_") && child !== this.previewLine && child !== this.previewPolygon) {
-                this.measureGroup.remove(child);
-            }
-        }
+        const context = this.getMeasurementContext();
+        const result = applyClearMeasurementPreview(context);
+        this.syncMeasurementState(result.state);
     }
 
     // --- 剖切逻辑 ---
