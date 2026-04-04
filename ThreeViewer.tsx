@@ -1149,13 +1149,7 @@ export const ThreeViewer = ({
     return (
         <ErrorBoundary t={t} theme={theme}>
             <div
-                className={`ui-container ${themeMode} font-medium`}
-                style={{
-                    display: "flex", flexDirection: "column", height: "100%", width: "100%", 
-                    backgroundColor: "var(--bg-primary)", color: "var(--text-primary)", 
-                    fontSize: "var(--font-size-base)", fontFamily: "inherit", 
-                    userSelect: "none", overflow: "hidden", position: "relative"
-                }}
+                className={`ui-container ui-app-shell ${themeMode} font-medium`}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
@@ -1192,14 +1186,11 @@ export const ThreeViewer = ({
              />
 
              {/* Main Content Area */}
-             <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+             <div className="ui-main-layout">
                 
                  {/* Left Sidebar: Outline */}
                 {showOutline && (
-                    <div className="ui-sidebar" style={{ 
-                        width: `${leftWidth}px`, 
-                        borderRight: '1px solid var(--border-color)',
-                    }}>
+                    <div className="ui-sidebar ui-sidebar-left" style={{ width: `${leftWidth}px` }}>
                         <div className="ui-sidebar-header">
                             <span>{t("interface_outline")}</span>
                             <button 
@@ -1209,7 +1200,7 @@ export const ThreeViewer = ({
                                 <IconClose width={16} height={16} />
                             </button>
                         </div>
-                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div className="ui-sidebar-content">
                             <SceneTree
                                 t={t}
                                 treeRoot={treeRoot}
@@ -1233,22 +1224,16 @@ export const ThreeViewer = ({
                             />
                         </div>
                         {/* Resize handle */}
-                        <div 
-                            className="ui-sidebar-resize"
-                            style={{ right: -2 }}
+                        <div
+                            className="ui-sidebar-resize ui-sidebar-resize-left"
                             onMouseDown={() => resizingLeft.current = true}
                         />
                     </div>
                 )}
 
                 {/* Center Viewport */}
-                <div ref={viewportRef} style={{ 
-                    flex: 1, 
-                    position: 'relative', 
-                    backgroundColor: theme.canvasBg,
-                    overflow: 'hidden'
-                }}>
-                    <canvas ref={canvasRef} style={{width: '100%', height: '100%', outline: 'none'}} />
+                <div ref={viewportRef} className="ui-viewport-shell" style={{ backgroundColor: theme.canvasBg }}>
+                    <canvas ref={canvasRef} className="ui-viewport-canvas" />
 
 
                     
@@ -1288,10 +1273,8 @@ export const ThreeViewer = ({
                     {/* Toast Notification */}
                     {toast && (
                         <div className="ui-toast">
-                            <div className="ui-toast-dot" style={{
-                                backgroundColor: toast.type === 'error' ? 'var(--error)' : (toast.type === 'success' ? 'var(--success)' : 'var(--info)')
-                            }} />
-                            <span style={{ fontWeight: 500 }}>{toast.message}</span>
+                            <div className={`ui-toast-dot ${toast.type === 'error' ? 'ui-toast-dot-error' : toast.type === 'success' ? 'ui-toast-dot-success' : 'ui-toast-dot-info'}`} />
+                            <span className="ui-toast-message">{toast.message}</span>
                             <button
                                 className="ui-toast-close"
                                 onClick={() => setToast(null)}
@@ -1482,10 +1465,7 @@ export const ThreeViewer = ({
 
                 {/* Right Sidebar: Properties */}
                 {showProps && (
-                    <div className="ui-sidebar" style={{ 
-                        width: `${rightWidth}px`, 
-                        borderLeft: `1px solid ${theme.border}`,
-                    }}>
+                    <div className="ui-sidebar ui-sidebar-right" style={{ width: `${rightWidth}px` }}>
                         <div className="ui-sidebar-header">
                             <span>{t("interface_props")}</span>
                             <button
@@ -1495,14 +1475,13 @@ export const ThreeViewer = ({
                                 <IconClose width={16} height={16} />
                             </button>
                         </div>
-                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div className="ui-sidebar-content">
                             <PropertiesPanel t={t} selectedProps={selectedProps} selectedSummary={selectedSummary} theme={theme} />
                         </div>
                         {/* Resize handle */}
-                        <div 
+                        <div
                             onMouseDown={() => resizingRight.current = true}
-                            className="ui-sidebar-resize"
-                            style={{ left: -2 }}
+                            className="ui-sidebar-resize ui-sidebar-resize-right"
                         />
                     </div>
                 )}
@@ -1514,7 +1493,7 @@ export const ThreeViewer = ({
                     <span>{status}</span>
                     {loading && <span>{progress}%</span>}
                     {selectedUuid && selectedUuids.length > 1 && (
-                        <span style={{ opacity: 0.8, paddingLeft: '8px', borderLeft: `1px solid ${theme.border}` }}>
+                        <span className="ui-statusbar-meta">
                             {t("selected_count") || "已选择"}: {selectedUuids.length}
                         </span>
                     )}
@@ -1523,7 +1502,7 @@ export const ThreeViewer = ({
                             <span>
                                 {t("chunk_loading") || "分片加载"}: {chunkProgress.loaded}/{chunkProgress.total}
                             </span>
-                            <div className="ui-progress-bar" style={{ width: '80px' }}>
+                            <div className="ui-progress-bar ui-progress-bar-compact">
                                 <div
                                     className="ui-progress-fill"
                                     style={{ width: `${(chunkProgress.loaded / chunkProgress.total) * 100}%` }}
@@ -1546,7 +1525,7 @@ export const ThreeViewer = ({
                 </div>
                 <div className="ui-statusbar-right">
                     {mousePos && (
-                        <div style={{ opacity: 0.85 }}>
+                        <div className="ui-statusbar-coords">
                             {mousePos.x.toFixed(2)}, {mousePos.y.toFixed(2)}, {mousePos.z.toFixed(2)}
                         </div>
                     )}
@@ -1570,16 +1549,16 @@ export const ThreeViewer = ({
                                 <span>{formatMemory(stats.memory)}</span>
                             </div>
                             {stats.chunksTotal > 0 && (
-                                <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Chunks">
+                                <div className="ui-statusbar-metric" title="Chunks">
                                     CH {stats.chunksLoaded}/{stats.chunksTotal}
                                 </div>
                             )}
-                            <div style={{ opacity: 0.75, fontVariantNumeric: 'tabular-nums' }} title="Pixel Ratio">
+                            <div className="ui-statusbar-metric" title="Pixel Ratio">
                                 DPR {stats.pixelRatio}
                             </div>
                         </div>
                     )}
-                    <div className="ui-divider-vertical ui-divider-vertical-compact" style={{ height: '12px' }} />
+                    <div className="ui-divider-vertical ui-divider-vertical-compact ui-divider-vertical-short" />
                     <button
                         className="ui-statusbar-btn ui-statusbar-btn-compact"
                         onClick={() => handleThemeModeChange(themeMode === 'dark' ? 'light' : 'dark')}
@@ -1593,9 +1572,9 @@ export const ThreeViewer = ({
                     >
                         {lang === 'zh' ? 'EN' : '中文'}
                     </button>
-                    <div className="ui-divider-vertical ui-divider-vertical-compact" style={{ height: '12px' }} />
+                    <div className="ui-divider-vertical ui-divider-vertical-compact ui-divider-vertical-short" />
                     <div className="ui-statusbar-tag ui-statusbar-tag-compact ui-statusbar-brand">
-                        <span style={{ fontWeight: '600', letterSpacing: '0.5px' }}>3D BROWSER</span>
+                        <span className="ui-statusbar-brand-label">3D BROWSER</span>
                     </div>
                 </div>
              </div>
@@ -1616,24 +1595,21 @@ export const ThreeViewer = ({
              {/* Error Modal */}
              {errorState.isOpen && (
                 <div className="ui-error-overlay">
-                    <div className="ui-error-content" style={{ width: '450px' }}>
-                        <div className="ui-error-header" style={{ backgroundColor: 'var(--error)', color: 'white' }}>
+                    <div className="ui-error-content ui-error-content-wide">
+                        <div className="ui-error-header ui-error-header-danger">
                             <span>{errorState.title}</span>
                             <div 
                                 onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))} 
-                                style={{ cursor: 'pointer', display: 'flex', padding: 2, borderRadius: '50%' }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                className="ui-error-close"
                             >
                                 <IconClose width={18} height={18} />
                             </div>
                         </div>
-                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ fontWeight: '600', fontSize: '15px', color: theme.text }}>{errorState.message}</div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                        <div className="ui-error-body">
+                            <div className="ui-error-message">{errorState.message}</div>
+                            <div className="ui-error-actions">
                                 <button 
-                                    className="ui-btn ui-btn-primary"
-                                    style={{ padding: '8px 24px' }}
+                                    className="ui-btn ui-btn-primary ui-btn-modal-confirm"
                                     onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))}
                                 >
                                     {t("confirm") || "确定"}
