@@ -13,6 +13,13 @@ import { deriveInitialRuntimeFromHardware } from "./scene/chunkRuntime";
 import { debugLog, debugWarn } from "./scene/debugLogger";
 import { stableExplodeDirection } from "./scene/explode";
 import { readNbimHeader, readNbimManifest, type NbimManifest } from "./scene/nbimIO";
+import {
+    applyCancelBoxSelect,
+    applyEndBoxSelect,
+    applyStartBoxSelect,
+    applyUpdateBoxSelect,
+    createInitialBoxSelectState
+} from "./sceneManagerBoxSelect";
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import {
     applyClearLocateFocus,
@@ -165,14 +172,7 @@ export class SceneManager {
     measureRecords: Map<string, MeasurementRecord> = new Map();
 
     // 框选状态
-    private boxSelectState = {
-        active: false,
-        startX: 0,
-        startY: 0,
-        endX: 0,
-        endY: 0,
-        rectElement: null as HTMLDivElement | null,
-    };
+    private boxSelectState = createInitialBoxSelectState();
 
     // 裁剪状态
     clippingPlanes: THREE.Plane[] = [];
@@ -3514,6 +3514,10 @@ export class SceneManager {
         this.previewPolygon = state.previewPolygon;
     }
 
+    private syncBoxSelectState(state: typeof this.boxSelectState) {
+        this.boxSelectState = state;
+    }
+
     setAllVisibility(visible: boolean) {
         const result = applySetAllVisibility(this.getVisibilityContext(), visible);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
@@ -4547,78 +4551,35 @@ export class SceneManager {
      * 开始框选
      */
     startBoxSelect(clientX: number, clientY: number) {
-        this.boxSelectState.active = true;
-        this.boxSelectState.startX = clientX;
-        this.boxSelectState.startY = clientY;
-        this.boxSelectState.endX = clientX;
-        this.boxSelectState.endY = clientY;
-        this.updateBoxSelectRect();
+        const result = applyStartBoxSelect(this.boxSelectState, clientX, clientY);
+        this.syncBoxSelectState(result.state);
     }
 
     /**
      * 更新框选范围
      */
     updateBoxSelect(clientX: number, clientY: number) {
-        if (!this.boxSelectState.active) return;
-        this.boxSelectState.endX = clientX;
-        this.boxSelectState.endY = clientY;
-        this.updateBoxSelectRect();
+        const result = applyUpdateBoxSelect(this.boxSelectState, clientX, clientY);
+        this.syncBoxSelectState(result.state);
     }
 
     /**
      * 完成框选，返回选中的对象 UUID 列表
      */
     endBoxSelect(): string[] {
-        if (!this.boxSelectState.active) return [];
-        this.boxSelectState.active = false;
-        this.removeBoxSelectRect();
-
-        const { startX, startY, endX, endY } = this.boxSelectState;
-        const dx = Math.abs(endX - startX);
-        const dy = Math.abs(endY - startY);
-        // 忽略太小的框（可能是误触）
-        if (dx < 5 || dy < 5) return [];
-
-        // 计算屏幕空间 NDC 坐标
-        const rect = this.canvas.getBoundingClientRect();
-        const x1 = (Math.min(startX, endX) - rect.left) / rect.width * 2 - 1;
-        const y1 = -(Math.max(startY, endY) - rect.top) / rect.height * 2 + 1;
-        const x2 = (Math.max(startX, endX) - rect.left) / rect.width * 2 - 1;
-        const y2 = -(Math.min(startY, endY) - rect.top) / rect.height * 2 + 1;
-
-        return this.selectByScreenRect(x1, y1, x2, y2);
+        const result = applyEndBoxSelect(this.boxSelectState, this.canvas, (x1, y1, x2, y2) =>
+            this.selectByScreenRect(x1, y1, x2, y2)
+        );
+        this.syncBoxSelectState(result.state);
+        return result.selected;
     }
 
     /**
      * 取消框选
      */
     cancelBoxSelect() {
-        this.boxSelectState.active = false;
-        this.removeBoxSelectRect();
-    }
-
-    private updateBoxSelectRect() {
-        const state = this.boxSelectState;
-        if (!state.rectElement) {
-            state.rectElement = document.createElement('div');
-            state.rectElement.style.cssText = `
-                position: fixed; border: 1px dashed #00aaff;
-                background: rgba(0, 170, 255, 0.08); pointer-events: none; z-index: 1000;
-            `;
-            document.body.appendChild(state.rectElement);
-        }
-        const { startX, startY, endX, endY } = state;
-        state.rectElement.style.left = Math.min(startX, endX) + 'px';
-        state.rectElement.style.top = Math.min(startY, endY) + 'px';
-        state.rectElement.style.width = Math.abs(endX - startX) + 'px';
-        state.rectElement.style.height = Math.abs(endY - startY) + 'px';
-    }
-
-    private removeBoxSelectRect() {
-        if (this.boxSelectState.rectElement) {
-            this.boxSelectState.rectElement.remove();
-            this.boxSelectState.rectElement = null;
-        }
+        const result = applyCancelBoxSelect(this.boxSelectState);
+        this.syncBoxSelectState(result.state);
     }
 
     /**
@@ -4881,6 +4842,7 @@ export class SceneManager {
     dispose() {
         this.disposed = true;
         this.animateFramePending = false;
+        this.cancelBoxSelect();
         disposeSceneManagerResources({
             cancelDeferredStructureBuild: () => this.cancelDeferredStructureBuild(),
             clearLocateFocus: () => this.clearLocateFocus(),
