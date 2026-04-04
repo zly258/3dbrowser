@@ -23,24 +23,16 @@ const Row: React.FC<{
   stretch?: boolean;   // 是否拉伸子控件填充剩余空间
 }> = ({ label, children, labelWidth = '80px', stretch = false }) => (
   <div
-    className="flex items-center justify-between"
-    style={{ marginBottom: '6px', minHeight: '26px', gap: '12px' }}
+    className="ui-form-row ui-form-row-tight"
   >
     <span
-      className="text-sm text-secondary flex-shrink-0"
-      style={{
-        minWidth: labelWidth,
-      }}
+      className="ui-form-label ui-form-label-dynamic"
+      style={{ ["--label-width" as any]: labelWidth }}
     >
       {label}
     </span>
     <div
-      className="flex items-center"
-      style={{
-        flex: stretch ? 1 : '0 1 auto',  // stretch时flex:1，否则不伸缩
-        justifyContent: stretch ? 'flex-start' : 'flex-end',
-        minWidth: stretch ? 0 : undefined,  // stretch时允许缩小
-      }}
+      className={`ui-form-value ${stretch ? "ui-form-value-stretch" : ""} ${stretch ? "" : "ui-form-value-end"}`}
     >
       {children}
     </div>
@@ -84,8 +76,8 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       movable={false}
       theme={theme}
     >
-      <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px', height: '100%', overflowY: 'auto' }}>
-        <div style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-panel)', paddingBottom: '6px' }}>
+      <div className="ui-toolpanel-body">
+        <div className="ui-toolpanel-sticky-tabs">
           <SegmentedControl
             options={tabOptions}
             value={activeTab}
@@ -94,10 +86,10 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         </div>
 
         {activeTab === "general" && (
-          <div className="mb-2" style={{ padding: '0 6px' }}>
+          <div className="ui-panel-stack">
             {/* 主题选择 */}
             <Row label={t("st_theme")} labelWidth="70px">
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <div className="ui-inline-actions ui-inline-actions-end">
                 <SegmentedControl
                   options={[
                     { value: 'light', label: t("theme_light") || 'Light' },
@@ -132,10 +124,10 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === "lighting" && (
-          <div className="mb-2" style={{ padding: '0 6px' }}>
+          <div className="ui-panel-stack">
             <Row label={t("st_ambient") || "环境光"} labelWidth="90px" stretch={true}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="ui-slider-field">
+                <div className="ui-inline-actions-stretch">
                   <Slider
                     min={0}
                     max={4}
@@ -144,15 +136,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                     onChange={(value) => onUpdate({ ambientInt: value })}
                   />
                 </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '42px', textAlign: 'right' }}>
+                <div className="ui-result-item-secondary-value">
                   {(settings.ambientInt || 0).toFixed(2)}
                 </div>
               </div>
             </Row>
 
             <Row label={t("st_dir") || "主光"} labelWidth="90px" stretch={true}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="ui-slider-field">
+                <div className="ui-inline-actions-stretch">
                   <Slider
                     min={0}
                     max={4}
@@ -161,15 +153,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                     onChange={(value) => onUpdate({ dirInt: value })}
                   />
                 </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '42px', textAlign: 'right' }}>
+                <div className="ui-result-item-secondary-value">
                   {(settings.dirInt || 0).toFixed(2)}
                 </div>
               </div>
             </Row>
 
             <Row label={t("st_back") || "背光"} labelWidth="90px" stretch={true}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="ui-slider-field">
+                <div className="ui-inline-actions-stretch">
                   <Slider
                     min={0}
                     max={2}
@@ -178,7 +170,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                     onChange={(value) => onUpdate({ backLightInt: value })}
                   />
                 </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '42px', textAlign: 'right' }}>
+                <div className="ui-result-item-secondary-value">
                   {(settings.backLightInt ?? 0.5).toFixed(2)}
                 </div>
               </div>
@@ -187,10 +179,10 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === "viewport" && (
-          <div className="mb-2" style={{ padding: '0 6px' }}>
+          <div className="ui-panel-stack">
           <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ui-slider-field">
+              <div className="ui-inline-actions-stretch">
                 <Slider
                   min={120}
                   max={180}
@@ -199,7 +191,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                   onChange={(value) => onUpdate({ viewCubeSize: value })}
                 />
               </div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '44px', textAlign: 'right' }}>
+              <div className="ui-result-item-secondary-value ui-result-item-secondary-value-wide">
                 {settings.viewCubeSize || 120}px
               </div>
             </div>
@@ -211,7 +203,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             />
           </Row>
           <Row label={t("st_performance_profile") || "性能策略"} labelWidth="90px">
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="ui-inline-actions ui-inline-actions-end">
               <SegmentedControl
                 options={[
                   { value: 'smooth', label: t("st_perf_smooth") || '流畅优先' },
@@ -227,7 +219,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         )}
 
         {activeTab === "highlight" && (
-          <div className="mb-2" style={{ padding: '0 6px' }}>
+          <div className="ui-panel-stack">
           <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="90px" stretch={true}>
             <ColorPicker
               value={settings.highlightColor || "#ff9f1c"}

@@ -148,13 +148,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         {conditions.map((condition, index) => (
           <div
             key={condition.id}
-            style={{
-              padding: "2px 0",
-              display: "grid",
-              gridTemplateColumns: index > 0 ? "64px minmax(0, 1fr) 92px minmax(0, 1fr) 24px" : "minmax(0, 1fr) 92px minmax(0, 1fr) 24px",
-              gap: "6px",
-              alignItems: "center"
-            }}
+            className={`ui-toolpanel-grid ui-toolpanel-grid-condition ${index > 0 ? "ui-toolpanel-grid-condition-linked" : "ui-toolpanel-grid-condition-first"}`}
           >
             {index > 0 && (
               <Select
@@ -188,10 +182,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
             {index > 0 ? (
               <button
-                className="ui-search-clear"
+                className="ui-search-clear ui-search-clear-static"
                 onClick={() => removeCondition(condition.id)}
                 title={t("remove_condition") || "移除条件"}
-                style={{ position: "static" }}
               >
                 <IconClose width={14} height={14} />
               </button>
@@ -221,7 +214,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
         {results.length > 0 && (
           <>
-            <div className="ui-toolpanel-row-between ui-toolpanel-caption" style={{ marginTop: 4 }}>
+            <div className="ui-toolpanel-row-between ui-toolpanel-caption ui-toolpanel-caption-spaced">
               <span>{t("search_selected_results") || "已勾选"}: {checkedResultUuids.length}</span>
               <div className="ui-toolpanel-row">
                 <Button className="ui-properties-action" onClick={onSelectAllResults}>
@@ -303,35 +296,16 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         )}
 
         {searching && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: "rgba(0, 0, 0, 0.28)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 10
-            }}
-          >
-            <div
-              style={{
-                width: "78%",
-                background: "var(--bg-panel)",
-                border: "1px solid var(--border-color)",
-                borderRadius: 8,
-                padding: "10px 12px",
-                boxShadow: "0 6px 18px rgba(0,0,0,0.18)"
-              }}
-            >
-              <div style={{ fontSize: 12, color: "var(--text-primary)", marginBottom: 8 }}>
+          <div className="ui-toolpanel-overlay">
+            <div className="ui-toolpanel-overlay-card">
+              <div className="ui-toolpanel-overlay-title">
                 {searchStatus || (t("searching") || "搜索中...")}
               </div>
-              <div className="ui-progress-bar" style={{ width: "100%" }}>
+              <div className="ui-progress-bar ui-progress-bar-full">
                 <div className="ui-progress-fill" style={{ width: `${Math.max(0, Math.min(100, searchProgress))}%` }} />
               </div>
-              <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+              <div className="ui-toolpanel-row-between ui-toolpanel-caption ui-toolpanel-caption-spaced">
+                <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">
                   {Math.round(searchProgress)}%
                 </div>
                 <Button className="ui-properties-action" onClick={onCancelSearch}>

@@ -1660,10 +1660,41 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   overflow: auto;
 }
 
+.ui-toolpanel-sticky-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-panel);
+  padding-bottom: 6px;
+}
+
 .ui-toolpanel-row {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.ui-toolpanel-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.ui-toolpanel-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ui-toolpanel-grid-condition {
+  padding: 2px 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.ui-toolpanel-grid-condition-first {
+  grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr) 24px;
+}
+
+.ui-toolpanel-grid-condition-linked {
+  grid-template-columns: 64px minmax(0, 1fr) 92px minmax(0, 1fr) 24px;
 }
 
 .ui-toolpanel-wrap {
@@ -1680,6 +1711,20 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolpanel-caption {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.ui-toolpanel-caption-muted {
+  font-size: 11px;
+}
+
+.ui-toolpanel-caption-strong {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.ui-toolpanel-caption-spaced {
+  margin-top: 4px;
 }
 
 .ui-toolpanel-results-box {
@@ -1705,9 +1750,25 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: 11px;
 }
 
+.ui-result-item-secondary-value {
+  color: var(--text-secondary);
+  font-size: 12px;
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-result-item-secondary-value-wide {
+  min-width: 44px;
+}
+
 .ui-search-clear:hover {
   background-color: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.ui-search-clear-static {
+  position: static;
 }
 
 .ui-search-meta {
@@ -1863,6 +1924,36 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   cursor: pointer;
   padding: 0;
   font: inherit;
+}
+
+.ui-search-result-checkbox {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.ui-toolpanel-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(24, 28, 34, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.ui-toolpanel-overlay-card {
+  width: 78%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.ui-toolpanel-overlay-title {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
 }
 
 .ui-mode-tray {
@@ -2283,6 +2374,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   min-height: 28px;
 }
 
+.ui-form-row-tight {
+  margin-bottom: 6px;
+  min-height: 26px;
+}
+
 .ui-form-row-top {
   align-items: flex-start;
 }
@@ -2304,6 +2400,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-form-value-stretch {
   flex: 1;
+}
+
+.ui-form-value-end {
+  justify-content: flex-end;
+}
+
+.ui-form-label-dynamic {
+  min-width: var(--label-width, 80px);
 }
 
 .ui-slider-field {
@@ -2332,6 +2436,43 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-inline-actions-wrap {
   flex-wrap: wrap;
+}
+
+.ui-inline-actions-end {
+  justify-content: flex-end;
+}
+
+.ui-inline-actions-stretch {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-selection-box {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: color-mix(in srgb, var(--bg-panel) 92%, var(--bg-hover));
+}
+
+.ui-selection-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ui-selection-box-list {
+  max-height: 92px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ui-selection-box-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .ui-empty-state {
