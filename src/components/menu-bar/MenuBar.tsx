@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { ThemeColors } from "../../theme/Styles";
+import { ThemeColors } from "../../theme/styles";
 import { ClassicMenuItem, ClassicSubItem } from "./MenuItem";
 import {
     IconViewTop, IconViewBottom, IconViewFront, IconViewBack, IconViewLeft, IconViewRight,

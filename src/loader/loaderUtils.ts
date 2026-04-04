@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TFunc, ProgressCallback } from "../theme/Locales";
+import { TFunc, ProgressCallback } from "../theme/locales";
 import { SceneSettings } from "../utils/SceneManager";
 import { createResourceResolver } from "./resourceResolver";
 import type { LoadProfile } from "../utils/scene/types";
@@ -213,7 +213,7 @@ async function loadObjectByExtension(
         }
 
         if (ext === "ifc") {
-            const { loadIFC } = await import("./IFCLoader");
+            const { loadIFC } = await import("./ifcLoader");
             reportStage("parse", 0);
             const ifcSettings = {
                 ...(settings as unknown as Record<string, unknown>),
@@ -294,7 +294,7 @@ async function loadObjectByExtension(
                 : await fileOrUrl.arrayBuffer();
             const normalizedLibPath = normalizeLibPath(libPath);
             const wasmUrl = `${normalizedLibPath}/occt-import-js/occt-import-js.wasm`;
-            const { OCCTLoader } = await import("./OCCTLoader");
+            const { OCCTLoader } = await import("./occtLoader");
             const loader = new OCCTLoader(wasmUrl);
             reportStage("parse", 0);
             return await loader.load(buffer, t, (p, msg) => reportStage("parse", p, msg));

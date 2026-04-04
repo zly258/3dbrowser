@@ -1,7 +1,7 @@
-import { loadModelFiles } from "../loader/LoaderUtils";
+import { loadModelFiles } from "../loader/loaderUtils";
 import { SceneSettings, SceneManager } from "../utils/SceneManager";
-import { TFunc } from "../theme/Locales";
-import type { LoaderRuntimeHints } from "../loader/LoaderUtils";
+import { TFunc } from "../theme/locales";
+import type { LoaderRuntimeHints } from "../loader/loaderUtils";
 
 export function cleanLoadingStatus(message: string) {
     if (!message) return "";

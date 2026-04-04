@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ThemeColors } from "../theme/Styles";
+import { ThemeColors } from "../theme/styles";
 
 interface ContextMenuItem {
     label?: string;

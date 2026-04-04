@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import { DEFAULT_FONT } from "../theme/Styles";
+import { DEFAULT_FONT } from "../theme/styles";
 
 interface ErrorBoundaryProps {
     children: React.ReactNode;

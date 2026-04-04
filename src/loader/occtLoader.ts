@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TFunc } from "../theme/Locales";
+import { TFunc } from "../theme/locales";
 
 type OcctFaceColor = {
     first?: number;

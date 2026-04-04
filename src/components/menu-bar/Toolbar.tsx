@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ThemeColors } from "../../theme/Styles";
+import { ThemeColors } from "../../theme/styles";
 import { ImageButton } from "../common/ImageButton";
 import {
     IconFile, IconDownload, IconMaximize,

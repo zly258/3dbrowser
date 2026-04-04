@@ -116,8 +116,13 @@ export function buildSelectionPropertyGroups({
     const basicProps: Record<string, string> = {};
     const geoProps: Record<string, string> = {};
     const targetElevation = resolveTargetElevation(target);
+    const resolvedName = [target?.name, target?.userData?.name]
+        .find((value) => typeof value === "string" && value.trim().length > 0);
 
     const wrappedId = sceneManager.getBimIdByUuid(focusUuid) || focusUuid;
+    if (resolvedName) {
+        basicProps[t("prop_name")] = resolvedName;
+    }
     basicProps[t("prop_id")] = wrappedId;
     basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
     if (typeof targetElevation === "number" && Number.isFinite(targetElevation)) {

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { SceneManager, SceneSettings } from "../utils/SceneManager";
-import type { TFunc } from "../theme/Locales";
+import type { TFunc } from "../theme/locales";
 import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "../viewer/fileLoading";
 
 interface FileLoadingFlowOptions {

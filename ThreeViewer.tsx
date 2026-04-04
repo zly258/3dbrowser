@@ -3,8 +3,8 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 import * as THREE from "three";
 import "./src/styles/index.css";
 import { SceneManager, SceneSettings, PerformancePreset, SceneChunkOptions } from "./src/utils/SceneManager";
-import { themes, ThemeColors } from "./src/theme/Styles";
-import { getTranslation, Lang } from "./src/theme/Locales";
+import { themes, ThemeColors } from "./src/theme/styles";
+import { getTranslation, Lang } from "./src/theme/locales";
 
 // 组件
 import { Toolbar } from "./src/components/menu-bar";
@@ -35,9 +35,9 @@ import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
 import { sanitizeFileStem, stripFileExtension } from "./src/viewer/exportNaming";
 import type { PropertyGroupInput, PropertyGroups } from "./src/viewer/propertyIndex";
 import type { ViewerConfirmState, ViewerErrorState, ViewerToast } from "./src/viewer/types";
-import { usePropertySearch } from "./src/viewer/usePropertySearch";
-import { useClashCheck } from "./src/viewer/useClashCheck";
-import { useClashSummary } from "./src/viewer/useClashSummary";
+import { usePropertySearch } from "./src/hooks/usePropertySearch";
+import { useClashCheck } from "./src/hooks/useClashCheck";
+import { useClashSummary } from "./src/hooks/useClashSummary";
 
 const IS_DEV = typeof window !== "undefined" && (
     window.location.hostname === "localhost" ||
