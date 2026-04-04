@@ -250,7 +250,7 @@ export const ThreeViewer = ({
             ambientInt: 2.0,
             dirInt: 1.0,
             bgColor: theme.canvasBg,
-            viewCubeSize: 100,
+            viewCubeSize: 120,
             colorSpace: 'srgb',
             toneMapping: 'aces',
             exposure: 1,

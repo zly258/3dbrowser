@@ -200,7 +200,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 />
               </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '12px', minWidth: '44px', textAlign: 'right' }}>
-                {settings.viewCubeSize || 100}px
+                {settings.viewCubeSize || 120}px
               </div>
             </div>
           </Row>
