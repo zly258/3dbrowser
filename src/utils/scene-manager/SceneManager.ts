@@ -8,7 +8,7 @@ import {
     collectLeafNodes
 } from "../octree";
 import { deriveInitialRuntimeFromHardware } from "../scene/chunkRuntime";
-import { debugLog, debugWarn } from "../scene/debugLogger";
+import { debugLog } from "../scene/debugLogger";
 import { stableExplodeDirection } from "../scene/explode";
 import { readNbimHeader, readNbimManifest, type NbimManifest } from "../scene/nbimIO";
 import {
@@ -21,10 +21,8 @@ import {
 import {
     collectPrefetchCandidates,
     enqueueChunkPrefetch as enqueueChunkPrefetchItems,
-    getChunkReadCacheKey as getChunkReadCacheKeyValue,
     hasValidChunkBinaryRange as hasValidChunkBinaryRangeValue,
-    readChunkBuffer as readChunkBufferValue,
-    touchChunkReadCache as touchChunkReadCacheOrder
+    readChunkBuffer as readChunkBufferValue
 } from "./chunkIO";
 import {
     applyUnloadChunk,
@@ -35,6 +33,7 @@ import {
 } from "./chunkExecution";
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
 import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
+import { processChunkPrefetchQueue } from "./chunkPrefetch";
 import {
     acquireGhostLineResource,
     cacheChunkMeshEntry,
@@ -1023,26 +1022,8 @@ export class SceneManager {
         });
     }
 
-    private getChunkReadCacheKey(chunk: any) {
-        return getChunkReadCacheKeyValue(chunk);
-    }
-
     private hasValidChunkBinaryRange(chunk: any) {
         return hasValidChunkBinaryRangeValue(chunk);
-    }
-
-    private touchChunkReadCache(cacheKey: string) {
-        this.chunkReadCacheOrder = touchChunkReadCacheOrder(this.chunkReadCacheOrder, cacheKey);
-    }
-
-    private putChunkReadCache(cacheKey: string, buffer: ArrayBuffer) {
-        this.chunkReadCache.set(cacheKey, buffer);
-        this.touchChunkReadCache(cacheKey);
-        while (this.chunkReadCacheOrder.length > this.resolvedChunkOptions.chunkReadCacheSize) {
-            const evictKey = this.chunkReadCacheOrder.shift();
-            if (!evictKey) continue;
-            this.chunkReadCache.delete(evictKey);
-        }
     }
 
     private async readChunkBuffer(chunk: any) {
@@ -1085,31 +1066,18 @@ export class SceneManager {
     }
 
     private async processPrefetchQueue() {
-        if (this.prefetchPaused || this.isCameraMoving) return;
-        if (this.prefetchQueue.length === 0) return;
-
-        const maxParallel = Math.max(1, Math.min(4, Math.floor(this.maxWorkers / 2)));
-        while (!this.prefetchPaused && !this.isCameraMoving && this.prefetchQueue.length > 0 && this.prefetchInFlight.size < maxParallel) {
-            const chunkId = this.prefetchQueue.shift();
-            if (!chunkId) break;
-            this.prefetchQueueSet.delete(chunkId);
-            const chunk = this.getChunkById(chunkId);
-            if (!chunk || !chunk.nbimFileId || !this.hasValidChunkBinaryRange(chunk)) continue;
-            const cacheKey = this.getChunkReadCacheKey(chunk);
-            if (this.chunkReadCache.has(cacheKey)) continue;
-
-            this.prefetchInFlight.add(chunkId);
-            void this.readChunkBuffer(chunk)
-                .catch((error) => {
-                    debugWarn("SceneManager/prefetch", `prefetch failed for ${chunkId}`, error);
-                })
-                .finally(() => {
-                    this.prefetchInFlight.delete(chunkId);
-                    if (!this.prefetchPaused && !this.isCameraMoving && this.prefetchQueue.length > 0) {
-                        void this.processPrefetchQueue();
-                    }
-                });
-        }
+        await processChunkPrefetchQueue({
+            prefetchPaused: this.prefetchPaused,
+            isCameraMoving: this.isCameraMoving,
+            prefetchQueue: this.prefetchQueue,
+            prefetchQueueSet: this.prefetchQueueSet,
+            prefetchInFlight: this.prefetchInFlight,
+            maxWorkers: this.maxWorkers,
+            getChunkById: (chunkId) => this.getChunkById(chunkId),
+            chunkReadCache: this.chunkReadCache,
+            readChunkBuffer: (chunk) => this.readChunkBuffer(chunk),
+            processQueue: () => this.processPrefetchQueue()
+        });
     }
 
     private unregisterOptimizedMeshMapping(bm: THREE.BatchedMesh) {
