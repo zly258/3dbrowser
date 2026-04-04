@@ -28,6 +28,7 @@ import {
     readChunkBuffer as readChunkBufferValue,
     touchChunkReadCache as touchChunkReadCacheOrder
 } from "./chunkIO";
+import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
     computeChunkFrameBudget,
     isMovingPeripheralChunk as isMovingPeripheralChunkRule,
@@ -1647,113 +1648,71 @@ export class SceneManager {
                     break;
                 }
             }
-            if (!c.paddedBounds || c._padding !== padding) {
-                const size = c.bounds.getSize(tempSize);
-                const pb = c.bounds.clone();
-                pb.expandByVector(size.multiplyScalar(padding));
-                c.paddedBounds = pb;
-                c._padding = padding;
-            }
-            if (!c.center) c.center = c.bounds.getCenter(new THREE.Vector3());
+            ensureChunkSpatialState({
+                chunk: c,
+                padding,
+                tempSize
+            });
 
             const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
-
-            toChunkDirection.copy(c.center).sub(cameraPos);
-            const dist = toChunkDirection.length();
-            const inRange = dist < this.maxRenderDistance;
-            if (sampleUnloadedWhileMoving && !c.loaded && (chunkIndex % movingSampleStride) !== movingSampleSeed) {
-                // 相机移动阶段对超大场景只抽样评估部分未加载分块，降低剔除主循环开销。
+            const evaluation = evaluateChunkVisibility({
+                chunk: c,
+                chunkIndex,
+                totalChunks,
+                now,
+                phase,
+                profile,
+                performanceMode: mode,
+                isBoxClipped: isClipped,
+                inFrustum,
+                maxRenderDistance: this.maxRenderDistance,
+                cameraPos,
+                cameraForward,
+                projScreenMatrix: this.projScreenMatrix,
+                toChunkDirection,
+                tempCenterNdc,
+                viewHeight,
+                canvasHeight,
+                sampleUnloadedWhileMoving,
+                movingSampleStride,
+                movingSampleSeed,
+                resolveShouldRefreshPeripheral: (isPeripheralWhileMoving) =>
+                    !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks, profile),
+                chunkWarmupActive: this.chunkWarmupActive,
+                chunkLoadedCount: this.chunkLoadedCount,
+                initialChunkLoadTarget: this.initialChunkLoadTarget,
+                chunkLoadResumeAt: this.chunkLoadResumeAt,
+                chunkMeshCached: this.chunkMeshCache.has(c.id)
+            });
+            if (evaluation.shouldSkipSample) {
                 continue;
             }
 
-            // 计算屏幕空间占用大小 (SSE 优化)
-            // 对于正交相机，大小与距离无关，只与 zoom 和 frustumSize 有关
-            const boxSize = c.bounds.getSize(tempSize).length();
-            const pixelSize = (boxSize / viewHeight) * canvasHeight;
-            const centerNDC = tempCenterNdc.copy(c.center).applyMatrix4(this.projScreenMatrix);
-            const ndcDistance = Math.sqrt(centerNDC.x * centerNDC.x + centerNDC.y * centerNDC.y);
-            const centrality = 1.0 - Math.min(1.0, ndcDistance);
-            const forwardness = dist > 1e-5
-                ? Math.max(0, cameraForward.dot(toChunkDirection.divideScalar(dist)))
-                : 1;
-
-            // 如果屏幕占比太小（例如小于 4 像素），则视为不可见 (LOD 优化)
-            const isTooSmall = pixelSize < 4;
-            const shouldHidePeripheralWhileMoving = phase === 'moving'
-                && centrality < profile.movingFocusCentralityThreshold
-                && pixelSize < profile.movingFocusPixelThreshold;
-
-            const shouldBeVisible = inFrustum && !isClipped && inRange && !isTooSmall && !shouldHidePeripheralWhileMoving;
-            const lastTouchedAt = Math.max(c.lastVisibleAt || 0, c.lastFocusAt || 0);
-            const shouldKeepVisibleWhileMoving = phase === 'moving'
-                && inFrustum
-                && !isClipped
-                && inRange
-                && !isTooSmall
-                && (now - lastTouchedAt) < profile.chunkVisibilityHoldMs;
-            const isPeripheralWhileMoving = this.isMovingPeripheralChunk(centrality, pixelSize, forwardness, profile);
-            const shouldRefreshPeripheral = !isPeripheralWhileMoving || this.shouldRefreshPeripheralChunk(now, chunkIndex, totalChunks, profile);
-            const effectiveVisible = phase === 'moving' && isPeripheralWhileMoving && !shouldRefreshPeripheral
-                ? (c.lastEffectiveVisible ?? c.mesh?.visible ?? false)
-                : (shouldBeVisible || shouldKeepVisibleWhileMoving);
-            const centerPriorityWindow = this.chunkWarmupActive || now < (this.chunkLoadResumeAt + profile.centerPriorityWindowMs);
-            const isPeripheralCandidate = centrality < profile.centerPriorityThreshold
-                && forwardness < profile.forwardPriorityThreshold
-                && pixelSize < 96;
-
-            if (effectiveVisible) {
+            if (evaluation.effectiveVisible) {
                 c.lastVisibleAt = now;
             }
-            if (centrality > 0.42 || forwardness > 0.55) {
+            if (evaluation.centrality > 0.42 || evaluation.forwardness > 0.55) {
                 c.lastFocusAt = now;
             }
-            c.lastEffectiveVisible = effectiveVisible;
+            c.lastEffectiveVisible = evaluation.effectiveVisible;
 
             if (c.loaded) {
                 loadedChunks.push(c);
                 if (c.mesh) {
-                    if (c.mesh.visible !== effectiveVisible) {
-                        c.mesh.visible = effectiveVisible;
+                    if (c.mesh.visible !== evaluation.effectiveVisible) {
+                        c.mesh.visible = evaluation.effectiveVisible;
                     }
                 } else {
                     const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
                     const bm = optimizedGroup?.getObjectByName(c.id);
                     if (bm) {
                         c.mesh = bm;
-                        bm.visible = effectiveVisible;
+                        bm.visible = evaluation.effectiveVisible;
                     }
                 }
-            } else if (!this.processingChunks.has(c.id) && shouldBeVisible) {
-                // 首屏优先：屏幕中心区域和屏幕占比更大的 chunk 更先加载
-                const viewportBoost = centrality > 0.8 ? 4.5 : centrality > 0.62 ? 2.8 : 1.0;
-                const sizeScore = Math.min(8, pixelSize / 120);
-                const distanceScore = 1000 / (dist + 1);
-                const forwardScore = forwardness * 550;
-                const cacheBoost = this.chunkMeshCache.has(c.id) ? 420 : 0;
-                const warmupBoost = this.chunkWarmupActive && this.chunkLoadedCount < this.initialChunkLoadTarget
-                    ? (centrality > 0.65 ? 1500 : centrality > 0.45 ? 500 : 0)
-                    : 0;
-                const movingPriorityBoost = phase === 'moving'
-                    ? (centrality > 0.65 || forwardness > 0.7 ? 900 : centrality > 0.4 ? 250 : -250)
-                    : 0;
-
-                if (phase === 'moving' && centrality < 0.08 && pixelSize < 18) {
-                    continue;
-                }
-                if (phase === 'moving' && isPeripheralWhileMoving && !shouldRefreshPeripheral) {
-                    continue;
-                }
-                if (phase !== 'moving' && centerPriorityWindow && isPeripheralCandidate) {
-                    continue;
-                }
-                if (phase === 'moving' && (this.settings.performanceMode ?? 'balanced') === 'smooth') {
-                    if (centrality < 0.3 && pixelSize < 54 && forwardness < 0.62) {
-                        continue;
-                    }
-                }
-
-                c.priority = movingPriorityBoost + cacheBoost + warmupBoost + forwardScore + (viewportBoost * 1000) + (sizeScore * 120) + distanceScore + (centrality * 300);
+            } else if (!this.processingChunks.has(c.id) && evaluation.shouldBeVisible && evaluation.priority !== null) {
+                c.priority = evaluation.priority;
                 toLoad.push(c);
             }
         }
