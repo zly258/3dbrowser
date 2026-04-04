@@ -34,7 +34,8 @@ import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
 import { sanitizeFileStem, stripFileExtension } from "./src/viewer/exportNaming";
 import type { PropertyGroupInput, PropertyGroups } from "./src/viewer/propertyIndex";
-import type { ViewerConfirmState, ViewerErrorState, ViewerToast } from "./src/viewer/types";
+import { buildSelectionSummary } from "./src/viewer/selectionSummary";
+import type { ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerErrorState, ViewerToast } from "./src/viewer/types";
 import { usePropertySearch } from "./src/hooks/usePropertySearch";
 import { useClashCheck } from "./src/hooks/useClashCheck";
 import { useClashSummary } from "./src/hooks/useClashSummary";
@@ -166,6 +167,7 @@ export const ThreeViewer = ({
         clearSelection
     } = useSceneSelection();
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
+    const [checkedSearchResultUuids, setCheckedSearchResultUuids] = useState<string[]>([]);
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -457,6 +459,93 @@ export const ThreeViewer = ({
         return mb.toFixed(1) + ' MB';
     };
 
+    function captureViewpointStateSnapshot(options: ViewpointSaveOptions): ViewpointStateSnapshot {
+        const snapshot: ViewpointStateSnapshot = {};
+
+        if (options.visibility) {
+            snapshot.hiddenUuids = Array.from(hiddenUuids);
+            snapshot.isolatedUuids = Array.from(isolatedUuids);
+        }
+
+        if (options.selection) {
+            snapshot.selectedUuids = [...selectedUuids];
+        }
+
+        if (options.clip) {
+            snapshot.clip = {
+                enabled: clipEnabled,
+                values: {
+                    x: [...clipValues.x],
+                    y: [...clipValues.y],
+                    z: [...clipValues.z]
+                },
+                active: { ...clipActive },
+                helperVisible: clipHelperVisible,
+                helperOpacity: clipHelperOpacity
+            };
+        }
+
+        if (options.explode) {
+            snapshot.explode = {
+                enabled: explodeEnabled,
+                strength: explodeStrength,
+                mode: explodeMode
+            };
+        }
+
+        return snapshot;
+    }
+
+    async function restoreViewpointStateSnapshot(snapshot?: ViewpointStateSnapshot) {
+        const manager = sceneMgr.current;
+        if (!manager || !snapshot) return;
+
+        resetLocateStateRef.current?.();
+        manager.clearLocateFocus();
+
+        if (snapshot.clip) {
+            setClipEnabled(snapshot.clip.enabled);
+            setClipValues(snapshot.clip.values);
+            setClipActive(snapshot.clip.active);
+            setClipHelperVisible(snapshot.clip.helperVisible);
+            setClipHelperOpacity(snapshot.clip.helperOpacity);
+        }
+
+        if (snapshot.explode) {
+            setExplodeEnabled(snapshot.explode.enabled);
+            setExplodeStrength(snapshot.explode.strength);
+            setExplodeMode(snapshot.explode.mode);
+        }
+
+        if (snapshot.hiddenUuids !== undefined || snapshot.isolatedUuids !== undefined) {
+            manager.setAllVisibility(true);
+            const nextHidden = snapshot.hiddenUuids || [];
+            const nextIsolated = snapshot.isolatedUuids || [];
+            if (nextIsolated.length > 0) {
+                manager.isolateObjects(nextIsolated);
+                setHiddenUuids(new Set());
+                setIsolatedUuids(new Set(nextIsolated));
+            } else {
+                nextHidden.forEach((uuid) => manager.setObjectVisibility(uuid, false));
+                setHiddenUuids(new Set(nextHidden));
+                setIsolatedUuids(new Set());
+            }
+            updateTree();
+        }
+
+        if (snapshot.selectedUuids !== undefined) {
+            setSelectedUuids(snapshot.selectedUuids);
+            setSelectedProps(null);
+            manager.highlightObjects(snapshot.selectedUuids);
+            if (snapshot.selectedUuids.length === 1) {
+                const target = manager.contentGroup.getObjectByProperty("uuid", snapshot.selectedUuids[0]);
+                if (target) {
+                    await handleSelect(target);
+                }
+            }
+        }
+    }
+
     const {
         viewpoints,
         handleSaveViewpoint,
@@ -469,7 +558,9 @@ export const ThreeViewer = ({
         sceneMgrRef: sceneMgr,
         setToast,
         setConfirmState,
-        t
+        t,
+        captureStateSnapshot: captureViewpointStateSnapshot,
+        restoreStateSnapshot: restoreViewpointStateSnapshot
     });
 
     // 3. 当布局状态变化时强制触发一次 resize
@@ -739,6 +830,188 @@ export const ThreeViewer = ({
         t,
         setToast
     });
+
+    useEffect(() => {
+        const resultSet = new Set(searchResults.map((item) => item.uuid));
+        setCheckedSearchResultUuids((prev) => prev.filter((uuid) => resultSet.has(uuid)));
+    }, [searchResults]);
+
+    const checkedSearchResults = useMemo(
+        () => searchResults.filter((item) => checkedSearchResultUuids.includes(item.uuid)),
+        [checkedSearchResultUuids, searchResults]
+    );
+
+    const handleToggleSearchResultChecked = useCallback((uuid: string, checked: boolean) => {
+        setCheckedSearchResultUuids((prev) => checked
+            ? (prev.includes(uuid) ? prev : [...prev, uuid])
+            : prev.filter((item) => item !== uuid)
+        );
+    }, []);
+
+    const handleSelectAllSearchResults = useCallback(() => {
+        setCheckedSearchResultUuids(searchResults.map((item) => item.uuid));
+    }, [searchResults]);
+
+    const handleClearCheckedSearchResults = useCallback(() => {
+        setCheckedSearchResultUuids([]);
+    }, []);
+
+    const handleBatchHighlightSearchResults = useCallback(() => {
+        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
+        sceneMgr.current.highlightObjects(checkedSearchResultUuids);
+        setToast({ message: `${t("search_batch_highlight") || "批量高亮"}: ${checkedSearchResultUuids.length}`, type: "info" });
+    }, [checkedSearchResultUuids, setToast, t]);
+
+    const handleBatchLocateSearchResults = useCallback(() => {
+        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
+        sceneMgr.current.highlightObjects(checkedSearchResultUuids);
+        sceneMgr.current.fitViewToObjects(checkedSearchResultUuids);
+        setSelectedUuids(checkedSearchResultUuids);
+        setSelectedProps(null);
+    }, [checkedSearchResultUuids, setSelectedUuids]);
+
+    const handleBatchHideSearchResults = useCallback(() => {
+        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
+        checkedSearchResultUuids.forEach((uuid) => sceneMgr.current?.setObjectVisibility(uuid, false));
+        setHiddenUuids((prev) => new Set([...prev, ...checkedSearchResultUuids]));
+        setIsolatedUuids(new Set());
+        setSelectedUuids((prev) => prev.filter((uuid) => !checkedSearchResultUuids.includes(uuid)));
+        setSelectedProps(null);
+        sceneMgr.current.highlightObjects([]);
+        updateTree();
+    }, [checkedSearchResultUuids, setSelectedUuids, updateTree]);
+
+    const handleBatchIsolateSearchResults = useCallback(() => {
+        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
+        sceneMgr.current.clearLocateFocus();
+        sceneMgr.current.isolateObjects(checkedSearchResultUuids);
+        sceneMgr.current.fitViewToObjects(checkedSearchResultUuids);
+        sceneMgr.current.highlightObjects(checkedSearchResultUuids);
+        setSelectedUuids(checkedSearchResultUuids);
+        setSelectedProps(null);
+        setHiddenUuids(new Set());
+        setIsolatedUuids(new Set(checkedSearchResultUuids));
+        updateTree();
+    }, [checkedSearchResultUuids, setSelectedUuids, updateTree]);
+
+    const handleAddSearchResultsToSelection = useCallback(() => {
+        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
+        const nextSelection = Array.from(new Set([...selectedUuids, ...checkedSearchResultUuids]));
+        setSelectedUuids(nextSelection);
+        sceneMgr.current.highlightObjects(nextSelection);
+        setSelectedProps(null);
+    }, [checkedSearchResultUuids, selectedUuids, setSelectedUuids]);
+
+    const handleExportSearchResults = useCallback(() => {
+        if (checkedSearchResults.length === 0) return;
+        const lines = [
+            ["uuid", "name", "type", "modelId", "source", "matchedBy"].join(","),
+            ...checkedSearchResults.map((item) => [
+                item.uuid,
+                `"${String(item.name || "").replace(/"/g, '""')}"`,
+                `"${String(item.type || "").replace(/"/g, '""')}"`,
+                `"${String(item.modelId || "").replace(/"/g, '""')}"`,
+                `"${String(item.source || "").replace(/"/g, '""')}"`,
+                `"${item.matchedBy.join(" | ").replace(/"/g, '""')}"`
+            ].join(","))
+        ];
+        const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${stripFileExtension(currentFileSetId || "search-results") || "search-results"}.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }, [checkedSearchResults, currentFileSetId]);
+
+    const selectedSummary = useMemo(() => buildSelectionSummary({
+        sceneManager: sceneMgr.current,
+        treeRoot,
+        selectedUuids,
+        selectedProps,
+        t
+    }), [mgrInstance, selectedProps, selectedUuids, t, treeRoot]);
+
+    const modeTrayItems = useMemo(() => {
+        const items: Array<{ key: string; label: string; onClear: () => void }> = [];
+
+        if (measureType !== "none") {
+            items.push({
+                key: "measure",
+                label: t("mode_measure") || "测量中",
+                onClear: () => {
+                    setMeasureType("none");
+                    setActiveTool("none");
+                    sceneMgr.current?.clearMeasurementPreview();
+                }
+            });
+        }
+
+        if (clipEnabled) {
+            items.push({
+                key: "clip",
+                label: t("mode_clip") || "剖切中",
+                onClear: () => {
+                    setClipEnabled(false);
+                    setActiveTool("none");
+                }
+            });
+        }
+
+        if (searchResults.length > 0) {
+            items.push({
+                key: "search",
+                label: `${t("mode_search") || "搜索结果高亮"} ${searchResults.length}`,
+                onClear: handleClearSearchResult
+            });
+        }
+
+        if (hiddenUuids.size > 0) {
+            items.push({
+                key: "hidden",
+                label: `${t("mode_hidden") || "已隐藏对象"} ${hiddenUuids.size}`,
+                onClear: handleShowAll
+            });
+        }
+
+        if (isolatedUuids.size > 0) {
+            items.push({
+                key: "isolated",
+                label: `${t("mode_isolated") || "已隔离对象"} ${isolatedUuids.size}`,
+                onClear: handleShowAll
+            });
+        }
+
+        if (activeTool === "boxSelect") {
+            items.push({
+                key: "boxSelect",
+                label: t("mode_box_select") || "框选中",
+                onClear: () => setActiveTool("none")
+            });
+        }
+
+        if (clashResults.length > 0) {
+            items.push({
+                key: "clash",
+                label: `${t("mode_clash") || "碰撞结果已激活"} ${clashResults.length}`,
+                onClear: handleClearClashResults
+            });
+        }
+
+        return items;
+    }, [
+        activeTool,
+        clashResults.length,
+        clipEnabled,
+        handleClearClashResults,
+        handleClearSearchResult,
+        handleShowAll,
+        hiddenUuids.size,
+        isolatedUuids.size,
+        measureType,
+        searchResults.length,
+        t
+    ]);
 
     const handleIsolateClashByStatus = useCallback((status: "new" | "confirmed") => {
         if (!sceneMgr.current) return;
@@ -1132,6 +1405,16 @@ export const ThreeViewer = ({
                             onCancelSearch={handleCancelSearch}
                             onApplyResultHighlight={handleApplySearchResultHighlight}
                             onClearResult={handleClearSearchResult}
+                            checkedResultUuids={checkedSearchResultUuids}
+                            onToggleResultChecked={handleToggleSearchResultChecked}
+                            onSelectAllResults={handleSelectAllSearchResults}
+                            onClearCheckedResults={handleClearCheckedSearchResults}
+                            onBatchHighlight={handleBatchHighlightSearchResults}
+                            onBatchLocate={handleBatchLocateSearchResults}
+                            onBatchHide={handleBatchHideSearchResults}
+                            onBatchIsolate={handleBatchIsolateSearchResults}
+                            onBatchAddToSelection={handleAddSearchResultsToSelection}
+                            onExportSelectedResults={handleExportSearchResults}
                             theme={theme}
                         />
                     )}
@@ -1213,7 +1496,7 @@ export const ThreeViewer = ({
                             </button>
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
-                            <PropertiesPanel t={t} selectedProps={selectedProps} theme={theme} />
+                            <PropertiesPanel t={t} selectedProps={selectedProps} selectedSummary={selectedSummary} theme={theme} />
                         </div>
                         {/* Resize handle */}
                         <div 
@@ -1248,10 +1531,17 @@ export const ThreeViewer = ({
                             </div>
                         </div>
                     )}
-                    {(hiddenUuids.size > 0 || isolatedUuids.size > 0) && (
-                        <button className="ui-statusbar-tag" onClick={handleShowAll}>
-                            {hiddenUuids.size > 0 ? `${t("hide_selected") || "隐藏选中"} ${hiddenUuids.size}` : `${t("isolate_selection") || "隔离选中"} ${isolatedUuids.size}`}
-                        </button>
+                    {modeTrayItems.length > 0 && (
+                        <div className="ui-mode-tray">
+                            {modeTrayItems.map((item) => (
+                                <div key={item.key} className="ui-mode-pill">
+                                    <span>{item.label}</span>
+                                    <button onClick={item.onClear}>
+                                        {t("mode_clear") || "清除"}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
                 <div className="ui-statusbar-right">

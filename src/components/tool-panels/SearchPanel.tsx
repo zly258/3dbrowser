@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Button, PaginationControls, Select } from "../common";
+import { Button, Checkbox, PaginationControls, Select } from "../common";
 import { IconClose } from "../../theme/Icons";
 
 export type SearchOperator = "equals" | "contains" | "notContains" | "startsWith" | "endsWith";
@@ -17,6 +17,9 @@ export interface PropertySearchCondition {
 export interface PropertySearchResultItem {
   uuid: string;
   name: string;
+  type: string;
+  modelId: string;
+  source: string;
   matchedBy: string[];
 }
 
@@ -33,6 +36,16 @@ interface SearchPanelProps {
   onCancelSearch: () => void;
   onApplyResultHighlight: (uuid: string) => void;
   onClearResult: () => void;
+  checkedResultUuids: string[];
+  onToggleResultChecked: (uuid: string, checked: boolean) => void;
+  onSelectAllResults: () => void;
+  onClearCheckedResults: () => void;
+  onBatchHighlight: () => void;
+  onBatchLocate: () => void;
+  onBatchHide: () => void;
+  onBatchIsolate: () => void;
+  onBatchAddToSelection: () => void;
+  onExportSelectedResults: () => void;
   theme?: any;
 }
 
@@ -62,10 +75,21 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   onCancelSearch,
   onApplyResultHighlight,
   onClearResult,
+  checkedResultUuids,
+  onToggleResultChecked,
+  onSelectAllResults,
+  onClearCheckedResults,
+  onBatchHighlight,
+  onBatchLocate,
+  onBatchHide,
+  onBatchIsolate,
+  onBatchAddToSelection,
+  onExportSelectedResults,
   theme
 }) => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const checkedSet = useMemo(() => new Set(checkedResultUuids), [checkedResultUuids]);
 
   useEffect(() => {
     setPage(1);
@@ -195,6 +219,42 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           </div>
         </div>
 
+        {results.length > 0 && (
+          <>
+            <div className="ui-toolpanel-row-between ui-toolpanel-caption" style={{ marginTop: 4 }}>
+              <span>{t("search_selected_results") || "已勾选"}: {checkedResultUuids.length}</span>
+              <div className="ui-toolpanel-row">
+                <Button className="ui-properties-action" onClick={onSelectAllResults}>
+                  {t("select_all") || "全选"}
+                </Button>
+                <Button className="ui-properties-action" onClick={onClearCheckedResults}>
+                  {t("clear_selection") || "清空选择"}
+                </Button>
+              </div>
+            </div>
+            <div className="ui-search-bulk-actions">
+              <Button className="ui-properties-action" onClick={onBatchHighlight} disabled={checkedResultUuids.length === 0}>
+                {t("search_batch_highlight") || "批量高亮"}
+              </Button>
+              <Button className="ui-properties-action" onClick={onBatchLocate} disabled={checkedResultUuids.length === 0}>
+                {t("locate_in_view") || "定位到视图"}
+              </Button>
+              <Button className="ui-properties-action" onClick={onBatchHide} disabled={checkedResultUuids.length === 0}>
+                {t("hide_selected") || "隐藏选中"}
+              </Button>
+              <Button className="ui-properties-action" onClick={onBatchIsolate} disabled={checkedResultUuids.length === 0}>
+                {t("isolate_selection") || "隔离选择"}
+              </Button>
+              <Button className="ui-properties-action" onClick={onBatchAddToSelection} disabled={checkedResultUuids.length === 0}>
+                {t("search_add_to_selection") || "加入当前选择"}
+              </Button>
+              <Button className="ui-properties-action" onClick={onExportSelectedResults} disabled={checkedResultUuids.length === 0}>
+                {t("search_export_results") || "导出结果"}
+              </Button>
+            </div>
+          </>
+        )}
+
         <div className="ui-toolpanel-results-box ui-toolpanel-results-box-sm">
           {results.length === 0 ? (
             <div className="ui-toolpanel-results-empty">
@@ -202,15 +262,26 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             </div>
           ) : (
             pageItems.map((item) => (
-              <button
+              <div
                 key={item.uuid}
                 className="ui-search-result-item"
-                onClick={() => onApplyResultHighlight(item.uuid)}
                 title={`${item.uuid}\n${item.matchedBy.join("\n")}`}
               >
-                <span>{item.name || item.uuid}</span>
-                <span className="ui-result-item-secondary">{item.matchedBy.join(", ")}</span>
-              </button>
+                <Checkbox
+                  checked={checkedSet.has(item.uuid)}
+                  onChange={(checked) => onToggleResultChecked(item.uuid, checked)}
+                  style={{ alignSelf: "flex-start", marginTop: 2 }}
+                />
+                <button
+                  className="ui-search-result-main"
+                  onClick={() => onApplyResultHighlight(item.uuid)}
+                >
+                  <span>{item.name || item.uuid}</span>
+                  <span className="ui-result-item-secondary">
+                    {[item.type, item.modelId, ...item.matchedBy].filter(Boolean).join(" · ")}
+                  </span>
+                </button>
+              </div>
             ))
           )}
         </div>

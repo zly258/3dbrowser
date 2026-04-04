@@ -17,6 +17,9 @@ export type PropertySearchCondition = {
 export type PropertySearchResultItem = {
   uuid: string;
   name: string;
+  type: string;
+  modelId: string;
+  source: string;
   matchedBy: string[];
 };
 
@@ -32,6 +35,9 @@ interface UsePropertySearchParams {
 type SearchCandidate = {
   uuid: string;
   name: string;
+  type: string;
+  modelId: string;
+  sourceLabel: string;
   source: THREE.Object3D;
 };
 
@@ -81,6 +87,19 @@ export function usePropertySearch({
   const [searchStatus, setSearchStatus] = useState("");
   const searchRunTokenRef = useRef(0);
   const searchInFlightRef = useRef(false);
+
+  const resolveModelId = useCallback((uuid: string, obj: THREE.Object3D | null) => {
+    let cursor: THREE.Object3D | null = obj;
+    while (cursor) {
+      const owner = cursor.userData?.originalUuid || cursor.userData?.modelUuid || cursor.userData?.rootUuid;
+      if (owner) return String(owner);
+      cursor = cursor.parent;
+    }
+
+    const structureNode = sceneMgrRef.current?.getStructureNodes(uuid)?.[0];
+    if (structureNode?.userData?.originalUuid) return String(structureNode.userData.originalUuid);
+    return uuid;
+  }, [sceneMgrRef]);
 
   const buildSearchPropertyEntries = useCallback((uuid: string, obj: THREE.Object3D) => {
     const entries: PropertyEntry[] = [];
@@ -137,6 +156,9 @@ export function usePropertySearch({
       candidates.push({
         uuid: mesh.uuid,
         name: mesh.name || mesh.uuid,
+        type: mesh.type || "Mesh",
+        modelId: resolveModelId(mesh.uuid, mesh),
+        sourceLabel: "object",
         source: mesh
       });
     });
@@ -150,6 +172,9 @@ export function usePropertySearch({
           candidates.push({
             uuid: id,
             name: String(node.name || id),
+            type: String(node.type || "Node"),
+            modelId: String(node.userData?.originalUuid || node.id || id),
+            sourceLabel: "structure",
             source: {
               name: node.name,
               type: node.type,
@@ -168,7 +193,7 @@ export function usePropertySearch({
     }
 
     return candidates;
-  }, [sceneMgrRef]);
+  }, [resolveModelId, sceneMgrRef]);
 
   const evaluateCondition = useCallback((value: string, operator: SearchOperator, query: string) => {
     if (operator === "equals") return value === query;
@@ -256,6 +281,9 @@ export function usePropertySearch({
           nextResults.push({
             uuid: item.uuid,
             name: item.name || item.uuid,
+            type: item.type,
+            modelId: item.modelId,
+            source: item.sourceLabel,
             matchedBy: Array.from(matchedBy)
           });
         }
