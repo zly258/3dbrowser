@@ -30,11 +30,14 @@ import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
 import { getObjectGeometryDataFromScene } from "./sceneManagerGeometry";
 import {
     buildExportStructureTree,
+    collectIfcModelReferences,
+    collectNbimBimProperties,
     countStructureRenderableNodes,
     createNbimContainerGroup,
     deriveDefaultNbimStem,
     encodeNbimManifest,
     groupNbimPropertiesByOwner,
+    prepareNbimExportChunks,
     sanitizeDisplayLabel
 } from "./sceneManagerNbim";
 import {
@@ -2816,140 +2819,20 @@ export class SceneManager {
         };
         traverseBimIds(this.structureRoot);
 
-        const ifcApiByModel = new Map<string, { ifcApi: any; modelID: number }>();
-        const ifcManagerByModel = new Map<string, { ifcManager: any; modelID: number }>();
-        this.contentGroup.traverse(obj => {
-            if (obj.userData?.ifcAPI && obj.userData?.modelID !== undefined && obj.userData?.originalUuid) {
-                ifcApiByModel.set(String(obj.userData.originalUuid), { ifcApi: obj.userData.ifcAPI, modelID: obj.userData.modelID });
-            }
-            if (obj.userData?.ifcManager && obj.userData?.modelID !== undefined && obj.userData?.originalUuid) {
-                ifcManagerByModel.set(String(obj.userData.originalUuid), { ifcManager: obj.userData.ifcManager, modelID: obj.userData.modelID });
-            }
+        const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
+        const bimProperties = await collectNbimBimProperties({
+            structureRoot: this.structureRoot,
+            ifcApiByModel,
+            ifcManagerByModel
         });
-
-        const bimProperties: Record<string, any> = {};
-        const stack: StructureTreeNode[] = [this.structureRoot];
-        while (stack.length > 0) {
-            const node = stack.pop()!;
-            const originalUuid = node.userData?.originalUuid ? String(node.userData.originalUuid) : "";
-            if (node.bimId) {
-                const key = `${originalUuid}::${node.bimId}`;
-                if (!bimProperties[key]) {
-                    bimProperties[key] = { uuid: node.id, name: node.name };
-                    const expressID = node.userData?.expressID;
-                    if (expressID !== undefined && ifcApiByModel.has(originalUuid)) {
-                        try {
-                            const { ifcApi, modelID } = ifcApiByModel.get(originalUuid)!;
-                            const entity = ifcApi.GetLine(modelID, Number(expressID));
-                            if (entity) {
-                                bimProperties[key].ifcType = entity.is_a || '';
-                                bimProperties[key].globalId = entity.GlobalId?.value || '';
-                                bimProperties[key].ifcName = entity.Name?.value || '';
-                            }
-                        } catch { }
-                    }
-
-                    if (expressID !== undefined && ifcManagerByModel.has(originalUuid)) {
-                        try {
-                            const { ifcManager, modelID } = ifcManagerByModel.get(originalUuid)!;
-                            const fullProps = await ifcManager.getItemProperties(modelID, Number(expressID));
-                            const rawGroups = fullProps?.rawGroups || fullProps?.groups || null;
-                            const normalizedGroups = fullProps?.normalizedGroups || null;
-                            if (rawGroups && Object.keys(rawGroups).length > 0) {
-                                bimProperties[key].ifcRawGroups = rawGroups;
-                            }
-                            if (normalizedGroups && Object.keys(normalizedGroups).length > 0) {
-                                bimProperties[key].ifcNormalizedGroups = normalizedGroups;
-                            }
-                        } catch { }
-                    }
-                }
-            }
-            if (node.children && node.children.length > 0) {
-                for (let i = node.children.length - 1; i >= 0; i--) {
-                    stack.push(node.children[i]);
-                }
-            }
-        }
-
-        const chunkBlobs: Uint8Array[] = [];
-        const exportChunks = this.chunks.map(c => ({
-            id: c.id,
-            bounds: {
-                min: { x: c.bounds.min.x, y: c.bounds.min.y, z: c.bounds.min.z },
-                max: { x: c.bounds.max.x, y: c.bounds.max.y, z: c.bounds.max.z }
-            },
-            originalUuid: c.originalUuid ? String(c.originalUuid) : undefined,
-            byteOffset: 0,
-            byteLength: 0
-        }));
-
-        let currentOffset = 1024;
-
-        const decodeV8 = (buffer: ArrayBuffer, table: string[]) => {
-            const dv = new DataView(buffer);
-            let offset = 0;
-            const geoCount = dv.getUint32(offset, true); offset += 4;
-            const geometries: THREE.BufferGeometry[] = [];
-            for (let i = 0; i < geoCount; i++) {
-                const vertCount = dv.getUint32(offset, true); offset += 4;
-                const indexCount = dv.getUint32(offset, true); offset += 4;
-                const posArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-                const normArr = new Float32Array(buffer, offset, vertCount * 3); offset += vertCount * 12;
-                const geo = new THREE.BufferGeometry();
-                geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
-                geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normArr), 3));
-                if (indexCount > 0) {
-                    const indexArr = new Uint32Array(buffer, offset, indexCount); offset += indexCount * 4;
-                    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(indexArr), 1));
-                }
-                geometries.push(geo);
-            }
-            const instanceCount = dv.getUint32(offset, true); offset += 4;
-            const matrix = new THREE.Matrix4();
-            const instances: any[] = [];
-            for (let i = 0; i < instanceCount; i++) {
-                const bimIdIndex = dv.getUint32(offset, true); offset += 4;
-                const typeIndex = dv.getUint32(offset, true); offset += 4;
-                const color = dv.getUint32(offset, true); offset += 4;
-                for (let k = 0; k < 16; k++) {
-                    matrix.elements[k] = dv.getFloat32(offset, true); offset += 4;
-                }
-                const geoIdx = dv.getUint32(offset, true); offset += 4;
-                instances.push({ bimId: table[bimIdIndex] ?? String(bimIdIndex), typeIndex, color, matrix: matrix.clone(), geometry: geometries[geoIdx] });
-            }
-            return instances;
-        };
-
-        for (let i = 0; i < this.chunks.length; i++) {
-            const chunk = this.chunks[i];
-            const exportChunk = exportChunks[i];
-
-            let buffer: ArrayBuffer;
-            if (chunk.node) {
-                buffer = this.generateChunkBinaryV8(chunk.node.items, bimIdToIndex);
-            } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && this.hasValidChunkBinaryRange(chunk)) {
-                const file = this.nbimFiles.get(chunk.nbimFileId)!;
-                const raw = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
-                const meta = this.nbimMeta.get(chunk.nbimFileId);
-                const version = meta?.version ?? 8;
-                if (version !== 8) {
-                    throw new Error(`Unsupported NBIM version: ${version}. Only V8 is supported.`);
-                }
-                const instances = decodeV8(raw, meta?.bimIdTable || []);
-                const items = instances.map(inst => ({ uuid: "", bimId: inst.bimId, typeIndex: inst.typeIndex, color: inst.color, matrix: inst.matrix, geometry: inst.geometry }));
-                buffer = this.generateChunkBinaryV8(items, bimIdToIndex);
-            } else {
-                continue;
-            }
-
-            const uint8 = new Uint8Array(buffer);
-            chunkBlobs.push(uint8);
-
-            exportChunk.byteOffset = currentOffset;
-            exportChunk.byteLength = uint8.byteLength;
-            currentOffset += uint8.byteLength;
-        }
+        const { chunkBlobs, exportChunks, currentOffset } = await prepareNbimExportChunks({
+            chunks: this.chunks,
+            nbimFiles: this.nbimFiles,
+            nbimMeta: this.nbimMeta,
+            bimIdToIndex,
+            hasValidChunkBinaryRange: (chunk) => this.hasValidChunkBinaryRange(chunk),
+            generateChunkBinaryV8: (items, indexMap) => this.generateChunkBinaryV8(items, indexMap)
+        });
 
         const manifest = {
             globalBounds: {
