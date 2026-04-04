@@ -44,6 +44,7 @@ import {
     applyNbimGlobalBounds,
     appendNbimStructure,
     buildNbimQuickStats,
+    finalizeNbimLoad,
     populateNbimNodeMappings,
     registerNbimChunks
 } from "./sceneManagerNbimLoad";
@@ -2974,11 +2975,16 @@ export class SceneManager {
         this.reportChunkProgress();
 
         this.fitView(true);
-        this.chunkWarmupActive = true;
-        this.initialChunkLoadTarget = this.chunks.length > 200 ? 44 : this.chunks.length > 80 ? 30 : 16;
+        const loadFinalize = finalizeNbimLoad({
+            chunkCount: this.chunks.length,
+            hasManifestStats: Boolean(manifest.stats),
+            hasManifestChunks: Boolean(manifest.chunks?.length)
+        });
+        this.chunkWarmupActive = loadFinalize.chunkWarmupActive;
+        this.initialChunkLoadTarget = loadFinalize.initialChunkLoadTarget;
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
         this.checkCullingAndLoad();
-        if (!manifest.stats && manifest.chunks?.length) {
+        if (loadFinalize.shouldEstimateStats) {
             void this.estimateNbimStats(file, manifest.chunks, version).then((stats) => {
                 this.unregisterOriginalStats(rootId);
                 this.registerOriginalStats(rootId, stats);

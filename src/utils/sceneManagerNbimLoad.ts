@@ -196,3 +196,17 @@ export async function registerNbimChunks(options: {
         deferredGhostSpecs
     };
 }
+
+export function finalizeNbimLoad(options: {
+    chunkCount: number;
+    hasManifestStats: boolean;
+    hasManifestChunks: boolean;
+}) {
+    const { chunkCount, hasManifestStats, hasManifestChunks } = options;
+
+    return {
+        chunkWarmupActive: true,
+        initialChunkLoadTarget: chunkCount > 200 ? 44 : chunkCount > 80 ? 30 : 16,
+        shouldEstimateStats: !hasManifestStats && hasManifestChunks
+    };
+}
