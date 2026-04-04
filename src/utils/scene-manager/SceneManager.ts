@@ -35,6 +35,19 @@ import {
 } from "./chunkExecution";
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
 import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
+import {
+    acquireGhostLineResource,
+    cacheChunkMeshEntry,
+    clearChunkMeshCacheEntries,
+    createGhostLineResource,
+    disposeChunkMeshResource,
+    ensureChunkGhostResource,
+    registerOptimizedMeshResourceMapping,
+    releaseGhostLineResource,
+    takeCachedChunkMeshEntry,
+    touchChunkMeshCacheOrder,
+    unregisterOptimizedMeshResourceMapping
+} from "./chunkResources";
 import { processChunkWorkerQueue, queueChunkWorkerTask, type ChunkWorkerTask } from "./chunkWorkerPool";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
@@ -969,51 +982,45 @@ export class SceneManager {
     }
 
     private disposeChunkMesh(mesh: THREE.BatchedMesh) {
-        if (mesh.geometry) mesh.geometry.dispose();
-        if (mesh.material && mesh.material !== this.sharedMaterial) {
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            materials.forEach((m: any) => m.dispose && m.dispose());
-        }
+        disposeChunkMeshResource({
+            mesh,
+            sharedMaterial: this.sharedMaterial
+        });
     }
 
     private touchChunkCache(chunkId: string) {
-        this.chunkCacheOrder = this.chunkCacheOrder.filter((id) => id !== chunkId);
-        this.chunkCacheOrder.push(chunkId);
+        this.chunkCacheOrder = touchChunkMeshCacheOrder(this.chunkCacheOrder, chunkId);
     }
 
     private cacheChunkMesh(chunk: any, mesh: THREE.BatchedMesh) {
-        if (this.chunkMeshCache.has(chunk.id)) {
-            const oldMesh = this.chunkMeshCache.get(chunk.id)!;
-            if (oldMesh !== mesh) this.disposeChunkMesh(oldMesh);
-        }
-        this.chunkMeshCache.set(chunk.id, mesh);
-        this.touchChunkCache(chunk.id);
-
-        while (this.chunkCacheOrder.length > this.maxCachedChunks) {
-            const evictId = this.chunkCacheOrder.shift();
-            if (!evictId) break;
-            const cached = this.chunkMeshCache.get(evictId);
-            if (!cached) continue;
-            this.chunkMeshCache.delete(evictId);
-            this.disposeChunkMesh(cached);
-        }
+        const result = cacheChunkMeshEntry({
+            chunk,
+            mesh,
+            chunkMeshCache: this.chunkMeshCache,
+            chunkCacheOrder: this.chunkCacheOrder,
+            maxCachedChunks: this.maxCachedChunks,
+            disposeChunkMesh: (nextMesh) => this.disposeChunkMesh(nextMesh)
+        });
+        this.chunkCacheOrder = result.chunkCacheOrder;
     }
 
     private takeCachedChunkMesh(chunkId: string) {
-        const mesh = this.chunkMeshCache.get(chunkId) || null;
-        if (!mesh) return null;
-        this.chunkMeshCache.delete(chunkId);
-        this.chunkCacheOrder = this.chunkCacheOrder.filter((id) => id !== chunkId);
-        return mesh;
+        const result = takeCachedChunkMeshEntry({
+            chunkId,
+            chunkMeshCache: this.chunkMeshCache,
+            chunkCacheOrder: this.chunkCacheOrder
+        });
+        this.chunkCacheOrder = result.chunkCacheOrder;
+        return result.mesh;
     }
 
     private clearChunkCache(filter?: (chunkId: string, mesh: THREE.BatchedMesh) => boolean) {
-        for (const [chunkId, mesh] of this.chunkMeshCache.entries()) {
-            if (filter && !filter(chunkId, mesh)) continue;
-            this.disposeChunkMesh(mesh);
-            this.chunkMeshCache.delete(chunkId);
-        }
-        this.chunkCacheOrder = this.chunkCacheOrder.filter((chunkId) => this.chunkMeshCache.has(chunkId));
+        this.chunkCacheOrder = clearChunkMeshCacheEntries({
+            chunkMeshCache: this.chunkMeshCache,
+            chunkCacheOrder: this.chunkCacheOrder,
+            disposeChunkMesh: (mesh) => this.disposeChunkMesh(mesh),
+            filter
+        });
     }
 
     private getChunkReadCacheKey(chunk: any) {
@@ -1106,77 +1113,48 @@ export class SceneManager {
     }
 
     private unregisterOptimizedMeshMapping(bm: THREE.BatchedMesh) {
-        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
-        if (!batchIdToUuid) return;
-
-        for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-            const mapping = this.optimizedMapping.get(originalUuid);
-            if (!mapping) continue;
-            const index = mapping.findIndex((m) => m.mesh === bm && m.instanceId === batchId);
-            if (index !== -1) mapping.splice(index, 1);
-            if (mapping.length === 0) this.optimizedMapping.delete(originalUuid);
-        }
+        unregisterOptimizedMeshResourceMapping({
+            mesh: bm,
+            optimizedMapping: this.optimizedMapping
+        });
     }
 
     private registerOptimizedMeshMapping(bm: THREE.BatchedMesh) {
-        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string>;
-        const batchIdToColor = bm.userData.batchIdToColor as Map<number, number>;
-        const batchIdToGeometry = bm.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry>;
-
-        if (!batchIdToUuid) return;
-
-        for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
-            if (!this.optimizedMapping.has(originalUuid)) {
-                this.optimizedMapping.set(originalUuid, []);
-            }
-            const originalColor = batchIdToColor?.get(batchId) ?? 0xffffff;
-            const geometry = batchIdToGeometry?.get(batchId);
-            this.optimizedMapping.get(originalUuid)!.push({
-                mesh: bm,
-                instanceId: batchId,
-                originalColor,
-                geometry
-            });
-        }
+        registerOptimizedMeshResourceMapping({
+            mesh: bm,
+            optimizedMapping: this.optimizedMapping
+        });
     }
 
     private acquireGhostLine() {
-        const reused = this.ghostMeshPool.pop();
-        if (reused) {
-            reused.visible = true;
-            return reused;
-        }
-        return new THREE.LineSegments(this.ghostEdgesGeometry, this.ghostMaterial);
+        return acquireGhostLineResource({
+            ghostMeshPool: this.ghostMeshPool,
+            ghostEdgesGeometry: this.ghostEdgesGeometry,
+            ghostMaterial: this.ghostMaterial
+        });
     }
 
     private releaseGhostLine(line: THREE.LineSegments) {
-        line.visible = false;
-        line.name = "";
-        line.scale.set(1, 1, 1);
-        line.position.set(0, 0, 0);
-        if (line.material instanceof THREE.LineBasicMaterial) {
-            line.material.opacity = 0.3;
-        }
-        this.ghostMeshPool.push(line);
+        releaseGhostLineResource({
+            line,
+            ghostMeshPool: this.ghostMeshPool
+        });
     }
 
     private createGhostLine(name: string, bounds: THREE.Box3) {
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-        bounds.getSize(size);
-        bounds.getCenter(center);
-
-        const edges = this.acquireGhostLine();
-        edges.name = name;
-        edges.scale.copy(size);
-        edges.position.copy(center);
-        return edges;
+        return createGhostLineResource({
+            name,
+            bounds,
+            acquireGhostLine: () => this.acquireGhostLine()
+        });
     }
 
     private ensureChunkGhost(chunk: any) {
-        if (this.ghostGroup.getObjectByName(`ghost_${chunk.id}`)) return;
-        const edges = this.createGhostLine(`ghost_${chunk.id}`, chunk.bounds);
-        this.ghostGroup.add(edges);
+        ensureChunkGhostResource({
+            chunk,
+            ghostGroup: this.ghostGroup,
+            createGhostLine: (name, bounds) => this.createGhostLine(name, bounds)
+        });
     }
 
     private attachStructureRoot(modelRoot: StructureTreeNode) {
