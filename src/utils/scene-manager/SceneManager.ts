@@ -34,6 +34,7 @@ import {
     resolveChunkMeshForLoad
 } from "./chunkExecution";
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
+import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
 import { processChunkWorkerQueue, queueChunkWorkerTask, type ChunkWorkerTask } from "./chunkWorkerPool";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
@@ -1829,7 +1830,15 @@ export class SceneManager {
                 readChunkBuffer: (nextChunk) => this.readChunkBuffer(nextChunk),
                 nbimMeta: this.nbimMeta,
                 runWorkerTask: (data, transferables) => this.runWorkerTask(data, transferables),
-                reconstructBatchedMesh: (data, material) => this.reconstructBatchedMesh(data, material),
+                reconstructBatchedMesh: (data, material) => reconstructBatchedMeshFromWorkerData({
+                    data,
+                    material,
+                    resolveUuidByBimId: (originalUuid, bimId) => {
+                        const key = `${originalUuid}::${bimId}`;
+                        const nodeIds = this.bimIdToNodeIds.get(key);
+                        return nodeIds?.[0] || bimId || originalUuid;
+                    }
+                }),
                 isCameraMoving: this.isCameraMoving,
                 chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
                 getChunkIndex: (chunkId) => this.getChunkIndex(chunkId),
@@ -2604,83 +2613,6 @@ export class SceneManager {
         }
 
         return buffer;
-    }
-
-    private reconstructBatchedMesh(data: any, material: THREE.Material): THREE.BatchedMesh | null {
-        const { geometries: geoData, instances: instData, originalUuid } = data;
-
-        // BatchedMesh 要求所有几何体必须一致地拥有（或都没有）索引。
-        // 检查是否至少有一个几何体带有索引。
-        const hasAnyIndex = geoData.some((g: any) => g.index && g.index.length > 0);
-
-        const geometries: THREE.BufferGeometry[] = geoData.map((g: any) => {
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(g.position, 3));
-            geo.setAttribute('normal', new THREE.BufferAttribute(g.normal, 3));
-            if (g.index && g.index.length > 0) {
-                geo.setIndex(new THREE.BufferAttribute(g.index, 1));
-            } else if (hasAnyIndex) {
-                // 如果批次中有其他几何体带索引，则为此几何体生成顺序索引
-                const count = g.position.length / 3;
-                const index = new Uint32Array(count);
-                for (let i = 0; i < count; i++) index[i] = i;
-                geo.setIndex(new THREE.BufferAttribute(index, 1));
-            }
-            return geo;
-        });
-
-        let totalVerts = 0;
-        let totalIndices = 0;
-        geometries.forEach(g => {
-            totalVerts += g.attributes.position.count;
-            if (g.index) totalIndices += g.index.count;
-        });
-
-        const bm = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
-        // 关键：禁用 BatchedMesh 自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制可见性。
-        // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
-        // 关键：禁用 BatchedMesh 自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制可见性。
-        // 这可以解决在正交相机下，当相机非常靠近模型时，模型意外消失的问题。
-        bm.frustumCulled = false;
-        (bm as any).perInstanceFrustumCulling = false;
-        const geoIds = geometries.map(g => bm.addGeometry(g));
-
-        const matrix = new THREE.Matrix4();
-        const color = new THREE.Color();
-        const batchIdToUuid = new Map<number, string>();
-        const batchIdToBimId = new Map<number, string>();
-        const batchIdToColor = new Map<number, number>();
-        const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
-
-        instData.forEach((inst: any) => {
-            color.setHex(inst.color);
-            matrix.fromArray(inst.matrix);
-
-            const instId = bm.addInstance(geoIds[inst.geoIdx]);
-            bm.setMatrixAt(instId, matrix);
-            bm.setColorAt(instId, color);
-            // 设置实例包围盒，用于 perInstanceFrustumCulling（实例级视锥剔除）
-            const geo = geometries[inst.geoIdx];
-            if (!geo.boundingBox) geo.computeBoundingBox();
-            if (geo.boundingBox && (bm as any).setBoundingBoxAt) (bm as any).setBoundingBoxAt(instId, geo.boundingBox);
-
-            const bimId = inst.bimId;
-            const key = `${originalUuid}::${bimId}`;
-            const nodeIds = this.bimIdToNodeIds.get(key);
-            const resolvedUuid = nodeIds?.[0] || bimId || originalUuid;
-            batchIdToUuid.set(instId, resolvedUuid);
-            batchIdToBimId.set(instId, bimId);
-            batchIdToColor.set(instId, inst.color);
-            batchIdToGeometry.set(instId, geometries[inst.geoIdx]);
-        });
-
-        bm.userData.batchIdToUuid = batchIdToUuid;
-        bm.userData.batchIdToBimId = batchIdToBimId;
-        bm.userData.batchIdToColor = batchIdToColor;
-        bm.userData.batchIdToGeometry = batchIdToGeometry;
-        bm.computeBoundingBox();
-        bm.computeBoundingSphere();
-        return bm;
     }
 
     async exportNbim(fileName?: string) {
