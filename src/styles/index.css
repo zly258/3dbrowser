@@ -454,6 +454,14 @@ body {
   color: var(--text-muted);
 }
 
+.ui-select {
+  padding: 4px 28px 4px 8px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A0A0A0' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
 /* 数字输入框特殊样式 */
 input[type="number"].ui-input {
   text-align: right;
@@ -565,18 +573,36 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
 }
 
+.ui-slider-control {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ui-slider-control-interactive {
+  cursor: pointer;
+}
+
+.ui-slider-control-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .ui-slider-track {
   position: absolute;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 3px;
   background-color: var(--border-color);
 }
 
 .ui-slider-progress {
   position: absolute;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 3px;
   background-color: var(--accent);
   pointer-events: none;
 }
@@ -586,11 +612,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: var(--accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  cursor: pointer;
+  background-color: var(--bg-primary);
+  box-shadow: 0 1px 3px rgba(32, 36, 44, 0.24);
+  cursor: default;
   transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
-  border: 4px solid var(--bg-panel);
+  border: 2px solid var(--accent);
+  transform: translateX(-50%);
 }
 
 .ui-slider-thumb:hover {
@@ -1824,6 +1851,40 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   transition: all 200ms ease;
 }
 
+.ui-input-number-root {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.ui-input-number-input {
+  text-align: right;
+}
+
+.ui-input-number-input-with-unit {
+  padding-right: 24px;
+}
+
+.ui-input-number-input-with-controls {
+  padding-right: 48px;
+}
+
+.ui-input-number-unit {
+  position: absolute;
+  right: 32px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ui-input-number-controls {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 8px);
+  gap: 2px;
+}
+
 .ui-input-number .ui-input {
   padding-right: 32px;
   font-family: 'Roboto Mono', 'Consolas', monospace;
@@ -2055,6 +2116,86 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   height: 50%;
   padding: 0 !important;
   min-height: unset !important;
+}
+
+.ui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ui-checkbox-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-checkbox-box {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  background-color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ui-checkbox-box-checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.ui-checkbox-icon {
+  width: 10px;
+  height: 10px;
+}
+
+.ui-checkbox-label {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.ui-color-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-color-picker-input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: transparent;
+}
+
+.ui-color-picker-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ui-setting-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.ui-setting-slider-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .ui-input-number-btn:hover {
