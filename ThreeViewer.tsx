@@ -28,6 +28,7 @@ import { useViewerActions } from "./src/hooks/useViewerActions";
 import { useViewerFileActions } from "./src/hooks/useViewerFileActions";
 import { useViewerLayout } from "./src/hooks/useViewerLayout";
 import { useViewerTools } from "./src/hooks/useViewerTools";
+import { useViewerVisibility } from "./src/hooks/useViewerVisibility";
 import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
 import { sanitizeFileStem, stripFileExtension } from "./src/viewer/exportNaming";
@@ -437,61 +438,7 @@ export const ThreeViewer = ({
         applyClashModelOptionBounds();
     }, [applyClashModelOptionBounds]);
 
-    // 右键菜单状态
-    const [contextMenu, setContextMenu] = useState<{
-        x: number;
-        y: number;
-        visible: boolean;
-    }>({ x: 0, y: 0, visible: false });
-
-    // 隐藏对象记录
-    const [hiddenUuids, setHiddenUuids] = useState<Set<string>>(new Set());
-    // 隔离对象记录
-    const [isolatedUuids, setIsolatedUuids] = useState<Set<string>>(new Set());
-    const [contextMenuOpacity, setContextMenuOpacity] = useState(1.0);
-
-    // Visibility undo stack
-    const visibilityStackRef = useRef<{uuid: string, visible: boolean}[][]>([]);
     const resetLocateStateRef = useRef<() => void>(() => {});
-    
-    // 隐藏选中的对象
-    const handleHideSelected = useCallback(() => {
-        if (selectedUuids.length === 0 || !sceneMgr.current) return;
-
-        const stateToRestore = selectedUuids.map(uuid => {
-            const obj = sceneMgr.current?.contentGroup.getObjectByProperty('uuid', uuid);
-            return { uuid, visible: obj ? obj.visible : true };
-        });
-        visibilityStackRef.current.push(stateToRestore);
-
-        const newHiddenUuids = new Set(hiddenUuids);
-        const newIsolatedUuids = new Set(isolatedUuids);
-        selectedUuids.forEach(uuid => {
-            sceneMgr.current?.setObjectVisibility(uuid, false);
-            newHiddenUuids.add(uuid);
-            newIsolatedUuids.delete(uuid);
-        });
-        setHiddenUuids(newHiddenUuids);
-        setIsolatedUuids(newIsolatedUuids);
-        setSelectedUuids([]);
-        setSelectedProps(null);
-        sceneMgr.current?.highlightObjects([]);
-        updateTree();
-    }, [selectedUuids, hiddenUuids, isolatedUuids]);
-
-    // 显示全部对象
-    const handleShowAll = useCallback(() => {
-        if (!sceneMgr.current) return;
-
-        if (hiddenUuids.size > 0 || isolatedUuids.size > 0) {
-            sceneMgr.current.setAllVisibility(true);
-            setHiddenUuids(new Set());
-            setIsolatedUuids(new Set());
-            updateTree();
-        }
-        resetLocateStateRef.current();
-        sceneMgr.current.clearLocateFocus();
-    }, [hiddenUuids, isolatedUuids]);
 
     // Update status when lang changes if status is "Ready" (or equivalent)
     useEffect(() => {
@@ -616,71 +563,29 @@ export const ThreeViewer = ({
         });
     }, [])
 
-    const setAllTreeExpanded = useCallback((expanded: boolean) => {
-        const update = (nodes: any[]): any[] => {
-            return nodes.map(n => ({
-                ...n,
-                expanded,
-                children: n.children && n.children.length > 0 ? update(n.children) : n.children
-            }));
-        };
-        setTreeRoot(prev => update(prev));
-    }, []);
-
-    const handleToggleVisibility = (uuid: string, visible: boolean) => {
-        if (!sceneMgr.current) return;
-        
-        visibilityStackRef.current.push([{ uuid, visible: !visible }]);
-        
-        sceneMgr.current.setObjectVisibility(uuid, visible);
-
-        if (visible) {
-            const next = new Set(hiddenUuids);
-            next.delete(uuid);
-            setHiddenUuids(next);
-        } else {
-            const next = new Set(hiddenUuids);
-            next.add(uuid);
-            setHiddenUuids(next);
-        }
-
-        // 使用 updateTree 同步最新的结构树状态
-        updateTree();
-    };
-
-    const handleHideObject = useCallback((uuid: string) => {
-        if (!sceneMgr.current) return;
-        visibilityStackRef.current.push([{ uuid, visible: true }]);
-        sceneMgr.current.setObjectVisibility(uuid, false);
-        setHiddenUuids((prev) => new Set(prev).add(uuid));
-        setSelectedUuids((prev) => prev.filter((id) => id !== uuid));
-        updateTree();
-    }, [updateTree]);
-
-    const handleIsolateObject = useCallback((uuid: string) => {
-        if (!sceneMgr.current) return;
-        sceneMgr.current.isolateObjects([uuid]);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set([uuid]));
-        setSelectedUuids([uuid]);
-        sceneMgr.current.highlightObjects([uuid]);
-        updateTree();
-    }, [updateTree]);
-
-    const handleUndoVisibility = useCallback(() => {
-        if (visibilityStackRef.current.length === 0 || !sceneMgr.current) return;
-        const lastAction = visibilityStackRef.current.pop();
-        if (!lastAction) return;
-        
-        const nextHidden = new Set(hiddenUuids);
-        lastAction.forEach(change => {
-            sceneMgr.current?.setObjectVisibility(change.uuid, change.visible);
-            if (change.visible) nextHidden.delete(change.uuid);
-            else nextHidden.add(change.uuid);
-        });
-        setHiddenUuids(nextHidden);
-        updateTree();
-    }, [hiddenUuids]);
+    const {
+        contextMenu,
+        hiddenUuids,
+        isolatedUuids,
+        setHiddenUuids,
+        setIsolatedUuids,
+        handleContextMenu,
+        closeContextMenu,
+        handleHideSelected,
+        handleShowAll,
+        handleToggleVisibility,
+        handleHideObject,
+        handleIsolateObject,
+        handleIsolateSelection,
+        handleUndoVisibility
+    } = useViewerVisibility({
+        sceneMgrRef: sceneMgr,
+        selectedUuids,
+        setSelectedUuids,
+        setSelectedProps,
+        updateTree,
+        resetLocateState: () => resetLocateStateRef.current()
+    });
 
     const handleDeleteObject = (uuid: string) => {
         if (!sceneMgr.current) return;
@@ -880,36 +785,6 @@ export const ThreeViewer = ({
             });
         };
 
-        const handleContextMenu = (e: MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            let initialOpacity = 1.0;
-            if (selectedUuids.length > 0 && mgr) {
-                const obj = mgr.contentGroup.getObjectByProperty('uuid', selectedUuids[0]);
-                if (obj) {
-                    let found = false;
-                    obj.traverse((child: any) => {
-                        if (!found && child.isMesh && child.material) {
-                            const m = Array.isArray(child.material) ? child.material[0] : child.material;
-                            if (m.opacity !== undefined) {
-                                initialOpacity = m.opacity;
-                                found = true;
-                            }
-                        }
-                    });
-                }
-            }
-            setContextMenuOpacity(initialOpacity);
-            
-            // 显示右键菜单
-            setContextMenu({
-                x: e.clientX,
-                y: e.clientY,
-                visible: true
-            });
-        };
-
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
                 handleUndoVisibility();
@@ -948,7 +823,7 @@ export const ThreeViewer = ({
             canvas.removeEventListener("contextmenu", handleContextMenu);
             window.removeEventListener("keydown", handleKeyDown);
         };
-    }, [pickEnabled, selectedUuids, activeTool, measureType]);
+    }, [handleContextMenu, handleUndoVisibility, pickEnabled, selectedUuids, activeTool, measureType]);
 
     // 框选事件处理
     useEffect(() => {
@@ -1292,15 +1167,7 @@ export const ThreeViewer = ({
                                 },
                                 {
                                     label: t("isolate_selection") || "隔离选中",
-                                    onClick: () => {
-                                        if (selectedUuids.length > 0 && sceneMgr.current) {
-                                            const newIsolated = selectedUuids.filter(id => !isolatedUuids.has(id));
-                                            if (newIsolated.length > 0) {
-                                                sceneMgr.current.isolateObjects(selectedUuids);
-                                                setIsolatedUuids(new Set([...isolatedUuids, ...newIsolated]));
-                                            }
-                                        }
-                                    },
+                                    onClick: handleIsolateSelection,
                                     disabled: selectedUuids.length === 0
                                 },
                                 {
@@ -1313,7 +1180,7 @@ export const ThreeViewer = ({
                                     onClick: handleShowAll
                                 }
                             ]}
-                            onClose={() => setContextMenu(prev => ({ ...prev, visible: false }))}
+                            onClose={closeContextMenu}
                             theme={theme}
                         />
                     )}
