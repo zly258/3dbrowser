@@ -5,9 +5,7 @@ import {
     collectItems,
     collectItemsBatched,
     buildOctree,
-    collectLeafNodes,
-    createBatchedMeshFromItems,
-    createBatchedMeshFromItemsAsync
+    collectLeafNodes
 } from "../octree";
 import { deriveInitialRuntimeFromHardware } from "../scene/chunkRuntime";
 import { debugLog, debugWarn } from "../scene/debugLogger";
@@ -28,6 +26,13 @@ import {
     readChunkBuffer as readChunkBufferValue,
     touchChunkReadCache as touchChunkReadCacheOrder
 } from "./chunkIO";
+import {
+    applyUnloadChunk,
+    attachLoadedChunkMesh,
+    cleanupChunkGhost,
+    finalizeLoadedChunk,
+    resolveChunkMeshForLoad
+} from "./chunkExecution";
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
@@ -1815,18 +1820,15 @@ export class SceneManager {
     }
 
     private unloadChunk(chunk: any) {
-        if (!chunk.loaded || !chunk.mesh) return;
+        const result = applyUnloadChunk({
+            chunk,
+            unregisterOptimizedMeshMapping: (mesh) => this.unregisterOptimizedMeshMapping(mesh),
+            cacheChunkMesh: (nextChunk, mesh) => this.cacheChunkMesh(nextChunk, mesh),
+            ensureChunkGhost: (nextChunk) => this.ensureChunkGhost(nextChunk)
+        });
+        if (!result.changed) return;
 
-        const bm = chunk.mesh as THREE.BatchedMesh;
-        this.unregisterOptimizedMeshMapping(bm);
-
-        if (bm.parent) bm.parent.remove(bm);
-        this.cacheChunkMesh(chunk, bm);
-        this.ensureChunkGhost(chunk);
-
-        chunk.mesh = null;
-        chunk.loaded = false;
-        this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - 1);
+        this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount + result.chunkLoadedCountDelta);
         this.interactableListValid = false;
         this._needsBoundsUpdate = true;
         this.cullingDirty = true;
@@ -1835,112 +1837,70 @@ export class SceneManager {
     private async loadChunk(chunk: any) {
         this.processingChunks.add(chunk.id);
         try {
-            let bm: THREE.BatchedMesh | null = null;
             let loadedNow = false;
-            const cachedMesh = this.takeCachedChunkMesh(chunk.id);
+            const { mesh: bm, prefetchCandidates } = await resolveChunkMeshForLoad({
+                chunk,
+                sharedMaterial: this.sharedMaterial,
+                takeCachedChunkMesh: (chunkId) => this.takeCachedChunkMesh(chunkId),
+                yieldToMainThread: () => this.yieldToMainThread(),
+                nbimFiles: this.nbimFiles,
+                hasValidChunkBinaryRange: (nextChunk) => this.hasValidChunkBinaryRange(nextChunk),
+                readChunkBuffer: (nextChunk) => this.readChunkBuffer(nextChunk),
+                nbimMeta: this.nbimMeta,
+                runWorkerTask: (data, transferables) => this.runWorkerTask(data, transferables),
+                reconstructBatchedMesh: (data, material) => this.reconstructBatchedMesh(data, material),
+                isCameraMoving: this.isCameraMoving,
+                chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
+                getChunkIndex: (chunkId) => this.getChunkIndex(chunkId),
+                chunks: this.chunks,
+                processingChunks: this.processingChunks
+            });
 
-            if (cachedMesh) {
-                bm = cachedMesh;
-            } else if (chunk.node) {
-                // 来自 addModel 的本地分块
-                bm = await createBatchedMeshFromItemsAsync(chunk.node.items, this.sharedMaterial, {
-                    batchSize: 1200,
-                    yieldControl: () => this.yieldToMainThread()
-                });
-            } else if (chunk.nbimFileId && this.nbimFiles.has(chunk.nbimFileId) && this.hasValidChunkBinaryRange(chunk)) {
-                // 来自 loadNbim 的远程分块
-                const buffer = await this.readChunkBuffer(chunk);
-                const meta = this.nbimMeta.get(chunk.nbimFileId);
-                const version = meta?.version ?? 8;
-                if (version !== 8) {
-                    throw new Error(`Unsupported NBIM version: ${version}. Only V8 is supported.`);
-                }
-
-                // 使用 Worker 进行解析
-                const workerResult = await this.runWorkerTask({
-                    buffer,
-                    version,
-                    originalUuid: chunk.originalUuid,
-                    bimIdTable: meta?.bimIdTable
-                }, [buffer]);
-
-                bm = this.reconstructBatchedMesh(workerResult, this.sharedMaterial);
-
-                if (!this.isCameraMoving && this.resolvedChunkOptions.chunkPrefetchWindow > 0) {
-                    const chunkIndex = this.getChunkIndex(chunk.id);
-                    if (chunkIndex >= 0) {
-                        const candidates: string[] = [];
-                        for (let i = 1; i <= this.resolvedChunkOptions.chunkPrefetchWindow; i++) {
-                            const next = this.chunks[chunkIndex + i];
-                            if (!next) break;
-                            if (next.loaded || this.processingChunks.has(next.id)) continue;
-                            if (!next.nbimFileId || !this.hasValidChunkBinaryRange(next)) continue;
-                            candidates.push(next.id);
-                        }
-                        this.enqueueChunkPrefetch(candidates);
-                        void this.processPrefetchQueue();
-                    }
-                }
+            if (prefetchCandidates.length > 0) {
+                this.enqueueChunkPrefetch(prefetchCandidates);
+                void this.processPrefetchQueue();
             }
 
             if (bm) {
-                if (this.cancelledChunkIds.has(chunk.id) || !this.chunkIdSet.has(chunk.id)) {
-                    this.disposeChunkMesh(bm);
-                    return;
+                const attached = attachLoadedChunkMesh({
+                    chunk,
+                    mesh: bm,
+                    cancelledChunkIds: this.cancelledChunkIds,
+                    chunkIdSet: this.chunkIdSet,
+                    disposeChunkMesh: (mesh) => this.disposeChunkMesh(mesh),
+                    globalOffset: this.globalOffset,
+                    contentGroup: this.contentGroup,
+                    registerOptimizedMeshMapping: (mesh) => this.registerOptimizedMeshMapping(mesh)
+                });
+                loadedNow = attached.attached;
+                if (loadedNow) {
+                    this.interactableListValid = false;
+                    this._needsBoundsUpdate = true;
                 }
-                bm.name = chunk.id;
-                bm.userData.chunkId = chunk.id;
-                bm.userData.originalUuid = chunk.originalUuid;
-
-                // 抵消全局偏移 (解决大坐标导致的精度问题)
-                // 只有远程 NBIM 分块需要手动抵消，因为其二进制数据是大坐标
-                // 本地分块在 addModel 时已经随 object 整体偏移过了，生成的 BatchedMesh 坐标是正确的
-                if (chunk.nbimFileId) {
-                    bm.position.sub(this.globalOffset);
-                    bm.updateMatrixWorld(true);
-                }
-
-                // 查找或创建优化组
-                let optimizedGroup = this.contentGroup.getObjectByName(chunk.groupName) as THREE.Group;
-                if (!optimizedGroup) {
-                    optimizedGroup = new THREE.Group();
-                    optimizedGroup.name = chunk.groupName;
-                    optimizedGroup.userData.isOptimizedGroup = true;
-                    optimizedGroup.userData.originalUuid = chunk.originalUuid;
-                    this.contentGroup.add(optimizedGroup);
-                }
-
-                optimizedGroup.add(bm);
-                chunk.mesh = bm;
-                loadedNow = true;
-                this.interactableListValid = false;
-                this._needsBoundsUpdate = true; // 标记需要更新场景范围
-
-                this.registerOptimizedMeshMapping(bm);
             }
 
-            if (loadedNow && !chunk.loaded) {
-                chunk.loaded = true;
-                this.chunkLoadedCount++; // 增加计数
-                chunk.lastVisibleAt = performance.now();
-                chunk.lastFocusAt = chunk.lastVisibleAt;
-                if (chunk.originalUuid) {
-                    this.deactivateFastPreviewForModel(chunk.originalUuid);
-                }
-                if (this.chunkWarmupActive && this.chunkLoadedCount >= this.initialChunkLoadTarget) {
-                    this.chunkWarmupActive = false;
-                }
+            const finalized = finalizeLoadedChunk({
+                chunk,
+                loadedNow,
+                now: performance.now(),
+                chunkLoadedCount: this.chunkLoadedCount,
+                chunkWarmupActive: this.chunkWarmupActive,
+                initialChunkLoadTarget: this.initialChunkLoadTarget,
+                deactivateFastPreviewForModel: (originalUuid) => this.deactivateFastPreviewForModel(originalUuid)
+            });
+            this.chunkLoadedCount = finalized.nextChunkLoadedCount;
+            this.chunkWarmupActive = finalized.nextChunkWarmupActive;
+            if (finalized.progressChanged) {
                 this.reportChunkProgress();
                 this.cullingDirty = true;
             }
             this.cancelledChunkIds.delete(chunk.id);
 
-            // 移除鬼影
-            const ghost = this.ghostGroup.getObjectByName(`ghost_${chunk.id}`);
-            if (ghost) {
-                this.ghostGroup.remove(ghost);
-                this.releaseGhostLine(ghost as THREE.LineSegments);
-            }
+            cleanupChunkGhost({
+                chunkId: chunk.id,
+                ghostGroup: this.ghostGroup,
+                releaseGhostLine: (line) => this.releaseGhostLine(line)
+            });
         } catch (err) {
             console.error(`加载分块 ${chunk.id} 失败:`, err);
         } finally {
