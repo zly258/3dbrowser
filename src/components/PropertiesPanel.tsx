@@ -1,16 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { IconChevronRight, IconChevronDown, IconCopy } from "../theme/Icons";
 import { filterPropertyGroups, serializePropertyGroups, type PropertyGroups } from "../viewer/propertyIndex";
-import type { SelectionSummary } from "../viewer/selectionSummary";
 
 interface PropertiesPanelProps {
     t: (key: string) => string;
     selectedProps: PropertyGroups | null;
-    selectedSummary?: SelectionSummary | null;
     theme: any;
 }
 
-export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps, selectedSummary }) => {
+export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps }) => {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
     const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -78,25 +76,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
 
     return (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
-            {selectedSummary && (
-                <div className="ui-selection-summary">
-                    <div className="ui-selection-summary-header">
-                        <div className="ui-selection-summary-title">{selectedSummary.title}</div>
-                        {selectedSummary.subtitle && (
-                            <div className="ui-selection-summary-subtitle">{selectedSummary.subtitle}</div>
-                        )}
-                    </div>
-                    <div className="ui-selection-summary-grid">
-                        {selectedSummary.metrics.map((metric) => (
-                            <div key={metric.key} className="ui-selection-summary-card">
-                                <div className="ui-selection-summary-key">{metric.key}</div>
-                                <div className="ui-selection-summary-value" title={metric.value}>{metric.value}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             {selectedProps && (
                 <div className="ui-properties-toolbar">
                     <div className="ui-search-input-wrap">
@@ -191,7 +170,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                     ))
                 ) : (
                     <div style={{ padding: 20, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
-                        {selectedSummary ? (t("summary_multi_only") || "当前为多选摘要，详细属性请单选查看") : t("no_selection")}
+                        {t("no_selection")}
                     </div>
                 )}
             </div>
