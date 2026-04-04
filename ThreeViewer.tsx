@@ -2,7 +2,7 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 // @ts-ignore
 import * as THREE from "three";
 import "./src/styles/index.css";
-import { SceneManager, MeasureType, SceneSettings, PerformancePreset, SceneChunkOptions } from "./src/utils/SceneManager";
+import { SceneManager, SceneSettings, PerformancePreset, SceneChunkOptions } from "./src/utils/SceneManager";
 import { exportGLB, exportLMB } from "./src/utils/converter";
 import { themes, ThemeColors } from "./src/theme/Styles";
 import { getTranslation, Lang } from "./src/theme/Locales";
@@ -25,6 +25,7 @@ import { useFileLoadingFlow } from "./src/hooks/useFileLoadingFlow";
 import { useSceneStats } from "./src/hooks/useSceneStats";
 import { useSceneSelection } from "./src/hooks/useSceneSelection";
 import { useViewerSelection } from "./src/hooks/useViewerSelection";
+import { useViewerTools } from "./src/hooks/useViewerTools";
 import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
 import { cleanLoadingStatus } from "./src/viewer/fileLoading";
@@ -177,13 +178,8 @@ export const ThreeViewer = ({
         pixelRatio: 1
     });
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
+    const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     
-    // 工具状态
-    const [activeTool, setActiveTool] = useState<'none' | 'measure' | 'clip' | 'settings' | 'export' | 'screenshot' | 'viewpoint' | 'search' | 'boxSelect' | 'explode' | 'clash'>('none');
-    const [explodeEnabled, setExplodeEnabled] = useState(false);
-    const [explodeStrength, setExplodeStrength] = useState(32);
-    const [explodeMode, setExplodeMode] = useState<'radial' | 'horizontal' | 'vertical'>('radial');
-
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
     // 显示模式：solid-着色, transparent-透明
@@ -192,34 +188,38 @@ export const ThreeViewer = ({
     // Viewpoint State
     const [currentFileSetId, setCurrentFileSetId] = useState<string>("");
     
-    // Measure State
-    const [measureType, setMeasureType] = useState<MeasureType>('none');
-    // 存储历史记录: { id, type, val }
-    const [measureHistory, setMeasureHistory] = useState<any[]>([]);
-    const [highlightedMeasureId, setHighlightedMeasureId] = useState<string | null>(null);
-
-    const [clipEnabled, setClipEnabled] = useState(false);
-    const [clipValues, setClipValues] = useState({ x: [0, 100], y: [0, 100], z: [0, 100] });
-    const [clipActive, setClipActive] = useState({ x: false, y: false, z: false });
-    const [clipHelperVisible, setClipHelperVisible] = usePersistentState<boolean>(
-        '3dbrowser_clipHelperVisible',
-        initialSettings?.clip?.helperVisible ?? false,
-        {
-            serializer: (value) => String(value),
-            parser: (raw) => raw === 'true'
-        }
-    );
-    const [clipHelperOpacity, setClipHelperOpacity] = usePersistentState<number>(
-        '3dbrowser_clipHelperOpacity',
-        initialSettings?.clip?.helperOpacity ?? 0.12,
-        {
-            serializer: (value) => String(value),
-            parser: (raw) => {
-                const parsed = Number(raw);
-                return Number.isFinite(parsed) ? parsed : 0.12;
-            }
-        }
-    );
+    const {
+        activeTool,
+        setActiveTool,
+        explodeEnabled,
+        setExplodeEnabled,
+        explodeStrength,
+        setExplodeStrength,
+        explodeMode,
+        setExplodeMode,
+        resetExplodeState,
+        measureType,
+        setMeasureType,
+        measureHistory,
+        setMeasureHistory,
+        highlightedMeasureId,
+        setHighlightedMeasureId,
+        resetMeasurementState,
+        handleMeasureUpdate,
+        clipEnabled,
+        setClipEnabled,
+        clipValues,
+        setClipValues,
+        clipActive,
+        setClipActive,
+        clipHelperVisible,
+        setClipHelperVisible,
+        clipHelperOpacity,
+        setClipHelperOpacity
+    } = useViewerTools({
+        initialSettings,
+        mgrInstance
+    });
 
     // Toolbar State - 从localStorage恢复状态
     const [pickEnabled, setPickEnabled] = usePersistentState<boolean>('3dbrowser_pickEnabled', false, {
@@ -297,7 +297,6 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const ifcPropertyCacheRef = useRef<Map<string, Record<string, PropertyGroupInput>>>(new Map());
-    const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
     const mouseMoveRafRef = useRef<number | null>(null);
     const pendingMousePointRef = useRef<{ x: number; y: number } | null>(null);
@@ -336,21 +335,6 @@ export const ThreeViewer = ({
             return merged;
         });
     }, [sceneBgFollowsTheme, setSceneSettings, theme.canvasBg]);
-
-    useEffect(() => {
-        const normalizedOpacity = Math.min(0.35, Math.max(0.05, clipHelperOpacity));
-        if (normalizedOpacity !== clipHelperOpacity) {
-            setClipHelperOpacity(normalizedOpacity);
-            return;
-        }
-
-        if (sceneMgr.current) {
-            sceneMgr.current.setClipHelperOptions({
-                visible: clipHelperVisible,
-                opacity: normalizedOpacity
-            });
-        }
-    }, [clipHelperVisible, clipHelperOpacity, setClipHelperOpacity]);
 
     useEffect(() => {
         const manager = sceneMgr.current;
@@ -787,19 +771,13 @@ export const ThreeViewer = ({
 
         // Initial setup
         manager.updateSettings(sceneSettings);
-        manager.setClipHelperOptions({
-            visible: clipHelperVisible,
-            opacity: clipHelperOpacity
-        });
         requestAnimationFrame(() => {
             manager.resize();
         });
 
         manager.onChunkProgress = handleManagerChunkProgress;
 
-        manager.onMeasureUpdate = (records) => {
-            setMeasureHistory(records.map(r => ({ id: r.id, type: r.type, val: r.val })));
-        };
+        manager.onMeasureUpdate = handleMeasureUpdate;
 
         manager.onStructureUpdate = () => {
             updateTree();
@@ -1044,25 +1022,6 @@ export const ThreeViewer = ({
         };
     }, [activeTool]);
 
-    // 工具状态同步
-    useEffect(() => {
-        const mgr = sceneMgr.current;
-        if (!mgr) return;
-
-        // 清理非当前工具的状态
-        if (activeTool !== 'measure') {
-            mgr.clearMeasurementPreview();
-            mgr.highlightMeasurement(null);
-            setHighlightedMeasureId(null);
-            setMeasureType('none');
-        }
-
-        if (activeTool !== 'clip') {
-            mgr.setClippingEnabled(false);
-            setClipEnabled(false);
-        }
-    }, [activeTool]);
-
     // 设置同步
     const handleSettingsUpdate = (newSettings: Partial<SceneSettings>) => {
         const merged = {
@@ -1075,48 +1034,6 @@ export const ThreeViewer = ({
             sceneMgr.current.updateSettings(merged);
         }
     };
-
-
-    // 剖切参数更新
-    useEffect(() => {
-        if (activeTool === 'clip' && sceneMgr.current) {
-            sceneMgr.current.setClippingEnabled(clipEnabled);
-            if (clipEnabled) {
-                // 使用当前场景中可见物体的包围盒，这样剖切范围会随着场景内容自动调整
-                // 如果没有可见物体，则回退到完整包围盒
-                let box = sceneMgr.current.computeTotalBounds(true);
-                if (box.isEmpty()) {
-                    box = sceneMgr.current.computeTotalBounds(false);
-                }
-                
-                if (!box.isEmpty()) {
-                    sceneMgr.current.updateClippingPlanes(box, clipValues, clipActive);
-                }
-            }
-        }
-    }, [clipEnabled, clipValues, clipActive, activeTool]);
-
-    // 测量类型同步
-    useEffect(() => {
-        if (sceneMgr.current) {
-            sceneMgr.current.startMeasurement(measureType);
-        }
-    }, [measureType]);
-
-    useEffect(() => {
-        if (!sceneMgr.current) return;
-        sceneMgr.current.setExplodeEnabled(explodeEnabled);
-    }, [explodeEnabled]);
-
-    useEffect(() => {
-        if (!sceneMgr.current) return;
-        sceneMgr.current.setExplodeStrength(explodeStrength);
-    }, [explodeStrength]);
-
-    useEffect(() => {
-        if (!sceneMgr.current) return;
-        sceneMgr.current.setExplodeMode(explodeMode);
-    }, [explodeMode]);
 
 
     // --- 处理函数 ---
@@ -1233,7 +1150,7 @@ export const ThreeViewer = ({
             await sceneMgr.current.clear();
             setSelectedUuids([]);
             setSelectedProps(null);
-            setMeasureHistory([]);
+            resetMeasurementState();
             updateTree();
 
             await loadItemsIntoScene(files);
@@ -1435,12 +1352,10 @@ export const ThreeViewer = ({
                     handleClearSearchResult();
                     resetClashState();
                     ifcPropertyCacheRef.current.clear();
-                    setMeasureHistory([]);
+                    resetMeasurementState();
                     setChunkProgress({ loaded: 0, total: 0 }); // 重置分片进度
                     completedFileSetsRef.current.clear(); // 清除已完成的文件集记录
-                    setExplodeEnabled(false);
-                    setExplodeStrength(32);
-                    setExplodeMode('radial');
+                    resetExplodeState();
                     updateTree();
                     setStatus(t("ready"));
                 } catch (error) {
@@ -1692,9 +1607,7 @@ export const ThreeViewer = ({
                             }}
                             onClear={() => { 
                                 sceneMgr.current?.clearAllMeasurements(); 
-                                setMeasureHistory([]); 
-                                setHighlightedMeasureId(null);
-                                setMeasureType('none');
+                                resetMeasurementState();
                             }}
                             onClose={() => setActiveTool('none')}
                             theme={theme}
@@ -1831,9 +1744,7 @@ export const ThreeViewer = ({
                             onStrengthChange={setExplodeStrength}
                             onModeChange={setExplodeMode}
                             onReset={() => {
-                                setExplodeEnabled(false);
-                                setExplodeStrength(32);
-                                setExplodeMode('radial');
+                                resetExplodeState();
                                 sceneMgr.current?.resetExplode();
                             }}
                             theme={theme}

@@ -27,6 +27,7 @@ import {
     isBoxClippedByPlanes
 } from "./sceneManagerClipping";
 import { disposeSceneManagerResources } from "./sceneManagerLifecycle";
+import { getObjectGeometryDataFromScene } from "./sceneManagerGeometry";
 import {
     applyClearLocateFocus,
     applyHighlightObjects,
@@ -74,6 +75,7 @@ import {
     type StructureTreeNode
 } from "./sceneManagerTypes";
 import type { PropertyGroupInput } from "../viewer/propertyIndex";
+import { sanitizeFileStem, stripFileExtension } from "../viewer/exportNaming";
 
 const CHUNK_PROGRESS_REPORT_INTERVAL_MS = 48;
 const NBIM_CHUNK_REGISTRATION_BATCH = 220;
@@ -4460,120 +4462,15 @@ export class SceneManager {
         return applyPickMeasurement(this.getMeasurementContext(), clientX, clientY);
     }
 
-    private computeGeometryVolume(geometry: THREE.BufferGeometry, mesh: THREE.Mesh, instanceId?: number): number {
-        const pos = geometry.attributes.position;
-        const index = geometry.index;
-        let volume = 0;
-        const vA = new THREE.Vector3();
-        const vB = new THREE.Vector3();
-        const vC = new THREE.Vector3();
-        const tmpMat = new THREE.Matrix4();
-
-        if (instanceId !== undefined && mesh.isInstancedMesh) {
-            (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, tmpMat);
-        } else {
-            tmpMat.copy(mesh.matrixWorld);
-        }
-
-        const applyMatrix = (v: THREE.Vector3) => {
-            v.applyMatrix4(tmpMat);
-        };
-
-        if (index) {
-            for (let i = 0; i < index.count; i += 3) {
-                vA.fromBufferAttribute(pos, index.getX(i));
-                vB.fromBufferAttribute(pos, index.getX(i + 1));
-                vC.fromBufferAttribute(pos, index.getX(i + 2));
-                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
-                // 使用散度定理计算有符号体积
-                volume += vA.dot(new THREE.Vector3().crossVectors(vB, vC)) / 6;
-            }
-        } else {
-            for (let i = 0; i < pos.count; i += 3) {
-                vA.fromBufferAttribute(pos, i);
-                vB.fromBufferAttribute(pos, i + 1);
-                vC.fromBufferAttribute(pos, i + 2);
-                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
-                volume += vA.dot(new THREE.Vector3().crossVectors(vB, vC)) / 6;
-            }
-        }
-        return Math.abs(volume);
-    }
-
-    private computeGeometryArea(geometry: THREE.BufferGeometry, mesh: THREE.Mesh, instanceId?: number): number {
-        const pos = geometry.attributes.position;
-        const index = geometry.index;
-        let area = 0;
-        const vA = new THREE.Vector3();
-        const vB = new THREE.Vector3();
-        const vC = new THREE.Vector3();
-        const tmpMat = new THREE.Matrix4();
-
-        if (instanceId !== undefined && mesh.isInstancedMesh) {
-            (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, tmpMat);
-        } else {
-            tmpMat.copy(mesh.matrixWorld);
-        }
-
-        const applyMatrix = (v: THREE.Vector3) => {
-            v.applyMatrix4(tmpMat);
-        };
-
-        if (index) {
-            for (let i = 0; i < index.count; i += 3) {
-                vA.fromBufferAttribute(pos, index.getX(i));
-                vB.fromBufferAttribute(pos, index.getX(i + 1));
-                vC.fromBufferAttribute(pos, index.getX(i + 2));
-                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
-                // 计算三角形面积
-                const ab = new THREE.Vector3().subVectors(vB, vA);
-                const ac = new THREE.Vector3().subVectors(vC, vA);
-                area += ab.cross(ac).length() / 2;
-            }
-        } else {
-            for (let i = 0; i < pos.count; i += 3) {
-                vA.fromBufferAttribute(pos, i);
-                vB.fromBufferAttribute(pos, i + 1);
-                vC.fromBufferAttribute(pos, i + 2);
-                applyMatrix(vA); applyMatrix(vB); applyMatrix(vC);
-                // 计算三角形面积
-                const ab = new THREE.Vector3().subVectors(vB, vA);
-                const ac = new THREE.Vector3().subVectors(vC, vA);
-                area += ab.cross(ac).length() / 2;
-            }
-        }
-        return area;
-    }
-
     /**
      * 获取对象的面积和体积
      */
     getObjectGeometryData(uuid: string): { area: number, volume: number } {
-        let area = 0;
-        let volume = 0;
-
-        // 尝试从优化映射中获取
-        const mappings = this.optimizedMapping.get(uuid);
-        if (mappings && mappings.length > 0) {
-            mappings.forEach(m => {
-                if (m.geometry) {
-                    area += this.computeGeometryArea(m.geometry, m.mesh, m.instanceId);
-                    volume += this.computeGeometryVolume(m.geometry, m.mesh, m.instanceId);
-                }
-            });
-        } else {
-            // 尝试从 contentGroup 中获取
-            const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
-            if (obj && (obj as THREE.Mesh).isMesh) {
-                const mesh = obj as THREE.Mesh;
-                if (mesh.geometry) {
-                    area = this.computeGeometryArea(mesh.geometry, mesh, undefined);
-                    volume = this.computeGeometryVolume(mesh.geometry, mesh, undefined);
-                }
-            }
-        }
-
-        return { area, volume };
+        return getObjectGeometryDataFromScene({
+            uuid,
+            optimizedMapping: this.optimizedMapping,
+            contentGroup: this.contentGroup
+        });
     }
 
     // ========== 框选方法 ==========
@@ -4755,18 +4652,6 @@ export class SceneManager {
             }
         });
     }
-}
-
-function stripFileExtension(name: string) {
-    return name.replace(/\.[^./\\]+$/, "");
-}
-
-function sanitizeFileStem(name: string) {
-    const sanitized = name
-        .replace(/[\\/:*?"<>|]/g, "_")
-        .replace(/\s+/g, " ")
-        .trim();
-    return sanitized || "model";
 }
 
 export type { PerformancePreset, SceneChunkOptions, SceneManagerOptions };
