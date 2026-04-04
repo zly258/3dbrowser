@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { IconChevronDown, IconChevronUp } from "../theme/Icons";
 import { TFunc } from "../theme/Locales";
-import { FloatingPanel } from "./ToolPanels/index";
+import { FloatingPanel } from "./tool-panels/index";
 
 interface AboutModalProps {
     isOpen: boolean;
