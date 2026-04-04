@@ -238,7 +238,7 @@ body {
   color: var(--text-secondary);
   background: transparent;
   border: none;
-  transition: all 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .ui-panel-close:hover {
@@ -316,7 +316,7 @@ body {
   font-family: inherit;
   border-radius: var(--radius-sm); /* Changed from XL for more professional look */
   cursor: pointer;
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1), border-color 200ms cubic-bezier(0.4, 0, 0.2, 1), color 200ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   min-height: var(--control-h-md);
   border: 1px solid transparent;
@@ -435,7 +435,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, color 200ms ease;
   min-height: var(--control-h-md);
 }
 
@@ -496,7 +496,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-weight: 500;
   border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, color 200ms ease;
   color: var(--text-secondary);
   background: transparent;
   border: none;
@@ -530,7 +530,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border-radius: 12px;
   background-color: var(--border-color);
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, color 200ms ease;
   border: 2px solid transparent;
   padding: 0;
   flex-shrink: 0;
@@ -764,7 +764,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   gap: 3px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, color 200ms ease;
   color: var(--text-secondary);
   background: transparent;
   border: none;
@@ -905,7 +905,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-secondary);
   background: transparent;
   border: none;
-  transition: all 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .ui-modal-close:hover {
@@ -1065,11 +1065,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .rounded-full { border-radius: 9999px; }
 
 /* ==================== 边框 ==================== */
-.border { border: 1px solid var(--border-color); }
-.border-b { border-bottom: 1px solid var(--border-color); }
-.border-t { border-top: 1px solid var(--border-color); }
-.border-l { border-left: 1px solid var(--border-color); }
-.border-r { border-right: 1px solid var(--border-color); }
+.border { border: 1px solid var(--border-light); }
+.border-b { border-bottom: 1px solid var(--border-light); }
+.border-t { border-top: 1px solid var(--border-light); }
+.border-l { border-left: 1px solid var(--border-light); }
+.border-r { border-right: 1px solid var(--border-light); }
 .border-l-2 { border-left: 2px solid var(--accent); }
 .border-transparent { border-color: transparent; }
 
@@ -1848,7 +1848,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   position: relative;
   background-color: var(--bg-panel);
   border-radius: var(--radius-sm);
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 .ui-input-number-root {
@@ -2103,19 +2103,19 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-input-number-btn {
-  transition: all 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
   background: transparent;
   border: none;
   border-radius: 2px;
   color: var(--text-muted);
   font-size: 8px;
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 50%;
-  padding: 0 !important;
-  min-height: unset !important;
+  padding: 0;
+  min-height: unset;
 }
 
 .ui-checkbox {
@@ -2199,12 +2199,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-input-number-btn:hover {
-  background-color: var(--bg-hover) !important;
-  color: var(--accent) !important;
+  background-color: var(--bg-hover);
+  color: var(--accent);
 }
 
 .ui-input-number-btn:active {
-  background-color: var(--bg-active) !important;
+  background-color: var(--bg-active);
 }
 
 .ui-properties-toolbar {
@@ -2429,7 +2429,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: 13px;
   color: var(--text-primary);
   background: transparent;
-  transition: all 200ms ease;
+  transition: background-color 200ms ease, color 200ms ease;
   padding-right: 8px;
   border-radius: var(--radius-sm);
   margin: 1px 4px;
@@ -2824,3 +2824,4 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   box-shadow: var(--shadow-lg);
   color: var(--text-primary);
 }
+

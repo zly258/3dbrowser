@@ -34,7 +34,6 @@ import { useViewpoints } from "./src/hooks/useViewpoints";
 import { useViewportLifecycle } from "./src/hooks/useViewportLifecycle";
 import { sanitizeFileStem, stripFileExtension } from "./src/viewer/exportNaming";
 import type { PropertyGroupInput, PropertyGroups } from "./src/viewer/propertyIndex";
-import { buildSelectionSummary } from "./src/viewer/selectionSummary";
 import type { ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerErrorState, ViewerToast } from "./src/viewer/types";
 import { usePropertySearch } from "./src/hooks/usePropertySearch";
 import { useClashCheck } from "./src/hooks/useClashCheck";
@@ -924,14 +923,6 @@ export const ThreeViewer = ({
         URL.revokeObjectURL(url);
     }, [checkedSearchResults, currentFileSetId]);
 
-    const selectedSummary = useMemo(() => buildSelectionSummary({
-        sceneManager: sceneMgr.current,
-        treeRoot,
-        selectedUuids,
-        selectedProps,
-        t
-    }), [mgrInstance, selectedProps, selectedUuids, t, treeRoot]);
-
     const modeTrayItems = useMemo(() => {
         const items: Array<{ key: string; label: string; onClear: () => void }> = [];
 
@@ -1476,7 +1467,7 @@ export const ThreeViewer = ({
                             </button>
                         </div>
                         <div className="ui-sidebar-content">
-                            <PropertiesPanel t={t} selectedProps={selectedProps} selectedSummary={selectedSummary} theme={theme} />
+                            <PropertiesPanel t={t} selectedProps={selectedProps} theme={theme} />
                         </div>
                         {/* Resize handle */}
                         <div
