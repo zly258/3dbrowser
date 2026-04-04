@@ -10,6 +10,10 @@ type MeasurementState = {
 };
 
 interface SceneManagerMeasurementContext {
+    canvas: HTMLCanvasElement;
+    camera: THREE.Camera;
+    raycaster: THREE.Raycaster;
+    mouse: THREE.Vector2;
     measureGroup: THREE.Group;
     tempMarker: THREE.Points;
     dotTexture: THREE.Texture;
@@ -335,4 +339,66 @@ export function applyAddMeasurePoint(
         needsRender: true,
         completed: null
     };
+}
+
+export function applyHighlightMeasurement(
+    context: SceneManagerMeasurementContext,
+    id: string | null
+): MeasurementResult {
+    context.measureRecords.forEach((record, recordId) => {
+        const isHighlighted = recordId === id;
+        const color = isHighlighted ? 0x00ff00 : 0xff0000;
+
+        record.group.traverse((child) => {
+            if (child instanceof THREE.Line || child instanceof THREE.LineLoop) {
+                (child.material as THREE.LineBasicMaterial).color.set(color);
+            } else if (child instanceof THREE.Points) {
+                (child.material as THREE.PointsMaterial).color.set(color);
+            } else if (child instanceof THREE.Sprite) {
+                (child.material as THREE.SpriteMaterial).color.set(isHighlighted ? 0x00ff00 : 0xffffff);
+            } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+                child.material.color.set(color);
+            } else if (child instanceof THREE.Box3Helper) {
+                (child as any).material.color.set(color);
+            }
+        });
+    });
+
+    return {
+        state: context.state,
+        needsRender: true
+    };
+}
+
+export function applyPickMeasurement(
+    context: SceneManagerMeasurementContext,
+    clientX: number,
+    clientY: number
+): string | null {
+    const rect = context.canvas.getBoundingClientRect();
+    context.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    context.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    context.raycaster.setFromCamera(context.mouse, context.camera);
+    const previousThreshold = context.raycaster.params.Line?.threshold || 0;
+    if (context.raycaster.params.Line) {
+        context.raycaster.params.Line.threshold = 5;
+    }
+
+    const intersects = context.raycaster.intersectObjects(context.measureGroup.children, true);
+
+    if (context.raycaster.params.Line) {
+        context.raycaster.params.Line.threshold = previousThreshold;
+    }
+
+    if (intersects.length === 0) {
+        return null;
+    }
+
+    let object = intersects[0].object;
+    while (object.parent && !object.name.startsWith("measure_")) {
+        object = object.parent;
+    }
+
+    return object.name.startsWith("measure_") ? object.name : null;
 }

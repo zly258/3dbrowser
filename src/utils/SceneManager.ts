@@ -23,6 +23,8 @@ import {
     applyAddMeasurePoint,
     applyClearMeasurementPreview,
     applyFinalizeMeasurement,
+    applyHighlightMeasurement,
+    applyPickMeasurement,
     applyUpdateMeasureHover,
     applyUpdateMeasurePreview
 } from "./sceneManagerMeasurement";
@@ -3478,6 +3480,10 @@ export class SceneManager {
 
     private getMeasurementContext() {
         return {
+            canvas: this.canvas,
+            camera: this.camera,
+            raycaster: this.raycaster,
+            mouse: this.mouse,
             measureGroup: this.measureGroup,
             tempMarker: this.tempMarker,
             dotTexture: this.dotTexture,
@@ -4410,52 +4416,13 @@ export class SceneManager {
     }
 
     highlightMeasurement(id: string | null) {
-        this.measureRecords.forEach((record, rid) => {
-            const isHighlighted = rid === id;
-            const color = isHighlighted ? 0x00ff00 : 0xff0000; // 高亮绿色，普通红色
-
-            record.group.traverse(child => {
-                if (child instanceof THREE.Line || child instanceof THREE.LineLoop) {
-                    (child.material as THREE.LineBasicMaterial).color.set(color);
-                } else if (child instanceof THREE.Points) {
-                    (child.material as THREE.PointsMaterial).color.set(color);
-                } else if (child instanceof THREE.Sprite) {
-                    (child.material as THREE.SpriteMaterial).color.set(isHighlighted ? 0x00ff00 : 0xffffff);
-                } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
-                    // 半透明填充面
-                    (child.material as THREE.MeshBasicMaterial).color.set(color);
-                } else if (child instanceof THREE.Box3Helper) {
-                    (child as any).material.color.set(color);
-                }
-            });
-        });
+        const result = applyHighlightMeasurement(this.getMeasurementContext(), id);
+        this.syncMeasurementState(result.state);
+        if (result.needsRender) this.requestRender();
     }
 
     pickMeasurement(clientX: number, clientY: number): string | null {
-        const rect = this.canvas.getBoundingClientRect();
-        this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-        this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-        // 增加阈值以便更容易选中线
-        const oldThreshold = this.raycaster.params.Line?.threshold || 0;
-        if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = 5;
-
-        const intersects = this.raycaster.intersectObjects(this.measureGroup.children, true);
-
-        if (this.raycaster.params.Line) this.raycaster.params.Line.threshold = oldThreshold;
-
-        if (intersects.length > 0) {
-            // 找到所属的 Group (其名字为 measure_xxx)
-            let obj = intersects[0].object;
-            while (obj.parent && !obj.name.startsWith("measure_")) {
-                obj = obj.parent;
-            }
-            if (obj.name.startsWith("measure_")) {
-                return obj.name;
-            }
-        }
-        return null;
+        return applyPickMeasurement(this.getMeasurementContext(), clientX, clientY);
     }
 
     private computeGeometryVolume(geometry: THREE.BufferGeometry, mesh: THREE.Mesh, instanceId?: number): number {
