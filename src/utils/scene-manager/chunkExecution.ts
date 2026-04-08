@@ -221,8 +221,9 @@ export function cleanupChunkGhost(options: {
     const { chunkId, ghostGroup, releaseGhostLine } = options;
     const ghost = ghostGroup.getObjectByName(`ghost_${chunkId}`);
     if (!ghost) {
-        return;
+        return { changed: false };
     }
     ghostGroup.remove(ghost);
     releaseGhostLine(ghost as THREE.LineSegments);
+    return { changed: true };
 }
