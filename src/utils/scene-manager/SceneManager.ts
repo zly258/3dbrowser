@@ -572,8 +572,7 @@ export class SceneManager {
             this.interactionShadowRestoreAt = 0;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
-            this.cullingDirty = true;
-            this.requestRender();
+            this.markSceneDirty({ needsCulling: true });
         });
         this.controls.addEventListener('change', () => {
             const profile = this.getChunkRuntimeProfile();
@@ -582,8 +581,7 @@ export class SceneManager {
             this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
             this.postMoveRecoveryUntil = 0;
             this.interactionShadowRestoreAt = 0;
-            this.cullingDirty = true;
-            this.requestRender();
+            this.markSceneDirty({ needsCulling: true });
         });
         this.controls.addEventListener('end', () => {
             const now = performance.now();
@@ -595,8 +593,7 @@ export class SceneManager {
             this.interactionShadowRestoreAt = now + this.interactionShadowRestoreDelayMs;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
-            this.cullingDirty = true;
-            this.requestRender();
+            this.markSceneDirty({ needsCulling: true });
         });
 
         // 灯光
@@ -660,7 +657,7 @@ export class SceneManager {
         this.mouse = new THREE.Vector2();
 
         this.animate = this.animate.bind(this);
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     /** 按需调度一帧：合并多次调用，在相机静止且无后台任务时不常驻 requestAnimationFrame */
@@ -669,6 +666,33 @@ export class SceneManager {
         if (this.animateFramePending) return;
         this.animateFramePending = true;
         this.animationFrameId = requestAnimationFrame(this.animate);
+    }
+
+    private markSceneDirty(options: {
+        needsRender?: boolean;
+        needsBoundsUpdate?: boolean;
+        needsCulling?: boolean;
+        invalidateInteractables?: boolean;
+    } = {}) {
+        const {
+            needsRender = true,
+            needsBoundsUpdate = false,
+            needsCulling = false,
+            invalidateInteractables = false
+        } = options;
+
+        if (invalidateInteractables) {
+            this.interactableListValid = false;
+        }
+        if (needsBoundsUpdate) {
+            this._needsBoundsUpdate = true;
+        }
+        if (needsCulling) {
+            this.cullingDirty = true;
+        }
+        if (needsRender) {
+            this.requestRender();
+        }
     }
 
     updateSettings(newSettings: Partial<SceneSettings>) {
@@ -1241,6 +1265,7 @@ export class SceneManager {
 
         for (let start = 0; start < ghostSpecs.length; start += this.chunkGhostBatchSize) {
             const end = Math.min(ghostSpecs.length, start + this.chunkGhostBatchSize);
+            let addedAnyGhost = false;
             for (let index = start; index < end; index++) {
                 const spec = ghostSpecs[index];
                 const chunk = this.getChunkById(spec.chunkId);
@@ -1248,6 +1273,11 @@ export class SceneManager {
                 if (this.ghostGroup.getObjectByName(`ghost_${spec.chunkId}`)) continue;
                 const edges = this.createGhostLine(`ghost_${spec.chunkId}`, spec.bounds);
                 this.ghostGroup.add(edges);
+                addedAnyGhost = true;
+            }
+
+            if (addedAnyGhost) {
+                this.markSceneDirty();
             }
 
             if (end < ghostSpecs.length) {
@@ -1574,6 +1604,7 @@ export class SceneManager {
         const toLoad: any[] = [];
         const loadedChunks: any[] = [];
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
+        let sceneMutated = false;
 
         const totalChunks = this.chunks.length;
         const cullingLoopStart = performance.now();
@@ -1656,6 +1687,7 @@ export class SceneManager {
                 if (c.mesh) {
                     if (c.mesh.visible !== evaluation.effectiveVisible) {
                         c.mesh.visible = evaluation.effectiveVisible;
+                        sceneMutated = true;
                     }
                 } else {
                     const optimizedGroup = this.contentGroup.getObjectByName(c.groupName);
@@ -1663,6 +1695,7 @@ export class SceneManager {
                     if (bm) {
                         c.mesh = bm;
                         bm.visible = evaluation.effectiveVisible;
+                        sceneMutated = true;
                     }
                 }
             } else if (!this.processingChunks.has(c.id) && evaluation.shouldBeVisible && evaluation.priority !== null) {
@@ -1685,6 +1718,9 @@ export class SceneManager {
         for (const chunk of unloadTargets) {
             this.unloadChunk(chunk);
         }
+        if (unloadTargets.length > 0) {
+            sceneMutated = true;
+        }
 
         const loadPlan = planChunkLoads({
             toLoad,
@@ -1704,6 +1740,9 @@ export class SceneManager {
         for (const chunk of loadPlan) {
             this.loadChunk(chunk);
         }
+        if (loadPlan.length > 0) {
+            sceneMutated = true;
+        }
 
         this.schedulePrefetchFromVisibleChunks(loadedChunks);
         if (!this.forceMaxChunkLoadSpeed) {
@@ -1717,6 +1756,11 @@ export class SceneManager {
 
         if (this.chunkWarmupActive && this.chunkLoadedCount >= this.initialChunkLoadTarget) {
             this.chunkWarmupActive = false;
+            sceneMutated = true;
+        }
+
+        if (sceneMutated || abortedByBudget) {
+            this.markSceneDirty();
         }
     }
 
@@ -1757,15 +1801,22 @@ export class SceneManager {
         if (!result.changed) return;
 
         this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount + result.chunkLoadedCountDelta);
-        this.interactableListValid = false;
-        this._needsBoundsUpdate = true;
-        this.cullingDirty = true;
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
     }
 
     private async loadChunk(chunk: any) {
         this.processingChunks.add(chunk.id);
+        this.markSceneDirty();
         try {
             let loadedNow = false;
+            let needsRender = false;
+            let needsBoundsUpdate = false;
+            let invalidateInteractables = false;
+            let needsCulling = false;
             const { mesh: bm, prefetchCandidates } = await resolveChunkMeshForLoad({
                 chunk,
                 sharedMaterial: this.sharedMaterial,
@@ -1810,8 +1861,9 @@ export class SceneManager {
                 });
                 loadedNow = attached.attached;
                 if (loadedNow) {
-                    this.interactableListValid = false;
-                    this._needsBoundsUpdate = true;
+                    invalidateInteractables = true;
+                    needsBoundsUpdate = true;
+                    needsRender = true;
                 }
             }
 
@@ -1828,19 +1880,31 @@ export class SceneManager {
             this.chunkWarmupActive = finalized.nextChunkWarmupActive;
             if (finalized.progressChanged) {
                 this.reportChunkProgress();
-                this.cullingDirty = true;
+                needsCulling = true;
+                needsRender = true;
             }
             this.cancelledChunkIds.delete(chunk.id);
 
-            cleanupChunkGhost({
+            const ghostCleanup = cleanupChunkGhost({
                 chunkId: chunk.id,
                 ghostGroup: this.ghostGroup,
                 releaseGhostLine: (line) => this.releaseGhostLine(line)
             });
+            if (ghostCleanup.changed) {
+                needsRender = true;
+            }
+            if (needsRender) {
+                this.markSceneDirty({
+                    invalidateInteractables,
+                    needsBoundsUpdate,
+                    needsCulling
+                });
+            }
         } catch (err) {
             console.error(`加载分块 ${chunk.id} 失败:`, err);
         } finally {
             this.processingChunks.delete(chunk.id);
+            this.markSceneDirty();
         }
     }
 
@@ -1848,7 +1912,11 @@ export class SceneManager {
         this.chunkLoadingEnabled = enabled;
         this.prefetchPaused = !enabled;
         this.cullingDirty = true;
-        if (enabled) this.checkCullingAndLoad();
+        if (enabled) {
+            this.checkCullingAndLoad();
+            return;
+        }
+        this.markSceneDirty();
     }
 
     private applyNbimScaleTuning(chunkCount: number) {
@@ -2133,7 +2201,10 @@ export class SceneManager {
 
         object.visible = keepVisible;
         this.contentGroup.add(fileGroup);
-        this.interactableListValid = false;
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsRender: false
+        });
     }
 
     private async prepareModelChunkStage(
@@ -2220,6 +2291,7 @@ export class SceneManager {
         if (!previewGhost) return;
         this.ghostGroup.remove(previewGhost);
         this.releaseGhostLine(previewGhost as THREE.LineSegments);
+        this.markSceneDirty();
     }
 
     private cancelDeferredStructureBuild() {
@@ -2391,7 +2463,10 @@ export class SceneManager {
             };
             traverseNode(nodes[0]);
         }
-        this.interactableListValid = false;
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsRender: false
+        });
         this.unregisterOriginalStats(originalUuid);
         this.fastPreviewModels.delete(uuid);
         this.fastPreviewModels.delete(originalUuid);
@@ -2454,7 +2529,11 @@ export class SceneManager {
 
         this.updateSceneBounds();
         if (this.onStructureUpdate) this.onStructureUpdate();
-        this.requestRender();
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
 
         // 6. 删除关联的测量记录
         this.measureRecords.forEach((record, recordId) => {
@@ -2832,7 +2911,7 @@ export class SceneManager {
             this.globalOffset.set(0, 0, 0);
 
             debugLog("SceneManager", "场景已清空");
-            this.requestRender();
+            this.markSceneDirty();
         } catch (error) {
             console.error("清空场景失败:", error);
             throw error;
@@ -3007,7 +3086,7 @@ export class SceneManager {
         const result = applySetAllVisibility(this.getVisibilityContext(), visible);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
         if (result.needsExplodeRefresh) this.refreshExplodeState();
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     hideObjects(uuids: string[]) {
@@ -3024,14 +3103,17 @@ export class SceneManager {
                     const highlightContext = this.getHighlightContext();
                     const highlightResult = applyHighlightObjects(highlightContext, inner.nextHighlightedUuids);
                     this.syncHighlightState(highlightContext.state);
-                    if (highlightResult.needsRender) this.requestRender();
+                    if (highlightResult.needsRender) this.markSceneDirty();
                 }
             }
         );
-        this.interactableListValid = false;
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsRender: false
+        });
         if (result.needsBoundsUpdate) this.updateSceneBounds();
         if (result.needsExplodeRefresh) this.refreshExplodeState();
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
@@ -3039,9 +3121,12 @@ export class SceneManager {
         if (result.nextHighlightedUuids) {
             this.highlightObjects(result.nextHighlightedUuids);
         }
-        this.interactableListValid = false;
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsRender: false
+        });
         if (result.needsBoundsUpdate) this.updateSceneBounds();
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     highlightObject(uuid: string | null) {
@@ -3185,7 +3270,7 @@ export class SceneManager {
 
         this.interactableListValid = false;
         this.updateSceneBounds();
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     private restoreExplodeSnapshot() {
@@ -3199,7 +3284,7 @@ export class SceneManager {
         });
         this.interactableListValid = false;
         this.updateSceneBounds();
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     private refreshExplodeState() {
@@ -3274,7 +3359,7 @@ export class SceneManager {
         const normalizedB = String(bUuid || "").trim();
         if (!normalizedA || !normalizedB) {
             this.clearClashPairHighlight();
-            this.requestRender();
+            this.markSceneDirty();
             return;
         }
 
@@ -3365,14 +3450,14 @@ export class SceneManager {
         });
 
         this.clashPairUuids = new Set([normalizedA, normalizedB]);
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     clearLocateFocus() {
         const context = this.getHighlightContext();
         const result = applyClearLocateFocus(context);
         this.syncHighlightState(context.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     private expandLocateTargets(ids: string[]) {
@@ -3403,7 +3488,7 @@ export class SceneManager {
         const context = this.getHighlightContext();
         const result = applySetLocateResultSet(context, uuids, focusUuid);
         this.syncHighlightState(context.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     setLocateFocus(uuid: string | null) {
@@ -3418,7 +3503,7 @@ export class SceneManager {
         const context = this.getHighlightContext();
         const result = applyHighlightObjects(context, uuids);
         this.syncHighlightState(context.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     pick(clientX: number, clientY: number): { object: THREE.Object3D, intersect: THREE.Intersection } | null {
@@ -3827,7 +3912,7 @@ export class SceneManager {
 
         this.camera.updateProjectionMatrix();
         this.controls.update();
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     // --- 测量定位逻辑 ---
@@ -3864,7 +3949,7 @@ export class SceneManager {
         this.camera.zoom = Math.min(targetZoom, 100.0); // 允许更大缩放
         this.camera.updateProjectionMatrix();
         this.controls.update();
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     // --- 测量逻辑 ---
@@ -3879,7 +3964,7 @@ export class SceneManager {
         const context = this.getMeasurementContext();
         const result = applyAddMeasurePoint(context, point, modelUuid);
         this.syncMeasurementState(result.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
         return result.completed ?? null;
     }
 
@@ -3893,21 +3978,21 @@ export class SceneManager {
         const context = this.getMeasurementContext();
         const result = applyUpdateMeasureHover(context, clientX, clientY);
         this.syncMeasurementState(result.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     finalizeMeasurement() {
         const context = this.getMeasurementContext();
         const result = applyFinalizeMeasurement(context);
         this.syncMeasurementState(result.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
         return result.completed ?? null;
     }
 
     highlightMeasurement(id: string | null) {
         const result = applyHighlightMeasurement(this.getMeasurementContext(), id);
         this.syncMeasurementState(result.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     pickMeasurement(clientX: number, clientY: number): string | null {
@@ -4002,7 +4087,7 @@ export class SceneManager {
         if (this.onMeasureUpdate) {
             this.onMeasureUpdate([]);
         }
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     clearMeasurementPreview() {
@@ -4028,13 +4113,13 @@ export class SceneManager {
         if (!enabled) {
             this.clipPlaneHelpers.forEach(h => h.visible = false);
         }
-        this.requestRender();
+        this.markSceneDirty();
     }
 
     updateClippingPlanes(bounds: THREE.Box3, values: { x: number[], y: number[], z: number[] }, active: { x: boolean, y: boolean, z: boolean }) {
         const result = applyUpdateClippingPlanes(this.getClippingContext(), bounds, values, active);
         this.syncClippingState(result.state);
-        if (result.needsRender) this.requestRender();
+        if (result.needsRender) this.markSceneDirty();
     }
 
     /**
