@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import * as THREE from "three";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { MeasureType } from "../utils/scene-manager/types";
 import type { PropertyGroups } from "../viewer/propertyIndex";
 

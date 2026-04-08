@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { ViewerErrorState, ViewerToast } from "../viewer/types";
 
 interface UseViewportLifecycleOptions {

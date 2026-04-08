@@ -1,4 +1,4 @@
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 
 export interface ViewerToast {
     message: string;

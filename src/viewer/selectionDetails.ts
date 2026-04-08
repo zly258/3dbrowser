@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { buildSelectedPropertyGroups } from "./selectionProperties";
 import { createPropertyEntries, type PropertyGroupInput, type PropertyGroups } from "./propertyIndex";
-import type { SceneManager, StructureTreeNode } from "../utils/SceneManager";
+import type { SceneManager, StructureTreeNode } from "../utils/scene-manager/SceneManager";
 
 export interface ClashSummaryRecord {
     total: number;

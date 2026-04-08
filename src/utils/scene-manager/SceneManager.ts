@@ -7,10 +7,10 @@ import {
     buildOctree,
     collectLeafNodes
 } from "../octree";
-import { deriveInitialRuntimeFromHardware } from "../scene/chunkRuntime";
-import { debugLog } from "../scene/debugLogger";
-import { stableExplodeDirection } from "../scene/explode";
-import { readNbimHeader, readNbimManifest, type NbimManifest } from "../scene/nbimIO";
+import { deriveInitialRuntimeFromHardware } from "../scene-core/chunkRuntime";
+import { debugLog } from "../scene-core/debugLogger";
+import { stableExplodeDirection } from "../scene-core/explode";
+import { readNbimHeader, readNbimManifest, type NbimManifest } from "../scene-core/nbimIO";
 import {
     applyCancelBoxSelect,
     applyEndBoxSelect,
@@ -122,7 +122,7 @@ import {
     type SceneChunkOptions,
     type SceneManagerOptions,
     resolveSceneChunkOptions
-} from "../scene/types";
+} from "../scene-core/types";
 import {
     type MeasurementRecord,
     type MeasureType,

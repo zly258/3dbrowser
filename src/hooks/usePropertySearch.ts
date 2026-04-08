@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
-import { SceneManager } from "../utils/SceneManager";
+import { SceneManager } from "../utils/scene-manager/SceneManager";
 import { createPropertyEntries, normalizePropertyToken, type PropertyEntry, type PropertyGroupInput } from "../viewer/propertyIndex";
 
 export type SearchOperator = "equals" | "contains" | "notContains" | "startsWith" | "endsWith";

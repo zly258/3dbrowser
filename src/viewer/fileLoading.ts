@@ -1,5 +1,5 @@
 import { loadModelFiles } from "../loader/loaderUtils";
-import { SceneSettings, SceneManager } from "../utils/SceneManager";
+import { SceneSettings, SceneManager } from "../utils/scene-manager/SceneManager";
 import { TFunc } from "../theme/locales";
 import type { LoaderRuntimeHints } from "../loader/loaderUtils";
 

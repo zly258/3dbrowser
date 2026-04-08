@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { PropertyGroups } from "../viewer/propertyIndex";
 
 interface ViewerContextMenuState {

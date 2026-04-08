@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { OBB } from "three/examples/jsm/math/OBB.js";
-import { SceneManager } from "../utils/SceneManager";
+import { SceneManager } from "../utils/scene-manager/SceneManager";
 
 export type ClashResultItem = {
   id: string;

@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { ThreeViewer } from "./ThreeViewer";
+import { ThreeViewer } from "./src/ThreeViewer";
 import "./src/styles/index.css";
 
 if (document.getElementById("root")) {

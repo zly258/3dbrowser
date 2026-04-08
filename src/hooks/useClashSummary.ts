@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
-import { SceneManager } from "../utils/SceneManager";
+import { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { ClashResultItem } from "./useClashCheck";
 
 type ClashSummaryRecord = {

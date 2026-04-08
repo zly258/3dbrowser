@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import * as THREE from "three";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { PropertyGroupInput, PropertyGroups } from "../viewer/propertyIndex";
 import { buildSelectionPropertyGroups, fetchIfcGroups, resolveSelectionTarget, type ClashSummaryRecord } from "../viewer/selectionDetails";
 
@@ -99,20 +99,21 @@ export function useViewerSelection({
 
     const handleLocateObject = useCallback((obj: any) => {
         const sceneManager = sceneMgrRef.current;
-        if (!sceneManager || !obj) return;
+        if (!sceneManager || !obj) return false;
 
-        const uuid = obj.uuid || obj.id;
-        if (!uuid) return;
+        const rawUuid = obj.uuid || obj.id;
+        if (!rawUuid) return false;
 
-        setLocatedUuid(uuid);
+        const uuid = sceneManager.resolveSelectionUuid(rawUuid);
+        if (!uuid) return false;
+
+        const bounds = sceneManager.getBoundsForObject(uuid);
+        if (!bounds) return false;
+
         sceneManager.clearLocateFocus();
-        sceneManager.isolateObjects([uuid]);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set([uuid]));
-        updateTree();
         sceneManager.fitViewToObject(uuid);
-        void handleSelect(obj);
-    }, [handleSelect, sceneMgrRef, setHiddenUuids, setIsolatedUuids, updateTree]);
+        return true;
+    }, [sceneMgrRef]);
 
     const handleLocateResultsChange = useCallback((uuids: string[]) => {
         const changed = !(locateResultUuids.length === uuids.length && locateResultUuids.every((uuid, index) => uuid === uuids[index]));
@@ -123,21 +124,13 @@ export function useViewerSelection({
         if (!sceneManager || uuids.length > 0) return;
 
         sceneManager.clearLocateFocus();
-        sceneManager.setAllVisibility(true);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set());
-        updateTree();
-    }, [locateResultUuids, sceneMgrRef, setHiddenUuids, setIsolatedUuids, updateTree]);
+    }, [locateResultUuids, sceneMgrRef]);
 
     const handleClearLocate = useCallback(() => {
         resetLocateState();
         sceneMgrRef.current?.clearLocateFocus();
-        sceneMgrRef.current?.setAllVisibility(true);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set());
         sceneMgrRef.current?.highlightObjects(selectedUuids);
-        updateTree();
-    }, [resetLocateState, sceneMgrRef, selectedUuids, setHiddenUuids, setIsolatedUuids, updateTree]);
+    }, [resetLocateState, sceneMgrRef, selectedUuids]);
 
     return {
         locatedUuid,

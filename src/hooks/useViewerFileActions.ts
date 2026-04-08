@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import type { ChangeEvent, DragEvent } from "react";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { PropertyGroups } from "../viewer/propertyIndex";
 import type { ViewerToast } from "../viewer/types";
 import type { ViewerTool } from "./useViewerTools";

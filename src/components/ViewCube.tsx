@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { SceneManager } from "../utils/SceneManager";
+import { SceneManager } from "../utils/scene-manager/SceneManager";
 import { getTranslation, Lang } from "../theme/locales";
 import { ThemeColors } from "../theme/styles";
 

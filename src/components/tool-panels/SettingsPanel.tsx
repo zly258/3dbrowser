@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { TFunc, Lang } from "../../theme/locales";
-import { SceneSettings } from "../../utils/SceneManager";
+import { SceneSettings } from "../../utils/scene-manager/SceneManager";
 import { FloatingPanel } from "./FloatingPanel";
 import {
     Switch,
