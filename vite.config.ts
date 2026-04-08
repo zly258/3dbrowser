@@ -33,7 +33,7 @@ export default defineConfig(() => {
         },
         chunkSizeWarningLimit: 2000,
         lib: {
-          entry: 'ThreeViewer.tsx',
+          entry: 'src/ThreeViewer.tsx',
           name: 'ThreeBrowser',
           fileName: '3dbrowser',
           formats: ['es'] as any

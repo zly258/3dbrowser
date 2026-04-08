@@ -1,4 +1,4 @@
-import { debugWarn } from "../scene/debugLogger";
+import { debugWarn } from "../scene-core/debugLogger";
 import { getChunkReadCacheKey, hasValidChunkBinaryRange } from "./chunkIO";
 
 export async function processChunkPrefetchQueue(options: {

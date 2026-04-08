@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { TFunc, ProgressCallback } from "../theme/locales";
-import { SceneSettings } from "../utils/SceneManager";
+import { SceneSettings } from "../utils/scene-manager/SceneManager";
 import { createResourceResolver } from "./resourceResolver";
-import type { LoadProfile } from "../utils/scene/types";
+import type { LoadProfile } from "../utils/scene-core/types";
 
 export interface LoadedItem {
     name: string;

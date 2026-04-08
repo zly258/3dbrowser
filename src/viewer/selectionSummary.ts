@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { PropertyGroups } from "./propertyIndex";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 
 export interface SelectionSummaryMetric {
     key: string;

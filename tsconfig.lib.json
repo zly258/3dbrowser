@@ -7,5 +7,5 @@
     "outDir": "dist",
     "allowImportingTsExtensions": false
   },
-  "include": ["src/index.ts", "ThreeViewer.tsx", "src/utils/SceneManager.ts", "src/loader/LoaderUtils.ts", "src/theme/Locales.ts", "src/theme/Styles.ts"]
+  "include": ["src/index.ts", "src/ThreeViewer.tsx", "src/loader/loaderUtils.ts", "src/theme/locales.ts", "src/theme/styles.ts"]
 }

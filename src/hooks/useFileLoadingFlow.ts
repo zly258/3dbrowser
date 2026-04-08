@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
-import type { SceneManager, SceneSettings } from "../utils/SceneManager";
+import type { SceneManager, SceneSettings } from "../utils/scene-manager/SceneManager";
 import type { TFunc } from "../theme/locales";
 import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "../viewer/fileLoading";
 

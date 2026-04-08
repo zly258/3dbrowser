@@ -185,7 +185,7 @@ interface SceneTreeProps {
     onIsolate?: (uuid: string) => void;
     onHide?: (uuid: string) => void;
     onShowAll?: () => void;
-    onLocate?: (obj: any) => void;
+    onLocate?: (obj: any) => boolean | void;
     onClearLocate?: () => void;
     onLocateResultsChange?: (uuids: string[]) => void;
     locateResultUuids?: string[];
@@ -224,6 +224,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const selectionSourceRef = useRef<"tree" | "external" | null>(null);
     const searchExpandedStateRef = useRef<Map<string, boolean> | null>(null);
     const previousSearchQueryRef = useRef("");
+    const [activeTreeUuid, setActiveTreeUuid] = useState<string | null>(null);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -248,21 +249,21 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     }, [searchQuery, setTreeRoot, treeRoot]);
 
     useEffect(() => {
-        if (!selectedUuid) return;
+        if (!activeTreeUuid) return;
         if (selectionSourceRef.current !== "tree") return;
         setTreeRoot((prev) => {
             const expandSelectedPath = (nodes: TreeNode[]): [TreeNode[], boolean] => {
                 let found = false;
                 const nextNodes = nodes.map((node) => {
                     let workingNode = node;
-                    if (node.uuid === selectedUuid) {
+                    if (node.uuid === activeTreeUuid) {
                         found = true;
                         return node;
                     }
 
                     if (!node.childrenLoaded && node.hasChildren) {
                         const rawChildren = getRawChildren(node);
-                        const containsTarget = rawChildren.some((child) => rawTreeContainsUuid(child, selectedUuid));
+                        const containsTarget = rawChildren.some((child) => rawTreeContainsUuid(child, activeTreeUuid));
                         if (containsTarget) {
                             workingNode = ensureNodeChildrenLoaded(node);
                         }
@@ -282,7 +283,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             const [nextTree, found] = expandSelectedPath(prev);
             return found ? nextTree : prev;
         });
-    }, [selectedUuid, setTreeRoot]);
+    }, [activeTreeUuid, setTreeRoot]);
 
     const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
         const lowercaseQuery = query.toLowerCase();
@@ -395,7 +396,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     const handleLocateFirstMatch = () => {
         if (!firstSearchMatch) return;
-        onSelect(firstSearchMatch.uuid, firstSearchMatch.object);
         onLocate?.(firstSearchMatch.object);
     };
 
@@ -470,10 +470,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         {visibleItems.map((node) => (
                             <div
                                 key={node.uuid}
-                                className={`ui-tree-node ${node.uuid === selectedUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
+                                className={`ui-tree-node ${node.uuid === activeTreeUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
                                 style={{ paddingLeft: 8 + node.depth * 16 }}
                                 onClick={() => {
                                     selectionSourceRef.current = "tree";
+                                    setActiveTreeUuid(node.uuid);
                                     onSelect(node.uuid, node.object);
                                 }}
                                 onDoubleClick={(e) => {

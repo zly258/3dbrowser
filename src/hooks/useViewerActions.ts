@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import * as THREE from "three";
-import type { SceneManager } from "../utils/SceneManager";
+import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import { exportGLB, exportLMB } from "../utils/converter";
 import { sanitizeFileStem, stripFileExtension } from "../viewer/exportNaming";
 import { cleanLoadingStatus } from "../viewer/fileLoading";

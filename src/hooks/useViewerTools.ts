@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type { SceneManager, MeasureType, SceneSettings, MeasurementRecord } from "../utils/SceneManager";
+import type { SceneManager, MeasureType, SceneSettings, MeasurementRecord } from "../utils/scene-manager/SceneManager";
 import { usePersistentState } from "./usePersistentState";
 
 export type ViewerTool =

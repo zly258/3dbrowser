@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import { estimateTextureMemoryMb } from "../scene/stats";
+import { estimateTextureMemoryMb } from "../scene-core/stats";
 import type { SceneManagerStats } from "./types";
 
 interface SceneManagerStatsContext {
