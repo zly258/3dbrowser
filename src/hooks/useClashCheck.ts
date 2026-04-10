@@ -6,15 +6,21 @@ import { SceneManager } from "../utils/scene-manager/SceneManager";
 export type ClashResultItem = {
   id: string;
   pairKey: string;
+  groupKey: string;
+  ruleId: string;
   aUuid: string;
   bUuid: string;
   aName: string;
   bName: string;
   overlapVolume: number;
+  distance: number;
+  severity: "high" | "medium" | "low";
+  type: "hard" | "clearance";
   status: "new" | "confirmed" | "resolved";
 };
 
 export type ClashFilter = "ALL" | "NEW" | "CONFIRMED" | "RESOLVED";
+export type ClashTypeFilter = "ALL" | "HARD" | "CLEARANCE";
 
 type ClashMeshInfo = {
   uuid: string;
@@ -53,6 +59,13 @@ function buildBoxFromGeometry(geometry: THREE.BufferGeometry, matrixWorld: THREE
   return geometry.boundingBox ? geometry.boundingBox.clone().applyMatrix4(matrixWorld) : null;
 }
 
+function distanceBetweenBoxes(a: THREE.Box3, b: THREE.Box3) {
+  const dx = Math.max(0, a.min.x - b.max.x, b.min.x - a.max.x);
+  const dy = Math.max(0, a.min.y - b.max.y, b.min.y - a.max.y);
+  const dz = Math.max(0, a.min.z - b.max.z, b.min.z - a.max.z);
+  return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+}
+
 function buildObbFromGeometry(geometry: THREE.BufferGeometry, matrixWorld: THREE.Matrix4) {
   if (!geometry.boundingBox) geometry.computeBoundingBox();
   const bb = geometry.boundingBox;
@@ -83,10 +96,13 @@ export function useClashCheck({
   const [clashSetB, setClashSetB] = useState<string[]>([]);
   const [clashTolerance, setClashTolerance] = useState(0);
   const [clashMinOverlapVolume, setClashMinOverlapVolume] = useState(0);
+  const [clashClearanceDistance, setClashClearanceDistance] = useState(0.05);
   const [clashUseNarrowPhase, setClashUseNarrowPhase] = useState(true);
   const [clashUseTrianglePhase, setClashUseTrianglePhase] = useState(false);
+  const [clashIncludeSameModel, setClashIncludeSameModel] = useState(false);
   const [clashPairsScanned, setClashPairsScanned] = useState(0);
   const [clashResultFilter, setClashResultFilter] = useState<ClashFilter>("ALL");
+  const [clashTypeFilter, setClashTypeFilter] = useState<ClashTypeFilter>("ALL");
   const clashRunTokenRef = useRef(0);
   const clashInFlightRef = useRef(false);
   const clashCandidateCacheRef = useRef<Map<string, ClashCandidate>>(new Map());
@@ -267,7 +283,7 @@ export function useClashCheck({
     clashInFlightRef.current = true;
     setClashRunning(true);
     setClashProgress(0);
-    setClashStatus(t("clash_collecting") || "正在收集构件...");
+    setClashStatus(t("clash_collecting"));
     setClashResults([]);
     setClashPairsScanned(0);
 
@@ -275,7 +291,7 @@ export function useClashCheck({
       const rawCandidates = collectClashCandidates();
       setClashScannedCount(rawCandidates.length);
       if (rawCandidates.length < 2) {
-        setClashStatus(t("clash_insufficient_candidates") || "可检测构件不足（至少需要2个）");
+        setClashStatus(t("clash_insufficient_candidates"));
         return;
       }
 
@@ -284,6 +300,7 @@ export function useClashCheck({
       const hasA = setAFilter.size > 0;
       const hasB = setBFilter.size > 0;
       const pairAllowed = (aModelId: string, bModelId: string) => {
+        if (!clashIncludeSameModel && aModelId && bModelId && aModelId === bModelId) return false;
         if (hasA && hasB) {
           return (setAFilter.has(aModelId) && setBFilter.has(bModelId))
             || (setAFilter.has(bModelId) && setBFilter.has(aModelId));
@@ -299,11 +316,15 @@ export function useClashCheck({
         return true;
       };
 
+      const effectiveClearance = Math.max(0, clashClearanceDistance);
+
       const bounded = rawCandidates
         .filter((candidate) => !candidate.box.isEmpty() && candidateEligible(candidate.modelId))
         .map((candidate) => {
           const testBox = candidate.box.clone();
-          if (clashTolerance > 0) testBox.expandByScalar(clashTolerance);
+          if (clashTolerance > 0 || effectiveClearance > 0) {
+            testBox.expandByScalar(Math.max(clashTolerance, effectiveClearance));
+          }
           return {
             ...candidate,
             testBox
@@ -311,13 +332,13 @@ export function useClashCheck({
         });
 
       if (bounded.length < 2) {
-        setClashStatus(t("clash_no_results") || "暂无碰撞结果");
+        setClashStatus(t("clash_no_results"));
         setClashProgress(100);
         return;
       }
 
       bounded.sort((a, b) => a.testBox.min.x - b.testBox.min.x);
-      setClashStatus(t("clash_running") || "正在执行碰撞检查...");
+      setClashStatus(t("clash_running"));
 
       const maxResults = 2000;
       const results: ClashResultItem[] = [];
@@ -328,7 +349,7 @@ export function useClashCheck({
 
       for (let i = 0; i < n; i++) {
         if (clashRunTokenRef.current !== runToken) {
-          setClashStatus(t("clash_cancelled") || "碰撞检查已取消");
+          setClashStatus(t("clash_cancelled"));
           return;
         }
 
@@ -352,23 +373,39 @@ export function useClashCheck({
           }
 
           overlapBox.copy(a.box).intersect(b.box);
+          const hasOverlap = !overlapBox.isEmpty();
           let overlapVolume = 0;
-          if (!overlapBox.isEmpty()) {
+          if (hasOverlap) {
             overlapBox.getSize(overlapSize);
             overlapVolume = Math.max(0, overlapSize.x) * Math.max(0, overlapSize.y) * Math.max(0, overlapSize.z);
           }
-          if (overlapVolume < clashMinOverlapVolume) continue;
-          if (clashUseTrianglePhase && (!overlapBox.isEmpty()) && !passesTrianglePhase(a, b, overlapBox)) continue;
+
+          const distance = hasOverlap ? 0 : distanceBetweenBoxes(a.box, b.box);
+          const isHardClash = hasOverlap && overlapVolume >= clashMinOverlapVolume;
+          const isClearanceClash = !hasOverlap && effectiveClearance > 0 && distance <= effectiveClearance;
+
+          if (!isHardClash && !isClearanceClash) continue;
+          if (clashUseTrianglePhase && hasOverlap && !passesTrianglePhase(a, b, overlapBox)) continue;
 
           const pairKey = [a.uuid, b.uuid].sort().join("::");
+          const clashType: ClashResultItem["type"] = isHardClash ? "hard" : "clearance";
+          const severity: ClashResultItem["severity"] =
+            clashType === "hard"
+              ? (overlapVolume > Math.max(0.5, clashMinOverlapVolume * 10) ? "high" : "medium")
+              : (distance <= Math.max(0.001, effectiveClearance * 0.25) ? "high" : "low");
           results.push({
-            id: `clash_${pairKey}_${results.length}`,
+            id: `clash_${clashType}_${pairKey}_${results.length}`,
             pairKey,
+            groupKey: `${clashType}::${a.modelId || "unknown"}::${b.modelId || "unknown"}::${pairKey}`,
+            ruleId: clashType === "hard" ? "hard-clash-default" : "clearance-default",
             aUuid: a.uuid,
             bUuid: b.uuid,
             aName: a.name,
             bName: b.name,
             overlapVolume,
+            distance,
+            severity,
+            type: clashType,
             status: "new"
           });
           if (results.length >= maxResults) break;
@@ -379,12 +416,16 @@ export function useClashCheck({
           const progress = 30 + ((i + 1) / n) * 70;
           setClashProgress(progress);
           setClashPairsScanned(pairChecks);
-          setClashStatus(`${t("clash_running") || "正在执行碰撞检查..."} ${i + 1}/${n}`);
+          setClashStatus(`${t("clash_running")} ${i + 1}/${n}`);
           await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
         }
       }
 
-      results.sort((x, y) => y.overlapVolume - x.overlapVolume);
+      results.sort((x, y) => {
+        if (x.type !== y.type) return x.type === "hard" ? -1 : 1;
+        if (x.type === "hard") return y.overlapVolume - x.overlapVolume;
+        return x.distance - y.distance;
+      });
       setClashResults((prev) => {
         const statusByPair = new Map<string, ClashResultItem["status"]>();
         prev.forEach((item) => statusByPair.set(item.pairKey, item.status));
@@ -395,7 +436,7 @@ export function useClashCheck({
       });
       setClashPairsScanned(pairChecks);
       setClashProgress(100);
-      setClashStatus(`${t("clash_results") || "碰撞结果"}: ${results.length}`);
+      setClashStatus(`${t("clash_results")}: ${results.length}`);
       if (results.length === 0) {
         sceneMgrRef.current.clearLocateFocus();
       }
@@ -408,12 +449,12 @@ export function useClashCheck({
       clashInFlightRef.current = false;
       setClashRunning(false);
     }
-  }, [clashMinOverlapVolume, clashSetA, clashSetB, clashTolerance, clashUseNarrowPhase, clashUseTrianglePhase, collectClashCandidates, passesTrianglePhase, sceneMgrRef, t]);
+  }, [clashClearanceDistance, clashIncludeSameModel, clashMinOverlapVolume, clashSetA, clashSetB, clashTolerance, clashUseNarrowPhase, clashUseTrianglePhase, collectClashCandidates, passesTrianglePhase, sceneMgrRef, t]);
 
   const handleCancelClashCheck = useCallback(() => {
     if (!clashInFlightRef.current) return;
     clashRunTokenRef.current++;
-    setClashStatus(t("clash_cancelling") || "正在取消碰撞检查...");
+    setClashStatus(t("clash_cancelling"));
   }, [t]);
 
   const handleClearClashResults = useCallback(() => {
@@ -425,6 +466,7 @@ export function useClashCheck({
     setClashScannedCount(0);
     setClashPairsScanned(0);
     setClashResultFilter("ALL");
+    setClashTypeFilter("ALL");
     setClashResults([]);
     sceneMgrRef.current?.clearLocateFocus();
     sceneMgrRef.current?.highlightObjects(selectedUuids);
@@ -444,14 +486,19 @@ export function useClashCheck({
 
   const handleMarkFilteredClashStatus = useCallback((nextStatus: ClashResultItem["status"]) => {
     setClashResults((prev) => prev.map((item) => {
-      const matched =
+      const matchedStatus =
         clashResultFilter === "ALL"
         || (clashResultFilter === "NEW" && item.status === "new")
         || (clashResultFilter === "CONFIRMED" && item.status === "confirmed")
         || (clashResultFilter === "RESOLVED" && item.status === "resolved");
+      const matchedType =
+        clashTypeFilter === "ALL"
+        || (clashTypeFilter === "HARD" && item.type === "hard")
+        || (clashTypeFilter === "CLEARANCE" && item.type === "clearance");
+      const matched = matchedStatus && matchedType;
       return matched ? { ...item, status: nextStatus } : item;
     }));
-  }, [clashResultFilter]);
+  }, [clashResultFilter, clashTypeFilter]);
 
   const handleExportClashCsv = useCallback(() => {
     if (clashResults.length === 0) return;
@@ -463,17 +510,21 @@ export function useClashCheck({
       return text;
     };
 
-    const header = ["pairKey", "aUuid", "aName", "bUuid", "bName", "status", "overlapVolume"];
+    const header = ["pairKey", "type", "severity", "ruleId", "aUuid", "aName", "bUuid", "bName", "status", "overlapVolume", "distance"];
     const lines = [header.join(",")];
     clashResults.forEach((item) => {
       lines.push([
         escapeCsv(item.pairKey),
+        escapeCsv(item.type),
+        escapeCsv(item.severity),
+        escapeCsv(item.ruleId),
         escapeCsv(item.aUuid),
         escapeCsv(item.aName),
         escapeCsv(item.bUuid),
         escapeCsv(item.bName),
         escapeCsv(item.status),
-        escapeCsv(item.overlapVolume.toFixed(6))
+        escapeCsv(item.overlapVolume.toFixed(6)),
+        escapeCsv(item.distance.toFixed(6))
       ].join(","));
     });
 
@@ -500,6 +551,7 @@ export function useClashCheck({
     setClashScannedCount(0);
     setClashPairsScanned(0);
     setClashResultFilter("ALL");
+    setClashTypeFilter("ALL");
   }, []);
 
   const applyClashModelOptionBounds = useCallback(() => {
@@ -519,17 +571,23 @@ export function useClashCheck({
     clashSetB,
     clashTolerance,
     clashMinOverlapVolume,
+    clashClearanceDistance,
     clashUseNarrowPhase,
     clashUseTrianglePhase,
+    clashIncludeSameModel,
     clashPairsScanned,
     clashResultFilter,
+    clashTypeFilter,
     setClashSetA,
     setClashSetB,
     setClashTolerance,
     setClashMinOverlapVolume,
+    setClashClearanceDistance,
     setClashUseNarrowPhase,
     setClashUseTrianglePhase,
+    setClashIncludeSameModel,
     setClashResultFilter,
+    setClashTypeFilter,
     handleRunClashCheck,
     handleCancelClashCheck,
     handleClearClashResults,

@@ -229,7 +229,7 @@ export function usePropertySearch({
       setSearching(false);
       setSearchProgress(0);
       setSearchStatus("");
-      setToast({ message: t("search_invalid_condition") || "请至少输入一组完整的搜索条件", type: "info" });
+      setToast({ message: t("search_invalid_condition"), type: "info" });
       sceneMgrRef.current.highlightObjects(selectedUuids);
       return;
     }
@@ -239,7 +239,7 @@ export function usePropertySearch({
     searchInFlightRef.current = true;
     setSearching(true);
     setSearchProgress(0);
-    setSearchStatus(t("searching") || "搜索中...");
+    setSearchStatus(t("searching"));
 
     try {
       const candidates = collectSearchCandidates();
@@ -252,7 +252,7 @@ export function usePropertySearch({
       for (let i = 0; i < candidates.length; i++) {
         if (searchRunTokenRef.current !== runToken) {
           cancelled = true;
-          setSearchStatus(t("search_cancelled") || "搜索已取消");
+          setSearchStatus(t("search_cancelled"));
           break;
         }
 
@@ -303,7 +303,7 @@ export function usePropertySearch({
         setSearchResults(nextResults);
         sceneMgrRef.current.highlightObjects(nextResults.map((resultItem) => resultItem.uuid));
         setSearchProgress(100);
-        setSearchStatus(`${t("search_results") || "结果"}: ${nextResults.length}`);
+        setSearchStatus(`${t("search_results")}: ${nextResults.length}`);
       }
     } finally {
       const elapsed = performance.now() - searchStartAt;
@@ -342,7 +342,7 @@ export function usePropertySearch({
   const handleCancelSearch = useCallback(() => {
     if (!searchInFlightRef.current) return;
     searchRunTokenRef.current++;
-    setSearchStatus(t("search_cancelling") || "正在取消搜索...");
+    setSearchStatus(t("search_cancelling"));
   }, [t]);
 
   return {

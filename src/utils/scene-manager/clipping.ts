@@ -30,25 +30,22 @@ function clonePlanes(planes: THREE.Plane[]) {
 function updatePlaneHelper(
     helper: THREE.Mesh | undefined,
     normal: THREE.Vector3,
-    distance: number,
-    center: THREE.Vector3,
-    size: number,
+    position: THREE.Vector3,
+    width: number,
+    height: number,
     isEnabled: boolean,
     clipHelperVisible: boolean
 ) {
     if (!helper) return;
 
-    helper.visible = isEnabled && clipHelperVisible;
-    helper.scale.set(size, size, 1);
-
-    const position = new THREE.Vector3(center.x, center.y, center.z);
-    const epsilon = 0.001;
-    if (normal.x !== 0) position.x = distance + (normal.x * epsilon);
-    else if (normal.y !== 0) position.y = distance + (normal.y * epsilon);
-    else if (normal.z !== 0) position.z = distance + (normal.z * epsilon);
-
+    const helperVisible = isEnabled && clipHelperVisible;
+    helper.visible = helperVisible;
+    helper.scale.set(Math.max(width, 0.001), Math.max(height, 0.001), 1);
     helper.position.copy(position);
     helper.lookAt(position.clone().add(normal));
+    helper.children.forEach((child) => {
+        child.visible = helperVisible;
+    });
 }
 
 export function applySetupClipping(context: SceneManagerClippingContext): ClippingResult {
@@ -134,13 +131,17 @@ export function applySetClipHelperOptions(
         });
     });
 
-    if (!state.clipHelperVisible || context.renderer.clippingPlanes.length === 0) {
-        state.clipPlaneHelpers.forEach((helper) => {
-            helper.visible = false;
+    state.clipPlaneHelpers.forEach((helper, index) => {
+        const plane = context.state.clippingPlanes[index];
+        const isPlaneActive = !!plane && Number.isFinite(plane.constant) && plane.constant !== Infinity;
+        const helperVisible = state.clipHelperVisible && context.renderer.clippingPlanes.length > 0 && isPlaneActive;
+        helper.visible = helperVisible;
+        helper.children.forEach((child) => {
+            child.visible = helperVisible;
         });
-    }
+    });
 
-    return { state, needsRender: false };
+    return { state, needsRender: true };
 }
 
 export function applyUpdateClippingPlanes(
@@ -159,10 +160,6 @@ export function applyUpdateClippingPlanes(
 
     const { min, max } = bounds;
     const size = max.clone().sub(min);
-    const center = bounds.getCenter(new THREE.Vector3());
-    const diagonal = size.length();
-    const helperSize = diagonal > 0 ? diagonal * 1.2 : 1000;
-
     const xMin = min.x + (values.x[0] / 100) * size.x;
     const xMax = min.x + (values.x[1] / 100) * size.x;
     const yMin = min.y + (values.y[0] / 100) * size.y;
@@ -171,12 +168,41 @@ export function applyUpdateClippingPlanes(
     const zMax = min.z + (values.z[1] / 100) * size.z;
 
     const isEnabled = context.renderer.clippingPlanes.length > 0;
+    const clippedBoxMin = new THREE.Vector3(
+        active.x ? xMin : min.x,
+        active.y ? yMin : min.y,
+        active.z ? zMin : min.z
+    );
+    const clippedBoxMax = new THREE.Vector3(
+        active.x ? xMax : max.x,
+        active.y ? yMax : max.y,
+        active.z ? zMax : max.z
+    );
+    const clippedCenter = clippedBoxMin.clone().add(clippedBoxMax).multiplyScalar(0.5);
+    const clippedSize = clippedBoxMax.clone().sub(clippedBoxMin);
+    const epsilon = 0.0005;
 
     if (active.x) {
         clippingPlanes[0].constant = -xMin;
         clippingPlanes[1].constant = xMax;
-        updatePlaneHelper(clipPlaneHelpers[0], new THREE.Vector3(1, 0, 0), xMin, center, helperSize, isEnabled, state.clipHelperVisible);
-        updatePlaneHelper(clipPlaneHelpers[1], new THREE.Vector3(-1, 0, 0), xMax, center, helperSize, isEnabled, state.clipHelperVisible);
+        updatePlaneHelper(
+            clipPlaneHelpers[0],
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(xMin + epsilon, clippedCenter.y, clippedCenter.z),
+            clippedSize.z,
+            clippedSize.y,
+            isEnabled,
+            state.clipHelperVisible
+        );
+        updatePlaneHelper(
+            clipPlaneHelpers[1],
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(xMax - epsilon, clippedCenter.y, clippedCenter.z),
+            clippedSize.z,
+            clippedSize.y,
+            isEnabled,
+            state.clipHelperVisible
+        );
     } else {
         clippingPlanes[0].constant = Infinity;
         clippingPlanes[1].constant = Infinity;
@@ -187,8 +213,24 @@ export function applyUpdateClippingPlanes(
     if (active.y) {
         clippingPlanes[2].constant = -yMin;
         clippingPlanes[3].constant = yMax;
-        updatePlaneHelper(clipPlaneHelpers[2], new THREE.Vector3(0, 1, 0), yMin, center, helperSize, isEnabled, state.clipHelperVisible);
-        updatePlaneHelper(clipPlaneHelpers[3], new THREE.Vector3(0, -1, 0), yMax, center, helperSize, isEnabled, state.clipHelperVisible);
+        updatePlaneHelper(
+            clipPlaneHelpers[2],
+            new THREE.Vector3(0, 1, 0),
+            new THREE.Vector3(clippedCenter.x, yMin + epsilon, clippedCenter.z),
+            clippedSize.x,
+            clippedSize.z,
+            isEnabled,
+            state.clipHelperVisible
+        );
+        updatePlaneHelper(
+            clipPlaneHelpers[3],
+            new THREE.Vector3(0, -1, 0),
+            new THREE.Vector3(clippedCenter.x, yMax - epsilon, clippedCenter.z),
+            clippedSize.x,
+            clippedSize.z,
+            isEnabled,
+            state.clipHelperVisible
+        );
     } else {
         clippingPlanes[2].constant = Infinity;
         clippingPlanes[3].constant = Infinity;
@@ -199,8 +241,24 @@ export function applyUpdateClippingPlanes(
     if (active.z) {
         clippingPlanes[4].constant = -zMin;
         clippingPlanes[5].constant = zMax;
-        updatePlaneHelper(clipPlaneHelpers[4], new THREE.Vector3(0, 0, 1), zMin, center, helperSize, isEnabled, state.clipHelperVisible);
-        updatePlaneHelper(clipPlaneHelpers[5], new THREE.Vector3(0, 0, -1), zMax, center, helperSize, isEnabled, state.clipHelperVisible);
+        updatePlaneHelper(
+            clipPlaneHelpers[4],
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(clippedCenter.x, clippedCenter.y, zMin + epsilon),
+            clippedSize.x,
+            clippedSize.y,
+            isEnabled,
+            state.clipHelperVisible
+        );
+        updatePlaneHelper(
+            clipPlaneHelpers[5],
+            new THREE.Vector3(0, 0, -1),
+            new THREE.Vector3(clippedCenter.x, clippedCenter.y, zMax - epsilon),
+            clippedSize.x,
+            clippedSize.y,
+            isEnabled,
+            state.clipHelperVisible
+        );
     } else {
         clippingPlanes[4].constant = Infinity;
         clippingPlanes[5].constant = Infinity;

@@ -90,9 +90,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
 
                     <div className="ui-properties-subbar">
                         <div className="ui-properties-meta">
-                            {(searchQuery ? `${t("search_results") || "结果数"}` : `${t("prop_groups") || "分组"}`) + `: ${groupCount}`}
+                            {(searchQuery ? t("search_results") : t("prop_groups")) + `: ${groupCount}`}
                             <span> · </span>
-                            {(t("prop_items") || "条目") + `: ${itemCount}`}
+                            {t("prop_items") + `: ${itemCount}`}
                         </div>
 
                         <div className="ui-properties-actions">
@@ -100,7 +100,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                 className="ui-properties-action"
                                 onClick={() => currentGroups && handleCopy(serializePropertyGroups(currentGroups))}
                                 disabled={!currentGroups}
-                                title={t("copy_all_props") || "复制全部"}
+                                title={t("copy_all_props")}
                                 style={{
                                     background: 'transparent',
                                     border: 'none',
@@ -132,7 +132,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                             e.stopPropagation();
                                             handleCopy([`[${group.name}]`, ...group.items.map((item) => `${item.key}: ${item.value}`)].join("\n"));
                                         }}
-                                        title={t("copy_group_props") || "复制组"}
+                                        title={t("copy_group_props")}
                                     >
                                         <IconCopy size={12} />
                                     </button>
@@ -150,7 +150,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                     <div key={item.id} className="ui-prop-row">
                                         <div
                                             className="ui-prop-key"
-                                            title={`${item.path} (${t("copied") || "点击复制"})`}
+                                            title={`${item.path} (${t("click_to_copy")})`}
                                             onClick={() => handleCopy(item.key)}
                                             style={{ cursor: "copy" }}
                                         >
@@ -184,13 +184,13 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                         background: "rgba(0,0,0,0.7)",
                         color: "white",
                         padding: "6px 12px",
-                        borderRadius: "4px",
-                        fontSize: "12px",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "var(--font-size-secondary)",
                         zIndex: 100,
                         pointerEvents: "none"
                     }}
                 >
-                    {t("copied") || "已复制"}
+                    {t("copied")}
                 </div>
             )}
         </div>

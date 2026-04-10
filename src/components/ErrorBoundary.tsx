@@ -38,16 +38,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                     height: '100%', width: '100%', backgroundColor: theme.bg, color: theme.text,
                     fontFamily: DEFAULT_FONT, gap: '20px', padding: '40px', textAlign: 'center'
                 }}>
-                    <div style={{ fontSize: '64px' }}>⚠️</div>
-                    <h1 style={{ fontSize: '24px', margin: 0 }}>{t("error_title")}</h1>
-                    <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6' }}>
+                    <div style={{ fontSize: '48px', lineHeight: 1 }}>⚠️</div>
+                    <h1 style={{ fontSize: 'var(--font-size-title)', margin: 0, fontWeight: 700 }}>{t("error_title")}</h1>
+                    <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6', fontSize: 'var(--font-size-body)' }}>
                         {t("error_msg")}
                     </p>
                     <button 
                         onClick={() => window.location.reload()}
                         style={{
                             padding: '10px 24px', backgroundColor: theme.accent, color: '#fff',
-                            border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
+                            border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600,
+                            fontSize: 'var(--font-size-body)', minHeight: 'var(--control-h-md)'
                         }}
                     >
                         {t("error_reload")}

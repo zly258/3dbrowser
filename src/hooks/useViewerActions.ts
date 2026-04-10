@@ -81,7 +81,7 @@ export function useViewerActions({
         const now = new Date();
         const pad = (value: number) => String(value).padStart(2, "0");
         const suffix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        return `${t("export_batch_name") || "批量导出"}_${suffix}`;
+        return `${t("export_batch_name")}_${suffix}`;
     }, [getExportModelNames, t]);
 
     const resolveExportFilename = useCallback((format: string, requestedName?: string) => {

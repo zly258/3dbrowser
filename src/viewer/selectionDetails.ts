@@ -126,7 +126,7 @@ export function buildSelectionPropertyGroups({
     basicProps[t("prop_id")] = wrappedId;
     basicProps[t("prop_type")] = target.type || (target.children ? "Group" : "Mesh");
     if (typeof targetElevation === "number" && Number.isFinite(targetElevation)) {
-        basicProps[t("prop_storey_elevation") || "楼层标高"] = String(targetElevation);
+        basicProps[t("prop_storey_elevation")] = String(targetElevation);
     }
 
     if (target.getWorldPosition) {
@@ -198,15 +198,15 @@ export function buildSelectionPropertyGroups({
     });
 
     if (clashSummary) {
-        const clashLabel = t("pg_clash") || "碰撞状态";
+        const clashLabel = t("pg_clash");
         groups.push({
             name: clashLabel,
             items: createPropertyEntries(clashLabel, [
-                { key: t("clash_group_all") || "全部", value: String(clashSummary.total) },
-                { key: t("clash_group_new") || "新建", value: String(clashSummary.newCount) },
-                { key: t("clash_group_confirmed") || "已确认", value: String(clashSummary.confirmedCount) },
-                { key: t("clash_group_resolved") || "已解决", value: String(clashSummary.resolvedCount) },
-                { key: t("prop_status") || "状态", value: t(`clash_group_${clashSummary.worstStatus}`) || clashSummary.worstStatus }
+                { key: t("clash_group_all"), value: String(clashSummary.total) },
+                { key: t("clash_group_new"), value: String(clashSummary.newCount) },
+                { key: t("clash_group_confirmed"), value: String(clashSummary.confirmedCount) },
+                { key: t("clash_group_resolved"), value: String(clashSummary.resolvedCount) },
+                { key: t("prop_status"), value: t(`clash_group_${clashSummary.worstStatus}`) }
             ].map((item, index) => ({ ...item, id: `clash-summary::${index}` })))
         });
     }

@@ -28,8 +28,8 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
             {label && (
                 <div
                     style={{
-                        fontSize: 11,
-                        lineHeight: 1,
+                        fontSize: "var(--font-size-base)",
+                        lineHeight: 1.2,
                         fontWeight: 500,
                         whiteSpace: "nowrap",
                         overflow: "hidden",

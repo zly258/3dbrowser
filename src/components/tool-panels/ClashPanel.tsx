@@ -5,15 +5,21 @@ import { Button, Checkbox, InputNumber, PaginationControls, Select } from "../co
 export interface ClashResultItem {
   id: string;
   pairKey: string;
+  groupKey: string;
+  ruleId: string;
   aUuid: string;
   bUuid: string;
   aName: string;
   bName: string;
   overlapVolume: number;
+  distance: number;
+  severity: "high" | "medium" | "low";
+  type: "hard" | "clearance";
   status: "new" | "confirmed" | "resolved";
 }
 
 type ClashFilter = "ALL" | "NEW" | "CONFIRMED" | "RESOLVED";
+type ClashTypeFilter = "ALL" | "HARD" | "CLEARANCE";
 
 interface ClashPanelProps {
   t: (key: string) => string;
@@ -30,14 +36,18 @@ interface ClashPanelProps {
   setB: string[];
   tolerance: number;
   minOverlapVolume: number;
+  clearanceDistance: number;
   useNarrowPhase: boolean;
   useTrianglePhase: boolean;
+  includeSameModel: boolean;
   onSetAChange: (next: string[]) => void;
   onSetBChange: (next: string[]) => void;
   onToleranceChange: (next: number) => void;
   onMinOverlapVolumeChange: (next: number) => void;
+  onClearanceDistanceChange: (next: number) => void;
   onUseNarrowPhaseChange: (next: boolean) => void;
   onUseTrianglePhaseChange: (next: boolean) => void;
+  onIncludeSameModelChange: (next: boolean) => void;
   onRun: () => void;
   onCancel: () => void;
   onClear: () => void;
@@ -45,6 +55,8 @@ interface ClashPanelProps {
   onIsolateByStatus: (status: "new" | "confirmed") => void;
   onRestoreVisibility: () => void;
   onResultFilterChange: (next: ClashFilter) => void;
+  typeFilter: ClashTypeFilter;
+  onTypeFilterChange: (next: ClashTypeFilter) => void;
   onUpdateResultStatus: (id: string, status: ClashResultItem["status"]) => void;
   onMarkFilteredStatus: (status: ClashResultItem["status"]) => void;
   onSetASelectAll: () => void;
@@ -70,14 +82,18 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   setB,
   tolerance,
   minOverlapVolume,
+  clearanceDistance,
   useNarrowPhase,
   useTrianglePhase,
+  includeSameModel,
   onSetAChange,
   onSetBChange,
   onToleranceChange,
   onMinOverlapVolumeChange,
+  onClearanceDistanceChange,
   onUseNarrowPhaseChange,
   onUseTrianglePhaseChange,
+  onIncludeSameModelChange,
   onRun,
   onCancel,
   onClear,
@@ -85,6 +101,8 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   onIsolateByStatus,
   onRestoreVisibility,
   onResultFilterChange,
+  typeFilter,
+  onTypeFilterChange,
   onUpdateResultStatus,
   onMarkFilteredStatus,
   onSetASelectAll,
@@ -112,11 +130,19 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   }, [results]);
 
   const filteredResults = useMemo(() => {
-    if (resultFilter === "NEW") return results.filter((item) => item.status === "new");
-    if (resultFilter === "CONFIRMED") return results.filter((item) => item.status === "confirmed");
-    if (resultFilter === "RESOLVED") return results.filter((item) => item.status === "resolved");
-    return results;
-  }, [resultFilter, results]);
+    return results.filter((item) => {
+      const statusMatched =
+        resultFilter === "ALL"
+          || (resultFilter === "NEW" && item.status === "new")
+          || (resultFilter === "CONFIRMED" && item.status === "confirmed")
+          || (resultFilter === "RESOLVED" && item.status === "resolved");
+      const typeMatched =
+        typeFilter === "ALL"
+          || (typeFilter === "HARD" && item.type === "hard")
+          || (typeFilter === "CLEARANCE" && item.type === "clearance");
+      return statusMatched && typeMatched;
+    });
+  }, [resultFilter, results, typeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -251,6 +277,33 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             />
           </div>
         </div>
+        <div className="ui-toolpanel-grid ui-toolpanel-grid-2">
+          <div>
+            <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_clearance_distance") || "最小净空距离"}</div>
+            <InputNumber
+              className="ui-input-compact"
+              value={Number.isFinite(clearanceDistance) ? clearanceDistance : 0}
+              min={0}
+              step={0.001}
+              onChange={(value) => onClearanceDistanceChange(Math.max(0, value || 0))}
+              style={{ width: "100%" }}
+            />
+          </div>
+          <div>
+            <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_detection_type") || "检测类型"}</div>
+            <Select
+              value={typeFilter}
+              onChange={(value) => onTypeFilterChange(value as ClashTypeFilter)}
+              options={[
+                { value: "ALL", label: t("clash_type_all") || "全部" },
+                { value: "HARD", label: t("clash_type_hard") || "硬碰撞" },
+                { value: "CLEARANCE", label: t("clash_type_clearance") || "净空碰撞" }
+              ]}
+              className="ui-input-compact"
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
         <div className="ui-toolpanel-row-between">
           <Checkbox
             checked={useNarrowPhase}
@@ -264,6 +317,14 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             checked={useTrianglePhase}
             onChange={onUseTrianglePhaseChange}
             label={t("clash_triangle_phase") || "启用三角面复核"}
+            labelStyle={{ fontSize: 12 }}
+          />
+        </div>
+        <div className="ui-toolpanel-row-between">
+          <Checkbox
+            checked={includeSameModel}
+            onChange={onIncludeSameModelChange}
+            label={t("clash_include_same_model") || "包含同模型内检测"}
             labelStyle={{ fontSize: 12 }}
           />
         </div>
@@ -338,7 +399,9 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 <span>{item.aName || item.aUuid} {" <> "} {item.bName || item.bUuid}</span>
                 <div className="ui-toolpanel-row-between">
                   <span className="ui-result-item-secondary">
-                    {(t("clash_overlap_volume") || "重叠体积")}: {item.overlapVolume.toFixed(6)}
+                    {item.type === "hard"
+                      ? `${t("clash_overlap_volume") || "重叠体积"}: ${item.overlapVolume.toFixed(6)}`
+                      : `${t("clash_clearance_value") || "净空距离"}: ${item.distance.toFixed(6)}`}
                   </span>
                   <Select
                     value={item.status}
@@ -351,6 +414,14 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                     className="ui-input-compact"
                     style={{ minWidth: 88 }}
                   />
+                </div>
+                <div className="ui-toolpanel-row-between">
+                  <span className="ui-result-item-secondary">
+                    {(item.type === "hard" ? (t("clash_type_hard") || "硬碰撞") : (t("clash_type_clearance") || "净空碰撞"))}
+                  </span>
+                  <span className="ui-result-item-secondary">
+                    {t(`clash_severity_${item.severity}`) || item.severity}
+                  </span>
                 </div>
               </button>
             ))

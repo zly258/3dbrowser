@@ -24,6 +24,18 @@ export interface SceneVisibilityResult {
     nextHighlightedUuids?: string[];
 }
 
+export interface SceneVisibilityChange {
+    uuid: string;
+    visible: boolean;
+    showParents?: boolean;
+}
+
+export interface SceneVisibilityBatchOptions {
+    recomputeBounds?: boolean;
+    refreshExplode?: boolean;
+    invalidateInteractables?: boolean;
+}
+
 function syncStructureNodeVisibility(nodeMap: Map<string, StructureTreeNode[]>, rootNode: StructureTreeNode, visible: boolean) {
     const setNodeVisible = (node: StructureTreeNode) => {
         node.visible = visible;
@@ -188,6 +200,47 @@ export function applySetObjectVisibility(
         nextHighlightedUuids: idsToUnhighlight.length > 0
             ? Array.from(new Set([...context.highlightedUuids].filter((id) => !idsToUnhighlight.includes(id))))
             : undefined
+    };
+}
+
+export function applyVisibilityBatch(
+    context: SceneManagerVisibilityContext,
+    changes: SceneVisibilityChange[],
+    options: SceneVisibilityBatchOptions = {}
+): SceneVisibilityResult {
+    if (changes.length === 0) {
+        return {
+            needsBoundsUpdate: false,
+            needsExplodeRefresh: false,
+            needsRender: false
+        };
+    }
+
+    let highlighted = new Set(context.highlightedUuids);
+    let needsRender = false;
+
+    changes.forEach((change) => {
+        const result = applySetObjectVisibility(
+            {
+                ...context,
+                highlightedUuids: highlighted
+            },
+            change.uuid,
+            change.visible,
+            change.showParents ?? true
+        );
+
+        if (result.nextHighlightedUuids) {
+            highlighted = new Set(result.nextHighlightedUuids);
+        }
+        needsRender = needsRender || result.needsRender;
+    });
+
+    return {
+        needsBoundsUpdate: options.recomputeBounds ?? true,
+        needsExplodeRefresh: options.refreshExplode ?? false,
+        needsRender,
+        nextHighlightedUuids: Array.from(highlighted)
     };
 }
 

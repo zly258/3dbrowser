@@ -368,17 +368,23 @@ export const ThreeViewer = ({
         clashSetB,
         clashTolerance,
         clashMinOverlapVolume,
+        clashClearanceDistance,
         clashUseNarrowPhase,
         clashUseTrianglePhase,
+        clashIncludeSameModel,
         clashPairsScanned,
         clashResultFilter,
+        clashTypeFilter,
         setClashSetA,
         setClashSetB,
         setClashTolerance,
         setClashMinOverlapVolume,
+        setClashClearanceDistance,
         setClashUseNarrowPhase,
         setClashUseTrianglePhase,
+        setClashIncludeSameModel,
         setClashResultFilter,
+        setClashTypeFilter,
         handleRunClashCheck,
         handleCancelClashCheck,
         handleClearClashResults,
@@ -929,7 +935,7 @@ export const ThreeViewer = ({
         if (measureType !== "none") {
             items.push({
                 key: "measure",
-                label: t("mode_measure") || "测量中",
+                label: t("mode_measure"),
                 onClear: () => {
                     setMeasureType("none");
                     setActiveTool("none");
@@ -941,7 +947,7 @@ export const ThreeViewer = ({
         if (clipEnabled) {
             items.push({
                 key: "clip",
-                label: t("mode_clip") || "剖切中",
+                label: t("mode_clip"),
                 onClear: () => {
                     setClipEnabled(false);
                     setActiveTool("none");
@@ -952,7 +958,7 @@ export const ThreeViewer = ({
         if (searchResults.length > 0) {
             items.push({
                 key: "search",
-                label: `${t("mode_search") || "搜索结果高亮"} ${searchResults.length}`,
+                label: `${t("mode_search")} ${searchResults.length}`,
                 onClear: handleClearSearchResult
             });
         }
@@ -960,7 +966,7 @@ export const ThreeViewer = ({
         if (hiddenUuids.size > 0) {
             items.push({
                 key: "hidden",
-                label: `${t("mode_hidden") || "已隐藏对象"} ${hiddenUuids.size}`,
+                label: `${t("mode_hidden")} ${hiddenUuids.size}`,
                 onClear: handleShowAll
             });
         }
@@ -968,7 +974,7 @@ export const ThreeViewer = ({
         if (isolatedUuids.size > 0) {
             items.push({
                 key: "isolated",
-                label: `${t("mode_isolated") || "已隔离对象"} ${isolatedUuids.size}`,
+                label: `${t("mode_isolated")} ${isolatedUuids.size}`,
                 onClear: handleShowAll
             });
         }
@@ -976,7 +982,7 @@ export const ThreeViewer = ({
         if (activeTool === "boxSelect") {
             items.push({
                 key: "boxSelect",
-                label: t("mode_box_select") || "框选中",
+                label: t("mode_box_select"),
                 onClear: () => setActiveTool("none")
             });
         }
@@ -984,7 +990,7 @@ export const ThreeViewer = ({
         if (clashResults.length > 0) {
             items.push({
                 key: "clash",
-                label: `${t("mode_clash") || "碰撞结果已激活"} ${clashResults.length}`,
+                label: `${t("mode_clash")} ${clashResults.length}`,
                 onClear: handleClearClashResults
             });
         }
@@ -1237,22 +1243,22 @@ export const ThreeViewer = ({
                             y={contextMenu.y}
                             items={[
                                 {
-                                    label: t("hide_selected") || "隐藏选中",
+                                    label: t("hide_selected"),
                                     onClick: handleHideSelected,
                                     disabled: selectedUuids.length === 0
                                 },
                                 {
-                                    label: t("isolate_selection") || "隔离选中",
+                                    label: t("isolate_selection"),
                                     onClick: handleIsolateSelection,
                                     disabled: selectedUuids.length === 0
                                 },
                                 {
-                                    label: t("clear_selection") || "清空选择",
+                                    label: t("clear_selection"),
                                     onClick: handleClearSelection,
                                     disabled: selectedUuids.length === 0
                                 },
                                 {
-                                    label: t("show_all") || "显示全部",
+                                    label: t("show_all"),
                                     onClick: handleShowAll
                                 }
                             ]}
@@ -1409,14 +1415,18 @@ export const ThreeViewer = ({
                             setB={clashSetB}
                             tolerance={clashTolerance}
                             minOverlapVolume={clashMinOverlapVolume}
+                            clearanceDistance={clashClearanceDistance}
                             useNarrowPhase={clashUseNarrowPhase}
                             useTrianglePhase={clashUseTrianglePhase}
+                            includeSameModel={clashIncludeSameModel}
                             onSetAChange={setClashSetA}
                             onSetBChange={setClashSetB}
                             onToleranceChange={setClashTolerance}
                             onMinOverlapVolumeChange={setClashMinOverlapVolume}
+                            onClearanceDistanceChange={setClashClearanceDistance}
                             onUseNarrowPhaseChange={setClashUseNarrowPhase}
                             onUseTrianglePhaseChange={setClashUseTrianglePhase}
+                            onIncludeSameModelChange={setClashIncludeSameModel}
                             onRun={() => void handleRunClashCheck()}
                             onCancel={handleCancelClashCheck}
                             onClear={handleClearClashResults}
@@ -1424,6 +1434,8 @@ export const ThreeViewer = ({
                             onIsolateByStatus={handleIsolateClashByStatus}
                             onRestoreVisibility={handleShowAll}
                             onResultFilterChange={setClashResultFilter}
+                            typeFilter={clashTypeFilter}
+                            onTypeFilterChange={setClashTypeFilter}
                             onUpdateResultStatus={handleUpdateClashResultStatus}
                             onMarkFilteredStatus={handleMarkFilteredClashStatus}
                             onSetASelectAll={() => setClashSetA(clashModelOptions.map((item) => item.id))}
@@ -1485,13 +1497,13 @@ export const ThreeViewer = ({
                     {loading && <span>{progress}%</span>}
                     {selectedUuid && selectedUuids.length > 1 && (
                         <span className="ui-statusbar-meta">
-                            {t("selected_count") || "已选择"}: {selectedUuids.length}
+                            {t("selected_count")}: {selectedUuids.length}
                         </span>
                     )}
                     {chunkProgress.total > 0 && chunkProgress.loaded < chunkProgress.total && (
                         <div className="ui-chunk-progress">
                             <span>
-                                {t("chunk_loading") || "分片加载"}: {chunkProgress.loaded}/{chunkProgress.total}
+                                {t("chunk_loading")}: {chunkProgress.loaded}/{chunkProgress.total}
                             </span>
                             <div className="ui-progress-bar ui-progress-bar-compact">
                                 <div
@@ -1507,7 +1519,7 @@ export const ThreeViewer = ({
                                 <div key={item.key} className="ui-mode-pill">
                                     <span>{item.label}</span>
                                     <button onClick={item.onClear}>
-                                        {t("mode_clear") || "清除"}
+                                        {t("mode_clear")}
                                     </button>
                                 </div>
                             ))}
@@ -1527,11 +1539,11 @@ export const ThreeViewer = ({
                     </div>
                     {showStats && (
                         <div className="ui-stats-group">
-                            <div className="ui-stats-item" title="Original Meshes">
+                            <div className="ui-stats-item" title={t("stats_original_meshes")}>
                                 <IconBox width={14} height={14} />
                                 <span>{formatNumber(stats.meshes)}</span>
                             </div>
-                            <div className="ui-stats-item" title="Triangles">
+                            <div className="ui-stats-item" title={t("stats_triangles")}>
                                 <IconGrid width={14} height={14} />
                                 <span>{formatNumber(stats.faces)}</span>
                             </div>
@@ -1540,11 +1552,11 @@ export const ThreeViewer = ({
                                 <span>{formatMemory(stats.memory)}</span>
                             </div>
                             {stats.chunksTotal > 0 && (
-                                <div className="ui-statusbar-metric" title="Chunks">
+                                <div className="ui-statusbar-metric" title={t("stats_chunks")}>
                                     CH {stats.chunksLoaded}/{stats.chunksTotal}
                                 </div>
                             )}
-                            <div className="ui-statusbar-metric" title="Pixel Ratio">
+                            <div className="ui-statusbar-metric" title={t("stats_pixel_ratio")}>
                                 DPR {stats.pixelRatio}
                             </div>
                         </div>
@@ -1603,7 +1615,7 @@ export const ThreeViewer = ({
                                     className="ui-btn ui-btn-primary ui-btn-modal-confirm"
                                     onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))}
                                 >
-                                    {t("confirm") || "确定"}
+                                    {t("confirm")}
                                 </button>
                             </div>
                         </div>
