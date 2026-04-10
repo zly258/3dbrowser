@@ -18,6 +18,14 @@ interface UseViewerVisibilityOptions {
     resetLocateState: () => void;
 }
 
+const VISIBILITY_BATCH_SIZE = 400;
+
+function nextAnimationFrame() {
+    return new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+    });
+}
+
 export function useViewerVisibility({
     sceneMgrRef,
     selectedUuids,
@@ -58,22 +66,34 @@ export function useViewerVisibility({
             return { uuid, visible: object ? object.visible : true };
         });
         visibilityStackRef.current.push(stateToRestore);
+        const uuidsToHide = [...selectedUuids];
 
-        const nextHiddenUuids = new Set(hiddenUuids);
-        const nextIsolatedUuids = new Set(isolatedUuids);
-        selectedUuids.forEach((uuid) => {
-            sceneManager.setObjectVisibility(uuid, false);
-            nextHiddenUuids.add(uuid);
-            nextIsolatedUuids.delete(uuid);
-        });
-
-        setHiddenUuids(nextHiddenUuids);
-        setIsolatedUuids(nextIsolatedUuids);
         setSelectedUuids([]);
         setSelectedProps(null);
         sceneManager.highlightObjects([]);
-        updateTree();
         closeContextMenu();
+
+        void (async () => {
+            for (let index = 0; index < uuidsToHide.length; index += VISIBILITY_BATCH_SIZE) {
+                const chunk = uuidsToHide.slice(index, index + VISIBILITY_BATCH_SIZE);
+                const isLastChunk = index + VISIBILITY_BATCH_SIZE >= uuidsToHide.length;
+                sceneManager.setObjectsVisibility(chunk, false, { deferRefresh: !isLastChunk });
+                if (index + VISIBILITY_BATCH_SIZE < uuidsToHide.length) {
+                    await nextAnimationFrame();
+                }
+            }
+
+            const nextHiddenUuids = new Set(hiddenUuids);
+            const nextIsolatedUuids = new Set(isolatedUuids);
+            uuidsToHide.forEach((uuid) => {
+                nextHiddenUuids.add(uuid);
+                nextIsolatedUuids.delete(uuid);
+            });
+
+            setHiddenUuids(nextHiddenUuids);
+            setIsolatedUuids(nextIsolatedUuids);
+            updateTree();
+        })();
     }, [
         closeContextMenu,
         hiddenUuids,
@@ -162,9 +182,14 @@ export function useViewerVisibility({
         const lastAction = visibilityStackRef.current.pop();
         if (!lastAction) return;
 
+        sceneManager.applyVisibilityBatch(lastAction, {
+            recomputeBounds: true,
+            refreshExplode: false,
+            invalidateInteractables: true
+        });
+
         const nextHiddenUuids = new Set(hiddenUuids);
         lastAction.forEach((change) => {
-            sceneManager.setObjectVisibility(change.uuid, change.visible);
             if (change.visible) {
                 nextHiddenUuids.delete(change.uuid);
             } else {

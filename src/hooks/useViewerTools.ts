@@ -103,16 +103,10 @@ export function useViewerTools({ initialSettings, mgrInstance }: UseViewerToolsO
             setHighlightedMeasureId(null);
             setMeasureType("none");
         }
-
-        if (activeTool !== "clip") {
-            mgrInstance.setClippingEnabled(false);
-            setClipEnabled(false);
-        }
     }, [activeTool, mgrInstance]);
 
     useEffect(() => {
-        if (!mgrInstance || activeTool !== "clip") return;
-
+        if (!mgrInstance) return;
         mgrInstance.setClippingEnabled(clipEnabled);
         if (!clipEnabled) return;
 
@@ -124,7 +118,7 @@ export function useViewerTools({ initialSettings, mgrInstance }: UseViewerToolsO
         if (!bounds.isEmpty()) {
             mgrInstance.updateClippingPlanes(bounds, clipValues, clipActive);
         }
-    }, [activeTool, clipActive, clipEnabled, clipValues, mgrInstance]);
+    }, [clipActive, clipEnabled, clipValues, mgrInstance]);
 
     useEffect(() => {
         if (!mgrInstance) return;

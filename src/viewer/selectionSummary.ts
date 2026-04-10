@@ -92,32 +92,32 @@ export function buildSelectionSummary(args: {
         const geometryData = sceneManager.getObjectGeometryData(uuid);
 
         const metrics: SelectionSummaryMetric[] = [
-            { key: t("prop_name") || "名称", value: String(name) },
-            { key: t("prop_type") || "类型", value: String(type) },
-            { key: t("prop_id") || "ID", value: sceneManager.getBimIdByUuid(uuid) || uuid },
-            { key: t("tb_model") || "模型", value: modelName },
-            { key: t("summary_parent") || "父级", value: parentName },
-            { key: t("summary_children") || "子节点", value: String(childrenCount) },
-            { key: t("summary_visible") || "可见", value: visible ? (t("summary_yes") || "是") : (t("summary_no") || "否") }
+            { key: t("prop_name"), value: String(name) },
+            { key: t("prop_type"), value: String(type) },
+            { key: t("prop_id"), value: sceneManager.getBimIdByUuid(uuid) || uuid },
+            { key: t("tb_model"), value: modelName },
+            { key: t("summary_parent"), value: parentName },
+            { key: t("summary_children"), value: String(childrenCount) },
+            { key: t("summary_visible"), value: visible ? t("summary_yes") : t("summary_no") }
         ];
 
         if (size) {
             metrics.push({
-                key: t("prop_dim") || "尺寸",
+                key: t("prop_dim"),
                 value: `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`
             });
         }
         if (geometryData.area > 0) {
-            metrics.push({ key: t("prop_area") || "面积", value: geometryData.area.toFixed(3) });
+            metrics.push({ key: t("prop_area"), value: geometryData.area.toFixed(3) });
         }
         if (geometryData.volume > 0) {
-            metrics.push({ key: t("prop_volume") || "体积", value: geometryData.volume.toFixed(3) });
+            metrics.push({ key: t("prop_volume"), value: geometryData.volume.toFixed(3) });
         }
 
         return {
             mode: "single",
             title: String(name),
-            subtitle: `${t("prop_type") || "类型"}: ${type}`,
+            subtitle: `${t("prop_type")}: ${type}`,
             metrics
         };
     }
@@ -140,27 +140,27 @@ export function buildSelectionSummary(args: {
     });
 
     const metrics: SelectionSummaryMetric[] = [
-        { key: t("selected_count") || "已选择", value: String(selectedUuids.length) },
-        { key: t("summary_models") || "模型数", value: String(modelNames.size || 1) },
-        { key: t("summary_types") || "类型分布", value: stringifyTypeDistribution(typeCounts) || "-" }
+        { key: t("selected_count"), value: String(selectedUuids.length) },
+        { key: t("summary_models"), value: String(modelNames.size || 1) },
+        { key: t("summary_types"), value: stringifyTypeDistribution(typeCounts) || "-" }
     ];
 
     if (size) {
         metrics.push({
-            key: t("summary_bounds") || "总体包围盒",
+            key: t("summary_bounds"),
             value: `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`
         });
     }
     if (totalArea > 0) {
-        metrics.push({ key: t("summary_total_area") || "总面积", value: totalArea.toFixed(3) });
+        metrics.push({ key: t("summary_total_area"), value: totalArea.toFixed(3) });
     }
     if (totalVolume > 0) {
-        metrics.push({ key: t("summary_total_volume") || "总体积", value: totalVolume.toFixed(3) });
+        metrics.push({ key: t("summary_total_volume"), value: totalVolume.toFixed(3) });
     }
 
     return {
         mode: "multi",
-        title: `${selectedUuids.length} ${t("selected_count") || "已选择"}`,
+        title: `${selectedUuids.length} ${t("selected_count")}`,
         subtitle: modelNames.size > 0 ? Array.from(modelNames).slice(0, 3).join(", ") : undefined,
         metrics
     };

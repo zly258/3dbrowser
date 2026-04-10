@@ -84,8 +84,9 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                     border: `1px solid ${theme.border}`,
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                     zIndex: 2000,
-                    minWidth: '140px',
-                    padding: '4px 0',
+                    minWidth: '180px',
+                    padding: '6px 0',
+                    borderRadius: 'var(--radius-md)'
                 }}
             >
                 {items}
@@ -95,7 +96,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
 
     const menuItem = (icon: React.ReactNode, label: string, onClick: () => void) => (
         <div
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 14px', fontSize: '12px', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '32px', padding: '8px 14px', fontSize: 'var(--font-size-body)', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
             onClick={onClick}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}

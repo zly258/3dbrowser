@@ -134,7 +134,7 @@ export function useViewpoints({
         setConfirmState({
             isOpen: true,
             title: t("viewpoint_title"),
-            message: `${t("confirm_delete")} "${viewpoint?.name || "Viewpoint"}"?`,
+            message: `${t("confirm_delete")} "${viewpoint?.name || t("viewpoint_default_name")}"?`,
             action: () => {
                 persistViewpoints(viewpoints.filter((item) => item.id !== id));
             }

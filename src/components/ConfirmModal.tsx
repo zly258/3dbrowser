@@ -64,19 +64,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                         style={{ backgroundColor: 'var(--error)', borderColor: 'var(--error)', color: 'white' }}
                         onClick={onConfirm}
                     >
-                        {(() => {
-                            const text = t("btn_confirm").trim();
-                            if (text.toLowerCase() === "confirm") {
-                                // 普通英文确认
-                                return "Confirm";
-                            }
-                            if (text === "确定" || text === "确认") {
-                                // 中文确认
-                                return text;
-                            }
-                            // 兼容异常内容，优先保持已经本地化的值
-                            return text || (t("confirm") || "Confirm");
-                        })()}
+                        {t("btn_confirm")}
                     </button>
                 </div>
             </div>

@@ -113,9 +113,12 @@ import {
 } from "./selection";
 import { collectSceneManagerStats } from "./stats";
 import {
+    applyVisibilityBatch,
     applyIsolateObjects,
     applySetAllVisibility,
-    applySetObjectVisibility
+    applySetObjectVisibility,
+    type SceneVisibilityBatchOptions,
+    type SceneVisibilityChange
 } from "./visibility";
 import {
     type PerformancePreset,
@@ -3090,7 +3093,42 @@ export class SceneManager {
     }
 
     hideObjects(uuids: string[]) {
-        uuids.forEach(id => this.setObjectVisibility(id, false));
+        this.setObjectsVisibility(uuids, false);
+    }
+
+    applyVisibilityBatch(changes: SceneVisibilityChange[], options: SceneVisibilityBatchOptions = {}) {
+        const result = applyVisibilityBatch(this.getVisibilityContext(), changes, options);
+        if (result.nextHighlightedUuids) {
+            this.highlightObjects(result.nextHighlightedUuids);
+        }
+        if (options.invalidateInteractables ?? true) {
+            this.markSceneDirty({
+                invalidateInteractables: true,
+                needsRender: false
+            });
+        }
+        if (result.needsBoundsUpdate) this.updateSceneBounds();
+        if (result.needsExplodeRefresh) this.refreshExplodeState();
+        if (result.needsRender) this.markSceneDirty();
+    }
+
+    setObjectsVisibility(
+        uuids: string[],
+        visible: boolean,
+        options: { showParents?: boolean; deferRefresh?: boolean; refreshExplode?: boolean } = {}
+    ) {
+        if (uuids.length === 0) return;
+        const changes = uuids.map((uuid) => ({
+            uuid,
+            visible,
+            showParents: options.showParents
+        }));
+        const recomputeBounds = !options.deferRefresh;
+        this.applyVisibilityBatch(changes, {
+            recomputeBounds,
+            refreshExplode: options.refreshExplode ?? false,
+            invalidateInteractables: !options.deferRefresh
+        });
     }
 
     isolateObjects(uuids: string[]) {
@@ -4074,6 +4112,7 @@ export class SceneManager {
                 if (this.onMeasureUpdate) {
                     this.onMeasureUpdate(Array.from(this.measureRecords.values()));
                 }
+                this.markSceneDirty();
             }
         }
     }
@@ -4094,6 +4133,7 @@ export class SceneManager {
         const context = this.getMeasurementContext();
         const result = applyClearMeasurementPreview(context);
         this.syncMeasurementState(result.state);
+        if (result.needsRender) this.markSceneDirty();
     }
 
     // --- 剖切逻辑 ---
@@ -4106,6 +4146,7 @@ export class SceneManager {
     setClipHelperOptions(options: { visible?: boolean; opacity?: number }) {
         const result = applySetClipHelperOptions(this.getClippingContext(), options);
         this.syncClippingState(result.state);
+        if (result.needsRender) this.markSceneDirty();
     }
 
     setClippingEnabled(enabled: boolean) {

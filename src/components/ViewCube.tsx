@@ -307,7 +307,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh', theme
                 height: `${cubeSize}px`,
                 zIndex: 100,
                 pointerEvents: "auto",
-                borderRadius: "8px",
+                borderRadius: "var(--radius-lg)",
                 overflow: "hidden",
             }}
             onClick={handleClick}

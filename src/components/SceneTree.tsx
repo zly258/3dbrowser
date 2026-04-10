@@ -404,18 +404,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         if (!summary) return null;
         if (summary.worstStatus === "new") {
             return {
-                label: `${t("clash_group_new") || "新建"} ${summary.newCount}`,
+                label: `${t("clash_group_new")} ${summary.newCount}`,
                 color: "var(--error)"
             };
         }
         if (summary.worstStatus === "confirmed") {
             return {
-                label: `${t("clash_group_confirmed") || "已确认"} ${summary.confirmedCount}`,
+                label: `${t("clash_group_confirmed")} ${summary.confirmedCount}`,
                 color: "var(--warning, #f59e0b)"
             };
         }
         return {
-            label: `${t("clash_group_resolved") || "已解决"} ${summary.resolvedCount}`,
+            label: `${t("clash_group_resolved")} ${summary.resolvedCount}`,
             color: "var(--success)"
         };
     };
@@ -446,7 +446,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 {searchQuery && (
                     <div className="ui-tree-search-meta">
                         <span>
-                            {(t("search_results") || "结果")}: {searchMatches.length}
+                            {t("search_results")}: {searchMatches.length}
                         </span>
                         <Button
                             variant="ghost"
@@ -454,7 +454,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                             onClick={handleLocateFirstMatch}
                             disabled={!firstSearchMatch}
                         >
-                            {t("locate_first_match") || "定位首个匹配"}
+                            {t("locate_first_match")}
                         </Button>
                     </div>
                 )}
@@ -530,10 +530,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                                  style={{
                                                      marginLeft: 6,
                                                      padding: "0 6px",
-                                                     borderRadius: 10,
+                                                     borderRadius: "var(--radius-xl)",
                                                      border: `1px solid ${badge.color}`,
                                                      color: badge.color,
-                                                     fontSize: 10,
+                                                     fontSize: "var(--font-size-label)",
                                                      lineHeight: "16px",
                                                      display: "inline-flex",
                                                      alignItems: "center",
@@ -558,7 +558,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     onClose={() => setContextMenu(null)}
                     items={[
                         {
-                            label: t("locate_in_view") || "定位到视图",
+                            label: t("locate_in_view"),
                             onClick: () => onLocate?.(contextMenu.node.object)
                         },
                         {
