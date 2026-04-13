@@ -75,7 +75,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
         : 0;
 
     return (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
+        <div className="ui-properties-panel">
             {selectedProps && (
                 <div className="ui-properties-toolbar">
                     <div className="ui-search-input-wrap">
@@ -97,20 +97,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
 
                         <div className="ui-properties-actions">
                             <button
-                                className="ui-properties-action"
+                                className="ui-properties-action ui-properties-icon-btn"
                                 onClick={() => currentGroups && handleCopy(serializePropertyGroups(currentGroups))}
                                 disabled={!currentGroups}
                                 title={t("copy_all_props")}
-                                style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    opacity: currentGroups ? 1 : 0.5,
-                                }}
                             >
                                 <IconCopy size={14} />
                             </button>
@@ -119,7 +109,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                 </div>
             )}
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="ui-properties-scroll">
                 {filteredProps ? (
                     filteredProps.map((group) => (
                         <div key={group.name}>
@@ -136,7 +126,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                     >
                                         <IconCopy size={12} />
                                     </button>
-                                    <span style={{ opacity: 0.6, display: "flex", alignItems: "center", marginLeft: 4 }}>
+                                    <span className="ui-prop-group-chevron">
                                         {collapsed.has(group.name) ? (
                                             <IconChevronRight width={14} height={14} />
                                         ) : (
@@ -152,7 +142,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                             className="ui-prop-key"
                                             title={`${item.path} (${t("click_to_copy")})`}
                                             onClick={() => handleCopy(item.key)}
-                                            style={{ cursor: "copy" }}
                                         >
                                             {item.key}
                                         </div>
@@ -160,7 +149,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                                             className="ui-prop-value"
                                             title={`${item.value}\n${item.path}`}
                                             onClick={() => handleCopy(item.value)}
-                                            style={{ cursor: "copy" }}
                                         >
                                             {item.value}
                                         </div>
@@ -169,27 +157,13 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                         </div>
                     ))
                 ) : (
-                    <div style={{ padding: 20, color: "var(--text-muted)", textAlign: "center", marginTop: 20 }}>
+                    <div className="ui-properties-empty">
                         {t("no_selection")}
                     </div>
                 )}
             </div>
             {copiedText && (
-                <div
-                    style={{
-                        position: "absolute",
-                        bottom: "20px",
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        background: "rgba(0,0,0,0.7)",
-                        color: "white",
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm)",
-                        fontSize: "var(--font-size-secondary)",
-                        zIndex: 100,
-                        pointerEvents: "none"
-                    }}
-                >
+                <div className="ui-copy-toast">
                     {t("copied")}
                 </div>
             )}

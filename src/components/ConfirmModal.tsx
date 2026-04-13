@@ -26,42 +26,20 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
             theme={theme}
         >
             <div
-                style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: '100%',
-                    padding: '16px',
-                    gap: '16px'
-                }}
+                className="ui-modal-body ui-modal-body-confirm"
             >
-                <div
-                    className="text-base"
-                    style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        color: 'var(--text-primary)',
-                        lineHeight: 1.6
-                    }}
-                >
+                <div className="ui-modal-message">
                     {message}
                 </div>
-                <div
-                    style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: '10px'
-                    }}
-                >
+                <div className="ui-modal-actions">
                     <button
-                        className="ui-btn ui-btn-ghost w-[80px]"
+                        className="ui-btn ui-btn-ghost ui-modal-action-btn"
                         onClick={onCancel}
                     >
                         {t("btn_cancel")}
                     </button>
                     <button
-                        className="ui-btn ui-btn-danger w-[80px]"
-                        style={{ backgroundColor: 'var(--error)', borderColor: 'var(--error)', color: 'white' }}
+                        className="ui-btn ui-btn-danger ui-modal-action-btn"
                         onClick={onConfirm}
                     >
                         {t("btn_confirm")}
