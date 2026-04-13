@@ -43,7 +43,7 @@ export const ClassicMenuItem = ({ label, children, enabled = true }: MenuItemPro
                 {label}
             </div>
             {isOpen && enabled && (
-                <div className="ui-context-menu" style={{ position: 'absolute', top: '100%', left: 0, marginTop: '2px', padding: '4px 0', minWidth: '160px' }}>
+                <div className="ui-context-menu" style={{ position: 'absolute', top: '100%', left: 0, marginTop: '2px', minWidth: '160px' }}>
                     {children(closeMenu)}
                 </div>
             )}

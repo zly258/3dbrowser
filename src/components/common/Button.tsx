@@ -2,6 +2,7 @@ import React from 'react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'default';
+    size?: 'sm' | 'md' | 'lg';
     active?: boolean;
     theme?: any;
 }
@@ -9,6 +10,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 export const Button: React.FC<ButtonProps> = ({ 
     children, 
     variant = 'default', 
+    size = 'md',
     active, 
     theme, 
     style, 
@@ -21,6 +23,10 @@ export const Button: React.FC<ButtonProps> = ({
     else if (variant === 'ghost') btnClass += ' ui-btn-ghost';
     else btnClass += ' ui-btn-default';
     
+    if (size === 'sm') btnClass += ' ui-btn-sm';
+    else if (size === 'lg') btnClass += ' ui-btn-lg';
+    else btnClass += ' ui-btn-md';
+
     if (active) btnClass += ' active';
 
     return (
