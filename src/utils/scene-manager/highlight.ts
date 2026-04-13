@@ -40,6 +40,10 @@ export interface SceneHighlightResult {
     needsRender: boolean;
 }
 
+export interface LocateHighlightOptions {
+    highlightColors?: Record<string, string>;
+}
+
 function getHighlightColor(settings: SceneManagerHighlightContext["settings"]) {
     return new THREE.Color(settings.highlightColor || "#ff9f1c");
 }
@@ -229,7 +233,8 @@ export function applyClearLocateFocus(
 export function applySetLocateResultSet(
     context: SceneManagerHighlightContext & { nodeMap: Map<string, any[]> },
     uuids: string[],
-    focusUuid: string | null = null
+    focusUuid: string | null = null,
+    options?: LocateHighlightOptions
 ): SceneHighlightResult {
     context.clearClashPairHighlight();
     const normalized = Array.from(new Set(uuids.filter(Boolean)));
@@ -240,6 +245,16 @@ export function applySetLocateResultSet(
     const selectedSet = new Set(normalized);
     const expandedTargets = expandLocateTargets(context.nodeMap, normalized);
     const expandedList = Array.from(expandedTargets);
+    const rootColorByExpandedId = new Map<string, THREE.Color>();
+    const colorEntries = options?.highlightColors || {};
+
+    normalized.forEach((rootId) => {
+        const colorHex = colorEntries[rootId];
+        if (!colorHex) return;
+        const rootColor = new THREE.Color(colorHex);
+        const expandedFromRoot = expandLocateTargets(context.nodeMap, [rootId]);
+        expandedFromRoot.forEach((id) => rootColorByExpandedId.set(id, rootColor));
+    });
 
     if (hasSameLocateResultSet(context.state.locateResultSet, expandedList)) {
         const nextFocus = focusUuid && context.state.locateResultSet.has(focusUuid) ? focusUuid : expandedList[0];
@@ -264,6 +279,7 @@ export function applySetLocateResultSet(
         const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         const isMatched = expandedTargets.has(child.uuid);
         const isFocus = isMatched && focusKey !== null && child.uuid === focusKey;
+        const matchedColor = rootColorByExpandedId.get(child.uuid) || accentColor;
         const nextMaterials = sourceMaterials.map((material) => {
             if (!material) return material;
             const cloned = material.clone() as THREE.Material & {
@@ -281,7 +297,7 @@ export function applySetLocateResultSet(
             if ("color" in cloned && cloned.color) {
                 const baseColor = cloned.color.clone();
                 if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(accentColor, isFocus ? 0.93 : 0.76));
+                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.93 : 0.76));
                 } else {
                     cloned.transparent = true;
                     cloned.opacity = 0.18;
@@ -290,7 +306,7 @@ export function applySetLocateResultSet(
                 }
             }
             if ("emissive" in cloned && cloned.emissive) {
-                if (isMatched) cloned.emissive.copy(accentColor.clone().multiplyScalar(isFocus ? 0.4 : 0.12));
+                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.4 : 0.12));
                 else cloned.emissive.set(0x000000);
             }
             if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
@@ -316,10 +332,14 @@ export function applySetLocateResultSet(
         const batchIdToUuid = batched.userData?.batchIdToUuid as Map<number, string> | undefined;
         let hasMatchedInstance = false;
         let hasFocusInstance = false;
+        let instanceMatchColor: THREE.Color | null = owner ? (rootColorByExpandedId.get(owner) || null) : null;
         if (batchIdToUuid && batchIdToUuid.size > 0) {
             for (const instanceUuid of batchIdToUuid.values()) {
                 if (!hasMatchedInstance && expandedTargets.has(instanceUuid)) hasMatchedInstance = true;
                 if (!hasFocusInstance && focusKey !== null && instanceUuid === focusKey) hasFocusInstance = true;
+                if (!instanceMatchColor && expandedTargets.has(instanceUuid)) {
+                    instanceMatchColor = rootColorByExpandedId.get(instanceUuid) || null;
+                }
                 if (hasMatchedInstance && hasFocusInstance) break;
             }
         }
@@ -330,6 +350,7 @@ export function applySetLocateResultSet(
             hasFocusInstance ||
             (ownerExplicitSelected && context.state.locateFocusUuid !== null && context.state.locateFocusUuid === owner);
         const sourceMaterials = Array.isArray(batched.material) ? batched.material : [batched.material];
+        const matchedColor = instanceMatchColor || accentColor;
 
         const nextMaterials = sourceMaterials.map((material) => {
             if (!material) return material;
@@ -348,7 +369,7 @@ export function applySetLocateResultSet(
             if ("color" in cloned && cloned.color) {
                 const baseColor = cloned.color.clone();
                 if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(accentColor, isFocus ? 0.92 : 0.7));
+                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.92 : 0.7));
                 } else {
                     cloned.transparent = true;
                     cloned.opacity = 0.16;
@@ -357,7 +378,7 @@ export function applySetLocateResultSet(
                 }
             }
             if ("emissive" in cloned && cloned.emissive) {
-                if (isMatched) cloned.emissive.copy(accentColor.clone().multiplyScalar(isFocus ? 0.36 : 0.12));
+                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.36 : 0.12));
                 else cloned.emissive.set(0x000000);
             }
             if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
@@ -371,6 +392,7 @@ export function applySetLocateResultSet(
     context.optimizedMapping.forEach((mappings, originalUuid) => {
         const isMatched = expandedTargets.has(originalUuid);
         const isFocus = isMatched && focusKey !== null && originalUuid === focusKey;
+        const matchedColor = rootColorByExpandedId.get(originalUuid) || accentColor;
         mappings.forEach((mapping) => {
             const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
             context.locateDimmedInstances.set(key, {
@@ -380,7 +402,7 @@ export function applySetLocateResultSet(
             });
             const sourceColor = new THREE.Color(mapping.originalColor);
             const tint = isFocus ? 0.93 : isMatched ? 0.76 : 0.82;
-            const targetColor = isMatched ? accentColor : dimmedColor;
+            const targetColor = isMatched ? matchedColor : dimmedColor;
             mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(targetColor, tint));
             if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
         });

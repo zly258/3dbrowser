@@ -28,6 +28,12 @@ interface UsePropertySearchParams {
   selectedUuids: string[];
   setSelectedUuids: (next: string[]) => void;
   onSelectObject: (obj: any) => Promise<void> | void;
+  focusObjectsInView: (options: {
+    uuids: string[];
+    focusUuid?: string | null;
+    highlightColors?: Record<string, string>;
+    updateSelection?: boolean;
+  }) => boolean;
   t: (key: string) => string;
   setToast: (payload: { message: string; type: "info" | "success" | "error" }) => void;
 }
@@ -75,6 +81,7 @@ export function usePropertySearch({
   selectedUuids,
   setSelectedUuids,
   onSelectObject,
+  focusObjectsInView,
   t,
   setToast
 }: UsePropertySearchParams) {
@@ -319,14 +326,13 @@ export function usePropertySearch({
   const handleApplySearchResultHighlight = useCallback((uuid: string) => {
     if (!sceneMgrRef.current) return;
     const target = sceneMgrRef.current.contentGroup.getObjectByProperty("uuid", uuid);
-    sceneMgrRef.current.fitViewToObject(uuid);
+    focusObjectsInView({ uuids: [uuid], focusUuid: uuid });
     if (target) {
       void onSelectObject(target);
       return;
     }
     setSelectedUuids([uuid]);
-    sceneMgrRef.current.highlightObjects([uuid]);
-  }, [onSelectObject, sceneMgrRef, setSelectedUuids]);
+  }, [focusObjectsInView, onSelectObject, sceneMgrRef, setSelectedUuids]);
 
   const handleClearSearchResult = useCallback(() => {
     searchRunTokenRef.current++;

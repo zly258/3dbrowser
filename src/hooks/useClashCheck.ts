@@ -51,6 +51,12 @@ interface UseClashCheckParams {
   clashModelOptions: ClashModelOption[];
   selectedUuids: string[];
   setSelectedUuids: (next: string[]) => void;
+  focusObjectsInView: (options: {
+    uuids: string[];
+    focusUuid?: string | null;
+    highlightColors?: Record<string, string>;
+    updateSelection?: boolean;
+  }) => boolean;
   t: (key: string) => string;
 }
 
@@ -85,6 +91,7 @@ export function useClashCheck({
   clashModelOptions,
   selectedUuids,
   setSelectedUuids,
+  focusObjectsInView,
   t
 }: UseClashCheckParams) {
   const [clashResults, setClashResults] = useState<ClashResultItem[]>([]);
@@ -473,12 +480,16 @@ export function useClashCheck({
   }, [sceneMgrRef, selectedUuids]);
 
   const handleFocusClashResult = useCallback((item: ClashResultItem) => {
-    if (!sceneMgrRef.current) return;
     const uuids = [item.aUuid, item.bUuid];
-    sceneMgrRef.current.setClashPairHighlight(item.aUuid, item.bUuid);
-    sceneMgrRef.current.fitViewToObjects(uuids);
-    setSelectedUuids(uuids);
-  }, [sceneMgrRef, setSelectedUuids]);
+    focusObjectsInView({
+      uuids,
+      focusUuid: item.aUuid,
+      highlightColors: {
+        [item.aUuid]: "#ff4d4f",
+        [item.bUuid]: "#1890ff"
+      }
+    });
+  }, [focusObjectsInView]);
 
   const handleUpdateClashResultStatus = useCallback((id: string, nextStatus: ClashResultItem["status"]) => {
     setClashResults((prev) => prev.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)));

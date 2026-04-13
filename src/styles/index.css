@@ -745,7 +745,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   min-height: 48px;
-  padding: 0 12px;
+  padding: 0 8px;
   gap: 6px;
   background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
@@ -756,7 +756,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 8px;
+  padding: 6px 6px;
   border-right: 1px solid var(--border-color);
   min-height: 100%;
 }
@@ -2635,6 +2635,114 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-selection-box-actions {
   display: flex;
   gap: 6px;
+}
+
+.ui-clash-panel {
+  gap: 8px;
+}
+
+.ui-clash-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-panel) 94%, var(--bg-hover)) 0%, var(--bg-panel) 100%);
+}
+
+.ui-clash-hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-clash-hero-title,
+.ui-clash-results-title,
+.ui-clash-section-title {
+  margin-bottom: 0;
+}
+
+.ui-clash-hero-meta,
+.ui-clash-section-summary {
+  line-height: 1.4;
+}
+
+.ui-clash-hero-actions {
+  gap: 6px;
+}
+
+.ui-clash-progress {
+  margin-top: 2px;
+}
+
+.ui-clash-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-panel) 94%, var(--bg-hover));
+}
+
+.ui-clash-section-toggle {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ui-clash-selection-list {
+  max-height: 80px;
+}
+
+.ui-clash-option-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.ui-clash-results-header {
+  align-items: flex-end;
+}
+
+.ui-clash-results-box {
+  max-height: 240px;
+}
+
+.ui-clash-result-item {
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.ui-clash-result-top {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ui-clash-result-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-clash-result-meta {
+  gap: 8px;
 }
 
 .ui-empty-state {

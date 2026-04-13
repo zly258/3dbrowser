@@ -16,6 +16,12 @@ interface UseViewerSelectionOptions {
     propOnSelect?: (uuid: string, object: any) => void;
     ifcPropertyCacheRef: RefObject<Map<string, Record<string, PropertyGroupInput>>>;
     clashSummaryByUuid: Record<string, ClashSummaryRecord>;
+    focusObjectsInView: (options: {
+        uuids: string[];
+        focusUuid?: string | null;
+        highlightColors?: Record<string, string>;
+        updateSelection?: boolean;
+    }) => boolean;
     t: (key: string) => string;
     isDev?: boolean;
 }
@@ -31,6 +37,7 @@ export function useViewerSelection({
     propOnSelect,
     ifcPropertyCacheRef,
     clashSummaryByUuid,
+    focusObjectsInView,
     t,
     isDev = false
 }: UseViewerSelectionOptions) {
@@ -110,10 +117,9 @@ export function useViewerSelection({
         const bounds = sceneManager.getBoundsForObject(uuid);
         if (!bounds) return false;
 
-        sceneManager.clearLocateFocus();
-        sceneManager.fitViewToObject(uuid);
-        return true;
-    }, [sceneMgrRef]);
+        setLocatedUuid(uuid);
+        return focusObjectsInView({ uuids: [uuid], focusUuid: uuid, updateSelection: false });
+    }, [focusObjectsInView, sceneMgrRef]);
 
     const handleLocateResultsChange = useCallback((uuids: string[]) => {
         const changed = !(locateResultUuids.length === uuids.length && locateResultUuids.every((uuid, index) => uuid === uuids[index]));
