@@ -21,18 +21,18 @@
   --text-muted: #938F99;
   --text-disabled: #49454F;
 
-  /* Accent / Primary (Light Blue) */
-  --accent: #A1C9FF;
-  --accent-hover: #C1E8FF;
-  --accent-active: #7EB0F0;
-  --accent-focus: rgba(161, 201, 255, 0.4);
-  --accent-subtle: rgba(161, 201, 255, 0.12);
+  /* Accent / Primary (Ant Design Blue Dark) */
+  --accent: #177DDC;
+  --accent-hover: #3C9AE8;
+  --accent-active: #1554AD;
+  --accent-focus: rgba(23, 125, 220, 0.3);
+  --accent-subtle: rgba(23, 125, 220, 0.15);
 
   /* Semantic */
   --success: #B4E197;
   --warning: #F2C94C;
   --error: #F2B8B5;
-  --info: #A8C7FA;
+  --info: #177DDC;
 
   /* Elevation (MD3 Shadows) */
   --shadow-sm: 0px 1px 2px rgba(12, 16, 22, 0.18);
@@ -89,18 +89,18 @@
   --text-muted: #79747E;
   --text-disabled: #CAC4D0;
 
-  /* Accent / Primary (Light Blue) */
-  --accent: #0061A4;
-  --accent-hover: #1D80C6;
-  --accent-active: #004A7F;
-  --accent-focus: rgba(0, 97, 164, 0.3);
-  --accent-subtle: rgba(0, 97, 164, 0.08);
+  /* Accent / Primary (Ant Design Blue) */
+  --accent: #1677FF;
+  --accent-hover: #4096FF;
+  --accent-active: #0958D9;
+  --accent-focus: rgba(22, 119, 255, 0.2);
+  --accent-subtle: rgba(22, 119, 255, 0.1);
 
   /* Semantic */
   --success: #217346;
   --warning: #CA8A04;
   --error: #B3261E;
-  --info: #0061A4;
+  --info: #1677FF;
 
   /* Elevation (MD3 Shadows) */
   --shadow-sm: 0px 1px 2px rgba(32, 36, 44, 0.08);
@@ -214,8 +214,8 @@ body {
 }
 
 .ui-panel-header {
-  height: 32px;
-  padding: 0 12px;
+  height: 38px;
+  padding: 0 16px;
   background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
   font-weight: 500;
@@ -322,18 +322,36 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 4px 12px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
   font-family: inherit;
-  border-radius: var(--radius-sm); /* Changed from XL for more professional look */
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1), border-color 200ms cubic-bezier(0.4, 0, 0.2, 1), color 200ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
   user-select: none;
-  min-height: var(--control-h-md);
   border: 1px solid transparent;
   white-space: nowrap;
-  letter-spacing: 0.1px;
+}
+
+.ui-btn-sm {
+  min-height: var(--control-h-sm);
+  padding: 0 7px;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.ui-btn-md {
+  min-height: var(--control-h-md);
+  padding: 4px 15px;
+  font-size: 14px;
+  border-radius: var(--radius-md);
+}
+
+.ui-btn-lg {
+  min-height: var(--control-h-lg);
+  padding: 6.4px 15px;
+  font-size: 16px;
+  border-radius: var(--radius-lg);
 }
 
 .ui-btn:disabled {
@@ -474,6 +492,89 @@ body {
   background-position: right 8px center;
 }
 
+.ui-select-custom {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.ui-select-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding-right: 8px !important;
+  user-select: none;
+  width: 100%;
+}
+
+.ui-select-custom.disabled .ui-select-selector {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-select-custom.open .ui-select-selector {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-focus);
+}
+
+.ui-select-selection-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.ui-select-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  margin-left: 8px;
+  transition: transform 0.2s ease;
+}
+
+.ui-select-custom.open .ui-select-arrow {
+  transform: rotate(180deg);
+}
+
+.ui-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  max-height: 256px;
+  overflow-y: auto;
+  background-color: var(--bg-panel);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 1050;
+  padding: 4px;
+  border: 1px solid var(--border-light);
+  transform-origin: top;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.ui-select-item {
+  padding: 5px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--text-primary);
+}
+
+.ui-select-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.ui-select-item.selected {
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 500;
+}
+
 /* 数字输入框特殊样式 */
 input[type="number"].ui-input {
   text-align: right;
@@ -491,11 +592,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-segmented {
   display: inline-flex;
   align-items: center;
-  padding: 4px;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
-  gap: 4px;
+  padding: 2px;
+  background-color: var(--bg-header);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  gap: 2px;
 }
 
 .ui-segmented-item {
@@ -503,10 +604,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 2px 12px;
+  padding: 4px 12px;
   font-size: 13px;
   font-weight: 500;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color 200ms ease, color 200ms ease;
   color: var(--text-secondary);
@@ -522,9 +623,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-segmented-item.active {
-  background-color: var(--accent);
-  color: white;
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
   font-weight: 500;
+  box-shadow: var(--shadow-sm);
 }
 
 .ui-segmented-item:disabled {
@@ -538,8 +640,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: inline-flex;
   align-items: center;
   width: 44px;
-  height: 24px;
-  border-radius: 12px;
+  height: 22px;
+  border-radius: 11px;
   background-color: var(--border-color);
   cursor: pointer;
   transition: background-color 200ms ease, color 200ms ease;
@@ -563,17 +665,17 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-switch-thumb {
   position: absolute;
-  left: 2px;
-  width: 14px;
-  height: 14px;
+  left: 0;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background-color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 120ms ease;
+  box-shadow: 0 2px 4px 0 rgba(0,35,11,0.2);
+  transition: transform 200ms cubic-bezier(0.78, 0.14, 0.15, 0.86);
 }
 
 .ui-switch.active .ui-switch-thumb {
-  transform: translateX(18px);
+  transform: translateX(22px);
 }
 
 /* ==================== 滑块 ==================== */
@@ -749,6 +851,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   gap: 4px;
   background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
   box-sizing: border-box;
 }
 
@@ -797,9 +900,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-toolbar-btn.active {
-  background-color: var(--accent);
-  color: var(--bg-primary); /* Use high contrast text for active state */
-  box-shadow: var(--elevation-1);
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .ui-toolbar-btn:disabled {
@@ -825,9 +928,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   justify-content: space-between;
   min-height: 32px;
   padding: 4px 10px;
-  background-color: var(--bg-header);
-  border-top: 1px solid var(--border-color);
-  font-size: var(--font-size-body);
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-light);
+  font-size: 12px;
   line-height: 1.2;
   color: var(--text-secondary);
 }
@@ -886,7 +989,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-modal {
   background-color: var(--bg-panel);
-  border-radius: 6px;
+  border-radius: 8px;
   box-shadow: var(--shadow-lg);
   z-index: 600;
   max-height: 80vh;
@@ -899,13 +1002,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-header);
+  background-color: var(--bg-panel);
 }
 
 .ui-modal-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -934,7 +1037,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-modal-body {
-  padding: 16px;
+  padding: 24px;
   overflow-y: auto;
   flex: 1;
 }
@@ -944,8 +1047,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 16px;
-  background-color: var(--bg-header);
+  padding: 16px 24px;
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-color);
 }
 
 /* ==================== 工具提示 ==================== */
@@ -956,17 +1060,17 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-tooltip {
   position: absolute;
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 6px 8px;
+  font-size: 12px;
   color: white;
-  background-color: #374151;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background-color: rgba(0, 0, 0, 0.75);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
   pointer-events: none;
   white-space: nowrap;
   z-index: 1000;
   opacity: 0;
-  transition: opacity 150ms ease;
+  transition: opacity 150ms ease, transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .ui-tooltip-wrapper:hover .ui-tooltip {
@@ -976,16 +1080,154 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-tooltip-top {
   bottom: 100%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(4px) scale(0.95);
   margin-bottom: 4px;
+}
+
+.ui-tooltip-wrapper:hover .ui-tooltip-top {
+  transform: translateX(-50%) translateY(0) scale(1);
 }
 
 .ui-tooltip-bottom {
   top: 100%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(-4px) scale(0.95);
   margin-top: 4px;
 }
+
+.ui-tooltip-wrapper:hover .ui-tooltip-bottom {
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.ui-tooltip-left {
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%) translateX(-4px) scale(0.95);
+  margin-right: 4px;
+}
+
+.ui-tooltip-wrapper:hover .ui-tooltip-left {
+  transform: translateY(-50%) translateX(0) scale(1);
+}
+
+.ui-tooltip-right {
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%) translateX(4px) scale(0.95);
+  margin-left: 4px;
+}
+
+.ui-tooltip-wrapper:hover .ui-tooltip-right {
+  transform: translateY(-50%) translateX(0) scale(1);
+}
+
+/* ==================== Tag 标签 ==================== */
+.ui-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.ui-tag-primary {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-color: var(--accent-subtle);
+}
+
+.ui-tag-success {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  border-color: color-mix(in srgb, var(--success) 15%, transparent);
+}
+
+.ui-tag-warning {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 15%, transparent);
+}
+
+.ui-tag-error {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  border-color: color-mix(in srgb, var(--error) 15%, transparent);
+}
+
+.ui-tag-close {
+  display: inline-flex;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.ui-tag-close:hover {
+  color: var(--text-primary);
+}
+
+/* ==================== Badge 徽标 ==================== */
+.ui-badge-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.ui-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  transform-origin: 100% 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  color: #fff;
+  font-weight: normal;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-align: center;
+  background: var(--error);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--bg-panel);
+}
+
+.ui-badge-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  transform-origin: 100% 0;
+  width: 6px;
+  height: 6px;
+  background: var(--error);
+  border-radius: 100%;
+  box-shadow: 0 0 0 1px var(--bg-panel);
+}
+
+.ui-badge-status {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ui-badge-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.ui-badge-status-success { background: var(--success); }
+.ui-badge-status-error { background: var(--error); }
+.ui-badge-status-default { background: var(--text-muted); }
+.ui-badge-status-processing { background: var(--accent); }
+.ui-badge-status-warning { background: var(--warning); }
 
 /* ==================== Flex 工具 ==================== */
 .flex { display: flex; }
@@ -1432,7 +1674,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   opacity: 1;
 }
 
-/* 右键菜单 */
+/* 右键菜单与下拉菜单 */
+.ui-dropdown-menu {
+  position: absolute;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 10000;
+  min-width: 160px;
+  padding: 4px;
+}
+
 .ui-context-menu {
   position: fixed;
   background-color: var(--bg-panel);
@@ -1453,8 +1706,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-primary);
   cursor: pointer;
   background: transparent;
+  border-radius: 4px;
   transition: background-color 200ms ease;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ui-context-menu-item:hover {
@@ -1476,9 +1733,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* 进度条（内联） */
 .ui-progress-bar {
-  height: 4px;
-  background-color: var(--border-color);
-  border-radius: 2px;
+  height: 8px;
+  background-color: var(--bg-hover);
+  border-radius: 100px;
   overflow: hidden;
 }
 
@@ -1494,7 +1751,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   height: 100%;
   background-color: var(--accent);
   transition: width 0.2s ease;
-  border-radius: 2px;
+  border-radius: 100px;
 }
 
 /* 状态栏扩展 */
@@ -1700,12 +1957,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-toolpanel-body {
   position: relative;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 68vh;
-  overflow: auto;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .ui-toolpanel-sticky-tabs {
@@ -1735,14 +1994,15 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   padding: 2px 0;
   align-items: center;
   gap: 6px;
+  display: flex;
 }
 
 .ui-toolpanel-grid-condition-first {
-  grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr) 24px;
+  /* removed grid */
 }
 
 .ui-toolpanel-grid-condition-linked {
-  grid-template-columns: 64px minmax(0, 1fr) 92px minmax(0, 1fr) 24px;
+  /* removed grid */
 }
 
 .ui-toolpanel-wrap {
@@ -1870,6 +2130,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background-color: var(--bg-panel);
   border-radius: var(--radius-sm);
   transition: background-color 200ms ease, color 200ms ease;
+  overflow: hidden;
 }
 
 .ui-input-number-root {
@@ -1899,11 +2160,20 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-input-number-controls {
   position: absolute;
-  right: 4px;
+  right: 0;
+  top: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  height: calc(100% - 8px);
-  gap: 2px;
+  width: 22px;
+  border-left: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.ui-input-number:hover .ui-input-number-controls {
+  opacity: 1;
 }
 
 .ui-input-number .ui-input {
@@ -2139,16 +2409,20 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   transition: background-color 120ms ease, color 120ms ease;
   background: transparent;
   border: none;
-  border-radius: 2px;
+  border-radius: 0;
   color: var(--text-muted);
   font-size: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 100%;
   height: 50%;
   padding: 0;
   min-height: unset;
+}
+
+.ui-input-number-btn:first-child {
+  border-bottom: 1px solid var(--border-color);
 }
 
 .ui-checkbox {
@@ -2165,17 +2439,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-checkbox-box {
-  width: 14px;
-  height: 14px;
-  min-width: 14px;
-  min-height: 14px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
   border: 1px solid var(--border-color);
-  border-radius: 2px;
+  border-radius: 4px;
   background-color: var(--bg-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.2s;
 }
 
 .ui-checkbox-box-checked {
@@ -2410,13 +2685,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* 属性分组标题 */
 .ui-prop-group {
-  background-color: var(--bg-header);
-  padding: 6px 12px;
-  font-weight: 500;
+  background-color: var(--bg-panel);
+  padding: 8px 12px;
+  font-weight: 600;
   font-size: 13px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-light);
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2430,7 +2705,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-prop-group.collapsed {
-  margin-bottom: 4px;
+  margin-bottom: 0;
+  border-bottom-color: transparent;
 }
 
 .ui-prop-group-actions {

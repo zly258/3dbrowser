@@ -37,3 +37,12 @@ export { InputNumber } from './InputNumber';
 export type { InputNumberProps } from './InputNumber';
 
 export { PaginationControls } from './PaginationControls';
+
+export { Tag } from './Tag';
+export type { TagProps } from './Tag';
+
+export { Badge } from './Badge';
+export type { BadgeProps } from './Badge';
+
+export { Tooltip } from './Tooltip';
+export type { TooltipProps } from './Tooltip';

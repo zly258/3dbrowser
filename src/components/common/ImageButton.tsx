@@ -14,12 +14,14 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
     theme, 
     style, 
     className = '',
+    disabled,
     ...props 
 }) => {
     return (
         <button 
-            style={style} 
+            style={{ opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer', ...style }} 
             className={`ui-toolbar-btn ${active ? 'active' : ''} ${className}`}
+            disabled={disabled}
             {...props}
         >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, overflow: "visible" }}>
