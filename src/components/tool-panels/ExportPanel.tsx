@@ -19,31 +19,31 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
     }, [format, getDefaultFileName]);
 
     return (
-        <FloatingPanel title={t("export_title")} onClose={onClose} width={320} height={450} resizable={false} theme={theme} storageId="tool_export">
-            <div style={{ padding: 16 }}>
-                <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>{t("export_format")}:</div>
+        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close") || "关闭"} onClose={onClose} width={320} height={450} resizable={false} theme={theme} storageId="tool_export">
+            <div className="ui-toolpanel-body">
+                <div className="ui-toolpanel-caption">{t("export_format")}:</div>
 
                 {[
                     { id: 'glb', label: 'GLB', desc: t("export_glb") },
                     { id: 'lmb', label: 'LMB', desc: t("export_lmb") },
                     { id: 'nbim', label: 'NBIM', desc: t("export_nbim") }
                 ].map(opt => (
-                    <label key={opt.id} style={{
-                        display: 'flex', alignItems: 'center', padding: '10px', cursor: 'pointer',
-                        border: `1px solid ${format === opt.id ? theme.accent : theme.border}`,
-                        borderRadius: 0, marginBottom: 8,
-                        backgroundColor: format === opt.id ? `${theme.accent}15` : 'transparent',
-                        transition: 'all 0.2s'
-                    }}>
-                        <input type="radio" name="exportFmt" checked={format === opt.id} onChange={() => setFormat(opt.id)} style={{ marginRight: 10 }} />
-                        <div>
-                            <div style={{ color: theme.text, fontWeight: 'bold', fontSize: 14 }}>{opt.label}</div>
-                            <div style={{ fontSize: 11, color: theme.textMuted }}>{opt.desc}</div>
+                    <label key={opt.id} className={`ui-choice-card ${format === opt.id ? 'active' : ''}`}>
+                        <input
+                            type="radio"
+                            name="exportFmt"
+                            checked={format === opt.id}
+                            onChange={() => setFormat(opt.id)}
+                            className="ui-choice-card-radio"
+                        />
+                        <div className="ui-choice-card-content">
+                            <div className="ui-choice-card-title">{opt.label}</div>
+                            <div className="ui-choice-card-desc">{opt.desc}</div>
                         </div>
                     </label>
                 ))}
 
-                <div style={{ marginTop: 12, marginBottom: 8, fontSize: 12, color: theme.textMuted }}>
+                <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">
                     {t("export_filename") || "文件名"}:
                 </div>
                 <input
@@ -52,16 +52,15 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
                     onChange={(e) => setFileName(e.target.value)}
                     placeholder={t("export_filename_placeholder") || "请输入文件名"}
                     className="ui-input ui-input-compact"
-                    style={{ width: '100%', marginBottom: 6 }}
                 />
-                <div style={{ fontSize: 11, color: theme.textMuted }}>
+                <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">
                     {t("export_filename_hint") || "留空时自动按模型名生成"}
                 </div>
 
                 <Button
                     theme={theme}
                     onClick={() => onExport(format, fileName)}
-                    style={{ width: '100%', marginTop: 10, height: 40 }}
+                    className="ui-toolpanel-submit"
                 >
                     {t("export_btn")}
                 </Button>

@@ -69,6 +69,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   return (
     <FloatingPanel
       title={t("settings")}
+      closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={360}
       height={400}

@@ -105,6 +105,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   return (
     <FloatingPanel
       title={t("tb_search") || "属性搜索"}
+      closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={420}
       storageId="tool_search"

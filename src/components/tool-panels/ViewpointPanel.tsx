@@ -72,6 +72,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
     return (
         <FloatingPanel
             title={t("viewpoint_title") || "视点管理"}
+            closeLabel={t("panel_close") || "关闭"}
             onClose={onClose}
             width={320}
             height={470}

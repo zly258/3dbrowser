@@ -101,6 +101,7 @@ const resources: Record<Lang, Record<string, string>> = {
         delete_item: "Delete Item",
         btn_confirm: "Confirm",
         btn_cancel: "Cancel",
+        panel_close: "Close",
         // 属性
         pg_basic: "Basic Information",
         pg_geo: "Geometry",
@@ -129,6 +130,7 @@ const resources: Record<Lang, Record<string, string>> = {
         measure_clear: "Clear All",
         measure_start: "Start",
         measure_stop: "Stop",
+        measure_panel_hint: "Choose a mode, then click points in the viewport to measure.",
         tb_boxSelect: "Box Select",
         tb_boxSelect_hint: "Drag to select objects",
         tb_wireframe: "Wireframe",
@@ -485,6 +487,7 @@ const resources: Record<Lang, Record<string, string>> = {
         delete_item: "删除模型",
         btn_confirm: "确定",
         btn_cancel: "取消",
+        panel_close: "关闭",
         // 属性
         pg_basic: "基本信息",
         pg_geo: "几何信息",
@@ -513,6 +516,7 @@ const resources: Record<Lang, Record<string, string>> = {
         measure_clear: "清空测量",
         measure_start: "开始测量",
         measure_stop: "停止测量",
+        measure_panel_hint: "选择测量方式后，在视口中点击点位开始测量。",
         tb_boxSelect: "框选",
         tb_boxSelect_hint: "拖拽选择对象",
         tb_wireframe: "线框",

@@ -28,6 +28,7 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
     return (
         <FloatingPanel
             title={t("op_screenshot") || "场景截图"}
+            closeLabel={t("panel_close") || "关闭"}
             onClose={onClose}
             width={320}
             height={280}
@@ -35,36 +36,23 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
             theme={theme}
             storageId="tool_screenshot"
         >
-            <div style={{ padding: 16 }}>
-                <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>
+            <div className="ui-toolpanel-body">
+                <div className="ui-toolpanel-caption">
                     {t("screenshot_mode") || "截图方式"}:
                 </div>
 
                 {options.map((opt) => (
-                    <label
-                        key={opt.id}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '10px',
-                            cursor: 'pointer',
-                            border: `1px solid ${mode === opt.id ? theme.accent : theme.border}`,
-                            borderRadius: 0,
-                            marginBottom: 8,
-                            backgroundColor: mode === opt.id ? `${theme.accent}15` : 'transparent',
-                            transition: 'all 0.2s'
-                        }}
-                    >
+                    <label key={opt.id} className={`ui-choice-card ${mode === opt.id ? 'active' : ''}`}>
                         <input
                             type="radio"
                             name="screenshotMode"
                             checked={mode === opt.id}
                             onChange={() => setMode(opt.id)}
-                            style={{ marginRight: 10 }}
+                            className="ui-choice-card-radio"
                         />
-                        <div>
-                            <div style={{ color: theme.text, fontWeight: 'bold', fontSize: 14 }}>{opt.label}</div>
-                            <div style={{ fontSize: 11, color: theme.textMuted }}>{opt.desc}</div>
+                        <div className="ui-choice-card-content">
+                            <div className="ui-choice-card-title">{opt.label}</div>
+                            <div className="ui-choice-card-desc">{opt.desc}</div>
                         </div>
                     </label>
                 ))}
@@ -72,7 +60,7 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
                 <Button
                     theme={theme}
                     onClick={() => onCapture(mode)}
-                    style={{ width: '100%', marginTop: 10, height: 40 }}
+                    className="ui-toolpanel-submit"
                 >
                     {t("btn_confirm") || "确定"}
                 </Button>
