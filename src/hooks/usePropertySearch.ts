@@ -308,7 +308,6 @@ export function usePropertySearch({
 
       if (!cancelled) {
         setSearchResults(nextResults);
-        sceneMgrRef.current.highlightObjects(nextResults.map((resultItem) => resultItem.uuid));
         setSearchProgress(100);
         setSearchStatus(`${t("search_results")}: ${nextResults.length}`);
       }

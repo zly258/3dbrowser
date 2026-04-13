@@ -745,8 +745,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   min-height: 48px;
-  padding: 0 8px;
-  gap: 6px;
+  padding: 0 4px;
+  gap: 4px;
   background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
   box-sizing: border-box;
@@ -756,7 +756,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 6px;
+  padding: 4px;
   border-right: 1px solid var(--border-color);
   min-height: 100%;
 }
@@ -770,10 +770,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 5px 10px;
-  min-height: 36px;
-  min-width: 52px;
-  gap: 4px;
+  padding: 4px 8px;
+  min-height: 34px;
+  min-width: 44px;
+  gap: 2px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color 200ms ease, color 200ms ease;
@@ -2008,6 +2008,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font: inherit;
 }
 
+.ui-search-results-box {
+  max-height: 320px;
+}
+
+.ui-search-result-item-simple {
+  padding: 8px 10px;
+}
+
+.ui-search-result-item-simple .ui-search-result-main {
+  gap: 2px;
+}
+
 .ui-search-result-checkbox {
   align-self: flex-start;
   margin-top: 2px;
@@ -2716,7 +2728,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-clash-results-box {
-  max-height: 240px;
+  max-height: 360px;
 }
 
 .ui-clash-result-item {
