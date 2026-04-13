@@ -24,21 +24,11 @@ export const ImageButton: React.FC<ImageButtonProps> = ({
             disabled={disabled}
             {...props}
         >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, overflow: "visible" }}>
+            <div className="ui-toolbar-btn-icon">
                 {icon}
             </div>
             {label && (
-                <div
-                    style={{
-                        fontSize: "var(--font-size-base)",
-                        lineHeight: 1.2,
-                        fontWeight: 500,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        maxWidth: "100%"
-                    }}
-                >
+                <div className="ui-toolbar-btn-label">
                     {label}
                 </div>
             )}

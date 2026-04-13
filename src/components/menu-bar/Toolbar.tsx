@@ -73,22 +73,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
     const renderDropdown = (menuId: string, items: React.ReactNode) => {
         if (openMenu !== menuId) return null;
         return (
-            <div
-                ref={menuRef}
-                style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    marginTop: '4px',
-                    backgroundColor: theme.panelBg,
-                    border: `1px solid ${theme.border}`,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    zIndex: 2000,
-                    minWidth: '180px',
-                    padding: '6px 0',
-                    borderRadius: 'var(--radius-md)'
-                }}
-            >
+            <div ref={menuRef} className="ui-toolbar-menu">
                 {items}
             </div>
         );
@@ -96,19 +81,17 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
 
     const menuItem = (icon: React.ReactNode, label: string, onClick: () => void) => (
         <div
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '32px', padding: '8px 14px', fontSize: 'var(--font-size-body)', color: theme.text, cursor: 'pointer', backgroundColor: 'transparent' }}
+            className="ui-toolbar-menu-item"
             onClick={onClick}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.itemHover}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
-            <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.8 }}>
+            <span className="ui-toolbar-menu-icon">
                 {icon}
             </span>
             {label}
         </div>
     );
 
-    const menuDivider = () => <div style={{ height: '1px', backgroundColor: theme.border, margin: '4px 0' }} />;
+    const menuDivider = () => <div className="ui-toolbar-menu-divider" />;
 
     return (
         <div className="ui-toolbar">

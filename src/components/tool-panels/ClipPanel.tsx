@@ -31,11 +31,8 @@ const AxisSliderRow: React.FC<{
 }> = ({ axis, label, active, value, onToggle, onChange, disabled = false }) => {
   return (
     <div
-      className="flex items-center"
+      className="ui-clip-axis-row"
       style={{
-        gap: "8px",
-        padding: "6px 0",
-        borderBottom: "1px solid var(--border-color)",
         opacity: disabled ? 0.5 : 1,
         pointerEvents: disabled ? "none" : "auto",
       }}
@@ -54,13 +51,8 @@ const AxisSliderRow: React.FC<{
 
       {/* Axis label */}
       <span
-        style={{
-          fontSize: "12px",
-          fontWeight: "600",
-          minWidth: "16px",
-          color: active ? "var(--text-primary)" : "var(--text-secondary)",
-          flexShrink: 0,
-        }}
+        className="ui-clip-axis-label"
+        style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}
       >
         {axis.toUpperCase()}
       </span>
@@ -78,14 +70,7 @@ const AxisSliderRow: React.FC<{
 
       {/* Value display */}
       <span
-        style={{
-          fontSize: "11px",
-          color: "var(--text-primary)",
-          minWidth: "66px",
-          textAlign: "right",
-          flexShrink: 0,
-          fontVariantNumeric: "tabular-nums",
-        }}
+        className="ui-clip-axis-value"
       >
         {String(Math.round(value[0])).padStart(2, "0")}-{String(Math.round(value[1])).padStart(2, "0")}%
       </span>
@@ -120,8 +105,8 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
       resizable={false}
       storageId="tool_clip"
     >
-      <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="ui-toolpanel-body">
+        <div className="ui-panel-section">
           <div className="ui-form-row">
             <span className="ui-form-label">{t("clip_enable")}</span>
             <div className="ui-form-value">
@@ -159,13 +144,8 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
         </div>
 
         <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            opacity: clipEnabled ? 1 : 0.4,
-            pointerEvents: clipEnabled ? "auto" : "none",
-          }}
+          className="ui-panel-section ui-panel-section-fill"
+          style={{ opacity: clipEnabled ? 1 : 0.4, pointerEvents: clipEnabled ? "auto" : "none" }}
         >
           <AxisSliderRow
             axis="x"
@@ -196,7 +176,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
           />
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div className="ui-panel-footer">
           <Button variant="default" onClick={handleReset} disabled={!clipEnabled}>
             {t("clip_reset") || "重置范围"}
           </Button>
