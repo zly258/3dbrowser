@@ -24,22 +24,13 @@ const Row: React.FC<{
   stretch?: boolean;
 }> = ({ label, children, stretch = false }) => (
   <div
-    className="flex items-center justify-between"
-    style={{ marginBottom: "8px", minHeight: "28px", gap: "12px" }}
+    className="ui-form-row ui-form-row-tight"
   >
-    <span
-      className="text-sm text-secondary flex-shrink-0"
-      style={{ minWidth: "84px" }}
-    >
+    <span className="ui-form-label">
       {label}
     </span>
     <div
-      className="flex items-center"
-      style={{
-        flex: stretch ? 1 : "0 1 auto",
-        justifyContent: stretch ? "flex-start" : "flex-end",
-        minWidth: stretch ? 0 : undefined
-      }}
+      className={`ui-form-value${stretch ? " ui-form-value-stretch ui-form-value-start" : ""}`}
     >
       {children}
     </div>
@@ -69,20 +60,13 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
       autoHeight={true}
       theme={theme}
     >
-      <div
-        style={{
-          padding: "12px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px"
-        }}
-      >
+      <div className="ui-toolpanel-body ui-toolpanel-body-compact">
         <Row label={t("explode_enable") || "启用"}>
           <Switch checked={enabled} onChange={onEnabledChange} />
         </Row>
         <Row label={t("explode_strength") || "强度"} stretch={true}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="ui-slider-field">
+            <div className="ui-inline-actions-stretch">
               <Slider
                 min={0}
                 max={100}
@@ -91,15 +75,7 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
                 onChange={onStrengthChange}
               />
             </div>
-            <div
-              style={{
-                color: "var(--text-secondary)",
-                fontSize: "12px",
-                minWidth: "42px",
-                textAlign: "right",
-                fontVariantNumeric: "tabular-nums"
-              }}
-            >
+            <div className="ui-slider-value ui-slider-value-strong">
               {strength}%
             </div>
           </div>
@@ -115,7 +91,7 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
             onChange={(value) => onModeChange(value as ExplodeMode)}
           />
         </Row>
-        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "4px" }}>
+        <div className="ui-panel-footer ui-panel-footer-spaced">
           <Button className="ui-properties-action" onClick={onReset}>
             {t("explode_reset") || "重置"}
           </Button>

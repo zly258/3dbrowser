@@ -45,12 +45,12 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     const batchConvertInputRef = React.useRef<HTMLInputElement>(null);
 
     return (
-        <div className="ui-toolbar" style={{ height: '32px', padding: '0 12px' }}>
+        <div className="ui-toolbar ui-menubar">
             {/* Hidden inputs for file opening */}
             <input
                 type="file"
                 ref={fileInputRef}
-                style={{ display: 'none' }}
+                className="ui-visually-hidden"
                 multiple
                 accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleOpenFiles}
@@ -58,7 +58,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
             <input
                 type="file"
                 ref={batchConvertInputRef}
-                style={{ display: 'none' }}
+                className="ui-visually-hidden"
                 multiple
                 accept=".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleBatchConvert}

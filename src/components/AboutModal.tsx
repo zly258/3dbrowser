@@ -27,61 +27,52 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
             movable={false}
             theme={theme}
         >
-            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%', overflowY: 'auto' }}>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-primary)' }}>3D Browser</div>
-                    <div style={{ fontSize: 'var(--font-size-label)', opacity: 0.7 }}>{t("about_tagline")}</div>
+            <div className="ui-modal-body ui-modal-body-scroll ui-about-modal">
+                <div className="ui-about-hero">
+                    <div className="ui-about-app-name">3D Browser</div>
+                    <div className="ui-about-tagline">{t("about_tagline")}</div>
                 </div>
 
-                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: 'var(--font-size-secondary)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                        <span style={{ opacity: 0.7 }}>{t("about_version")}</span>
-                        <span style={{ fontWeight: '500' }}>{__APP_VERSION__}</span>
+                <div className="ui-about-meta-card">
+                    <div className="ui-about-meta-row">
+                        <span className="ui-about-meta-label">{t("about_version")}</span>
+                        <span className="ui-about-meta-value">{__APP_VERSION__}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                        <span style={{ opacity: 0.7 }}>{t("about_author")}</span>
-                        <span style={{ fontWeight: '500' }}>zhangly1403@163.com</span>
+                    <div className="ui-about-meta-row">
+                        <span className="ui-about-meta-label">{t("about_author")}</span>
+                        <span className="ui-about-meta-value">zhangly1403@163.com</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                        <span style={{ opacity: 0.7 }}>{t("project_url")}</span>
+                    <div className="ui-about-meta-row">
+                        <span className="ui-about-meta-label">{t("project_url")}</span>
                         <a href="https://github.com/zly258/3dbrowser" target="_blank" rel="noopener noreferrer" className="ui-link">
                             github.com/zly258/3dbrowser
                         </a>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                        <span style={{ opacity: 0.7 }}>{t("about_license")}</span>
-                        <span style={{ fontWeight: '500', color: 'var(--error)' }}>{t("about_license_nc")}</span>
+                    <div className="ui-about-meta-row">
+                        <span className="ui-about-meta-label">{t("about_license")}</span>
+                        <span className="ui-about-meta-value ui-about-license-badge">{t("about_license_nc")}</span>
                     </div>
                 </div>
 
-                {/* 授权协议详细内容 */}
-                <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                <div className="ui-about-license-card">
                     <div
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '8px 12px',
-                            backgroundColor: 'var(--bg-header)',
-                            cursor: 'pointer',
-                            userSelect: 'none'
-                        }}
+                        className="ui-about-license-toggle"
                         onClick={() => setShowLicenseDetails(!showLicenseDetails)}
                     >
-                        <span style={{ fontWeight: '500', fontSize: 'var(--font-size-secondary)' }}>{t("license_details")}</span>
+                        <span className="ui-about-license-title">{t("license_details")}</span>
                         {showLicenseDetails ? <IconChevronUp width={14} height={14} /> : <IconChevronDown width={14} height={14} />}
                     </div>
                     {showLicenseDetails && (
-                        <div style={{ padding: '12px', fontSize: 'var(--font-size-label)', lineHeight: '1.5', backgroundColor: 'var(--bg-primary)', maxHeight: '180px', overflowY: 'auto' }}>
-                            <div style={{ whiteSpace: 'pre-wrap', marginBottom: '8px' }}>{t("license_summary")}</div>
-                            <div style={{ fontSize: 'var(--font-size-label)', opacity: 0.7, marginTop: '8px' }}>
+                        <div className="ui-about-license-content">
+                            <div className="ui-about-license-summary">{t("license_summary")}</div>
+                            <div className="ui-about-license-link">
                                 {t("full_license")} <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer" className="ui-link">CC BY-NC 4.0</a>
                             </div>
                         </div>
                     )}
                 </div>
 
-                <div style={{ fontSize: 'var(--font-size-label)', opacity: 0.5, textAlign: 'center', marginTop: 'auto' }}>
+                <div className="ui-about-footer">
                     {t("about_copyright")}
                 </div>
             </div>

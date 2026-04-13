@@ -258,20 +258,12 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         <>
             {modal && (
                 <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                        zIndex: 1999,
-                    }}
+                    className="ui-modal-scrim"
                 />
             )}
             <div
                 ref={panelRef}
-                className="ui-panel"
+                className={`ui-panel${modal ? ' ui-panel-modal' : ''}`}
                 style={{
                     position: modal ? 'fixed' : 'absolute',
                     left: 0,

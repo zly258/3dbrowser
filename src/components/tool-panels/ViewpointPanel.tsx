@@ -80,8 +80,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
             theme={theme}
             storageId="tool_viewpoint"
         >
-            <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
-                {/* 新建视点输入 */}
+            <div className="ui-toolpanel-body ui-toolpanel-body-dense">
                 <div className="ui-inline-actions">
                     <input
                         autoFocus
@@ -92,7 +91,6 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                         }}
                         className="ui-input"
                         placeholder={t("viewpoint_title") || "视点名称"}
-                        style={{ flex: 1 }}
                     />
                     <Button variant="primary" onClick={handleSave}>
                         {t("btn_confirm") || "保存"}
@@ -122,8 +120,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                     />
                 </div>
 
-                {/* 视点网格列表 */}
-                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+                <div className="ui-viewpoint-list-wrap">
                     {viewpoints.length === 0 ? (
                         <div className="ui-empty-state">
                             {t("viewpoint_empty") || "暂无保存的视点"}

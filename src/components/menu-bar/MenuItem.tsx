@@ -33,17 +33,17 @@ export const ClassicMenuItem = ({ label, children, enabled = true }: MenuItemPro
     return (
         <div
             ref={menuRef}
-            style={{ position: 'relative', height: '100%' }}
+            className="ui-menubar-item"
         >
             <div
                 className={`ui-toolbar-btn ${isOpen ? 'active' : ''}`}
-                style={{ padding: '0 10px', opacity: enabled ? 1 : 0.5, pointerEvents: enabled ? 'auto' : 'none' }}
+                aria-disabled={!enabled}
                 onClick={toggleMenu}
             >
                 {label}
             </div>
             {isOpen && enabled && (
-                <div className="ui-dropdown-menu" style={{ top: '100%', left: 0, marginTop: '2px', minWidth: '160px' }}>
+                <div className="ui-dropdown-menu ui-menubar-dropdown">
                     {children(closeMenu)}
                 </div>
             )}
@@ -62,7 +62,7 @@ interface SubItemProps {
 export const ClassicSubItem = ({ label, onClick, enabled = true, checked, icon }: SubItemProps) => {
     return (
         <div
-            className={`ui-context-menu-item flex items-center justify-between ${!enabled ? 'disabled' : ''}`}
+            className={`ui-context-menu-item ui-menu-subitem ${!enabled ? 'disabled' : ''}`}
             onClick={() => {
                 if (enabled) {
                     onClick();
@@ -71,26 +71,14 @@ export const ClassicSubItem = ({ label, onClick, enabled = true, checked, icon }
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="ui-menu-subitem-main">
                 {checked !== undefined && (
-                    <div style={{
-                        width: "16px",
-                        height: "16px",
-                        borderRadius: "2px",
-                        border: `1px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`,
-                        backgroundColor: checked ? 'var(--accent)' : "transparent",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.2s ease",
-                        position: "relative",
-                        cursor: 'pointer'
-                    }}>
-                        {checked && <div style={{ color: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>✓</div>}
+                    <div className={`ui-menu-check ${checked ? 'checked' : ''}`}>
+                        {checked && <div className="ui-menu-check-mark">✓</div>}
                     </div>
                 )}
                 {icon && checked === undefined && (
-                    <span style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.8 }}>
+                    <span className="ui-menu-subitem-icon">
                         {icon}
                     </span>
                 )}

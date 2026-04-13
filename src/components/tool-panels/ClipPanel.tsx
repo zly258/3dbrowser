@@ -31,11 +31,7 @@ const AxisSliderRow: React.FC<{
 }> = ({ axis, label, active, value, onToggle, onChange, disabled = false }) => {
   return (
     <div
-      className="ui-clip-axis-row"
-      style={{
-        opacity: disabled ? 0.5 : 1,
-        pointerEvents: disabled ? "none" : "auto",
-      }}
+      className={`ui-clip-axis-row${disabled ? " ui-is-disabled" : ""}`}
     >
 
       <Checkbox
@@ -51,14 +47,13 @@ const AxisSliderRow: React.FC<{
 
       {/* Axis label */}
       <span
-        className="ui-clip-axis-label"
-        style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}
+        className={`ui-clip-axis-label${active ? " is-active" : ""}`}
       >
         {axis.toUpperCase()}
       </span>
 
       {/* Dual Slider */}
-      <div style={{ flex: 1 }}>
+      <div className="ui-inline-actions-stretch">
         <DualSlider
           min={0}
           max={100}
@@ -145,8 +140,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
         </div>
 
         <div
-          className="ui-panel-section ui-panel-section-fill"
-          style={{ opacity: clipEnabled ? 1 : 0.4, pointerEvents: clipEnabled ? "auto" : "none" }}
+          className={`ui-panel-section ui-panel-section-fill${clipEnabled ? "" : " ui-is-disabled"}`}
         >
           <AxisSliderRow
             axis="x"
