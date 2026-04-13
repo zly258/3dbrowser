@@ -3529,6 +3529,13 @@ export class SceneManager {
         if (result.needsRender) this.markSceneDirty();
     }
 
+    setLocateFocusContext(uuids: string[], focusUuid: string | null = null, highlightColors?: Record<string, string>) {
+        const context = this.getHighlightContext();
+        const result = applySetLocateResultSet(context, uuids, focusUuid, { highlightColors });
+        this.syncHighlightState(context.state);
+        if (result.needsRender) this.markSceneDirty();
+    }
+
     setLocateFocus(uuid: string | null) {
         if (!uuid) {
             this.clearLocateFocus();

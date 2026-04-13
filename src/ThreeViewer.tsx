@@ -38,6 +38,7 @@ import type { ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, 
 import { usePropertySearch } from "./hooks/usePropertySearch";
 import { useClashCheck } from "./hooks/useClashCheck";
 import { useClashSummary } from "./hooks/useClashSummary";
+import { useFocusInView } from "./hooks/useFocusInView";
 
 const IS_DEV = typeof window !== "undefined" && (
     window.location.hostname === "localhost" ||
@@ -166,7 +167,6 @@ export const ThreeViewer = ({
         clearSelection
     } = useSceneSelection();
     const [selectedProps, setSelectedProps] = useState<PropertyGroups | null>(null);
-    const [checkedSearchResultUuids, setCheckedSearchResultUuids] = useState<string[]>([]);
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -417,6 +417,12 @@ export const ThreeViewer = ({
 
     // Toast Message State
     const [toast, setToast] = useState<ViewerToast | null>(null);
+
+    const { focusObjectsInView } = useFocusInView({
+        sceneMgrRef: sceneMgr,
+        setSelectedUuids,
+        setSelectedProps
+    });
 
     const { onManagerChunkProgress } = useChunkProgress({
         fileSetIdRef: currentFileSetIdRef,
