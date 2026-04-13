@@ -834,7 +834,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolbar {
   display: flex;
   align-items: center;
-  height: 46px;
+  height: 48px;
   padding: 0 12px;
   gap: 4px;
   background-color: var(--bg-panel);
@@ -862,8 +862,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
   justify-content: center;
   padding: 4px 10px;
-  height: 36px;
-  min-width: 40px;
+  height: 42px;
+  min-width: 42px;
   gap: 4px;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -1659,9 +1659,20 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   opacity: 1;
 }
 
-/* 右键菜单 */
-.ui-context-menu {
+/* 右键菜单与下拉菜单 */
+.ui-dropdown-menu {
   position: absolute;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 10000;
+  min-width: 160px;
+  padding: 4px;
+}
+
+.ui-context-menu {
+  position: fixed;
   background-color: var(--bg-panel);
   border: 1px solid var(--border-light);
   border-radius: 8px;
