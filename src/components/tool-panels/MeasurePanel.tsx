@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { FloatingPanel } from "./FloatingPanel";
+import { Button, SegmentedControl } from "../common";
 
 // ==================== 图标组件 ====================
 const Icons = {
@@ -62,38 +63,18 @@ interface MeasurePanelProps {
   onHighlight?: (id: string) => void;
 }
 
-// Segmented Control组件
-const SegmentedControl: React.FC<{
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
-}> = ({ options, value, onChange }) => {
-  return (
-    <div className="ui-segmented">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          className={`ui-segmented-item ${value === option.value ? 'active' : ''}`}
-          onClick={() => onChange(option.value)}
-        >
-          <span>{option.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-};
-
-// 清空按钮
 const ClearButton: React.FC<{ onClick: () => void; disabled: boolean }> = ({ onClick, disabled }) => {
   return (
-    <button
+    <Button
       onClick={onClick}
       disabled={disabled}
-      className={`ui-btn ui-btn-icon ui-btn-ghost ${disabled ? 'disabled' : ''}`}
+      variant="ghost"
+      size="sm"
+      className="ui-btn-icon"
       title="Clear All"
     >
       <Icons.Trash />
-    </button>
+    </Button>
   );
 };
 
@@ -106,9 +87,7 @@ const DataPanel: React.FC<{
   return (
     <div className="ui-data-panel flex flex-col">
       {empty ? (
-        <div className="flex flex-col items-center justify-center" style={{ flex: 1, minHeight: '100px' }}>
-          <span className="text-secondary text-sm">{emptyText}</span>
-        </div>
+        <div className="ui-measure-empty">{emptyText}</div>
       ) : (
         children
       )}
@@ -126,21 +105,9 @@ const MeasureItem: React.FC<{
   return (
     <div
       onClick={onHighlight}
-      className={`ui-list-item ${isHighlighted ? 'selected' : ''}`}
-      style={{
-        padding: '6px 10px',
-        minHeight: '30px',
-      }}
+      className={`ui-list-item ui-measure-item ${isHighlighted ? 'selected' : ''}`}
     >
-      <span
-        style={{
-          fontSize: '12px',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
-        }}
-      >
+      <span className="ui-measure-item-value">
         {item.val}
       </span>
       <button
@@ -162,15 +129,7 @@ const MeasureItem: React.FC<{
 // 类型分组标题
 const TypeHeader: React.FC<{ label: string }> = ({ label }) => {
   return (
-    <div
-      className="ui-group-title"
-      style={{
-        padding: '4px 10px',
-        fontSize: '10px',
-      }}
-    >
-      {label}
-    </div>
+    <div className="ui-group-title">{label}</div>
   );
 };
 
@@ -230,26 +189,37 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       resizable={true}
       storageId="tool_measure"
     >
-      <div className="flex flex-col p-3" style={{ height: '100%', gap: '10px' }}>
-        {/* Header with segmented control and clear button */}
-        <div className="flex items-center justify-between">
-          <SegmentedControl
-            options={measureOptions}
-            value={measureType}
-            onChange={handleTypeChange}
-          />
+      <div className="ui-toolpanel-body">
+        <div className="ui-panel-hero">
+          <div className="ui-panel-hero-main">
+            <div className="ui-panel-hero-title">{t("measure_title")}</div>
+            <div className="ui-panel-hero-subtitle">
+              {getInstructionText() || (t("measure_panel_hint") || "选择测量模式后，在视口中拾取点位开始测量")}
+            </div>
+          </div>
+          <div className="ui-panel-hero-meta">
+            {measureHistory.length} {t("search_results") || "项"}
+          </div>
+        </div>
+
+        <div className="ui-toolpanel-row-between">
+          <div className="ui-measure-types">
+            <SegmentedControl
+              options={measureOptions}
+              value={measureType}
+              onChange={handleTypeChange}
+            />
+          </div>
           <ClearButton onClick={onClear} disabled={measureHistory.length === 0} />
         </div>
 
-        {/* Instruction text */}
-        <div className="flex items-center gap-2 text-sm text-secondary">
-          <span>{getInstructionText()}</span>
-          {measureType !== 'none' && (
-            <span className="ml-auto font-medium text-secondary">[ESC] Exit</span>
-          )}
-        </div>
+        {measureType !== 'none' && (
+          <div className="ui-toolpanel-row-between ui-toolpanel-caption">
+            <span>{getInstructionText()}</span>
+            <span className="ui-toolpanel-caption-muted">[ESC] Exit</span>
+          </div>
+        )}
 
-        {/* Results panel */}
         <DataPanel empty={measureHistory.length === 0} emptyText={t("no_measurements") || 'No measurements'}>
           {measureHistory.length > 0 && (
             <div className="flex flex-col" style={{ overflow: 'auto' }}>
