@@ -61,6 +61,7 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
   return (
     <FloatingPanel
       title={t("explode_title") || "爆炸图"}
+      closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={340}
       storageId="tool_explode"

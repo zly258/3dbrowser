@@ -113,7 +113,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             />
             {!isHidden('file') && (
                 <div className="ui-toolbar-group">
-                    <div style={{ position: 'relative' }}>
+                    <div className="ui-toolbar-menu-anchor">
                         <ImageButton
                         icon={<IconFile />}
                         label={t('tb_file')}
@@ -145,7 +145,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                         onClick={() => props.sceneMgr?.fitView()}
                         theme={theme}
                     />
-                    <div style={{ position: 'relative' }}>
+                    <div className="ui-toolbar-menu-anchor">
                         <ImageButton
                             icon={<IconEye />}
                             label={t('tb_view')}
@@ -175,7 +175,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
             {!isHidden('interface') && (
                 <div className="ui-toolbar-group">
                     {!isHidden('wireframe') && (
-                        <div style={{ position: 'relative' }}>
+                        <div className="ui-toolbar-menu-anchor">
                             <ImageButton
                                 icon={<IconLayers />}
                                 label={t('display_mode') || '样式'}

@@ -99,6 +99,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
   return (
     <FloatingPanel
       title={t("clip_title")}
+      closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={320}
       height={420}

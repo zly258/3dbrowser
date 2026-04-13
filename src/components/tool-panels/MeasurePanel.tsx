@@ -1,45 +1,12 @@
 import React, { useMemo } from "react";
 import { FloatingPanel } from "./FloatingPanel";
-import { Button, SegmentedControl } from "../common";
+import { Button } from "../common";
 
 // ==================== 图标组件 ====================
 const Icons = {
   Trash: () => (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  Distance: () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M2 8h12M8 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  Angle: () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M2 14L14 14M2 14l3.5-12 6 8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  Coordinate: () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <circle cx="8" cy="8" r="6" />
-      <path d="M8 2v12M2 8h12" strokeLinecap="round" />
-    </svg>
-  ),
-  Area: () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M3 12L6 4l5 6 2-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  Volume: () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" strokeLinejoin="round" />
-      <path d="M8 1v7M2 4.5L8 8l6-3.5" strokeLinejoin="round" />
-    </svg>
-  ),
-  None: () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <circle cx="8" cy="8" r="6" />
-      <path d="M5 5l6 6M11 5l-6 6" strokeLinecap="round" />
     </svg>
   ),
   Close: () => (
@@ -85,7 +52,7 @@ const DataPanel: React.FC<{
   emptyText: string;
 }> = ({ children, empty, emptyText }) => {
   return (
-    <div className="ui-data-panel flex flex-col">
+    <div className="ui-data-panel ui-measure-results">
       {empty ? (
         <div className="ui-measure-empty">{emptyText}</div>
       ) : (
@@ -155,13 +122,6 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
     sceneMgr?.startMeasurement(type);
   };
 
-  const measureOptions = [
-    { value: 'none', label: t("measure_none") || 'None', icon: <Icons.None /> },
-    { value: 'dist', label: t("measure_dist") || 'Distance', icon: <Icons.Distance /> },
-    { value: 'angle', label: t("measure_angle") || 'Angle', icon: <Icons.Angle /> },
-    { value: 'coord', label: t("measure_coord") || 'Coord', icon: <Icons.Coordinate /> },
-  ];
-
   const getInstructionText = () => {
     switch (measureType) {
       case 'dist': return t("measure_instruct_dist");
@@ -183,6 +143,7 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
   return (
     <FloatingPanel
       title={t("measure_title")}
+      closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={300}
       height={400}
@@ -190,39 +151,44 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       storageId="tool_measure"
     >
       <div className="ui-toolpanel-body">
-        <div className="ui-panel-hero">
-          <div className="ui-panel-hero-main">
-            <div className="ui-panel-hero-title">{t("measure_title")}</div>
-            <div className="ui-panel-hero-subtitle">
-              {getInstructionText() || (t("measure_panel_hint") || "选择测量模式后，在视口中拾取点位开始测量")}
-            </div>
-          </div>
-          <div className="ui-panel-hero-meta">
-            {measureHistory.length} {t("search_results") || "项"}
-          </div>
-        </div>
-
         <div className="ui-toolpanel-row-between">
-          <div className="ui-measure-types">
-            <SegmentedControl
-              options={measureOptions}
-              value={measureType}
-              onChange={handleTypeChange}
-            />
+          <div className="ui-segmented ui-measure-types">
+            <button
+              className={`ui-segmented-item ${measureType === 'none' ? 'active' : ''}`}
+              onClick={() => handleTypeChange('none')}
+            >
+              <span>{t("measure_none") || 'None'}</span>
+            </button>
+            <button
+              className={`ui-segmented-item ${measureType === 'dist' ? 'active' : ''}`}
+              onClick={() => handleTypeChange('dist')}
+            >
+              <span>{t("measure_dist") || 'Distance'}</span>
+            </button>
+            <button
+              className={`ui-segmented-item ${measureType === 'angle' ? 'active' : ''}`}
+              onClick={() => handleTypeChange('angle')}
+            >
+              <span>{t("measure_angle") || 'Angle'}</span>
+            </button>
+            <button
+              className={`ui-segmented-item ${measureType === 'coord' ? 'active' : ''}`}
+              onClick={() => handleTypeChange('coord')}
+            >
+              <span>{t("measure_coord") || 'Coord'}</span>
+            </button>
           </div>
           <ClearButton onClick={onClear} disabled={measureHistory.length === 0} />
         </div>
 
-        {measureType !== 'none' && (
-          <div className="ui-toolpanel-row-between ui-toolpanel-caption">
-            <span>{getInstructionText()}</span>
-            <span className="ui-toolpanel-caption-muted">[ESC] Exit</span>
-          </div>
-        )}
+        <div className="ui-toolpanel-row-between ui-toolpanel-caption">
+          <span>{getInstructionText()}</span>
+          {measureType !== 'none' && <span className="ui-toolpanel-caption-muted">[ESC] Exit</span>}
+        </div>
 
         <DataPanel empty={measureHistory.length === 0} emptyText={t("no_measurements") || 'No measurements'}>
           {measureHistory.length > 0 && (
-            <div className="flex flex-col" style={{ overflow: 'auto' }}>
+            <div className="ui-measure-results-scroll">
               {(Object.entries(groupedHistory) as [string, any[]][]).map(([type, items]) => {
                 if (items.length === 0) return null;
                 return (

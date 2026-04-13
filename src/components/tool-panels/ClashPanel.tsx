@@ -142,6 +142,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   return (
     <FloatingPanel
       title={t("tb_clash") || "碰撞检查"}
+      closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={500}
       storageId="tool_clash"

@@ -15,6 +15,7 @@ interface FloatingPanelProps {
     storageId?: string;
     modal?: boolean;
     autoHeight?: boolean;
+    closeLabel?: string;
 }
 
 type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -31,7 +32,8 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     movable = true,
     storageId,
     modal = false,
-    autoHeight = height === undefined
+    autoHeight = height === undefined,
+    closeLabel = "Close"
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
     const minWidth = storageId === 'tool_measure' ? 320 : 220;
@@ -291,7 +293,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         <button
                             className="ui-panel-close"
                             onClick={onCloseClick}
-                            title="Close"
+                            title={closeLabel}
                         >
                             <IconClose width={14} height={14} />
                         </button>
