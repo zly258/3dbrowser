@@ -135,6 +135,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 options={connectorOptions.map((item) => ({ value: item.value, label: t(item.labelKey) || item.fallback }))}
                 onChange={(value) => updateCondition(condition.id, { connector: value as SearchConnector })}
                 className="ui-input-compact"
+                style={{ width: '64px', flexShrink: 0 }}
               />
             )}
 
@@ -143,6 +144,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               placeholder={t("search_field_name") || "属性名"}
               value={condition.propertyName}
               onChange={(e) => updateCondition(condition.id, { propertyName: e.target.value })}
+              style={{ flex: 1, minWidth: 0 }}
             />
 
             <Select
@@ -150,6 +152,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               options={operatorOptions.map((item) => ({ value: item.value, label: t(item.labelKey) || item.fallback }))}
               onChange={(value) => updateCondition(condition.id, { operator: value as SearchOperator })}
               className="ui-input-compact"
+              style={{ width: '92px' }}
             />
 
             <input
@@ -157,6 +160,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               placeholder={t("search_field_value") || "属性值"}
               value={condition.value}
               onChange={(e) => updateCondition(condition.id, { value: e.target.value })}
+              style={{ flex: 1, minWidth: 0 }}
             />
 
             {index > 0 ? (
@@ -164,11 +168,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 className="ui-search-clear ui-search-clear-static"
                 onClick={() => removeCondition(condition.id)}
                 title={t("remove_condition") || "移除条件"}
+                style={{ flexShrink: 0, width: '24px' }}
               >
                 <IconClose width={14} height={14} />
               </button>
             ) : (
-              <div />
+              <div style={{ width: '24px', flexShrink: 0 }} />
             )}
           </div>
         ))}
