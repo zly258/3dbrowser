@@ -121,30 +121,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
     setPage(1);
   }, [results.length, pageSize]);
 
-  const counts = useMemo(() => {
-    const c = { all: results.length, new: 0, confirmed: 0, resolved: 0 };
-    results.forEach((item) => {
-      if (item.status === "new") c.new += 1;
-      else if (item.status === "confirmed") c.confirmed += 1;
-      else if (item.status === "resolved") c.resolved += 1;
-    });
-    return c;
-  }, [results]);
-
-  const filteredResults = useMemo(() => {
-    return results.filter((item) => {
-      const statusMatched =
-        resultFilter === "ALL"
-          || (resultFilter === "NEW" && item.status === "new")
-          || (resultFilter === "CONFIRMED" && item.status === "confirmed")
-          || (resultFilter === "RESOLVED" && item.status === "resolved");
-      const typeMatched =
-        typeFilter === "ALL"
-          || (typeFilter === "HARD" && item.type === "hard")
-          || (typeFilter === "CLEARANCE" && item.type === "clearance");
-      return statusMatched && typeMatched;
-    });
-  }, [resultFilter, results, typeFilter]);
+  const filteredResults = results;
 
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -340,37 +317,14 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           )}
         </div>
 
-        <div className="ui-toolpanel-row ui-toolpanel-wrap">
-          <Button className="ui-properties-action" onClick={() => onIsolateByStatus("new")} disabled={counts.new === 0}>
-            {t("clash_isolate_new") || "仅看新建"}
-          </Button>
-          <Button className="ui-properties-action" onClick={() => onIsolateByStatus("confirmed")} disabled={counts.confirmed === 0}>
-            {t("clash_isolate_confirmed") || "仅看已确认"}
-          </Button>
-          <Button className="ui-properties-action" onClick={onRestoreVisibility}>
-            {t("show_all") || "显示全部"}
-          </Button>
-        </div>
-
         <div className="ui-toolpanel-row-between ui-clash-results-header">
           <div>
             <div className="ui-toolpanel-caption-strong ui-clash-results-title">{t("clash_results") || "碰撞结果"} {filteredResults.length}</div>
             <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">
-              {t("clash_detection_type") || "检测类型"}
+              {t("locate_in_view") || "点击条目定位到视图"}
             </div>
           </div>
           <div className="ui-toolpanel-row">
-            <Select
-              value={typeFilter}
-              onChange={(value) => onTypeFilterChange(value as ClashTypeFilter)}
-              options={[
-                { value: "ALL", label: t("clash_type_all") || "全部" },
-                { value: "HARD", label: t("clash_type_hard") || "硬碰撞" },
-                { value: "CLEARANCE", label: t("clash_type_clearance") || "净空碰撞" }
-              ]}
-              className="ui-input-compact"
-              style={{ minWidth: 108 }}
-            />
             <Select
               value={String(pageSize)}
               onChange={(value) => setPageSize(Number(value) || 50)}
@@ -383,32 +337,6 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
               style={{ minWidth: 68 }}
             />
           </div>
-        </div>
-
-        <div className="ui-inline-actions ui-inline-actions-wrap">
-          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "ALL" ? "active" : ""}`} onClick={() => onResultFilterChange("ALL")}>
-            {(t("clash_group_all") || "全部")} ({counts.all})
-          </button>
-          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "NEW" ? "active" : ""}`} onClick={() => onResultFilterChange("NEW")}>
-            {(t("clash_group_new") || "新建")} ({counts.new})
-          </button>
-          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "CONFIRMED" ? "active" : ""}`} onClick={() => onResultFilterChange("CONFIRMED")}>
-            {(t("clash_group_confirmed") || "已确认")} ({counts.confirmed})
-          </button>
-          <button className={`ui-statusbar-tag ui-statusbar-tag-compact ${resultFilter === "RESOLVED" ? "active" : ""}`} onClick={() => onResultFilterChange("RESOLVED")}>
-            {(t("clash_group_resolved") || "已解决")} ({counts.resolved})
-          </button>
-        </div>
-        <div className="ui-inline-actions ui-inline-actions-wrap">
-          <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("confirmed")} disabled={filteredResults.length === 0}>
-            {t("clash_mark_confirmed") || "当前组标记已确认"}
-          </Button>
-          <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("resolved")} disabled={filteredResults.length === 0}>
-            {t("clash_mark_resolved") || "当前组标记已解决"}
-          </Button>
-          <Button className="ui-properties-action" onClick={() => onMarkFilteredStatus("new")} disabled={filteredResults.length === 0}>
-            {t("clash_mark_new") || "当前组标记新建"}
-          </Button>
         </div>
 
         <div className="ui-toolpanel-results-box ui-clash-results-box">
@@ -426,21 +354,10 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
               >
                 <div className="ui-clash-result-top">
                   <span className="ui-clash-result-title">{item.aName || item.aUuid} {" <> "} {item.bName || item.bUuid}</span>
-                  <Select
-                    value={item.status}
-                    onChange={(value) => onUpdateResultStatus(item.id, value as ClashResultItem["status"])}
-                    options={[
-                      { value: "new", label: t("clash_group_new") || "新建" },
-                      { value: "confirmed", label: t("clash_group_confirmed") || "已确认" },
-                      { value: "resolved", label: t("clash_group_resolved") || "已解决" }
-                    ]}
-                    className="ui-input-compact"
-                    style={{ minWidth: 88 }}
-                  />
                 </div>
                 <div className="ui-toolpanel-row-between ui-clash-result-meta">
                   <span className="ui-result-item-secondary">
-                    {(item.type === "hard" ? (t("clash_type_hard") || "硬碰撞") : (t("clash_type_clearance") || "净空碰撞"))} · {t(`clash_severity_${item.severity}`) || item.severity}
+                    {item.aUuid} {" <> "} {item.bUuid}
                   </span>
                   <span className="ui-result-item-secondary">
                     {item.type === "hard"

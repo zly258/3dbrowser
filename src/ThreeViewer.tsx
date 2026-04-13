@@ -32,7 +32,6 @@ import { useViewerTools } from "./hooks/useViewerTools";
 import { useViewerVisibility } from "./hooks/useViewerVisibility";
 import { useViewpoints } from "./hooks/useViewpoints";
 import { useViewportLifecycle } from "./hooks/useViewportLifecycle";
-import { sanitizeFileStem, stripFileExtension } from "./viewer/exportNaming";
 import type { PropertyGroupInput, PropertyGroups } from "./viewer/propertyIndex";
 import type { ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerErrorState, ViewerToast } from "./viewer/types";
 import { usePropertySearch } from "./hooks/usePropertySearch";
@@ -287,6 +286,11 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const ifcPropertyCacheRef = useRef<Map<string, Record<string, PropertyGroupInput>>>(new Map());
+    const { focusObjectsInView } = useFocusInView({
+        sceneMgrRef: sceneMgr,
+        setSelectedUuids,
+        setSelectedProps
+    });
     const {
         leftWidth,
         rightWidth,
@@ -400,6 +404,7 @@ export const ThreeViewer = ({
         clashModelOptions,
         selectedUuids,
         setSelectedUuids,
+        focusObjectsInView,
         t
     });
     const clashSummaryByUuid = useClashSummary(sceneMgr, clashResults);
@@ -418,11 +423,6 @@ export const ThreeViewer = ({
     // Toast Message State
     const [toast, setToast] = useState<ViewerToast | null>(null);
 
-    const { focusObjectsInView } = useFocusInView({
-        sceneMgrRef: sceneMgr,
-        setSelectedUuids,
-        setSelectedProps
-    });
 
     const { onManagerChunkProgress } = useChunkProgress({
         fileSetIdRef: currentFileSetIdRef,
@@ -817,6 +817,7 @@ export const ThreeViewer = ({
         propOnSelect,
         ifcPropertyCacheRef,
         clashSummaryByUuid,
+        focusObjectsInView,
         t,
         isDev: IS_DEV
     });
@@ -838,102 +839,10 @@ export const ThreeViewer = ({
         selectedUuids,
         setSelectedUuids,
         onSelectObject: handleSelect,
+        focusObjectsInView,
         t,
         setToast
     });
-
-    useEffect(() => {
-        const resultSet = new Set(searchResults.map((item) => item.uuid));
-        setCheckedSearchResultUuids((prev) => prev.filter((uuid) => resultSet.has(uuid)));
-    }, [searchResults]);
-
-    const checkedSearchResults = useMemo(
-        () => searchResults.filter((item) => checkedSearchResultUuids.includes(item.uuid)),
-        [checkedSearchResultUuids, searchResults]
-    );
-
-    const handleToggleSearchResultChecked = useCallback((uuid: string, checked: boolean) => {
-        setCheckedSearchResultUuids((prev) => checked
-            ? (prev.includes(uuid) ? prev : [...prev, uuid])
-            : prev.filter((item) => item !== uuid)
-        );
-    }, []);
-
-    const handleSelectAllSearchResults = useCallback(() => {
-        setCheckedSearchResultUuids(searchResults.map((item) => item.uuid));
-    }, [searchResults]);
-
-    const handleClearCheckedSearchResults = useCallback(() => {
-        setCheckedSearchResultUuids([]);
-    }, []);
-
-    const handleBatchHighlightSearchResults = useCallback(() => {
-        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
-        sceneMgr.current.highlightObjects(checkedSearchResultUuids);
-        setToast({ message: `${t("search_batch_highlight") || "批量高亮"}: ${checkedSearchResultUuids.length}`, type: "info" });
-    }, [checkedSearchResultUuids, setToast, t]);
-
-    const handleBatchLocateSearchResults = useCallback(() => {
-        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
-        sceneMgr.current.highlightObjects(checkedSearchResultUuids);
-        sceneMgr.current.fitViewToObjects(checkedSearchResultUuids);
-        setSelectedUuids(checkedSearchResultUuids);
-        setSelectedProps(null);
-    }, [checkedSearchResultUuids, setSelectedUuids]);
-
-    const handleBatchHideSearchResults = useCallback(() => {
-        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
-        checkedSearchResultUuids.forEach((uuid) => sceneMgr.current?.setObjectVisibility(uuid, false));
-        setHiddenUuids((prev) => new Set([...prev, ...checkedSearchResultUuids]));
-        setIsolatedUuids(new Set());
-        setSelectedUuids((prev) => prev.filter((uuid) => !checkedSearchResultUuids.includes(uuid)));
-        setSelectedProps(null);
-        sceneMgr.current.highlightObjects([]);
-        updateTree();
-    }, [checkedSearchResultUuids, setSelectedUuids, updateTree]);
-
-    const handleBatchIsolateSearchResults = useCallback(() => {
-        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
-        sceneMgr.current.clearLocateFocus();
-        sceneMgr.current.isolateObjects(checkedSearchResultUuids);
-        sceneMgr.current.fitViewToObjects(checkedSearchResultUuids);
-        sceneMgr.current.highlightObjects(checkedSearchResultUuids);
-        setSelectedUuids(checkedSearchResultUuids);
-        setSelectedProps(null);
-        setHiddenUuids(new Set());
-        setIsolatedUuids(new Set(checkedSearchResultUuids));
-        updateTree();
-    }, [checkedSearchResultUuids, setSelectedUuids, updateTree]);
-
-    const handleAddSearchResultsToSelection = useCallback(() => {
-        if (!sceneMgr.current || checkedSearchResultUuids.length === 0) return;
-        const nextSelection = Array.from(new Set([...selectedUuids, ...checkedSearchResultUuids]));
-        setSelectedUuids(nextSelection);
-        sceneMgr.current.highlightObjects(nextSelection);
-        setSelectedProps(null);
-    }, [checkedSearchResultUuids, selectedUuids, setSelectedUuids]);
-
-    const handleExportSearchResults = useCallback(() => {
-        if (checkedSearchResults.length === 0) return;
-        const lines = [
-            ["uuid", "name", "type", "modelId", "source", "matchedBy"].join(","),
-            ...checkedSearchResults.map((item) => [
-                item.uuid,
-                `"${String(item.name || "").replace(/"/g, '""')}"`,
-                `"${String(item.type || "").replace(/"/g, '""')}"`,
-                `"${String(item.modelId || "").replace(/"/g, '""')}"`,
-                `"${String(item.source || "").replace(/"/g, '""')}"`,
-                `"${item.matchedBy.join(" | ").replace(/"/g, '""')}"`
-            ].join(","))
-        ];
-        const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = `${stripFileExtension(currentFileSetId || "search-results") || "search-results"}.csv`;
-        anchor.click();
-        URL.revokeObjectURL(url);
-    }, [checkedSearchResults, currentFileSetId]);
 
     const modeTrayItems = useMemo(() => {
         const items: Array<{ key: string; label: string; onClear: () => void }> = [];
@@ -1391,16 +1300,6 @@ export const ThreeViewer = ({
                             onCancelSearch={handleCancelSearch}
                             onApplyResultHighlight={handleApplySearchResultHighlight}
                             onClearResult={handleClearSearchResult}
-                            checkedResultUuids={checkedSearchResultUuids}
-                            onToggleResultChecked={handleToggleSearchResultChecked}
-                            onSelectAllResults={handleSelectAllSearchResults}
-                            onClearCheckedResults={handleClearCheckedSearchResults}
-                            onBatchHighlight={handleBatchHighlightSearchResults}
-                            onBatchLocate={handleBatchLocateSearchResults}
-                            onBatchHide={handleBatchHideSearchResults}
-                            onBatchIsolate={handleBatchIsolateSearchResults}
-                            onBatchAddToSelection={handleAddSearchResultsToSelection}
-                            onExportSelectedResults={handleExportSearchResults}
                             theme={theme}
                         />
                     )}
