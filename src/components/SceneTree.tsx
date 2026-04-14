@@ -462,11 +462,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
             <div
                 ref={containerRef}
-                className="ui-tree-container flex-1 overflow-y-auto overflow-x-hidden"
+                className="ui-tree-container flex-1 overflow-auto"
                 onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
-                <div style={{ height: totalHeight, position: "relative" }}>
-                    <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
+                <div style={{ height: totalHeight, position: "relative", minWidth: "max-content" }}>
+                    <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0, minWidth: "max-content" }}>
                         {visibleItems.map((node) => (
                             <div
                                 key={node.uuid}

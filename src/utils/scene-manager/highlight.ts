@@ -193,8 +193,8 @@ export function applyHighlightObjects(
 
     const preserveLocateTint = context.state.locateResultSet.size > 0;
     if (!preserveLocateTint) {
-        restoreHighlightedInstanceColors(context, [...context.state.highlightedUuids].filter((id) => !target.has(id)));
-        applyHighlightedInstanceColors(context, [...target].filter((id) => !context.state.highlightedUuids.has(id)));
+        restoreHighlightedInstanceColors(context, Array.from(context.state.highlightedUuids).filter((id) => !target.has(id)));
+        applyHighlightedInstanceColors(context, Array.from(target).filter((id) => !context.state.highlightedUuids.has(id)));
     }
 
     context.state.highlightedUuids = target;
@@ -207,7 +207,9 @@ export function applyHighlightObjects(
 export function applyClearLocateFocus(
     context: SceneManagerHighlightContext
 ): SceneHighlightResult {
+    // 同时也清除碰撞高亮，确保状态干净
     context.clearClashPairHighlight();
+
     context.locateObjectMaterialCache.forEach((material, uuid) => {
         const object = context.contentGroup.getObjectByProperty("uuid", uuid) as (THREE.Mesh & { isBatchedMesh?: boolean }) | null;
         if (!object || (!object.isMesh && !(object as any).isBatchedMesh)) return;
@@ -236,11 +238,13 @@ export function applySetLocateResultSet(
     focusUuid: string | null = null,
     options?: LocateHighlightOptions
 ): SceneHighlightResult {
-    context.clearClashPairHighlight();
     const normalized = Array.from(new Set(uuids.filter(Boolean)));
     if (normalized.length === 0) {
         return applyClearLocateFocus(context);
     }
+
+    // 先清除状态但不立即渲染，后续统一渲染
+    applyClearLocateFocus(context);
 
     const selectedSet = new Set(normalized);
     const expandedTargets = expandLocateTargets(context.nodeMap, normalized);
@@ -256,19 +260,14 @@ export function applySetLocateResultSet(
         expandedFromRoot.forEach((id) => rootColorByExpandedId.set(id, rootColor));
     });
 
-    if (hasSameLocateResultSet(context.state.locateResultSet, expandedList)) {
-        const nextFocus = focusUuid && context.state.locateResultSet.has(focusUuid) ? focusUuid : expandedList[0];
-        context.state.locateFocusUuid = nextFocus;
-        return applyHighlightObjects(context, nextFocus ? [nextFocus] : []);
-    }
-
-    applyClearLocateFocus(context);
-
     context.state.locateResultSet = expandedTargets;
     context.state.locateFocusUuid = focusUuid && expandedTargets.has(focusUuid) ? focusUuid : expandedList[0];
     const focusKey = context.state.locateFocusUuid;
     const dimmedColor = new THREE.Color("#b7bec9");
     const accentColor = getHighlightColor(context.settings);
+
+    // 一次性变量，减少内存分配
+    const tempColor = new THREE.Color();
 
     context.contentGroup.traverse((child) => {
         const mesh = child as THREE.Mesh;
@@ -280,6 +279,7 @@ export function applySetLocateResultSet(
         const isMatched = expandedTargets.has(child.uuid);
         const isFocus = isMatched && focusKey !== null && child.uuid === focusKey;
         const matchedColor = rootColorByExpandedId.get(child.uuid) || accentColor;
+        
         const nextMaterials = sourceMaterials.map((material) => {
             if (!material) return material;
             const cloned = material.clone() as THREE.Material & {
@@ -297,20 +297,20 @@ export function applySetLocateResultSet(
             if ("color" in cloned && cloned.color) {
                 const baseColor = cloned.color.clone();
                 if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.93 : 0.76));
+                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.94 : 0.82));
                 } else {
                     cloned.transparent = true;
-                    cloned.opacity = 0.18;
+                    cloned.opacity = 0.08; // 降低非高亮物体透明度，使其更通透
                     cloned.depthWrite = false;
-                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.84));
+                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.88));
                 }
             }
             if ("emissive" in cloned && cloned.emissive) {
-                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.4 : 0.12));
+                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.45 : 0.18));
                 else cloned.emissive.set(0x000000);
             }
-            if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
-            if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
+            if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.95, cloned.roughness ?? 0.95);
+            if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.01, cloned.metalness ?? 0.01);
             cloned.needsUpdate = true;
             return cloned;
         });
@@ -369,20 +369,20 @@ export function applySetLocateResultSet(
             if ("color" in cloned && cloned.color) {
                 const baseColor = cloned.color.clone();
                 if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.92 : 0.7));
+                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.94 : 0.75));
                 } else {
                     cloned.transparent = true;
-                    cloned.opacity = 0.16;
+                    cloned.opacity = 0.08;
                     cloned.depthWrite = false;
-                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.86));
+                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.9));
                 }
             }
             if ("emissive" in cloned && cloned.emissive) {
-                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.36 : 0.12));
+                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.4 : 0.15));
                 else cloned.emissive.set(0x000000);
             }
-            if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.9, cloned.roughness ?? 0.9);
-            if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.02, cloned.metalness ?? 0.02);
+            if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.95, cloned.roughness ?? 0.95);
+            if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.01, cloned.metalness ?? 0.01);
             cloned.needsUpdate = true;
             return cloned;
         });
@@ -401,8 +401,10 @@ export function applySetLocateResultSet(
                 originalColor: mapping.originalColor
             });
             const sourceColor = new THREE.Color(mapping.originalColor);
-            const tint = isFocus ? 0.93 : isMatched ? 0.76 : 0.82;
+            const tint = isFocus ? 0.94 : isMatched ? 0.82 : 0.88;
             const targetColor = isMatched ? matchedColor : dimmedColor;
+            
+            // 如果是非高亮物体，在 BatchedMesh 中无法单独设置透明度，只能设置颜色趋近背景灰
             mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(targetColor, tint));
             if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
         });
