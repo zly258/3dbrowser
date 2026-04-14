@@ -41,8 +41,8 @@ const distPkg = {
   files: [
     '3dbrowser.css',
     '3dbrowser.js',
-    'IFCLoader-*.js',
-    'OCCTLoader-*.js',
+    'ifcLoader-*.js',
+    'occtLoader-*.js',
     'lmbLoader-*.js',
     'loaders-*.js',
     'meshopt_decoder.module-*.js',
