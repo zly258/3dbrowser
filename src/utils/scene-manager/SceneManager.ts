@@ -3768,7 +3768,7 @@ export class SceneManager {
         if (aspect >= 1) { fH = extent * padding; fW = fH * aspect; }
         else { fW = extent * padding; fH = fW / aspect; }
 
-        const zBuffer = Math.max(extent * 5, 2000);
+        const zBuffer = Math.max(extent * 5, 200);
         this.camera.near = -zBuffer;
         this.camera.far = zBuffer;
 
@@ -3780,7 +3780,7 @@ export class SceneManager {
 
         if (updateCameraPosition) {
             const offset = new THREE.Vector3(1, -1, 1).normalize();
-            const dist = Math.max(extent * 2, 2000);
+            const dist = Math.max(extent * 2.2, 5);
             const targetPosition = center.clone().add(offset.multiplyScalar(dist));
             const targetLookAt = center.clone();
 

@@ -2,6 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = resolve(__filename, '..');
 
 const packageJson = JSON.parse(
   readFileSync(resolve(__dirname, 'package.json'), 'utf-8')
@@ -24,19 +28,13 @@ export default defineConfig(() => {
       },
       build: {
         target: 'esnext',
-        minify: 'terser' as const,
-        terserOptions: {
-          compress: {
-            drop_console: false,
-            drop_debugger: true
-          }
-        },
-        chunkSizeWarningLimit: 2000,
+        minify: 'esbuild' as const,
+        chunkSizeWarningLimit: 1200,
         lib: {
-          entry: 'src/ThreeViewer.tsx',
+          entry: resolve(__dirname, 'src/index.ts'),
           name: 'ThreeBrowser',
           fileName: '3dbrowser',
-          formats: ['es'] as any
+          formats: ['es']
         },
         rollupOptions: {
           external: [
@@ -44,33 +42,26 @@ export default defineConfig(() => {
             'react-dom',
             'react-dom/client',
             'react/jsx-runtime',
-            'three',
+            /^three/,
             'occt-import-js',
             'web-ifc'
           ],
           output: {
-            manualChunks: {
-              'loaders': [
-                'three/examples/jsm/loaders/GLTFLoader.js',
-                'three/examples/jsm/loaders/FBXLoader.js',
-                'three/examples/jsm/loaders/OBJLoader.js',
-                'three/examples/jsm/loaders/MTLLoader.js',
-                'three/examples/jsm/loaders/STLLoader.js',
-                'three/examples/jsm/loaders/PLYLoader.js',
-                'three/examples/jsm/loaders/3MFLoader.js',
-                'three/examples/jsm/loaders/DRACOLoader.js',
-                'three/examples/jsm/loaders/KTX2Loader.js',
-                'three/examples/jsm/loaders/RGBELoader.js',
-                'three/examples/jsm/exporters/GLTFExporter.js',
-                'three/examples/jsm/controls/OrbitControls.js',
-                'three/examples/jsm/utils/BufferGeometryUtils.js'
-              ],
-              'utils': [
-                './src/utils/exportLMB.ts',
-                './src/utils/exportGLB.ts',
-                './src/utils/converter.ts',
-                './src/utils/octree.ts'
-              ]
+            inlineDynamicImports: false,
+            manualChunks: (id) => {
+              if (id.includes('three/examples/jsm/loaders/')) {
+                  const name = id.split('/').pop()?.replace('.js', '').toLowerCase();
+                  return `loaders-${name}`;
+              }
+              if (id.includes('src/loader/')) {
+                if (id.includes('ifcLoader')) return 'ifcLoader';
+                if (id.includes('occtLoader')) return 'occtLoader';
+                if (id.includes('lmbLoader')) return 'lmbLoader';
+              }
+              if (id.includes('src/utils/')) {
+                return 'utils';
+              }
+              return null;
             },
             globals: {
               react: 'React',

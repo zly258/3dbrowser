@@ -1869,14 +1869,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   justify-content: center;
   min-height: 24px;
   gap: 6px;
-  padding: 3px 8px;
-  border-radius: var(--radius-md);
+  padding: 0 8px;
+  border-radius: 4px;
   background-color: var(--bg-hover);
   font-size: var(--font-size-secondary);
-  line-height: 1.2;
+  line-height: normal;
   color: var(--text-primary);
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   cursor: default;
   border: none;
   font-family: inherit;
@@ -1894,7 +1894,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-statusbar-tag-compact {
   gap: 4px;
-  padding: 2px 6px;
+  padding: 0 6px;
 }
 
 .ui-statusbar-brand {
@@ -2558,13 +2558,15 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 0 10px;
+  height: 24px;
+  border-radius: 4px;
   background: var(--bg-hover);
   border: 1px solid var(--border-light);
   font-size: 11px;
   color: var(--text-primary);
   box-shadow: none;
+  line-height: normal;
 }
 
 .ui-mode-pill button {

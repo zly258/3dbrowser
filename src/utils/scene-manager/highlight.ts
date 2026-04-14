@@ -297,12 +297,12 @@ export function applySetLocateResultSet(
             if ("color" in cloned && cloned.color) {
                 const baseColor = cloned.color.clone();
                 if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.94 : 0.82));
+                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.94 : 0.85));
                 } else {
                     cloned.transparent = true;
                     cloned.opacity = 0.08; // 降低非高亮物体透明度，使其更通透
                     cloned.depthWrite = false;
-                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.88));
+                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.95));
                 }
             }
             if ("emissive" in cloned && cloned.emissive) {

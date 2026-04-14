@@ -106,12 +106,14 @@ export const ThreeViewer = ({
         }
     );
 
-    // 监听外部语言切换
+    // 监听外部语言切换 - 仅在外部 defaultLang 发生变化时更新
+    const prevDefaultLangRef = useRef<Lang | undefined>(defaultLang);
     useEffect(() => {
-        if (defaultLang && defaultLang !== lang) {
+        if (defaultLang && defaultLang !== prevDefaultLangRef.current) {
             setLang(defaultLang);
+            prevDefaultLangRef.current = defaultLang;
         }
-    }, [defaultLang, lang, setLang]);
+    }, [defaultLang, setLang]);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
 
