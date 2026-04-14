@@ -33,7 +33,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, messa
                 </div>
                 <div className="ui-modal-actions">
                     <button
-                        className="ui-btn ui-btn-ghost ui-modal-action-btn"
+                        className="ui-btn ui-btn-default ui-modal-action-btn"
                         onClick={onCancel}
                     >
                         {t("btn_cancel")}

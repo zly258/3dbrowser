@@ -82,7 +82,6 @@ export const ThreeViewer = ({
      chunkOptions
  }: ThreeViewerProps) => {
     const theme = themes.light;
-    const sceneBgFollowsTheme = initialSettings?.bgColor === undefined;
 
     const effectiveChunkOptions = useMemo<SceneChunkOptions>(() => ({
         chunkReadCacheSize: chunkOptions?.chunkReadCacheSize ?? 128,
@@ -736,8 +735,7 @@ export const ThreeViewer = ({
     const handleSettingsUpdate = (newSettings: Partial<SceneSettings>) => {
         const merged = {
             ...sceneSettings,
-            ...newSettings,
-            ...(sceneBgFollowsTheme && newSettings.bgColor === undefined ? { bgColor: theme.canvasBg } : {})
+            ...newSettings
         };
         setSceneSettings(merged);
         if (sceneMgr.current) {
