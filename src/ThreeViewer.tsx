@@ -242,7 +242,7 @@ export const ThreeViewer = ({
             targetFps: 50,
             performanceMode: 'balanced',
             backLightInt: 0.5,
-            highlightColor: "#ff9f1c",
+            highlightColor: "#0c62a2",
             highlightShowBox: false,
             clip: {
                 helperVisible: initialSettings?.clip?.helperVisible ?? false,

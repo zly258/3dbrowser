@@ -12,11 +12,11 @@
   --surface-canvas: #FFFFFF;
   --surface-overlay: rgba(255, 255, 255, 0.92);
   --surface-glass: rgba(255, 255, 255, 0.94);
-  --surface-hover: rgba(0, 97, 164, 0.08);
-  --surface-active: rgba(0, 97, 164, 0.12);
-  --surface-selected: rgba(0, 97, 164, 0.16);
-  --surface-soft: rgba(0, 97, 164, 0.04);
-  --surface-soft-strong: rgba(0, 97, 164, 0.08);
+  --surface-hover: rgba(12, 98, 162, 0.08);
+  --surface-active: rgba(12, 98, 162, 0.12);
+  --surface-selected: rgba(12, 98, 162, 0.16);
+  --surface-soft: rgba(12, 98, 162, 0.04);
+  --surface-soft-strong: rgba(12, 98, 162, 0.08);
 
   --outline: #B6B0BA;
   --outline-variant: #ECE6EF;
@@ -27,11 +27,11 @@
   --on-surface-muted: #79747E;
   --on-surface-disabled: #CAC4D0;
 
-  --primary: #0061A4;
-  --primary-hover: #1D80C6;
-  --primary-active: #004A7F;
-  --primary-focus: rgba(0, 97, 164, 0.22);
-  --primary-container: rgba(0, 97, 164, 0.12);
+  --primary: #0c62a2;
+  --primary-hover: #3d81b5;
+  --primary-active: #0a4e82;
+  --primary-focus: rgba(12, 98, 162, 0.22);
+  --primary-container: rgba(12, 98, 162, 0.12);
 
   --success: #217346;
   --warning: #CA8A04;
@@ -173,8 +173,8 @@ body {
 }
 
 .ui-panel-header {
-  min-height: 52px;
-  padding: 0 16px;
+  min-height: 42px;
+  padding: 0 12px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-light);
   font-weight: 600;
@@ -205,8 +205,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 4px;
   cursor: pointer;
   color: var(--text-secondary);
@@ -216,8 +216,13 @@ body {
 }
 
 .ui-panel-close:hover {
-  background-color: var(--bg-active);
-  color: var(--text-primary);
+  background-color: var(--error);
+  color: #fff;
+}
+
+.ui-panel-close svg {
+  width: 18px;
+  height: 18px;
 }
 
 .ui-panel-close:active {
@@ -229,8 +234,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
   padding: 0;
   background: transparent;
 }
@@ -831,8 +835,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   /* justify-content: center; */
-  min-height: 52px;
-  padding: 0 16px;
+  min-height: 44px;
+  padding: 0 8px;
   gap: 4px;
   background: var(--bg-header);
   border-bottom: 1px solid var(--border-light);
@@ -866,10 +870,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px;
-  min-height: 44px;
+  padding: 2px 4px;
+  min-height: 38px;
   min-width: 44px;
-  gap: 2px;
+  gap: 1px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background-color 160ms ease, color 160ms ease;
@@ -877,16 +881,16 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: transparent;
   border: none;
   box-sizing: border-box;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   text-align: center;
   white-space: nowrap;
 }
 
-.ui-toolbar-btn:hover {
-  background-color: color-mix(in srgb, var(--bg-hover) 52%, var(--bg-panel));
+.ui-toolbar-btn:hover:not(.active) {
+  background-color: var(--bg-hover);
   color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--border-hover) 52%, transparent);
+  border-color: var(--border-hover);
 }
 
 .ui-toolbar-btn:active {
@@ -895,11 +899,19 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-toolbar-btn.active {
-  background-color: var(--accent);
+  background-color: var(--primary);
   color: #fff;
-  font-weight: 500;
-  border-color: var(--accent);
+  font-weight: 600;
+  border-color: var(--primary);
   box-shadow: var(--shadow-sm);
+}
+
+.ui-toolbar-btn.active svg {
+  color: #fff;
+}
+
+.ui-toolbar-btn.active .ui-toolbar-btn-label {
+  color: #fff;
 }
 
 
@@ -927,9 +939,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 12px;
+  min-height: 14px;
   max-width: 100%;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   font-weight: 500;
   white-space: nowrap;
@@ -2898,11 +2910,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* 属性分组标题 */
 .ui-prop-group {
-  background-color: var(--accent-subtle);
+  background-color: var(--bg-header);
   padding: 8px 12px;
   font-weight: 600;
   font-size: 13px;
-  color: var(--accent);
+  color: var(--text-primary);
   border-bottom: 1px solid var(--border-light);
   border-top: 1px solid transparent;
   cursor: pointer;
