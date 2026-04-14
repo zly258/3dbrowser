@@ -50,8 +50,6 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   onUpdate,       // 设置更新回调
   currentLang,    // 当前语言
   setLang,        // 设置语言回调
-  themeMode,      // 主题模式
-  setThemeMode,   // 设置主题回调
   showStats,      // 是否显示统计
   setShowStats,   // 设置统计显示回调
   // 样式配置
@@ -88,19 +86,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {activeTab === "general" && (
           <div className="ui-panel-stack">
-            {/* 主题选择 */}
-            <Row label={t("st_theme")} labelWidth="70px">
-              <div className="ui-inline-actions ui-inline-actions-end">
-                <SegmentedControl
-                  options={[
-                    { value: 'light', label: t("theme_light") || 'Light' },
-                    { value: 'dark', label: t("theme_dark") || 'Dark' }
-                  ]}
-                  value={themeMode}
-                  onChange={(v) => setThemeMode(v as 'dark' | 'light')}
-                />
-              </div>
-            </Row>
+            {/* 主题选择已经移除 */}
 
             {/* 语言选择 */}
             <Row label={t("st_lang")} labelWidth="70px" stretch={true}>
@@ -250,8 +236,6 @@ interface SettingsModalProps {
   onUpdate: (s: Partial<SceneSettings>) => void;  // 更新设置回调
   currentLang: Lang;           // 当前语言
   setLang: (l: Lang) => void; // 设置语言回调
-  themeMode: 'dark' | 'light'; // 当前主题模式
-  setThemeMode: (m: 'dark' | 'light') => void;  // 设置主题回调
   showStats: boolean;          // 是否显示统计信息
   setShowStats: (v: boolean) => void;  // 设置统计显示回调
                   // 自定义样式

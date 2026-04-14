@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { ThemeColors } from "../../theme/styles";
 import { ImageButton } from "../common/ImageButton";
 import {
@@ -15,9 +15,7 @@ import {
 
 interface MenuBarProps {
     t: (key: string) => string;
-        theme: ThemeColors;
-    themeType?: 'dark' | 'light';
-    setThemeType?: (type: 'dark' | 'light') => void;
+    theme: ThemeColors;
     handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleOpenUrl?: () => void;
@@ -137,7 +135,7 @@ export const Toolbar: React.FC<MenuBarProps> = (props) => {
                 </div>
             )}
 
-                {!isHidden('view') && (
+            {!isHidden('view') && (
                 <div className="ui-toolbar-group">
                     <ImageButton
                         icon={<IconMaximize />}
