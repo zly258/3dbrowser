@@ -11,8 +11,8 @@ import {
 interface MenuBarProps {
     t: (key: string) => string;
         theme: ThemeColors;
-    themeType?: 'dark' | 'light';
-    setThemeType?: (type: 'dark' | 'light') => void;
+    themeType?: 'light';
+    setThemeType?: (type: 'light') => void;
     handleOpenFiles?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleBatchConvert?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleOpenUrl?: () => void;

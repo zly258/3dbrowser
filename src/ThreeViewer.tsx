@@ -17,7 +17,7 @@ import { AboutModal } from "./components/AboutModal";
 import { ViewCube } from "./components/ViewCube";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ContextMenu } from "./components/ContextMenu";
-import { IconClose, IconSun, IconMoon, IconActivity, IconBox, IconGrid } from "./theme/Icons";
+import { IconClose, IconActivity, IconBox, IconGrid } from "./theme/Icons";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useChunkProgress } from "./hooks/useChunkProgress";
 import { useFileLoadingFlow } from "./hooks/useFileLoadingFlow";
@@ -50,7 +50,6 @@ export interface ThreeViewerProps {
     allowDragOpen?: boolean;
     hiddenMenus?: string[];
     libPath?: string;
-    defaultTheme?: 'dark' | 'light';
     defaultLang?: Lang;
     showStats?: boolean;
     showOutline?: boolean;
@@ -70,8 +69,7 @@ export const ThreeViewer = ({
     allowDragOpen = true, 
     hiddenMenus = [],
     libPath = './libs',
-    defaultTheme,
-    defaultLang,
+     defaultLang,
     showStats: propShowStats,
     showOutline: propShowOutline,
     showProperties: propShowProperties,
@@ -83,21 +81,8 @@ export const ThreeViewer = ({
      performancePreset = 'quality',
      chunkOptions
  }: ThreeViewerProps) => {
+    const theme = themes.light;
     const sceneBgFollowsTheme = initialSettings?.bgColor === undefined;
-
-    // 主题状态 - 从localStorage恢复或使用prop
-    const [themeMode, setThemeMode] = usePersistentState<'dark' | 'light'>(
-        '3dbrowser_themeMode',
-        () => defaultTheme || 'light',
-        {
-            serializer: (value) => value,
-            parser: (raw) => (raw === 'dark' || raw === 'light') ? raw : 'light'
-        }
-    );
-
-    const theme = useMemo(() => {
-        return themes[themeMode];
-    }, [themeMode]);
 
     const effectiveChunkOptions = useMemo<SceneChunkOptions>(() => ({
         chunkReadCacheSize: chunkOptions?.chunkReadCacheSize ?? 128,
@@ -242,7 +227,6 @@ export const ThreeViewer = ({
         parser: (raw) => raw === 'true'
     });
 
-    // Settings State (mirrors SceneManager) - 从localStorage恢复
     const [sceneSettings, setSceneSettings] = usePersistentState<SceneSettings>('3dbrowser_sceneSettings', () => {
         const baseSettings: SceneSettings = {
             ambientInt: 2.0,
@@ -267,9 +251,7 @@ export const ThreeViewer = ({
             },
         };
         const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
-        return sceneBgFollowsTheme
-            ? { ...merged, bgColor: theme.canvasBg }
-            : merged;
+        return merged.bgColor === undefined ? { ...merged, bgColor: theme.canvasBg } : merged;
     });
 
     useEffect(() => {
@@ -303,40 +285,7 @@ export const ThreeViewer = ({
         setShowProps
     });
 
-    const handleThemeModeChange = useCallback((nextThemeMode: 'dark' | 'light') => {
-        setThemeMode(nextThemeMode);
-        const nextTheme = themes[nextThemeMode];
 
-        setSceneSettings((prevSettings) => {
-            const merged = sceneBgFollowsTheme
-                ? { ...prevSettings, bgColor: nextTheme.canvasBg }
-                : prevSettings;
-
-            if (sceneMgr.current && sceneBgFollowsTheme) {
-                sceneMgr.current.updateSettings(merged);
-            }
-            return merged;
-        });
-    }, [sceneBgFollowsTheme, setSceneSettings, setThemeMode]);
-
-    useEffect(() => {
-        if (defaultTheme && defaultTheme !== themeMode) {
-            handleThemeModeChange(defaultTheme);
-        }
-    }, [defaultTheme, themeMode, handleThemeModeChange]);
-
-    useEffect(() => {
-        if (!sceneBgFollowsTheme) return;
-
-        setSceneSettings((prevSettings) => {
-            if (prevSettings.bgColor === theme.canvasBg) return prevSettings;
-            const merged = { ...prevSettings, bgColor: theme.canvasBg };
-            if (sceneMgr.current) {
-                sceneMgr.current.updateSettings(merged);
-            }
-            return merged;
-        });
-    }, [sceneBgFollowsTheme, setSceneSettings, theme.canvasBg]);
 
     useEffect(() => {
         const manager = sceneMgr.current;
@@ -1061,7 +1010,7 @@ export const ThreeViewer = ({
     return (
         <ErrorBoundary t={t} theme={theme}>
             <div
-                className={`ui-container ui-app-shell ${themeMode} font-medium`}
+                className={`ui-container ui-app-shell font-medium`}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
@@ -1070,8 +1019,6 @@ export const ThreeViewer = ({
              {/* Top Toolbar */}
              <Toolbar
                  t={t}
-                 themeType={themeMode}
-                 setThemeType={setThemeMode}
                  handleOpenFiles={handleOpenFiles}
                  handleBatchConvert={handleBatchConvert}
                  handleOpenUrl={handleOpenUrl}
@@ -1266,7 +1213,7 @@ export const ThreeViewer = ({
                     {activeTool === 'settings' && (
                         <SettingsPanel 
                             t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
-                            currentLang={lang} setLang={setLang} themeMode={themeMode} setThemeMode={handleThemeModeChange}
+                            currentLang={lang} setLang={setLang}
                             showStats={showStats} setShowStats={setShowStats}
                             theme={theme}
                         />
@@ -1467,13 +1414,6 @@ export const ThreeViewer = ({
                         </div>
                     )}
                     <div className="ui-divider-vertical ui-divider-vertical-compact ui-divider-vertical-short" />
-                    <button
-                        className="ui-statusbar-btn ui-statusbar-btn-compact"
-                        onClick={() => handleThemeModeChange(themeMode === 'dark' ? 'light' : 'dark')}
-                        title={themeMode === 'dark' ? t("theme_light") : t("theme_dark")}
-                    >
-                        {themeMode === 'dark' ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
-                    </button>
                     <button
                         className="ui-statusbar-tag ui-statusbar-tag-compact"
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}

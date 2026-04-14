@@ -17,24 +17,7 @@ export interface ThemeColors {
     shadow: string;
 }
 
-export const themes: Record<'dark' | 'light', ThemeColors> = {
-    dark: {
-        bg: "#1A1C1E",
-        panelBg: "#222427",
-        headerBg: "#282A2D",
-        border: "#444b55",
-        text: "#E6E1E5",
-        textLight: "#FFFFFF",
-        textMuted: "#938F99",
-        accent: "#A1C9FF", 
-        highlight: "#49454F",
-        itemHover: "rgba(161, 201, 255, 0.08)",
-        success: "#B4E197",
-        warning: "#F2C94C",
-        danger: "#F2B8B5",
-        canvasBg: "#121416",
-        shadow: "rgba(0, 0, 0, 0.5)"
-    },
+export const themes: { light: ThemeColors } = {
     light: {
         bg: "#F8FAFF",
         panelBg: "#FFFFFF",
@@ -56,7 +39,7 @@ export const themes: Record<'dark' | 'light', ThemeColors> = {
 
 export const DEFAULT_FONT = "'Roboto', 'Inter', 'Segoe UI', 'Microsoft YaHei', sans-serif";
 
-export const colors = themes.dark;
+export const colors = themes.light;
 
 function readCssVar(name: string) {
     if (typeof window === "undefined") return "";
@@ -64,15 +47,15 @@ function readCssVar(name: string) {
     return style.getPropertyValue(name).trim();
 }
 
-export function resolveThemeColors(themeMode: "dark" | "light"): ThemeColors {
-    const fallback = themes[themeMode];
+export function resolveThemeColors(): ThemeColors {
+    const fallback = themes.light;
     const vars = {
         bg: readCssVar("--bg-primary"),
         panelBg: readCssVar("--bg-panel"),
         headerBg: readCssVar("--bg-header"),
         border: readCssVar("--border-color"),
         text: readCssVar("--text-primary"),
-        textLight: themeMode === "dark" ? "#FFFFFF" : "#000000",
+        textLight: "#000000",
         textMuted: readCssVar("--text-muted"),
         accent: readCssVar("--accent"),
         highlight: readCssVar("--bg-selected"),
