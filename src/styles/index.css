@@ -61,11 +61,11 @@
   --control-h-lg: 32px;
 
   /* Rounded Corners */
-  --radius-xs: 3px;
+  --radius-xs: 2px;
   --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   --bg-primary: var(--surface);
   --bg-panel: var(--surface-container);
@@ -303,7 +303,7 @@ body {
   min-height: var(--control-h-sm);
   padding: 0 7px;
   font-size: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .ui-btn-md {
@@ -351,16 +351,16 @@ body {
 }
 
 .ui-btn-primary {
-  background: var(--accent);
+  background-color: var(--accent);
   color: #fff;
   border-color: var(--accent);
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .ui-btn-primary:hover {
-  background: var(--accent);
+  background-color: var(--accent-hover);
   border-color: var(--accent-hover);
-  box-shadow: none;
+  box-shadow: var(--shadow-sm);
 }
 
 .ui-btn-primary:active {
@@ -605,8 +605,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-segmented-item.active {
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  background-color: var(--accent);
+  color: white;
   font-weight: 500;
   box-shadow: none;
 }
@@ -830,6 +830,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolbar {
   display: flex;
   align-items: center;
+  /* justify-content: center; */
   min-height: 52px;
   padding: 0 16px;
   gap: 4px;
@@ -894,11 +895,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-toolbar-btn.active {
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-weight: 600;
-  border-color: transparent;
-  box-shadow: none;
+  background-color: var(--accent);
+  color: #fff;
+  font-weight: 500;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
 }
 
 
@@ -1057,8 +1058,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-modal {
   background-color: var(--bg-panel);
-  border-radius: 8px;
-  box-shadow: none;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   z-index: 600;
   max-height: 80vh;
   display: flex;
@@ -1384,9 +1385,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* ==================== 圆角 ==================== */
 .rounded-none { border-radius: 0; }
-.rounded-sm { border-radius: 4px; }
-.rounded-md { border-radius: 6px; }
-.rounded-lg { border-radius: 8px; }
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
 .rounded-full { border-radius: 9999px; }
 
 /* ==================== 边框 ==================== */
@@ -2125,9 +2126,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-choice-card.active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-light));
+  border-color: var(--accent);
   background: var(--accent);
-  box-shadow: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-choice-card.active .ui-choice-card-title,
+.ui-choice-card.active .ui-choice-card-desc {
+  color: #fff;
 }
 
 
@@ -2892,11 +2898,11 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 /* 属性分组标题 */
 .ui-prop-group {
-  background-color: var(--bg-panel);
+  background-color: var(--accent-subtle);
   padding: 8px 12px;
   font-weight: 600;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--accent);
   border-bottom: 1px solid var(--border-light);
   border-top: 1px solid transparent;
   cursor: pointer;
@@ -3517,6 +3523,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-modal-action-btn {
   min-width: 88px;
+  min-height: 36px;
 }
 
 .ui-about-modal {
@@ -3747,7 +3754,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-menubar {
-  height: 42px;
+  height: 36px;
 }
 
 .ui-menubar-item {
