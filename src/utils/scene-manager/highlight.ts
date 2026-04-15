@@ -1,11 +1,6 @@
 import * as THREE from "three";
-
-type OptimizedMappingEntry = {
-    mesh: THREE.BatchedMesh;
-    instanceId: number;
-    originalColor: number;
-    geometry?: THREE.BufferGeometry;
-};
+import { collectRenderableBoundsForIds, type OptimizedMappingEntry } from "./renderTargets";
+import type { StructureTreeNode } from "./types";
 
 type LocateDimmedInstance = {
     mesh: THREE.BatchedMesh;
@@ -24,6 +19,7 @@ interface SceneManagerHighlightContext {
     contentGroup: THREE.Group;
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh;
+    nodeMap: Map<string, StructureTreeNode[]>;
     optimizedMapping: Map<string, OptimizedMappingEntry[]>;
     settings: {
         highlightColor?: string;
@@ -83,37 +79,7 @@ function updateSelectionHelpers(context: SceneManagerHighlightContext, target: S
         return;
     }
 
-    const union = new THREE.Box3();
-    const tmpBox = new THREE.Box3();
-    const tmpMatrix = new THREE.Matrix4();
-
-    const addObjectBounds = (id: string) => {
-        const mappings = context.optimizedMapping.get(id);
-        if (mappings && mappings.length > 0) {
-            const mapping = mappings[0];
-            if (mapping.geometry) {
-                if (!mapping.geometry.boundingBox) mapping.geometry.computeBoundingBox();
-                tmpBox.copy(mapping.geometry.boundingBox!);
-                mapping.mesh.getMatrixAt(mapping.instanceId, tmpMatrix);
-                tmpMatrix.premultiply(mapping.mesh.matrixWorld);
-                tmpBox.applyMatrix4(tmpMatrix);
-                union.union(tmpBox);
-            }
-            return;
-        }
-
-        const object = context.contentGroup.getObjectByProperty("uuid", id);
-        if (!object) return;
-        object.updateMatrixWorld(true);
-        if (object.userData.boundingBox) {
-            tmpBox.copy(object.userData.boundingBox).applyMatrix4(object.matrixWorld);
-        } else {
-            tmpBox.setFromObject(object);
-        }
-        union.union(tmpBox);
-    };
-
-    for (const id of target) addObjectBounds(id);
+    const union = collectRenderableBoundsForIds(context, Array.from(target));
 
     if (!union.isEmpty()) {
         context.selectionBox.box.copy(union);
@@ -189,7 +155,8 @@ export function applyHighlightObjects(
     uuids: string[]
 ): SceneHighlightResult {
     context.clearClashPairHighlight();
-    const target = new Set(uuids.filter(Boolean));
+    const normalized = Array.from(new Set(uuids.filter(Boolean)));
+    const target = expandLocateTargets(context.nodeMap, normalized);
 
     const preserveLocateTint = context.state.locateResultSet.size > 0;
     if (!preserveLocateTint) {
@@ -246,7 +213,6 @@ export function applySetLocateResultSet(
     // 先清除状态但不立即渲染，后续统一渲染
     applyClearLocateFocus(context);
 
-    const selectedSet = new Set(normalized);
     const expandedTargets = expandLocateTargets(context.nodeMap, normalized);
     const expandedList = Array.from(expandedTargets);
     const rootColorByExpandedId = new Map<string, THREE.Color>();
@@ -266,12 +232,9 @@ export function applySetLocateResultSet(
     const dimmedColor = new THREE.Color("#b7bec9");
     const accentColor = getHighlightColor(context.settings);
 
-    // 一次性变量，减少内存分配
-    const tempColor = new THREE.Color();
-
     context.contentGroup.traverse((child) => {
         const mesh = child as THREE.Mesh;
-        if (!mesh.isMesh || !mesh.material) return;
+        if (!mesh.isMesh || (mesh as any).isBatchedMesh || mesh.userData?.isOptimized || !mesh.material) return;
         if (!context.locateObjectMaterialCache.has(child.uuid)) {
             context.locateObjectMaterialCache.set(child.uuid, mesh.material);
         }
@@ -315,78 +278,6 @@ export function applySetLocateResultSet(
             return cloned;
         });
         mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
-    });
-
-    context.contentGroup.traverse((child) => {
-        const batched = child as THREE.Object3D & {
-            isBatchedMesh?: boolean;
-            material?: THREE.Material | THREE.Material[];
-            userData?: any;
-        };
-        if (!batched.isBatchedMesh || !batched.material) return;
-
-        if (!context.locateObjectMaterialCache.has(child.uuid)) {
-            context.locateObjectMaterialCache.set(child.uuid, batched.material);
-        }
-        const owner = batched.userData?.originalUuid ? String(batched.userData.originalUuid) : "";
-        const batchIdToUuid = batched.userData?.batchIdToUuid as Map<number, string> | undefined;
-        let hasMatchedInstance = false;
-        let hasFocusInstance = false;
-        let instanceMatchColor: THREE.Color | null = owner ? (rootColorByExpandedId.get(owner) || null) : null;
-        if (batchIdToUuid && batchIdToUuid.size > 0) {
-            for (const instanceUuid of batchIdToUuid.values()) {
-                if (!hasMatchedInstance && expandedTargets.has(instanceUuid)) hasMatchedInstance = true;
-                if (!hasFocusInstance && focusKey !== null && instanceUuid === focusKey) hasFocusInstance = true;
-                if (!instanceMatchColor && expandedTargets.has(instanceUuid)) {
-                    instanceMatchColor = rootColorByExpandedId.get(instanceUuid) || null;
-                }
-                if (hasMatchedInstance && hasFocusInstance) break;
-            }
-        }
-        const ownerExplicitSelected = owner ? selectedSet.has(owner) : false;
-        const isMatched = expandedTargets.has(child.uuid) || hasMatchedInstance || ownerExplicitSelected;
-        const isFocus =
-            (context.state.locateFocusUuid !== null && context.state.locateFocusUuid === child.uuid) ||
-            hasFocusInstance ||
-            (ownerExplicitSelected && context.state.locateFocusUuid !== null && context.state.locateFocusUuid === owner);
-        const sourceMaterials = Array.isArray(batched.material) ? batched.material : [batched.material];
-        const matchedColor = instanceMatchColor || accentColor;
-
-        const nextMaterials = sourceMaterials.map((material) => {
-            if (!material) return material;
-            const cloned = material.clone() as THREE.Material & {
-                transparent?: boolean;
-                opacity?: number;
-                depthWrite?: boolean;
-                color?: THREE.Color;
-                emissive?: THREE.Color;
-                roughness?: number;
-                metalness?: number;
-            };
-            if ("transparent" in cloned) cloned.transparent = false;
-            if ("opacity" in cloned) cloned.opacity = 1;
-            if ("depthWrite" in cloned) cloned.depthWrite = true;
-            if ("color" in cloned && cloned.color) {
-                const baseColor = cloned.color.clone();
-                if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.94 : 0.75));
-                } else {
-                    cloned.transparent = true;
-                    cloned.opacity = 0.08;
-                    cloned.depthWrite = false;
-                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.9));
-                }
-            }
-            if ("emissive" in cloned && cloned.emissive) {
-                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.4 : 0.15));
-                else cloned.emissive.set(0x000000);
-            }
-            if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.95, cloned.roughness ?? 0.95);
-            if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.01, cloned.metalness ?? 0.01);
-            cloned.needsUpdate = true;
-            return cloned;
-        });
-        (batched as any).material = Array.isArray(batched.material) ? nextMaterials : nextMaterials[0];
     });
 
     context.optimizedMapping.forEach((mappings, originalUuid) => {

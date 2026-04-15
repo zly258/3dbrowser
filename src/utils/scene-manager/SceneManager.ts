@@ -90,6 +90,12 @@ import {
     applySetLocateResultSet
 } from "./highlight";
 import {
+    collectAllRenderableTargets,
+    collectRenderableBoundsForIds,
+    collectRenderableTargetsForIds,
+    type RenderTarget
+} from "./renderTargets";
+import {
     applyAddMeasurePoint,
     applyClearMeasurementPreview,
     applyFinalizeMeasurement,
@@ -3411,7 +3417,7 @@ export class SceneManager {
 
         this.contentGroup.traverse((child) => {
             const mesh = child as THREE.Mesh;
-            if (!mesh.isMesh || !mesh.material) return;
+            if (!mesh.isMesh || (mesh as any).isBatchedMesh || mesh.userData?.isOptimized || !mesh.material) return;
             const side = aTargets.has(child.uuid) ? "A" : bTargets.has(child.uuid) ? "B" : null;
             if (!side) return;
             if (!this.clashPairObjectMaterialCache.has(child.uuid)) {
@@ -3549,6 +3555,13 @@ export class SceneManager {
         const result = applyHighlightObjects(context, uuids);
         this.syncHighlightState(context.state);
         if (result.needsRender) this.markSceneDirty();
+    }
+
+    collectRenderableTargets(uuids?: string[]): RenderTarget[] {
+        const context = this.getHighlightContext();
+        return uuids && uuids.length > 0
+            ? collectRenderableTargetsForIds(context, uuids)
+            : collectAllRenderableTargets(context);
     }
 
     pick(clientX: number, clientY: number): { object: THREE.Object3D, intersect: THREE.Intersection } | null {
@@ -3720,19 +3733,28 @@ export class SceneManager {
     }
 
     fitViewToObject(uuid: string) {
-        const box = new THREE.Box3();
-        this.unionNodeBounds(uuid, box);
+        let box = collectRenderableBoundsForIds(this.getHighlightContext(), [uuid]);
+        if (box.isEmpty()) {
+            box = new THREE.Box3();
+            this.unionNodeBounds(uuid, box);
+        }
         if (!box.isEmpty()) this.fitBox(box, false, 1.14);
     }
 
     getBoundsForObject(uuid: string) {
         if (!uuid) return null;
-        const box = new THREE.Box3();
-        this.unionNodeBounds(uuid, box);
+        let box = collectRenderableBoundsForIds(this.getHighlightContext(), [uuid]);
+        if (box.isEmpty()) {
+            box = new THREE.Box3();
+            this.unionNodeBounds(uuid, box);
+        }
         return box.isEmpty() ? null : box;
     }
 
     collectBoundsForUuids(uuids: string[]) {
+        const renderableBox = collectRenderableBoundsForIds(this.getHighlightContext(), uuids);
+        if (!renderableBox.isEmpty()) return renderableBox;
+
         const box = new THREE.Box3();
         const unique = Array.from(new Set((uuids || []).filter(Boolean)));
         unique.forEach((uuid) => this.unionNodeBounds(uuid, box));
