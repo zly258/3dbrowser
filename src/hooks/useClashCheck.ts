@@ -30,6 +30,7 @@ type ClashMeshInfo = {
 };
 
 type ClashCandidate = {
+  key: string;
   uuid: string;
   name: string;
   modelId: string;
@@ -58,11 +59,6 @@ interface UseClashCheckParams {
     updateSelection?: boolean;
   }) => boolean;
   t: (key: string) => string;
-}
-
-function buildBoxFromGeometry(geometry: THREE.BufferGeometry, matrixWorld: THREE.Matrix4) {
-  if (!geometry.boundingBox) geometry.computeBoundingBox();
-  return geometry.boundingBox ? geometry.boundingBox.clone().applyMatrix4(matrixWorld) : null;
 }
 
 function distanceBetweenBoxes(a: THREE.Box3, b: THREE.Box3) {
@@ -149,58 +145,25 @@ export function useClashCheck({
 
     const cached = clashCandidateCacheRef.current;
     cached.clear();
-    sceneMgr.contentGroup.updateMatrixWorld(true);
 
-    sceneMgr.contentGroup.traverse((obj: THREE.Object3D) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.visible || !mesh.geometry) return;
-      if (mesh.userData?.isIfcGridHelper) return;
-
-      const box = buildBoxFromGeometry(mesh.geometry, mesh.matrixWorld);
-      if (!box || box.isEmpty()) return;
-      const modelId = resolveModelOwner(mesh);
-      const candidate: ClashCandidate = {
-        uuid: mesh.uuid,
-        name: mesh.name || mesh.uuid,
-        modelId,
-        modelName: clashModelNameById.get(modelId) || modelId || mesh.name || mesh.uuid,
-        box,
-        testBox: box.clone(),
-        obb: clashUseNarrowPhase ? buildObbFromGeometry(mesh.geometry, mesh.matrixWorld) : null,
-        meshInfo: buildMeshInfo(mesh.uuid, mesh.geometry, mesh.matrixWorld)
-      };
-      cached.set(candidate.uuid, candidate);
-    });
-
-    sceneMgr.optimizedMapping.forEach((mappings, originalUuid) => {
-      if (cached.has(originalUuid) || !mappings || mappings.length === 0) return;
-      const nodes = sceneMgr.getStructureNodes(originalUuid) || [];
+    sceneMgr.collectRenderableTargets().forEach((target) => {
+      const nodes = sceneMgr.getStructureNodes(target.uuid) || [];
       if (nodes.length > 0 && nodes.every((node) => node.visible === false)) return;
-
-      const box = new THREE.Box3();
-      mappings.forEach((mapping) => {
-        const geometry = mapping.geometry || mapping.mesh.geometry;
-        if (!geometry) return;
-        const matrix = new THREE.Matrix4();
-        mapping.mesh.getMatrixAt(mapping.instanceId, matrix);
-        matrix.premultiply(mapping.mesh.matrixWorld);
-        const partBox = buildBoxFromGeometry(geometry, matrix);
-        if (partBox && !partBox.isEmpty()) box.union(partBox);
-      });
-      if (box.isEmpty()) return;
-
-      const node = nodes[0];
-      const modelId = node?.userData?.originalUuid ? String(node.userData.originalUuid) : "";
-      cached.set(originalUuid, {
-        uuid: originalUuid,
-        name: node?.name || originalUuid,
+      const modelId = nodes[0]?.userData?.originalUuid
+        ? String(nodes[0].userData.originalUuid)
+        : resolveModelOwner(target.object);
+      const candidate: ClashCandidate = {
+        key: target.key,
+        uuid: target.uuid,
+        name: target.name || target.uuid,
         modelId,
-        modelName: clashModelNameById.get(modelId) || modelId || node?.name || originalUuid,
-        box,
-        testBox: box.clone(),
-        obb: null,
-        meshInfo: null
-      });
+        modelName: clashModelNameById.get(modelId) || modelId || target.name || target.uuid,
+        box: target.box.clone(),
+        testBox: target.box.clone(),
+        obb: clashUseNarrowPhase ? buildObbFromGeometry(target.geometry, target.matrixWorld) : null,
+        meshInfo: buildMeshInfo(target.key, target.geometry, target.matrixWorld)
+      };
+      cached.set(candidate.key, candidate);
     });
 
     return Array.from(cached.values());
@@ -394,14 +357,14 @@ export function useClashCheck({
           if (!isHardClash && !isClearanceClash) continue;
           if (clashUseTrianglePhase && hasOverlap && !passesTrianglePhase(a, b, overlapBox)) continue;
 
-          const pairKey = [a.uuid, b.uuid].sort().join("::");
+          const pairKey = [a.key, b.key].sort().join("::");
           const clashType: ClashResultItem["type"] = isHardClash ? "hard" : "clearance";
           const severity: ClashResultItem["severity"] =
             clashType === "hard"
               ? (overlapVolume > Math.max(0.5, clashMinOverlapVolume * 10) ? "high" : "medium")
               : (distance <= Math.max(0.001, effectiveClearance * 0.25) ? "high" : "low");
           results.push({
-            id: `clash_${clashType}_${pairKey}_${results.length}`,
+            id: `clash_${clashType}_${pairKey}`,
             pairKey,
             groupKey: `${clashType}::${a.modelId || "unknown"}::${b.modelId || "unknown"}::${pairKey}`,
             ruleId: clashType === "hard" ? "hard-clash-default" : "clearance-default",

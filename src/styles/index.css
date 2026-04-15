@@ -49,6 +49,7 @@
   --scrollbar-thumb-hover: #A1A1AA;
 
   /* Typography */
+  --font-family-ui: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --font-size-base: 13px;
   --font-size-secondary: 12px;
   --font-size-label: 11px;
@@ -64,8 +65,8 @@
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
 
   --bg-primary: var(--surface);
   --bg-panel: var(--surface-container);
@@ -106,7 +107,7 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Roboto', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-family-ui);
   font-size: var(--font-size-base);
   line-height: 1.5;
   color: var(--text-primary);
@@ -852,17 +853,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 3px;
+  padding: 0;
   min-height: 100%;
-  border-right: none;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--bg-header) 72%, var(--bg-panel));
-  border: 1px solid var(--border-light);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
-.ui-toolbar-group:last-child {
-  border-right: none;
+.ui-toolbar-group + .ui-toolbar-group {
+  border-left: 1px solid var(--border-light);
+  margin-left: 5px;
+  padding-left: 8px;
 }
 
 .ui-toolbar-btn {
@@ -1275,7 +1277,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   white-space: nowrap;
   text-align: center;
   background: var(--error);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: none;
 }
 
@@ -1400,7 +1402,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .rounded-sm { border-radius: var(--radius-sm); }
 .rounded-md { border-radius: var(--radius-md); }
 .rounded-lg { border-radius: var(--radius-lg); }
-.rounded-full { border-radius: 9999px; }
+.rounded-full { border-radius: 50%; }
 
 /* ==================== 边框 ==================== */
 .border { border: 1px solid var(--border-light); }
@@ -1762,7 +1764,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   position: absolute;
   background: var(--surface-glass);
   border: 1px solid color-mix(in srgb, var(--border-light) 72%, var(--accent) 18%);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   box-shadow: none;
   z-index: 10000;
   min-width: 160px;
@@ -1774,7 +1776,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   position: fixed;
   background: var(--surface-glass);
   border: 1px solid color-mix(in srgb, var(--border-light) 72%, var(--accent) 18%);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   box-shadow: none;
   z-index: 10000;
   min-width: 180px;
@@ -1820,7 +1822,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-progress-bar {
   height: 8px;
   background-color: var(--bg-hover);
-  border-radius: 100px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -1836,7 +1838,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   height: 100%;
   background-color: var(--accent);
   transition: width 0.2s ease;
-  border-radius: 100px;
+  border-radius: 4px;
 }
 
 /* 状态栏扩展 */
@@ -2400,7 +2402,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-input-number .ui-input {
   padding-right: 32px;
-  font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-family: 'Consolas', 'Microsoft YaHei UI', monospace;
 }
 
 .ui-selection-summary {
@@ -2612,7 +2614,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--bg-hover);
   color: var(--text-secondary);
   font-size: 10px;
@@ -3027,9 +3029,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  background-color: var(--bg-primary);
+  border: 0;
+  border-top: 1px solid var(--border-light);
+  border-radius: 0;
+  background-color: transparent;
 }
 
 .ui-panel-section-fill {
@@ -3477,7 +3480,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-panel-modal {
-  border-radius: 18px;
+  border-radius: var(--radius-md);
 }
 
 .ui-section-block {
@@ -3568,7 +3571,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-about-meta-card,
 .ui-about-license-card {
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--bg-panel);
   overflow: hidden;
 }
@@ -3652,7 +3655,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-loading-box {
   background: var(--surface-glass);
   padding: 22px;
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   border: 1px solid color-mix(in srgb, var(--border-light) 74%, var(--accent) 26%);
 }
 
@@ -3760,7 +3763,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: color-mix(in srgb, var(--surface-container-highest) 92%, black 8%);
   color: white;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   font-size: var(--font-size-secondary);
   z-index: 100;
   pointer-events: none;
@@ -3846,9 +3849,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-panel-section {
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--border-light) 84%, transparent);
-  border-radius: 12px;
-  background: var(--bg-panel);
+  border: 0;
+  border-top: 1px solid var(--border-light);
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -3881,7 +3885,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-viewpoint-card-v2 {
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--bg-panel);
   transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
@@ -3895,7 +3899,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-error-content {
   background: var(--surface-glass);
   border: 1px solid color-mix(in srgb, var(--border-light) 70%, var(--accent) 20%);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
 }
 
 .ui-visually-hidden {

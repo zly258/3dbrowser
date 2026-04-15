@@ -37,7 +37,7 @@ export const themes: { light: ThemeColors } = {
     }
 };
 
-export const DEFAULT_FONT = "'Roboto', 'Inter', 'Segoe UI', 'Microsoft YaHei', sans-serif";
+export const DEFAULT_FONT = "'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif";
 
 export const colors = themes.light;
 
