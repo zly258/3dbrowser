@@ -505,6 +505,11 @@ export const ThreeViewer = ({
                 }
             }
         }
+
+        queueMicrotask(() => {
+            manager.invalidateRender?.({ needsCulling: true });
+            requestAnimationFrame(() => manager.invalidateRender?.({ needsCulling: true }));
+        });
     }
 
     const {

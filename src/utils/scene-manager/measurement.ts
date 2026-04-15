@@ -163,7 +163,7 @@ export function applyUpdateMeasurePreview(
     const points = [...state.currentMeasurePoints];
     if (hoverPoint) points.push(hoverPoint);
     if (points.length < 2) {
-        return { state, needsRender: false };
+        return { state, needsRender: true };
     }
 
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -179,7 +179,7 @@ export function applyUpdateMeasurePreview(
     state.previewLine.renderOrder = 998;
     context.measureGroup.add(state.previewLine);
 
-    return { state, needsRender: false };
+    return { state, needsRender: true };
 }
 
 export function applyUpdateMeasureHover(

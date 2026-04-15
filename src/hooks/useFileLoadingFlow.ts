@@ -31,20 +31,27 @@ export function useFileLoadingFlow({
 }: FileLoadingFlowOptions) {
     const loadItemsIntoScene = useCallback(async (items: (File | string)[]) => {
         if (!items.length || !managerRef.current) return;
-        const generation = managerRef.current.beginLoadGeneration?.() ?? 0;
-        const runtimeHints = (managerRef.current as any).getChunkOptions?.() || {};
+        const manager = managerRef.current;
+        const generation = manager.beginLoadGeneration?.() ?? 0;
+        const runtimeHints = (manager as any).getChunkOptions?.() || {};
         await loadSceneItems({
             items,
-            manager: managerRef.current,
+            manager,
             sceneSettings,
             libPath,
             t,
             onProgress: (p, msg) => {
                 setProgress(p);
                 if (msg) setStatus(cleanLoadingStatus(msg));
+                manager.invalidateRender?.();
             },
             runtimeHints,
             isStale: () => !(managerRef.current?.isLoadGenerationCurrent?.(generation))
+        });
+        manager.invalidateRender?.({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
         });
     }, [libPath, managerRef, sceneSettings, setProgress, setStatus, t]);
 
@@ -62,6 +69,11 @@ export function useFileLoadingFlow({
         try {
             await loadItemsIntoScene(items);
             updateTree();
+            managerRef.current?.invalidateRender?.({
+                invalidateInteractables: true,
+                needsBoundsUpdate: true,
+                needsCulling: true
+            });
             const hasNbim = items.some((item) => {
                 const path = typeof item === "string" ? item : item.name;
                 return path.toLowerCase().endsWith(".nbim");
@@ -74,12 +86,18 @@ export function useFileLoadingFlow({
             } else {
                 managerRef.current?.fitView(false);
             }
+            managerRef.current?.invalidateRender?.({
+                invalidateInteractables: true,
+                needsBoundsUpdate: true,
+                needsCulling: true
+            });
             setStatus(t("success"));
         } catch (err) {
             setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: "error" });
         } finally {
             setLoading(false);
+            managerRef.current?.invalidateRender?.();
         }
     }, [loadItemsIntoScene, managerRef, setCurrentFileSetId, setLoading, setProgress, setStatus, setToast, t, updateTree]);
 
