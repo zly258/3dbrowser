@@ -93,5 +93,10 @@ export async function loadSceneItems({
             const stagedProgress = Math.min(100, objectBase + Math.round((p / 100) * (8 / totalObjects)));
             onProgress(stagedProgress, msg);
         });
+        manager.invalidateRender?.({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
     }
 }

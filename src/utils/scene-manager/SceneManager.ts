@@ -704,6 +704,15 @@ export class SceneManager {
         }
     }
 
+    invalidateRender(options: {
+        needsRender?: boolean;
+        needsBoundsUpdate?: boolean;
+        needsCulling?: boolean;
+        invalidateInteractables?: boolean;
+    } = {}) {
+        this.markSceneDirty(options);
+    }
+
     updateSettings(newSettings: Partial<SceneSettings>) {
         this.settings = { ...this.settings, ...newSettings };
         this.applyHighlightSettings();
@@ -753,8 +762,10 @@ export class SceneManager {
             this.checkCullingAndLoad();
         }
 
-        // 如果不忙则强制渲染
-        this.renderer.render(this.scene, this.camera);
+        this.markSceneDirty({
+            needsCulling: newSettings.maxRenderDistance !== undefined,
+            invalidateInteractables: newSettings.frustumCulling !== undefined
+        });
     }
 
     createCircleTexture() {
@@ -773,7 +784,7 @@ export class SceneManager {
         return texture;
     }
 
-    animate() {
+    animate = () => {
         if (this.disposed) return;
         this.animateFramePending = false;
         this.animationFrameId = null;
@@ -1479,7 +1490,7 @@ export class SceneManager {
             this.controls.update();
         }
 
-        this.renderer.render(this.scene, this.camera);
+        this.markSceneDirty({ needsCulling: true });
     }
 
     private reportChunkProgress() {
@@ -1923,9 +1934,8 @@ export class SceneManager {
         this.cullingDirty = true;
         if (enabled) {
             this.checkCullingAndLoad();
-            return;
         }
-        this.markSceneDirty();
+        this.markSceneDirty({ needsCulling: enabled });
     }
 
     private applyNbimScaleTuning(chunkCount: number) {
@@ -1983,7 +1993,7 @@ export class SceneManager {
     setContentVisible(visible: boolean) {
         this.contentGroup.visible = visible;
         this.ghostGroup.visible = visible;
-        this.renderer.render(this.scene, this.camera);
+        this.markSceneDirty({ needsCulling: true });
     }
 
     private buildSceneGraph(object: THREE.Object3D): StructureTreeNode {
@@ -2351,6 +2361,11 @@ export class SceneManager {
                     const modelRoot = this.buildAndRegisterModelStructure(object);
                     this.replaceStructureNode(deferredPlaceholderId!, modelRoot);
                     if (this.onStructureUpdate) this.onStructureUpdate();
+                    this.markSceneDirty({
+                        invalidateInteractables: true,
+                        needsBoundsUpdate: true,
+                        needsCulling: true
+                    });
                 } catch (error) {
                     console.warn("延迟构建结构树失败:", error);
                 }
@@ -2378,9 +2393,24 @@ export class SceneManager {
 
         await this.prepareModelRuntimeStage(object, meshCount);
         this.attachModelToContentGroup(object, quickVisibleEnabled);
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
         await this.prepareModelChunkStage(object, meshCount, onProgress);
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
         this.finalizeModelStage(previewGhost, onProgress);
         this.scheduleDeferredStructureReplacement(object, shouldDeferStructure, deferredPlaceholderId);
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
     }
 
     removeObject(uuid: string) {
@@ -2778,6 +2808,11 @@ export class SceneManager {
         });
         this.contentGroup.add(fileGroup);
         this.interactableListValid = false;
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
 
         populateNbimNodeMappings({
             modelRoot,
@@ -2815,6 +2850,11 @@ export class SceneManager {
         this.reportChunkProgress();
 
         this.fitView(true);
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
         const loadFinalize = finalizeNbimLoad({
             chunkCount: this.chunks.length,
             hasManifestStats: Boolean(manifest.stats),
@@ -2824,6 +2864,11 @@ export class SceneManager {
         this.initialChunkLoadTarget = loadFinalize.initialChunkLoadTarget;
         if (onProgress) onProgress(100, "NBIM 已就绪，正在按需加载...");
         this.checkCullingAndLoad();
+        this.markSceneDirty({
+            invalidateInteractables: true,
+            needsBoundsUpdate: true,
+            needsCulling: true
+        });
         if (loadFinalize.shouldEstimateStats) {
             void this.estimateNbimStats(file, manifest.chunks, version).then((stats) => {
                 this.unregisterOriginalStats(rootId);
@@ -3314,7 +3359,11 @@ export class SceneManager {
 
         this.interactableListValid = false;
         this.updateSceneBounds();
-        this.markSceneDirty();
+        this.markSceneDirty({
+            needsBoundsUpdate: true,
+            needsCulling: true,
+            invalidateInteractables: true
+        });
     }
 
     private restoreExplodeSnapshot() {
@@ -3328,7 +3377,11 @@ export class SceneManager {
         });
         this.interactableListValid = false;
         this.updateSceneBounds();
-        this.markSceneDirty();
+        this.markSceneDirty({
+            needsBoundsUpdate: true,
+            needsCulling: true,
+            invalidateInteractables: true
+        });
     }
 
     private refreshExplodeState() {
@@ -3376,6 +3429,11 @@ export class SceneManager {
         this.explodeEnabled = false;
         this.explodeObjectStates.clear();
         this.explodeInstanceStates.clear();
+        this.markSceneDirty({
+            needsBoundsUpdate: true,
+            needsCulling: true,
+            invalidateInteractables: true
+        });
     }
 
     clearClashPairHighlight() {
@@ -3774,6 +3832,7 @@ export class SceneManager {
             this.controls.target.set(0, 0, 0);
             this.camera.updateProjectionMatrix();
             this.controls.update();
+            this.markSceneDirty({ needsCulling: true });
             return;
         }
 
@@ -3830,10 +3889,12 @@ export class SceneManager {
                 this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
-                this.renderer.render(this.scene, this.camera);
+                this.markSceneDirty({ needsCulling: true });
 
                 if (progress < 1) {
                     requestAnimationFrame(animate);
+                } else {
+                    this.markSceneDirty({ needsCulling: true });
                 }
             };
             animate();
@@ -3895,10 +3956,12 @@ export class SceneManager {
                 this.camera.zoom = startZoom + (targetZoom - startZoom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
-                this.renderer.render(this.scene, this.camera);
+                this.markSceneDirty({ needsCulling: true });
 
                 if (progress < 1) {
                     requestAnimationFrame(animate);
+                } else {
+                    this.markSceneDirty({ needsCulling: true });
                 }
             };
             animate();
@@ -4039,6 +4102,7 @@ export class SceneManager {
         const context = this.getMeasurementContext();
         const result = applyUpdateMeasurePreview(context, hoverPoint);
         this.syncMeasurementState(result.state);
+        if (result.needsRender) this.markSceneDirty();
     }
 
     updateMeasureHover(clientX: number, clientY: number) {
@@ -4085,6 +4149,7 @@ export class SceneManager {
     startBoxSelect(clientX: number, clientY: number) {
         const result = applyStartBoxSelect(this.boxSelectState, clientX, clientY);
         this.syncBoxSelectState(result.state);
+        if (result.needsRender) this.markSceneDirty();
     }
 
     /**
@@ -4093,6 +4158,7 @@ export class SceneManager {
     updateBoxSelect(clientX: number, clientY: number) {
         const result = applyUpdateBoxSelect(this.boxSelectState, clientX, clientY);
         this.syncBoxSelectState(result.state);
+        if (result.needsRender) this.markSceneDirty();
     }
 
     /**
@@ -4103,6 +4169,7 @@ export class SceneManager {
             this.selectByScreenRect(x1, y1, x2, y2)
         );
         this.syncBoxSelectState(result.state);
+        if (result.needsRender) this.markSceneDirty();
         return result.selected;
     }
 
@@ -4112,6 +4179,7 @@ export class SceneManager {
     cancelBoxSelect() {
         const result = applyCancelBoxSelect(this.boxSelectState);
         this.syncBoxSelectState(result.state);
+        if (result.needsRender) this.markSceneDirty();
     }
 
     /**
@@ -4170,6 +4238,7 @@ export class SceneManager {
     setupClipping() {
         const result = applySetupClipping(this.getClippingContext());
         this.syncClippingState(result.state);
+        this.markSceneDirty();
     }
 
     setClipHelperOptions(options: { visible?: boolean; opacity?: number }) {

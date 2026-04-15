@@ -9,6 +9,7 @@ interface BoxSelectState {
 
 interface BoxSelectResult {
     state: BoxSelectState;
+    needsRender: boolean;
 }
 
 function ensureRectElement(state: BoxSelectState) {
@@ -57,7 +58,7 @@ export function applyStartBoxSelect(
         endY: clientY
     };
     updateRectElement(state);
-    return { state };
+    return { state, needsRender: true };
 }
 
 export function applyUpdateBoxSelect(
@@ -66,7 +67,7 @@ export function applyUpdateBoxSelect(
     clientY: number
 ): BoxSelectResult {
     if (!prevState.active) {
-        return { state: prevState };
+        return { state: prevState, needsRender: false };
     }
 
     const state: BoxSelectState = {
@@ -75,7 +76,7 @@ export function applyUpdateBoxSelect(
         endY: clientY
     };
     updateRectElement(state);
-    return { state };
+    return { state, needsRender: true };
 }
 
 export function applyCancelBoxSelect(prevState: BoxSelectState): BoxSelectResult {
@@ -88,7 +89,8 @@ export function applyCancelBoxSelect(prevState: BoxSelectState): BoxSelectResult
             ...prevState,
             active: false,
             rectElement: null
-        }
+        },
+        needsRender: true
     };
 }
 
@@ -96,20 +98,21 @@ export function applyEndBoxSelect(
     prevState: BoxSelectState,
     canvas: HTMLCanvasElement,
     selectByScreenRect: (x1: number, y1: number, x2: number, y2: number) => string[]
-): { state: BoxSelectState; selected: string[] } {
+): { state: BoxSelectState; selected: string[]; needsRender: boolean } {
     if (!prevState.active) {
         return {
             state: prevState,
-            selected: []
+            selected: [],
+            needsRender: false
         };
     }
 
-    const { state } = applyCancelBoxSelect(prevState);
+    const { state, needsRender } = applyCancelBoxSelect(prevState);
     const { startX, startY, endX, endY } = prevState;
     const dx = Math.abs(endX - startX);
     const dy = Math.abs(endY - startY);
     if (dx < 5 || dy < 5) {
-        return { state, selected: [] };
+        return { state, selected: [], needsRender };
     }
 
     const rect = canvas.getBoundingClientRect();
@@ -120,7 +123,8 @@ export function applyEndBoxSelect(
 
     return {
         state,
-        selected: selectByScreenRect(x1, y1, x2, y2)
+        selected: selectByScreenRect(x1, y1, x2, y2),
+        needsRender
     };
 }
 
