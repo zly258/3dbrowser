@@ -9,7 +9,7 @@
   --surface-container: #FFFFFF;
   --surface-container-high: #F0F2F5;
   --surface-container-highest: #E0E2EC;
-  --surface-canvas: #FFFFFF;
+  --surface-canvas: #F0F2F5;
   --surface-overlay: rgba(255, 255, 255, 0.92);
   --surface-glass: rgba(255, 255, 255, 0.94);
   --surface-hover: rgba(12, 98, 162, 0.08);
@@ -38,9 +38,9 @@
   --error: #B3261E;
   --info: var(--primary);
 
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
   --overlay-scrim: rgba(224, 232, 242, 0.7);
 
   /* Scrollbar */
@@ -62,11 +62,11 @@
   --control-h-lg: 32px;
 
   /* Rounded Corners */
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 8px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
 
   --bg-primary: var(--surface);
   --bg-panel: var(--surface-container);
@@ -152,7 +152,7 @@ body {
   left: 0;
   top: 0;
   background: var(--surface-glass);
-  border: 1px solid color-mix(in srgb, var(--border-light) 78%, var(--border-color));
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
@@ -161,23 +161,24 @@ body {
   min-height: 100px;
   overflow: hidden;
   color: var(--text-primary);
-  box-shadow: none;
-  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(20px);
   /* GPU加速 */
   transform: translate(0, 0);
   backface-visibility: hidden;
+  transition: box-shadow 200ms ease, border-color 200ms ease;
 }
 
 .ui-panel:hover {
-  box-shadow: none;
-  border-color: color-mix(in srgb, var(--border-color) 72%, var(--accent) 28%);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent);
 }
 
 .ui-panel-header {
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 48px;
+  padding: 0 16px;
   background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-color);
   font-weight: 600;
   font-size: var(--font-size-title);
   display: flex;
@@ -295,9 +296,9 @@ body {
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -306,23 +307,23 @@ body {
 
 .ui-btn-sm {
   min-height: var(--control-h-sm);
-  padding: 0 7px;
-  font-size: 14px;
-  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: var(--radius-md);
 }
 
 .ui-btn-md {
   min-height: var(--control-h-md);
-  padding: 4px 15px;
+  padding: 4px 20px;
   font-size: 14px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .ui-btn-lg {
   min-height: var(--control-h-lg);
-  padding: 6.4px 15px;
+  padding: 8px 24px;
   font-size: 16px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
 }
 
 .ui-btn:disabled {
@@ -359,20 +360,20 @@ body {
   background-color: var(--accent);
   color: #fff;
   border-color: var(--accent);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .ui-btn-primary:hover {
   background-color: var(--accent-hover);
   border-color: var(--accent-hover);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .ui-btn-primary:active {
   background-color: var(--accent-active);
   border-color: var(--accent-active);
   box-shadow: none;
-  transform: translateY(1px);
+  transform: scale(0.98);
 }
 
 .ui-btn-danger {
@@ -426,9 +427,9 @@ body {
 /* 按钮激活状态 */
 .ui-btn.active {
   background: var(--accent);
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-light));
-  box-shadow: none;
+  color: white;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
 }
 
 .ui-btn-group {
@@ -835,15 +836,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-toolbar {
   display: flex;
   align-items: center;
-  /* justify-content: center; */
-  min-height: 44px;
-  padding: 0 8px;
-  gap: 4px;
-  background: var(--bg-header);
-  border-bottom: 1px solid var(--border-light);
-  box-shadow: none;
+  min-height: 52px;
+  padding: 0 16px;
+  gap: 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   box-sizing: border-box;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(24px);
   position: relative;
   z-index: 1200;
   overflow: visible;
@@ -862,8 +862,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-toolbar-group + .ui-toolbar-group {
-  border-left: 1px solid var(--border-light);
-  margin-left: 5px;
+  border-left: 1px solid var(--border-color);
+  margin-left: 6px;
   padding-left: 8px;
 }
 
@@ -872,18 +872,19 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2px 4px;
-  min-height: 38px;
-  min-width: 44px;
-  gap: 1px;
-  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  min-height: 42px;
+  min-width: 52px;
+  gap: 3px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--text-secondary);
   background: transparent;
   border: none;
   box-sizing: border-box;
   font-size: 11px;
+/* ... */
   line-height: 1;
   text-align: center;
   white-space: nowrap;
@@ -901,19 +902,16 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-toolbar-btn.active {
-  background-color: var(--primary);
-  color: #fff;
+  background-color: var(--accent-subtle);
+  color: var(--accent);
   font-weight: 600;
-  border-color: var(--primary);
-  box-shadow: var(--shadow-sm);
+  border-color: transparent;
+  box-shadow: none;
 }
 
-.ui-toolbar-btn.active svg {
-  color: #fff;
-}
-
+.ui-toolbar-btn.active svg,
 .ui-toolbar-btn.active .ui-toolbar-btn-label {
-  color: #fff;
+  color: var(--accent);
 }
 
 
@@ -943,7 +941,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   justify-content: center;
   min-height: 14px;
   max-width: 100%;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   font-weight: 500;
   white-space: nowrap;
@@ -954,15 +952,15 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-toolbar-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
-  min-width: 190px;
-  padding: 6px;
+  min-width: 200px;
+  padding: 8px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-light);
   background: var(--surface-glass);
-  box-shadow: none;
-  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(24px);
   z-index: 3000;
 }
 
@@ -1659,12 +1657,12 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-sidebar-header {
-  min-height: 42px;
+  min-height: 48px;
   padding: 0 16px;
   background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-color);
   cursor: default;
-  font-weight: 500;
+  font-weight: 600;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1708,16 +1706,16 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   transform: translateX(-50%);
   background: var(--surface-glass);
   color: var(--text-primary);
-  padding: 6px 16px;
-  border-radius: var(--radius-lg);
-  box-shadow: none;
+  padding: 8px 20px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
   z-index: 10000;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  border: 1px solid color-mix(in srgb, var(--border-light) 72%, var(--accent) 28%);
-  backdrop-filter: blur(16px);
+  gap: 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  backdrop-filter: blur(24px);
 }
 
 .ui-toast-dot {
@@ -1763,25 +1761,25 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-dropdown-menu {
   position: absolute;
   background: var(--surface-glass);
-  border: 1px solid color-mix(in srgb, var(--border-light) 72%, var(--accent) 18%);
-  border-radius: var(--radius-md);
-  box-shadow: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   z-index: 10000;
-  min-width: 160px;
-  padding: 6px;
-  backdrop-filter: blur(18px);
+  min-width: 180px;
+  padding: 8px;
+  backdrop-filter: blur(24px);
 }
 
 .ui-context-menu {
   position: fixed;
   background: var(--surface-glass);
-  border: 1px solid color-mix(in srgb, var(--border-light) 72%, var(--accent) 18%);
-  border-radius: var(--radius-md);
-  box-shadow: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   z-index: 10000;
-  min-width: 180px;
-  padding: 6px 0;
-  backdrop-filter: blur(18px);
+  min-width: 200px;
+  padding: 8px 0;
+  backdrop-filter: blur(24px);
 }
 
 .ui-context-menu-item {
