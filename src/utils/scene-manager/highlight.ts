@@ -6,6 +6,7 @@ type LocateDimmedInstance = {
     mesh: THREE.BatchedMesh;
     instanceId: number;
     originalColor: number;
+    originalVisible: boolean;
 };
 
 type SceneManagerHighlightState = {
@@ -118,14 +119,6 @@ function updateSelectionHelpers(context: SceneManagerHighlightContext, target: S
     context.highlightMesh.visible = true;
 }
 
-function hasSameLocateResultSet(currentSet: Set<string>, uuids: string[]) {
-    if (currentSet.size !== uuids.length) return false;
-    for (const uuid of uuids) {
-        if (!currentSet.has(uuid)) return false;
-    }
-    return true;
-}
-
 function expandLocateTargets(contentMap: Map<string, any[]>, ids: string[]) {
     const expanded = new Set<string>();
     const queue = [...ids];
@@ -174,21 +167,30 @@ export function applyHighlightObjects(
 export function applyClearLocateFocus(
     context: SceneManagerHighlightContext
 ): SceneHighlightResult {
-    // 同时也清除碰撞高亮，确保状态干净
     context.clearClashPairHighlight();
 
     context.locateObjectMaterialCache.forEach((material, uuid) => {
         const object = context.contentGroup.getObjectByProperty("uuid", uuid) as (THREE.Mesh & { isBatchedMesh?: boolean }) | null;
-        if (!object || (!object.isMesh && !(object as any).isBatchedMesh)) return;
-        (object as any).material = material;
+        if (!object) return;
+        if (object.isMesh || (object as any).isBatchedMesh) {
+            (object as any).material = material;
+            object.visible = true;
+        }
     });
     context.locateObjectMaterialCache.clear();
     context.locateMaterialCache.clear();
-    context.locateDimmedInstances.forEach(({ mesh, instanceId, originalColor }) => {
-        mesh.setColorAt(instanceId, new THREE.Color(originalColor));
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    
+    context.locateDimmedInstances.forEach(({ mesh, instanceId, originalColor, originalVisible }) => {
+        if ((mesh as any).isBatchedMesh) {
+            mesh.setColorAt(instanceId, new THREE.Color(originalColor));
+            if ((mesh as any).setVisibleAt) {
+                (mesh as any).setVisibleAt(instanceId, originalVisible);
+            }
+            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        }
     });
     context.locateDimmedInstances.clear();
+    
     context.state.locateResultSet.clear();
     context.state.locateFocusUuid = null;
     context.state.highlightedUuids = new Set();
@@ -210,97 +212,95 @@ export function applySetLocateResultSet(
         return applyClearLocateFocus(context);
     }
 
-    // 先清除状态但不立即渲染，后续统一渲染
     applyClearLocateFocus(context);
 
     const expandedTargets = expandLocateTargets(context.nodeMap, normalized);
     const expandedList = Array.from(expandedTargets);
-    const rootColorByExpandedId = new Map<string, THREE.Color>();
-    const colorEntries = options?.highlightColors || {};
-
-    normalized.forEach((rootId) => {
-        const colorHex = colorEntries[rootId];
-        if (!colorHex) return;
-        const rootColor = new THREE.Color(colorHex);
-        const expandedFromRoot = expandLocateTargets(context.nodeMap, [rootId]);
-        expandedFromRoot.forEach((id) => rootColorByExpandedId.set(id, rootColor));
-    });
+    const accentColor = getHighlightColor(context.settings);
+    const dimmedColor = new THREE.Color("#e0e0e0"); // 背景淡灰色
 
     context.state.locateResultSet = expandedTargets;
     context.state.locateFocusUuid = focusUuid && expandedTargets.has(focusUuid) ? focusUuid : expandedList[0];
     const focusKey = context.state.locateFocusUuid;
-    const dimmedColor = new THREE.Color("#b7bec9");
-    const accentColor = getHighlightColor(context.settings);
+
+    // --- 1. 处理所有网格对象 (Mesh & BatchedMesh) ---
+    // 先统计 BatchedMesh 中包含哪些目标
+    const meshIdToContainsTarget = new Map<string, boolean>();
+    context.optimizedMapping.forEach((mappings, uuid) => {
+        if (expandedTargets.has(uuid)) {
+            mappings.forEach(m => meshIdToContainsTarget.set(m.mesh.uuid, true));
+        }
+    });
 
     context.contentGroup.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (!mesh.isMesh || (mesh as any).isBatchedMesh || mesh.userData?.isOptimized || !mesh.material) return;
+        const mesh = child as any;
+        if (!mesh.isMesh || !mesh.material) return;
+        
+        // 备份材质
         if (!context.locateObjectMaterialCache.has(child.uuid)) {
             context.locateObjectMaterialCache.set(child.uuid, mesh.material);
         }
-        const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+        const isBatched = !!mesh.isBatchedMesh;
         const isMatched = expandedTargets.has(child.uuid);
-        const isFocus = isMatched && focusKey !== null && child.uuid === focusKey;
-        const matchedColor = rootColorByExpandedId.get(child.uuid) || accentColor;
-        
+        const containsTarget = meshIdToContainsTarget.get(mesh.uuid);
+
+        const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         const nextMaterials = sourceMaterials.map((material) => {
             if (!material) return material;
-            const cloned = material.clone() as THREE.Material & {
-                transparent?: boolean;
-                opacity?: number;
-                depthWrite?: boolean;
-                color?: THREE.Color;
-                emissive?: THREE.Color;
-                roughness?: number;
-                metalness?: number;
-            };
-            if ("transparent" in cloned) cloned.transparent = false;
-            if ("opacity" in cloned) cloned.opacity = 1;
-            if ("depthWrite" in cloned) cloned.depthWrite = true;
-            if ("color" in cloned && cloned.color) {
-                const baseColor = cloned.color.clone();
-                if (isMatched) {
-                    cloned.color.copy(baseColor.lerp(matchedColor, isFocus ? 0.94 : 0.85));
-                } else {
-                    cloned.transparent = true;
-                    cloned.opacity = 0.08; // 降低非高亮物体透明度，使其更通透
-                    cloned.depthWrite = false;
-                    cloned.color.copy(baseColor.lerp(dimmedColor, 0.95));
-                }
+            const cloned = material.clone() as any;
+            
+            if (isMatched) {
+                // 如果是命中的普通Mesh，高亮并保持不透明
+                cloned.transparent = false;
+                cloned.opacity = 1.0;
+                if (cloned.color) cloned.color.copy(accentColor);
+                if (cloned.emissive) cloned.emissive.copy(accentColor.clone().multiplyScalar(0.4));
+            } else if (isBatched && containsTarget) {
+                // 特殊处理包含目标的合并网格：让它整体半透明，但保留较高可见度
+                cloned.transparent = true;
+                cloned.opacity = 0.25; 
+                cloned.depthWrite = false;
+            } else {
+                // 纯背景：设为极高透明度
+                cloned.transparent = true;
+                cloned.opacity = 0.05; 
+                cloned.depthWrite = false;
+                if (cloned.color) cloned.color.set("#f5f5f5");
+                if (cloned.emissive) cloned.emissive.set(0x000000);
             }
-            if ("emissive" in cloned && cloned.emissive) {
-                if (isMatched) cloned.emissive.copy(matchedColor.clone().multiplyScalar(isFocus ? 0.45 : 0.18));
-                else cloned.emissive.set(0x000000);
-            }
-            if ("roughness" in cloned && !isMatched) cloned.roughness = Math.max(0.95, cloned.roughness ?? 0.95);
-            if ("metalness" in cloned && !isMatched) cloned.metalness = Math.min(0.01, cloned.metalness ?? 0.01);
-            cloned.needsUpdate = true;
             return cloned;
         });
         mesh.material = Array.isArray(mesh.material) ? nextMaterials : nextMaterials[0];
     });
 
+    // --- 2. 处理 BatchedMesh 的实例颜色和可见性 ---
     context.optimizedMapping.forEach((mappings, originalUuid) => {
         const isMatched = expandedTargets.has(originalUuid);
         const isFocus = isMatched && focusKey !== null && originalUuid === focusKey;
-        const matchedColor = rootColorByExpandedId.get(originalUuid) || accentColor;
+        
         mappings.forEach((mapping) => {
-            const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
-            context.locateDimmedInstances.set(key, {
-                mesh: mapping.mesh,
-                instanceId: mapping.instanceId,
-                originalColor: mapping.originalColor
-            });
-            const sourceColor = new THREE.Color(mapping.originalColor);
-            const tint = isFocus ? 0.94 : isMatched ? 0.82 : 0.88;
-            const targetColor = isMatched ? matchedColor : dimmedColor;
+            const batchedMesh = mapping.mesh;
+            const key = `${batchedMesh.uuid}:${mapping.instanceId}`;
             
-            // 如果是非高亮物体，在 BatchedMesh 中无法单独设置透明度，只能设置颜色趋近背景灰
-            mapping.mesh.setColorAt(mapping.instanceId, sourceColor.lerp(targetColor, tint));
-            if (mapping.mesh.instanceColor) mapping.mesh.instanceColor.needsUpdate = true;
+            context.locateDimmedInstances.set(key, {
+                mesh: batchedMesh,
+                instanceId: mapping.instanceId,
+                originalColor: mapping.originalColor,
+                originalVisible: true
+            });
+
+            if (isMatched) {
+                // 目标实例：改为醒目高亮色
+                batchedMesh.setColorAt(mapping.instanceId, isFocus ? accentColor : accentColor.clone().lerp(new THREE.Color("#ffffff"), 0.2));
+            } else {
+                // 背景实例：改为淡灰色
+                batchedMesh.setColorAt(mapping.instanceId, dimmedColor);
+            }
+            
+            if (batchedMesh.instanceColor) batchedMesh.instanceColor.needsUpdate = true;
         });
     });
 
     return applyHighlightObjects(context, context.state.locateFocusUuid ? [context.state.locateFocusUuid] : []);
 }
-
