@@ -690,6 +690,7 @@ export const ThreeViewer = ({
         clearSelection();
         setSelectedProps(null);
         sceneMgr.current?.highlightObjects([]);
+        sceneMgr.current?.invalidateRender?.({ needsCulling: true });
     };
 
     // --- Scene Initialization ---
@@ -712,7 +713,6 @@ export const ThreeViewer = ({
         });
 
         manager.onChunkProgress = handleManagerChunkProgress;
-
         manager.onMeasureUpdate = handleMeasureUpdate;
 
         manager.onStructureUpdate = () => {
@@ -722,7 +722,7 @@ export const ThreeViewer = ({
         return () => {
             manager.dispose();
         };
-    }, []); 
+    }, []);
 
     // --- Effect for Initial Files ---
     useEffect(() => {
@@ -1071,7 +1071,7 @@ export const ThreeViewer = ({
                                 setTreeRoot={setTreeRoot}
                                 selectedUuid={selectedUuid}
                                 locatedUuid={locatedUuid}
-                                onSelect={(_uuid, obj) => handleSelect(obj)}
+                                onSelect={(_uuid, obj) => handleSelect(obj, null, false, true)}
                                 onToggleVisibility={handleToggleVisibility}
                                 onDelete={(obj) => {
                                     const uuid = obj?.uuid || obj?.id;
@@ -1478,5 +1478,3 @@ export const ThreeViewer = ({
 };
 
 export default ThreeViewer;
-
-

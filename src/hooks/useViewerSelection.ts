@@ -49,7 +49,7 @@ export function useViewerSelection({
         setLocateResultUuids([]);
     }, []);
 
-    const handleSelect = useCallback(async (obj: any, _intersect?: THREE.Intersection | null, isMultiSelect = false) => {
+    const handleSelect = useCallback(async (obj: any, _intersect?: THREE.Intersection | null, isMultiSelect = false, skipHighlight = false) => {
         const sceneManager = sceneMgrRef.current;
         if (!sceneManager) return;
 
@@ -69,7 +69,9 @@ export function useViewerSelection({
             : [uuid];
 
         setSelectedUuids(nextUuids);
-        sceneManager.highlightObjects(nextUuids);
+        if (!skipHighlight) {
+            sceneManager.highlightObjects(nextUuids);
+        }
 
         const focusUuid = nextUuids[nextUuids.length - 1];
         if (!focusUuid) {
