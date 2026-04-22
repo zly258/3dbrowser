@@ -602,6 +602,24 @@ export class SceneManager {
             this.interactionShadowRestoreAt = now + this.interactionShadowRestoreDelayMs;
             this.movingPeripheralLastRefreshAt = 0;
             this.movingPeripheralCursor = 0;
+            
+            // 浮动原点 (Floating Origin): 若相机焦点远离(0,0,0)，反向平移世界以消除计算精度抖动
+            const dist = this.controls.target.length();
+            if (dist > 50000) {
+                const shift = this.controls.target.clone();
+                this.scene.position.sub(shift);
+                this.camera.position.sub(shift);
+                this.controls.target.set(0, 0, 0);
+                this.camera.updateProjectionMatrix();
+                // 灯光跟随平移
+                if (this.dirLight) this.dirLight.position.sub(shift);
+                if (this.backLight) this.backLight.position.sub(shift);
+                
+                // 更新世界包围盒记录
+                this.precomputedBounds.translate(shift.clone().negate());
+                this.sceneBounds.translate(shift.clone().negate());
+            }
+            
             this.markSceneDirty({ needsCulling: true });
         });
 
@@ -3613,6 +3631,36 @@ export class SceneManager {
         const result = applyHighlightObjects(context, uuids);
         this.syncHighlightState(context.state);
         if (result.needsRender) this.markSceneDirty();
+    }
+
+    /**
+     * 通用多构件聚焦高亮入口：
+     * - 高亮 uuids 中的所有物体（橙色），其余设为半透明灰色
+     * - 可选 fitView 将镜头飞到这批物体
+     * - 可选 highlightColors 支持按 UUID 指定不同颜色（碰撞场景 A/B 色对）
+     * - 传空数组等同于 clearLocateFocus()
+     */
+    focusHighlightObjects(
+        uuids: string[],
+        options: {
+            fitView?: boolean;
+            focusUuid?: string | null;
+            highlightColors?: Record<string, string>;
+        } = {}
+    ) {
+        const { fitView = true, focusUuid = null, highlightColors } = options;
+        const normalized = Array.from(new Set(uuids.filter(Boolean)));
+
+        if (normalized.length === 0) {
+            this.clearLocateFocus();
+            return;
+        }
+
+        this.setLocateFocusContext(normalized, focusUuid ?? normalized[0], highlightColors);
+
+        if (fitView) {
+            this.fitViewToObjects(normalized);
+        }
     }
 
     collectRenderableTargets(uuids?: string[]): RenderTarget[] {

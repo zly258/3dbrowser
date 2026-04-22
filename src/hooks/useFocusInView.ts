@@ -33,8 +33,13 @@ export function useFocusInView({
     if (normalized.length === 0) return false;
 
     const targetFocus = focusUuid && normalized.includes(focusUuid) ? focusUuid : normalized[0];
-    sceneManager.setLocateFocusContext(normalized, targetFocus, highlightColors);
-    sceneManager.fitViewToObjects(normalized);
+
+    // 统一高亮入口：高亮目标 + 背景灰化 + 飞到目标
+    sceneManager.focusHighlightObjects(normalized, {
+      fitView: true,
+      focusUuid: targetFocus,
+      highlightColors
+    });
 
     if (updateSelection) {
       setSelectedUuids(normalized);

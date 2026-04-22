@@ -101,7 +101,7 @@ export function flattenPropertyGroups(groups: PropertyGroups | null | undefined)
 
 export function filterPropertyGroups(groups: PropertyGroups, query: string): PropertyGroups {
     const normalizedQuery = normalizePropertyToken(query);
-    if (!normalizedQuery) return groups;
+    if (!normalizedQuery) return groups.filter(g => g.items.length > 0);
 
     return groups
         .map((group) => ({

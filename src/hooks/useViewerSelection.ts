@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import * as THREE from "three";
 import type { SceneManager } from "../utils/scene-manager/SceneManager";
+import { createPropertyEntries } from "../viewer/propertyIndex";
 import type { PropertyGroupInput, PropertyGroups } from "../viewer/propertyIndex";
 import { buildSelectionPropertyGroups, fetchIfcGroups, resolveSelectionTarget, type ClashSummaryRecord } from "../viewer/selectionDetails";
 
@@ -139,6 +140,110 @@ export function useViewerSelection({
         sceneMgrRef.current?.clearLocateFocus();
         sceneMgrRef.current?.highlightObjects(selectedUuids);
     }, [resetLocateState, sceneMgrRef, selectedUuids]);
+
+    // 延迟懒加载合并大数量构件属性（防抖 + 切片处理）
+    useEffect(() => {
+        const sceneManager = sceneMgrRef.current;
+        if (!sceneManager || selectedUuids.length <= 1) return;
+
+        let cancelled = false;
+
+        const computeSummaryAsync = async () => {
+            // 先在主线程收集边界和几何映射
+            const bounds = new THREE.Box3();
+            let totalArea = 0;
+            let totalVolume = 0;
+            const modelNames = new Set<string>();
+            const typeCounts = new Map<string, number>();
+            const ids = new Set(selectedUuids);
+
+            // 一次性遍历获取目标物体，避免 getObjectByProperty 的 O(K*M) 性能陷阱
+            const objectMap = new Map<string, THREE.Object3D>();
+            sceneManager.contentGroup.traverse((child) => {
+                const uuid = child.uuid;
+                const userDataId = child.userData?.id;
+                if (ids.has(uuid) || (userDataId && ids.has(userDataId))) {
+                    objectMap.set(uuid, child);
+                    if (userDataId) objectMap.set(userDataId, child);
+                    bounds.expandByObject(child);
+                }
+            });
+
+            // 异步分块处理类型聚合与几何特征，防止计算堵塞渲染
+            const chunkSize = 2000;
+            let lastYieldTime = performance.now();
+
+            for (let i = 0; i < selectedUuids.length; i += chunkSize) {
+                if (cancelled) return;
+
+                const chunk = selectedUuids.slice(i, i + chunkSize);
+                for (const uuid of chunk) {
+                    const object = objectMap.get(uuid);
+                    const nodes = sceneManager.getStructureNodes(uuid);
+                    const node = nodes && nodes.length > 0 ? nodes[0] : null;
+
+                    const type = String(object?.type || node?.type || "Object");
+                    typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+
+                    const rootName = object?.userData?.rootName || object?.userData?.modelName;
+                    if (rootName) modelNames.add(String(rootName));
+
+                    const geometryData = sceneManager.getObjectGeometryData(uuid);
+                    totalArea += geometryData.area;
+                    totalVolume += geometryData.volume;
+                }
+
+                if (performance.now() - lastYieldTime > 16) {
+                    await new Promise(r => setTimeout(r, 0));
+                    lastYieldTime = performance.now();
+                }
+            }
+
+            if (cancelled) return;
+
+            const formatTypeDistribution = (counts: Map<string, number>) =>
+                Array.from(counts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 4)
+                    .map(([tCount, c]) => `${tCount} x${c}`)
+                    .join(", ");
+
+            const size = bounds.isEmpty() ? null : bounds.getSize(new THREE.Vector3());
+            const metrics: { key: string, value: string }[] = [
+                { key: t("selected_count"), value: String(selectedUuids.length) },
+                { key: t("summary_models"), value: String(modelNames.size || 1) },
+                { key: t("summary_types"), value: formatTypeDistribution(typeCounts) || "-" }
+            ];
+
+            if (size) {
+                metrics.push({
+                    key: t("summary_bounds"),
+                    value: `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`
+                });
+            }
+            if (totalArea > 0) {
+                metrics.push({ key: t("prop_area"), value: totalArea.toFixed(3) });
+            }
+            if (totalVolume > 0) {
+                metrics.push({ key: t("prop_volume"), value: totalVolume.toFixed(3) });
+            }
+
+            const groupName = `${selectedUuids.length} ${t("selected_count")}`;
+            setSelectedProps([
+                {
+                    name: groupName,
+                    items: createPropertyEntries(groupName, metrics.map(m => ({ key: m.key, value: m.value })))
+                }
+            ]);
+        };
+
+        const timerId = window.setTimeout(computeSummaryAsync, 200);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timerId);
+        };
+    }, [selectedUuids, sceneMgrRef, t, setSelectedProps]);
 
     return {
         locatedUuid,
