@@ -15,14 +15,14 @@ declare const __APP_VERSION__: string;
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, theme }) => {
     if (!isOpen) return null;
 
-    const [showLicenseDetails, setShowLicenseDetails] = useState(true);
+    const [showLicenseDetails, setShowLicenseDetails] = useState(false);
 
     return (
         <FloatingPanel
             title={t("about_title")}
             onClose={onClose}
             width={400}
-            height={520}
+            height={showLicenseDetails ? 500 : 350}
             modal={true}
             movable={false}
             theme={theme}

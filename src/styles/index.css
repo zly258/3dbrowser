@@ -1,5 +1,5 @@
-/* ==================== 深色模式 ==================== */
-/* ==================== 全局主题 (浅色) ==================== */
+/* ==================== 娣辫壊妯″紡 ==================== */
+/* ==================== 鍏ㄥ眬涓婚 (娴呰壊) ==================== */
 :root {
   /* Material Design 3 Light Theme Colors (Light Blue Variant) */
   --surface: #F8FAFF;
@@ -38,9 +38,9 @@
   --error: #B3261E;
   --info: var(--primary);
 
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.12);
   --overlay-scrim: rgba(224, 232, 242, 0.7);
 
   /* Scrollbar */
@@ -93,7 +93,7 @@
   --overlay-panel: var(--surface-overlay);
 }
 
-/* ==================== 基础样式重置 ==================== */
+/* ==================== 鍩虹鏍峰紡閲嶇疆 ==================== */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -117,12 +117,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* 全局字体统一 */
+/* 鍏ㄥ眬瀛椾綋缁熶竴 */
 * {
   font-family: inherit;
 }
 
-/* ==================== 滚动条样式 ==================== */
+/* ==================== 婊氬姩鏉℃牱寮?==================== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -146,7 +146,7 @@ body {
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
-/* ==================== 浮动面板 ==================== */
+/* ==================== 娴姩闈㈡澘 ==================== */
 .ui-panel {
   position: absolute;
   left: 0;
@@ -162,8 +162,8 @@ body {
   overflow: hidden;
   color: var(--text-primary);
   box-shadow: var(--shadow-md);
-  backdrop-filter: blur(20px);
-  /* GPU加速 */
+
+  /* GPU鍔犻€?*/
   transform: translate(0, 0);
   backface-visibility: hidden;
   transition: box-shadow 200ms ease, border-color 200ms ease;
@@ -287,7 +287,7 @@ body {
   cursor: nesw-resize;
 }
 
-/* ==================== 按钮基础 ==================== */
+/* ==================== 鎸夐挳鍩虹 ==================== */
 .ui-btn {
   display: inline-flex;
   align-items: center;
@@ -337,7 +337,7 @@ body {
   outline-offset: 1px;
 }
 
-/* 按钮变体 */
+/* 鎸夐挳鍙樹綋 */
 .ui-btn-default {
   background: color-mix(in srgb, var(--bg-panel) 86%, var(--bg-soft-strong));
   color: var(--text-primary);
@@ -407,7 +407,7 @@ body {
   background-color: var(--bg-active);
 }
 
-/* 图标按钮 */
+/* 鍥炬爣鎸夐挳 */
 .ui-btn-icon {
   width: 28px;
   height: 28px;
@@ -424,7 +424,7 @@ body {
   min-height: var(--control-h-sm);
 }
 
-/* 按钮激活状态 */
+/* 鎸夐挳婵€娲荤姸鎬?*/
 .ui-btn.active {
   background: var(--accent);
   color: white;
@@ -442,7 +442,7 @@ body {
   border: 1px solid var(--border-light);
 }
 
-/* ==================== 输入框 ==================== */
+/* ==================== 杈撳叆妗?==================== */
 .ui-input {
   width: 100%;
   padding: 4px 12px;
@@ -562,7 +562,7 @@ body {
   font-weight: 500;
 }
 
-/* 数字输入框特殊样式 */
+/* 鏁板瓧杈撳叆妗嗙壒娈婃牱寮?*/
 input[type="number"].ui-input {
   text-align: right;
   appearance: textfield;
@@ -575,7 +575,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   opacity: 1;
 }
 
-/* ==================== 分段选择器 ==================== */
+/* ==================== 鍒嗘閫夋嫨鍣?==================== */
 .ui-segmented {
   display: inline-flex;
   align-items: center;
@@ -624,7 +624,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   cursor: not-allowed;
 }
 
-/* ==================== 开关 ==================== */
+/* ==================== 寮€鍏?==================== */
 .ui-switch {
   position: relative;
   display: inline-flex;
@@ -668,7 +668,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   transform: translateX(22px);
 }
 
-/* ==================== 滑块 ==================== */
+/* ==================== 婊戝潡 ==================== */
 .ui-slider {
   position: relative;
   width: 100%;
@@ -739,7 +739,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   pointer-events: none;
 }
 
-/* ==================== 数据面板 ==================== */
+/* ==================== 鏁版嵁闈㈡澘 ==================== */
 .ui-data-panel {
   font-size: var(--font-size-secondary);
   background-color: var(--bg-primary);
@@ -778,7 +778,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: var(--font-size-secondary);
 }
 
-/* ==================== 列表项 ==================== */
+/* ==================== 鍒楄〃椤?==================== */
 .ui-list-item {
   display: flex;
   align-items: center;
@@ -804,7 +804,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-weight: 500;
 }
 
-/* ==================== 分组标题 ==================== */
+/* ==================== 鍒嗙粍鏍囬 ==================== */
 .ui-group-title {
   padding: 6px 12px 4px;
   font-size: 11px;
@@ -816,7 +816,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background-color: var(--bg-header);
 }
 
-/* ==================== 分割线 ==================== */
+/* ==================== 鍒嗗壊绾?==================== */
 .ui-divider {
   width: 100%;
   height: 1px;
@@ -832,18 +832,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-shrink: 0;
 }
 
-/* ==================== 工具栏 ==================== */
+/* ==================== 宸ュ叿鏍?==================== */
 .ui-toolbar {
   display: flex;
   align-items: center;
-  min-height: 52px;
-  padding: 0 16px;
-  gap: 8px;
+  min-height: 46px;
+  padding: 0 12px;
+  gap: 6px;
   background: var(--surface);
   border-bottom: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   box-sizing: border-box;
-  backdrop-filter: blur(24px);
+
   position: relative;
   z-index: 1200;
   overflow: visible;
@@ -872,10 +872,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 8px;
-  min-height: 42px;
-  min-width: 52px;
-  gap: 3px;
+  padding: 4px 6px;
+  min-height: 38px;
+  min-width: 46px;
+  gap: 2px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -922,8 +922,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-toolbar-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
@@ -931,8 +931,8 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .ui-toolbar-btn-label {
@@ -960,7 +960,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border: 1px solid var(--border-light);
   background: var(--surface-glass);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(24px);
+
   z-index: 3000;
 }
 
@@ -1002,7 +1002,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   margin: 6px 2px;
 }
 
-/* ==================== 状态栏 ==================== */
+/* ==================== 鐘舵€佹爮 ==================== */
 .ui-statusbar {
   display: flex;
   align-items: center;
@@ -1057,7 +1057,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: var(--font-size-label);
 }
 
-/* ==================== 模态框 ==================== */
+/* ==================== 妯℃€佹 ==================== */
 .ui-modal-overlay {
   position: fixed;
   inset: 0;
@@ -1133,7 +1133,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border-top: 1px solid var(--border-color);
 }
 
-/* ==================== 工具提示 ==================== */
+/* ==================== 宸ュ叿鎻愮ず ==================== */
 .ui-tooltip-wrapper {
   position: relative;
   display: inline-flex;
@@ -1202,7 +1202,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   transform: translateY(-50%) translateX(0) scale(1);
 }
 
-/* ==================== Tag 标签 ==================== */
+/* ==================== Tag 鏍囩 ==================== */
 .ui-tag {
   display: inline-flex;
   align-items: center;
@@ -1253,7 +1253,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-primary);
 }
 
-/* ==================== Badge 徽标 ==================== */
+/* ==================== Badge 寰芥爣 ==================== */
 .ui-badge-wrapper {
   position: relative;
   display: inline-flex;
@@ -1310,7 +1310,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .ui-badge-status-processing { background: var(--accent); }
 .ui-badge-status-warning { background: var(--warning); }
 
-/* ==================== Flex 工具 ==================== */
+/* ==================== Flex 宸ュ叿 ==================== */
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
 .flex-1 { flex: 1; }
@@ -1328,7 +1328,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
-/* ==================== 文本工具 ==================== */
+/* ==================== 鏂囨湰宸ュ叿 ==================== */
 .text-xs { font-size: 11px; }
 .text-sm { font-size: var(--font-size-secondary); }
 .text-base { font-size: 13px; }
@@ -1348,7 +1348,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   white-space: nowrap;
 }
 
-/* 文本颜色 */
+/* 鏂囨湰棰滆壊 */
 .text-primary { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
 .text-muted { color: var(--text-muted); }
@@ -1358,7 +1358,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .text-warning { color: var(--warning); }
 .text-error { color: var(--error); }
 
-/* ==================== 间距工具 ==================== */
+/* ==================== 闂磋窛宸ュ叿 ==================== */
 .p-0 { padding: 0; }
 .p-1 { padding: 4px; }
 .p-2 { padding: 8px; }
@@ -1387,7 +1387,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .mr-1 { margin-right: 4px; }
 .mr-2 { margin-right: 8px; }
 
-/* ==================== 尺寸工具 ==================== */
+/* ==================== 灏哄宸ュ叿 ==================== */
 .w-full { width: 100%; }
 .h-full { height: 100%; }
 .min-h-0 { min-height: 0; }
@@ -1395,14 +1395,14 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .max-h-full { max-height: 100%; }
 .max-h-screen { max-height: 100vh; }
 
-/* ==================== 圆角 ==================== */
+/* ==================== 鍦嗚 ==================== */
 .rounded-none { border-radius: 0; }
 .rounded-sm { border-radius: var(--radius-sm); }
 .rounded-md { border-radius: var(--radius-md); }
 .rounded-lg { border-radius: var(--radius-lg); }
 .rounded-full { border-radius: 50%; }
 
-/* ==================== 边框 ==================== */
+/* ==================== 杈规 ==================== */
 .border { border: 1px solid var(--border-light); }
 .border-b { border-bottom: 1px solid var(--border-light); }
 .border-t { border-top: 1px solid var(--border-light); }
@@ -1411,7 +1411,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .border-l-2 { border-left: 2px solid var(--accent); }
 .border-transparent { border-color: transparent; }
 
-/* ==================== 定位 ==================== */
+/* ==================== 瀹氫綅 ==================== */
 .relative { position: relative; }
 .absolute { position: absolute; }
 .fixed { position: fixed; }
@@ -1421,23 +1421,23 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .left-0 { left: 0; }
 .right-0 { right: 0; }
 
-/* ==================== 溢出 ==================== */
+/* ==================== 婧㈠嚭 ==================== */
 .overflow-hidden { overflow: hidden; }
 .overflow-auto { overflow: auto; }
 .overflow-y-auto { overflow-y: auto; }
 .overflow-x-auto { overflow-x: auto; }
 
-/* ==================== 透明度 ==================== */
+/* ==================== 閫忔槑搴?==================== */
 .opacity-0 { opacity: 0; }
 .opacity-50 { opacity: 0.5; }
 .opacity-75 { opacity: 0.75; }
 .opacity-100 { opacity: 1; }
 
-/* ==================== 指针事件 ==================== */
+/* ==================== 鎸囬拡浜嬩欢 ==================== */
 .pointer-events-none { pointer-events: none; }
 .pointer-events-auto { pointer-events: auto; }
 
-/* ==================== 光标 ==================== */
+/* ==================== 鍏夋爣 ==================== */
 .cursor-pointer { cursor: pointer; }
 .cursor-grab { cursor: grab; }
 .cursor-grabbing { cursor: grabbing; }
@@ -1446,18 +1446,18 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .cursor-move { cursor: move; }
 .cursor-se-resize { cursor: se-resize; }
 
-/* ==================== 用户选择 ==================== */
+/* ==================== 鐢ㄦ埛閫夋嫨 ==================== */
 .select-none { user-select: none; }
 .select-text { user-select: text; }
 .select-all { user-select: all; }
 
-/* ==================== 其他 ==================== */
+/* ==================== 鍏朵粬 ==================== */
 .whitespace-nowrap { white-space: nowrap; }
 .whitespace-pre { white-space: pre; }
 .break-word { word-wrap: break-word; }
 .overflow-ellipsis { text-overflow: ellipsis; }
 
-/* ==================== 动画 ==================== */
+/* ==================== 鍔ㄧ敾 ==================== */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1485,7 +1485,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   animation: slideInDown 200ms ease-out;
 }
 
-/* ==================== 背景 ==================== */
+/* ==================== 鑳屾櫙 ==================== */
 .bg-primary { background-color: var(--bg-primary); }
 .bg-panel { background-color: var(--bg-panel); }
 .bg-header { background-color: var(--bg-header); }
@@ -1495,7 +1495,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .bg-active { background-color: var(--bg-active); }
 .bg-selected { background-color: var(--bg-selected); }
 
-/* ==================== 层级 ==================== */
+/* ==================== 灞傜骇 ==================== */
 .z-0 { z-index: 0; }
 .z-10 { z-index: 10; }
 .z-20 { z-index: 20; }
@@ -1505,27 +1505,27 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .z-500 { z-index: 500; }
 .z-1000 { z-index: 1000; }
 
-/* ==================== 禁用状态 ==================== */
+/* ==================== 绂佺敤鐘舵€?==================== */
 .disabled {
   opacity: 0.5;
   pointer-events: none;
   cursor: not-allowed;
 }
 
-/* ==================== 选择状态 ==================== */
+/* ==================== 閫夋嫨鐘舵€?==================== */
 .selected {
   background-color: var(--bg-selected);
   color: var(--text-primary);
   font-weight: 500;
 }
 
-/* ==================== 焦点环 ==================== */
+/* ==================== 鐒︾偣鐜?==================== */
 .focus-ring:focus {
   outline: 2px solid var(--accent-focus);
   outline-offset: 2px;
 }
 
-/* ==================== 单行布局容器 ==================== */
+/* ==================== 鍗曡甯冨眬瀹瑰櫒 ==================== */
 .row-layout {
   display: flex;
   align-items: center;
@@ -1554,13 +1554,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   flex-shrink: 0;
 }
 
-/* ==================== 字号等级 ==================== */
-/* 固定使用中等字号 */
+/* ==================== 瀛楀彿绛夌骇 ==================== */
+/* 鍥哄畾浣跨敤涓瓑瀛楀彿 */
 :root {
   --font-size-base: 13px;
 }
 
-/* 全站字号应用 */
+/* 鍏ㄧ珯瀛楀彿搴旂敤 */
 .ui-container {
   font-size: var(--font-size-base);
 }
@@ -1624,7 +1624,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: block;
 }
 
-/* 具体组件的字号 */
+/* 鍏蜂綋缁勪欢鐨勫瓧鍙?*/
 .ui-panel,
 .ui-modal,
 .ui-toolbar,
@@ -1636,7 +1636,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: var(--font-size-base);
 }
 
-/* 标题和标签的字号 */
+/* 鏍囬鍜屾爣绛剧殑瀛楀彿 */
 .ui-panel-title,
 .ui-modal-title,
 .ui-group-title {
@@ -1644,9 +1644,9 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-weight: 500;
 }
 
-/* ==================== 风格新增组件 ==================== */
+/* ==================== 椋庢牸鏂板缁勪欢 ==================== */
 
-/* 侧边栏 */
+/* 渚ц竟鏍?*/
 .ui-sidebar {
   display: flex;
   flex-direction: column;
@@ -1698,7 +1698,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   z-index: 20;
 }
 
-/* Toast 通知 */
+/* Toast 閫氱煡 */
 .ui-toast {
   position: fixed;
   top: 40px;
@@ -1715,7 +1715,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   gap: 12px;
   font-size: 14px;
   border: 1px solid var(--border-color);
-  backdrop-filter: blur(24px);
+
 }
 
 .ui-toast-dot {
@@ -1757,7 +1757,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   opacity: 1;
 }
 
-/* 右键菜单与下拉菜单 */
+/* 鍙抽敭鑿滃崟涓庝笅鎷夎彍鍗?*/
 .ui-dropdown-menu {
   position: absolute;
   background: var(--surface-glass);
@@ -1767,7 +1767,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   z-index: 10000;
   min-width: 180px;
   padding: 8px;
-  backdrop-filter: blur(24px);
+
 }
 
 .ui-context-menu {
@@ -1779,7 +1779,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   z-index: 10000;
   min-width: 200px;
   padding: 8px 0;
-  backdrop-filter: blur(24px);
+
 }
 
 .ui-context-menu-item {
@@ -1816,7 +1816,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   margin: 4px 0;
 }
 
-/* 进度条（内联） */
+/* 杩涘害鏉★紙鍐呰仈锛?*/
 .ui-progress-bar {
   height: 8px;
   background-color: var(--bg-hover);
@@ -1839,7 +1839,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border-radius: 4px;
 }
 
-/* 状态栏扩展 */
+/* 鐘舵€佹爮鎵╁睍 */
 .ui-statusbar-btn {
   cursor: pointer;
   padding: 4px 6px;
@@ -1912,7 +1912,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   height: 12px;
 }
 
-/* 链接 ：下划线区分，不用彩色 */
+/* 閾炬帴 锛氫笅鍒掔嚎鍖哄垎锛屼笉鐢ㄥ僵鑹?*/
 .ui-link {
   color: var(--text-primary);
   text-decoration: underline;
@@ -1924,7 +1924,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-secondary);
 }
 
-/* 统计区域 */
+/* 缁熻鍖哄煙 */
 .ui-stats-group {
   display: flex;
   gap: 8px;
@@ -1942,7 +1942,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: 11px;
 }
 
-/* 操作提示区域 */
+/* 鎿嶄綔鎻愮ず鍖哄煙 */
 .ui-tips {
   display: flex;
   gap: 6px;
@@ -1951,7 +1951,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-size: 11px;
 }
 
-/* 分片加载 */
+/* 鍒嗙墖鍔犺浇 */
 .ui-chunk-progress {
   display: flex;
   align-items: center;
@@ -1962,7 +1962,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 搜索栏 */
+/* 鎼滅储鏍?*/
 .ui-search-bar {
   padding: 12px;
   border-bottom: 1px solid var(--border-light);
@@ -2344,7 +2344,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   font-variant-numeric: tabular-nums;
 }
 
-/* ==================== 数字输入框优化 ==================== */
+/* ==================== 鏁板瓧杈撳叆妗嗕紭鍖?==================== */
 .ui-input-number {
   display: inline-flex;
   align-items: center;
@@ -2525,7 +2525,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   align-items: center;
   justify-content: center;
   z-index: 10;
-  backdrop-filter: blur(8px);
+
 }
 
 .ui-toolpanel-overlay-card {
@@ -2535,7 +2535,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border-radius: var(--radius-lg);
   padding: 14px;
   box-shadow: none;
-  backdrop-filter: blur(18px);
+
 }
 
 .ui-toolpanel-overlay-title {
@@ -2624,7 +2624,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: var(--bg-panel);
 }
 
-/* 在 Chrome/Safari/Edge 中隐藏数字输入框原生微调按钮 */
+/* 鍦?Chrome/Safari/Edge 涓殣钘忔暟瀛楄緭鍏ユ鍘熺敓寰皟鎸夐挳 */
 .ui-input-number .ui-input::-webkit-outer-spin-button,
 .ui-input-number .ui-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -2883,7 +2883,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   white-space: nowrap;
 }
 
-/* 数据行 - 紧凑型 */
+/* 鏁版嵁琛?- 绱у噾鍨?*/
 .ui-prop-row {
   display: flex;
   padding: 4px 12px 4px 20px;
@@ -2910,7 +2910,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   cursor: text;
 }
 
-/* 属性分组标题 */
+/* 灞炴€у垎缁勬爣棰?*/
 .ui-prop-group {
   background-color: var(--bg-header);
   padding: 8px 12px;
@@ -2955,7 +2955,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   color: var(--text-primary);
 }
 
-/* 树节点  */
+/* 鏍戣妭鐐? */
 .ui-tree-node {
   display: flex;
   align-items: center;
@@ -3362,7 +3362,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: var(--bg-hover);
 }
 
-/* 错误模态框 */
+/* 閿欒妯℃€佹 */
 .ui-error-overlay {
   position: absolute;
   top: 0;
@@ -3439,7 +3439,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   padding: 8px 24px;
 }
 
-/* 加载遮罩 */
+/* 鍔犺浇閬僵 */
 .ui-loading-overlay {
   position: absolute;
   top: 0;
@@ -3466,7 +3466,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   border: 1px solid color-mix(in srgb, var(--border-light) 76%, var(--accent) 24%);
   box-shadow: none;
   color: var(--text-primary);
-  backdrop-filter: blur(18px);
+
 }
 
 .ui-modal-scrim {
@@ -3474,7 +3474,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   inset: 0;
   background: var(--overlay-scrim);
   z-index: 1999;
-  backdrop-filter: blur(10px);
+
 }
 
 .ui-panel-modal {
@@ -3647,7 +3647,7 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 }
 
 .ui-loading-overlay {
-  backdrop-filter: blur(6px);
+
 }
 
 .ui-loading-box {

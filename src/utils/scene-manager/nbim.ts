@@ -4,10 +4,10 @@ import type { StructureTreeNode } from "./types";
 
 const INVALID_DISPLAY_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
 
-export function sanitizeDisplayLabel(...candidates: Array<string | null | undefined>) {
+export function sanitizeDisplayLabel(...candidates: Array<string | null | undefined | number>) {
     for (const candidate of candidates) {
-        if (typeof candidate !== "string") continue;
-        const trimmed = candidate.trim();
+        if (candidate === null || candidate === undefined) continue;
+        const trimmed = String(candidate).trim();
         if (INVALID_DISPLAY_LABELS.has(trimmed.toLowerCase())) continue;
         return trimmed;
     }
