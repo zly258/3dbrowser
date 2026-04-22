@@ -32,10 +32,10 @@ interface IfcMetadata {
 
 const INVALID_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
 
-const sanitizeTreeLabel = (...candidates: Array<string | null | undefined>) => {
+const sanitizeTreeLabel = (...candidates: Array<string | null | undefined | number>) => {
     for (const candidate of candidates) {
-        if (typeof candidate !== "string") continue;
-        const trimmed = candidate.trim();
+        if (candidate === null || candidate === undefined) continue;
+        const trimmed = String(candidate).trim();
         if (INVALID_LABELS.has(trimmed.toLowerCase())) continue;
         return trimmed;
     }
@@ -172,6 +172,97 @@ const getNodeSearchText = (node: TreeNode | any) => {
         .join(" ")
         .toLowerCase();
 };
+
+const TreeRowItem = React.memo(({ 
+    node, 
+    isActive, 
+    isMatched, 
+    isLocated, 
+    searchQuery, 
+    clashBadge, 
+    onSelect, 
+    onToggleNode, 
+    onToggleVisibility, 
+    onContextMenu 
+}: any) => {
+    return (
+        <div
+            className={`ui-tree-node ${isActive ? "selected" : ""} ${isMatched ? "matched" : ""} ${isLocated ? "located" : ""}`}
+            style={{ paddingLeft: 8 + node.depth * 16 }}
+            onClick={() => onSelect(node)}
+            onDoubleClick={(e) => {
+                if (node.hasChildren) {
+                    e.stopPropagation();
+                    onToggleNode(node.uuid);
+                }
+            }}
+            onContextMenu={(e) => onContextMenu(e, node)}
+        >
+            <div
+                className="ui-tree-expander"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleNode(node.uuid);
+                }}
+            >
+                {node.hasChildren ? (
+                    node.expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />
+                ) : null}
+            </div>
+
+            <Checkbox
+                checked={node.visible}
+                onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
+                style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
+            />
+
+            <div className="ui-tree-label">
+                {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                    <span>
+                        {node.name.split(new RegExp(`(${searchQuery})`, "gi")).map((part: string, index: number) =>
+                            part.toLowerCase() === searchQuery.toLowerCase() ? (
+                                <span key={index} className="ui-search-hit">
+                                    {part}
+                                </span>
+                            ) : (
+                                part
+                            )
+                        )}
+                    </span>
+                ) : (
+                    node.name
+                )}
+                {clashBadge && (
+                    <span
+                        style={{
+                            marginLeft: 6,
+                            padding: "0 6px",
+                            borderRadius: "var(--radius-xl)",
+                            border: `1px solid ${clashBadge.color}`,
+                            color: clashBadge.color,
+                            fontSize: "var(--font-size-label)",
+                            lineHeight: "16px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            verticalAlign: "middle"
+                        }}
+                    >
+                        {clashBadge.label}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}, (prevProps, nextProps) => {
+    return prevProps.isActive === nextProps.isActive &&
+           prevProps.isMatched === nextProps.isMatched &&
+           prevProps.isLocated === nextProps.isLocated &&
+           prevProps.node === nextProps.node &&
+           prevProps.node.visible === nextProps.node.visible &&
+           prevProps.node.expanded === nextProps.node.expanded &&
+           prevProps.searchQuery === nextProps.searchQuery &&
+           prevProps.clashBadge?.label === nextProps.clashBadge?.label;
+});
 
 interface SceneTreeProps {
     t: (key: string) => string;
@@ -468,85 +559,27 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 <div style={{ height: totalHeight, position: "relative", minWidth: "max-content" }}>
                     <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0, minWidth: "max-content" }}>
                         {visibleItems.map((node) => (
-                            <div
+                            <TreeRowItem
                                 key={node.uuid}
-                                className={`ui-tree-node ${node.uuid === activeTreeUuid ? "selected" : ""} ${locateResultUuids.includes(node.uuid) ? "matched" : ""} ${node.uuid === locatedUuid ? "located" : ""}`}
-                                style={{ paddingLeft: 8 + node.depth * 16 }}
-                                onClick={() => {
+                                node={node}
+                                isActive={node.uuid === activeTreeUuid}
+                                isMatched={locateResultUuids.includes(node.uuid)}
+                                isLocated={node.uuid === locatedUuid}
+                                searchQuery={searchQuery}
+                                clashBadge={getClashBadge(node.uuid)}
+                                onSelect={(n: any) => {
                                     selectionSourceRef.current = "tree";
-                                    setActiveTreeUuid(node.uuid);
-                                    onSelect(node.uuid, node.object);
+                                    setActiveTreeUuid(n.uuid);
+                                    onSelect(n.uuid, n.object);
                                 }}
-                                onDoubleClick={(e) => {
-                                    if (node.hasChildren) {
-                                        e.stopPropagation();
-                                        toggleNode(node.uuid);
-                                    }
-                                }}
-                                onContextMenu={(e) => {
+                                onToggleNode={toggleNode}
+                                onToggleVisibility={onToggleVisibility}
+                                onContextMenu={(e: any, n: any) => {
                                     e.preventDefault();
-                                    setContextMenu({ x: e.clientX, y: e.clientY, node });
+                                    setContextMenu({ x: e.clientX, y: e.clientY, node: n });
                                 }}
-                            >
-                                <div
-                                    className="ui-tree-expander"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleNode(node.uuid);
-                                    }}
-                                >
-                                    {node.hasChildren ? (
-                                        node.expanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />
-                                    ) : null}
-                                </div>
-
-                                <Checkbox
-                                    checked={node.visible}
-                                    onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
-                                    style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
-                                />
-
-                                 <div className="ui-tree-label">
-                                     {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-                                         <span>
-                                            {node.name.split(new RegExp(`(${searchQuery})`, "gi")).map((part, index) =>
-                                                part.toLowerCase() === searchQuery.toLowerCase() ? (
-                                                    <span key={index} className="ui-search-hit">
-                                                        {part}
-                                                    </span>
-                                                ) : (
-                                                    part
-                                                )
-                                            )}
-                                        </span>
-                                     ) : (
-                                         node.name
-                                     )}
-                                     {(() => {
-                                         const badge = getClashBadge(node.uuid);
-                                         if (!badge) return null;
-                                         return (
-                                             <span
-                                                 style={{
-                                                     marginLeft: 6,
-                                                     padding: "0 6px",
-                                                     borderRadius: "var(--radius-xl)",
-                                                     border: `1px solid ${badge.color}`,
-                                                     color: badge.color,
-                                                     fontSize: "var(--font-size-label)",
-                                                     lineHeight: "16px",
-                                                     display: "inline-flex",
-                                                     alignItems: "center",
-                                                     verticalAlign: "middle"
-                                                 }}
-                                             >
-                                                 {badge.label}
-                                             </span>
-                                         );
-                                     })()}
-                                 </div>
-                             </div>
-                         ))}
+                            />
+                        ))}
                     </div>
                 </div>
             </div>

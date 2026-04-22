@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { IconChevronRight, IconChevronDown, IconCopy } from "../theme/Icons";
 import { filterPropertyGroups, serializePropertyGroups, type PropertyGroups } from "../viewer/propertyIndex";
 
@@ -7,6 +7,56 @@ interface PropertiesPanelProps {
     selectedProps: PropertyGroups | null;
     theme: any;
 }
+
+const PropertyRow = React.memo(({ item, handleCopy, t }: any) => (
+    <div className="ui-prop-row">
+        <div
+            className="ui-prop-key"
+            title={`${item.path} (${t("click_to_copy")})`}
+            onClick={() => handleCopy(item.key)}
+        >
+            {item.key}
+        </div>
+        <div
+            className="ui-prop-value"
+            title={`${item.value}\n${item.path}`}
+            onClick={() => handleCopy(item.value)}
+        >
+            {item.value}
+        </div>
+    </div>
+));
+
+const PropertyGroup = React.memo(({ group, isCollapsed, toggleGroup, handleCopy, t }: any) => (
+    <div>
+        <div className={`ui-prop-group${isCollapsed ? ' collapsed' : ''}`} onClick={() => toggleGroup(group.name)}>
+            <span>{group.name}</span>
+            <div className="ui-prop-group-actions">
+                <button
+                    className="ui-prop-copy"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy([`[${group.name}]`, ...group.items.map((item: any) => `${item.key}: ${item.value}`)].join("\n"));
+                    }}
+                    title={t("copy_group_props")}
+                >
+                    <IconCopy size={12} />
+                </button>
+                <span className="ui-prop-group-chevron">
+                    {isCollapsed ? (
+                        <IconChevronRight width={14} height={14} />
+                    ) : (
+                        <IconChevronDown width={14} height={14} />
+                    )}
+                </span>
+            </div>
+        </div>
+        {!isCollapsed &&
+            group.items.map((item: any) => (
+                <PropertyRow key={item.id} item={item} handleCopy={handleCopy} t={t} />
+            ))}
+    </div>
+));
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps }) => {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -91,7 +141,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
                     <div className="ui-properties-subbar">
                         <div className="ui-properties-meta">
                             {(searchQuery ? t("search_results") : t("prop_groups")) + `: ${groupCount}`}
-                            <span> · </span>
+                            <span> 路 </span>
                             {t("prop_items") + `: ${itemCount}`}
                         </div>
 
@@ -170,3 +220,4 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
         </div>
     );
 };
+

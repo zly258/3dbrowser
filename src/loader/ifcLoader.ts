@@ -83,11 +83,11 @@ function uniqueStrings(values: Array<string | undefined | null>) {
     );
 }
 
-function sanitizeIfcLabel(...candidates: Array<string | undefined | null>) {
+function sanitizeIfcLabel(...candidates: Array<string | undefined | null | number>) {
     const invalidValues = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
     for (const candidate of candidates) {
-        if (typeof candidate !== "string") continue;
-        const trimmed = candidate.trim();
+        if (candidate === null || candidate === undefined) continue;
+        const trimmed = String(candidate).trim();
         if (invalidValues.has(trimmed.toLowerCase())) continue;
         return trimmed;
     }
@@ -746,20 +746,21 @@ export const loadIFC = async (
             'IFCZONE'
         ];
         
-        const isSpatialContainer = spatialTypes.includes(props.is_a);
+        const ifcTypeStr = props.is_a || (props.type ? ifcApi.GetNameFromTypeCode(props.type) : 'Item');
+        const isSpatialContainer = spatialTypes.includes(ifcTypeStr);
         const name =
             sanitizeIfcLabel(props.Name?.value, props.LongName?.value, props.Description?.value) ||
-            `${props.is_a} [${expressID}]`;
-        const storeyElevation = props.is_a === "IFCBUILDINGSTOREY"
+            `${ifcTypeStr} [${expressID}]`;
+        const storeyElevation = ifcTypeStr === "IFCBUILDINGSTOREY"
             ? getScalarValue(props.Elevation)
             : spatialContext.elevation;
         const group = new THREE.Group();
         group.name = name;
         nextSpatialContext = {
-            storey: props.is_a === "IFCBUILDINGSTOREY" ? name : spatialContext.storey,
+            storey: ifcTypeStr === "IFCBUILDINGSTOREY" ? name : spatialContext.storey,
             elevation: storeyElevation ?? undefined,
             path: isSpatialContainer ? [...spatialContext.path, name] : spatialContext.path,
-            container: props.is_a
+            container: ifcTypeStr
         };
         group.userData = {
             expressID,

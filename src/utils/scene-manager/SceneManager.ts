@@ -207,7 +207,7 @@ export class SceneManager {
     private locateResultSet = new Set<string>();
     private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
     private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
-    private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
+    private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number; originalVisible: boolean }>();
     private clashPairObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private clashPairInstanceColorCache = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
     private clashPairUuids = new Set<string>();
