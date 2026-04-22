@@ -146,7 +146,20 @@ export function useClashCheck({
     const cached = clashCandidateCacheRef.current;
     cached.clear();
 
+    // 先收集有几何体的 mesh uuid，用于排除无外形纯容器
+    const meshUuids = new Set<string>();
+    sceneMgr.contentGroup.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh && mesh.geometry && !mesh.userData?.isIfcGridHelper) {
+        meshUuids.add(mesh.uuid);
+      }
+    });
+
     sceneMgr.collectRenderableTargets().forEach((target) => {
+      // 过滤无几何外形的纯容器节点
+      if (!meshUuids.has(target.uuid)) return;
+      if (target.box.isEmpty()) return;
+
       const nodes = sceneMgr.getStructureNodes(target.uuid) || [];
       if (nodes.length > 0 && nodes.every((node) => node.visible === false)) return;
       const modelId = nodes[0]?.userData?.originalUuid
@@ -391,23 +404,48 @@ export function useClashCheck({
         }
       }
 
-      results.sort((x, y) => {
+      // 按 pairKey 去重：同一对象对只保留最严重的一条
+      const dedupedByPair = new Map<string, ClashResultItem>();
+      const severityScores: Record<ClashResultItem["severity"], number> = { high: 3, medium: 2, low: 1 };
+      
+      results.forEach((item) => {
+        const existing = dedupedByPair.get(item.pairKey);
+        if (!existing) {
+          dedupedByPair.set(item.pairKey, item);
+        } else {
+          const existingScore = (existing.type === "hard" ? 1000 : 0) + severityScores[existing.severity];
+          const itemScore = (item.type === "hard" ? 1000 : 0) + severityScores[item.severity];
+          
+          if (itemScore > existingScore) {
+            dedupedByPair.set(item.pairKey, item);
+          } else if (itemScore === existingScore) {
+            if (item.type === "hard" && item.overlapVolume > existing.overlapVolume) {
+              dedupedByPair.set(item.pairKey, item);
+            } else if (item.type === "clearance" && item.distance < existing.distance) {
+              dedupedByPair.set(item.pairKey, item);
+            }
+          }
+        }
+      });
+
+      const finalOrderedResults = Array.from(dedupedByPair.values()).sort((x, y) => {
         if (x.type !== y.type) return x.type === "hard" ? -1 : 1;
         if (x.type === "hard") return y.overlapVolume - x.overlapVolume;
         return x.distance - y.distance;
       });
+
       setClashResults((prev) => {
-        const statusByPair = new Map<string, ClashResultItem["status"]>();
-        prev.forEach((item) => statusByPair.set(item.pairKey, item.status));
-        return results.map((item) => ({
+        const statusMap = new Map<string, ClashResultItem["status"]>();
+        prev.forEach((p) => statusMap.set(p.pairKey, p.status));
+        return finalOrderedResults.map((item) => ({
           ...item,
-          status: statusByPair.get(item.pairKey) || "new"
+          status: statusMap.get(item.pairKey) || "new"
         }));
       });
       setClashPairsScanned(pairChecks);
       setClashProgress(100);
-      setClashStatus(`${t("clash_results")}: ${results.length}`);
-      if (results.length === 0) {
+      setClashStatus(`${t("clash_results")}: ${finalOrderedResults.length}`);
+      if (finalOrderedResults.length === 0) {
         sceneMgrRef.current.clearLocateFocus();
       }
     } finally {
@@ -548,6 +586,7 @@ export function useClashCheck({
     clashClearanceDistance,
     clashUseNarrowPhase,
     clashUseTrianglePhase,
+    clashPruning: true,
     clashIncludeSameModel,
     clashPairsScanned,
     clashResultFilter,

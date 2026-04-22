@@ -838,6 +838,41 @@ export const loadIFC = async (
 
     loadSpatialStructure();
 
+    // 空间结构剪枝：自底向上删除没有任何可渲染几何子节点的空虚容器节点
+    // 对于大型建筑 IFC 文件（Revit 导出），可显著削减 IFCSPACE/IFCZONE 等空节点
+    const pruneEmptySpatialNodes = (node: THREE.Object3D): boolean => {
+        // 叶节点是 Mesh 或带几何的实体，直接保留
+        if ((node as THREE.Mesh).isMesh) return true;
+
+        // 非空间容器节点（如后续挂载的普通 Group）保留
+        if (!node.userData?.isSpatial) return true;
+
+        // 递归裁剪子节点
+        const toRemove: THREE.Object3D[] = [];
+        node.children.forEach(child => {
+            const hasContent = pruneEmptySpatialNodes(child);
+            if (!hasContent) toRemove.push(child);
+        });
+        toRemove.forEach(child => {
+            node.remove(child);
+            nodesMap.delete(child.userData?.expressID);
+        });
+
+        // 裁剪后再判断自身是否还有子内容
+        return node.children.length > 0;
+    };
+
+    // 只对 rootGroup 的直接子节点（IfcProject 层）向下剪枝
+    const toRemoveFromRoot: THREE.Object3D[] = [];
+    rootGroup.children.forEach(child => {
+        const hasContent = pruneEmptySpatialNodes(child);
+        if (!hasContent) toRemoveFromRoot.push(child);
+    });
+    toRemoveFromRoot.forEach(child => {
+        rootGroup.remove(child);
+        nodesMap.delete(child.userData?.expressID);
+    });
+
     const buildIfcGridHelpers = () => {
         try {
             const gridType = getIfcTypeCode(ifcApi, "IFCGRID");
