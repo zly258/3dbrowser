@@ -102,7 +102,6 @@ export function usePropertySearch({
       if (owner) return String(owner);
       cursor = cursor.parent;
     }
-
     const structureNode = sceneMgrRef.current?.getStructureNodes(uuid)?.[0];
     if (structureNode?.userData?.originalUuid) return String(structureNode.userData.originalUuid);
     return uuid;
@@ -147,19 +146,32 @@ export function usePropertySearch({
     return entries;
   }, [sceneMgrRef]);
 
+  // 收集搜索候选：有几何体的 mesh 优先，按语义 ID 去重，排除纯结构容器（无外形节点）
   const collectSearchCandidates = useCallback(() => {
     const candidates: SearchCandidate[] = [];
-    const visited = new Set<string>();
     const sceneMgr = sceneMgrRef.current;
     if (!sceneMgr) return candidates;
+
+    // 有几何体的 mesh uuid 集合
+    const meshUuids = new Set<string>();
+    // 语义去重键（bimId / expressID / uuid）
+    const semanticVisited = new Set<string>();
 
     sceneMgr.contentGroup.updateMatrixWorld(true);
     sceneMgr.contentGroup.traverse((obj: THREE.Object3D) => {
       const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.visible || !mesh.geometry) return;
+      if (!mesh.isMesh || !mesh.geometry) return;
       if (mesh.userData?.isIfcGridHelper) return;
-      if (visited.has(mesh.uuid)) return;
-      visited.add(mesh.uuid);
+      meshUuids.add(mesh.uuid);
+
+      const semanticKey = String(
+        sceneMgr.getBimIdByUuid(mesh.uuid)
+        || mesh.userData?.expressID
+        || mesh.uuid
+      );
+      if (semanticVisited.has(semanticKey)) return;
+      semanticVisited.add(semanticKey);
+
       candidates.push({
         uuid: mesh.uuid,
         name: mesh.name || mesh.uuid,
@@ -170,24 +182,28 @@ export function usePropertySearch({
       });
     });
 
+    // 结构节点补充：只加入有对应真实 mesh 且未被去重覆盖的节点
     const walkNodes = (nodes: any[]) => {
       nodes.forEach((node) => {
         if (!node || node.visible === false) return;
         const id = String(node.id || "");
-        if (id && node.bimId && !visited.has(id)) {
-          visited.add(id);
-          candidates.push({
-            uuid: id,
-            name: String(node.name || id),
-            type: String(node.type || "Node"),
-            modelId: String(node.userData?.originalUuid || node.id || id),
-            sourceLabel: "structure",
-            source: {
-              name: node.name,
-              type: node.type,
-              userData: node.userData || {}
-            } as THREE.Object3D
-          });
+        if (id && node.bimId) {
+          const semanticKey = String(node.bimId || id);
+          if (!semanticVisited.has(semanticKey) && meshUuids.has(id)) {
+            semanticVisited.add(semanticKey);
+            candidates.push({
+              uuid: id,
+              name: String(node.name || id),
+              type: String(node.type || "Node"),
+              modelId: String(node.userData?.originalUuid || id),
+              sourceLabel: "structure",
+              source: {
+                name: node.name,
+                type: node.type,
+                userData: node.userData || {}
+              } as THREE.Object3D
+            });
+          }
         }
         if (Array.isArray(node.children) && node.children.length > 0) {
           walkNodes(node.children);
