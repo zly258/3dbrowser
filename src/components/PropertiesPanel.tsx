@@ -1,14 +1,6 @@
-<<<<<<< HEAD
-﻿import React, { useEffect, useMemo, useState } from "react";
-=======
 import React, { useEffect, useMemo, useRef, useState } from "react";
-<<<<<<< HEAD
->>>>>>> 5ad60f3 (refactor(UI组件): 优化多个组件样式和交互逻辑)
-import { IconChevronRight, IconChevronDown, IconCopy } from "../theme/Icons";
-=======
 import { IconChevronRight, IconChevronDown } from "../theme/Icons";
 import { ContextMenu } from "./ContextMenu";
->>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 import {
     filterPropertyGroups,
     serializePropertyGroups,
@@ -21,64 +13,6 @@ interface PropertiesPanelProps {
     theme?: any;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-const PropertyRow = React.memo(({ item, handleCopy, t }: any) => (
-    <div className="ui-prop-row">
-        <div
-            className="ui-prop-key"
-            title={`${item.path} (${t("click_to_copy")})`}
-            onClick={() => handleCopy(item.key)}
-        >
-            {item.key}
-        </div>
-        <div
-            className="ui-prop-value"
-            title={`${item.value}\n${item.path}`}
-            onClick={() => handleCopy(item.value)}
-        >
-            {item.value}
-        </div>
-    </div>
-));
-
-const PropertyGroup = React.memo(({ group, isCollapsed, toggleGroup, handleCopy, t }: any) => (
-    <div>
-        <div className={`ui-prop-group${isCollapsed ? ' collapsed' : ''}`} onClick={() => toggleGroup(group.name)}>
-            <span>{group.name}</span>
-            <div className="ui-prop-group-actions">
-                <button
-                    className="ui-prop-copy"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleCopy([`[${group.name}]`, ...group.items.map((item: any) => `${item.key}: ${item.value}`)].join("\n"));
-                    }}
-                    title={t("copy_group_props")}
-                >
-                    <IconCopy size={12} />
-                </button>
-                <span className="ui-prop-group-chevron">
-                    {isCollapsed ? (
-                        <IconChevronRight width={14} height={14} />
-                    ) : (
-                        <IconChevronDown width={14} height={14} />
-                    )}
-                </span>
-            </div>
-        </div>
-        {!isCollapsed &&
-            group.items.map((item: any) => (
-                <PropertyRow key={item.id} item={item} handleCopy={handleCopy} t={t} />
-            ))}
-    </div>
-));
-
-export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedProps }) => {
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-    const [searchQuery, setSearchQuery] = useState("");
-    const [copiedText, setCopiedText] = useState<string | null>(null);
-=======
-=======
 type PropertyGroup = NonNullable<PropertyGroups>[number];
 type PropertyItem = PropertyGroup["items"][number];
 
@@ -93,10 +27,8 @@ interface ContextMenuState {
     }>;
 }
 
->>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 const COPY_TOAST_DURATION = 1200;
 const SEARCH_DEBOUNCE_MS = 120;
->>>>>>> 5ad60f3 (refactor(UI组件): 优化多个组件样式和交互逻辑)
 
 async function copyText(text: string): Promise<boolean> {
     if (!text) return false;
@@ -425,18 +357,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
                     <div className="ui-properties-subbar">
                         <div className="ui-properties-meta">
-<<<<<<< HEAD
-                            {(searchQuery ? t("search_results") : t("prop_groups")) + `: ${groupCount}`}
-                            <span> 路 </span>
-                            {t("prop_items") + `: ${itemCount}`}
-=======
                             {(debouncedSearchQuery
                                 ? t("search_results") || "搜索结果"
                                 : t("prop_groups") || "属性组")}
                             : {groupCount}
                             <span> · </span>
                             {t("prop_items") || "属性项"}: {itemCount}
->>>>>>> 5ad60f3 (refactor(UI组件): 优化多个组件样式和交互逻辑)
                         </div>
                     </div>
                 </div>
@@ -531,11 +457,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             )}
 
             {copiedVisible && (
-                <div className="ui-toast">
+                <div className="ui-copy-toast">
                     {t("copied") || "已复制"}
                 </div>
             )}
         </div>
     );
 };
-
