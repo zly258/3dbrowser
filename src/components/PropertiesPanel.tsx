@@ -2,8 +2,13 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 =======
 import React, { useEffect, useMemo, useRef, useState } from "react";
+<<<<<<< HEAD
 >>>>>>> 5ad60f3 (refactor(UI组件): 优化多个组件样式和交互逻辑)
 import { IconChevronRight, IconChevronDown, IconCopy } from "../theme/Icons";
+=======
+import { IconChevronRight, IconChevronDown } from "../theme/Icons";
+import { ContextMenu } from "./ContextMenu";
+>>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 import {
     filterPropertyGroups,
     serializePropertyGroups,
@@ -16,6 +21,7 @@ interface PropertiesPanelProps {
     theme?: any;
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 const PropertyRow = React.memo(({ item, handleCopy, t }: any) => (
     <div className="ui-prop-row">
@@ -72,6 +78,22 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ t, selectedPro
     const [searchQuery, setSearchQuery] = useState("");
     const [copiedText, setCopiedText] = useState<string | null>(null);
 =======
+=======
+type PropertyGroup = NonNullable<PropertyGroups>[number];
+type PropertyItem = PropertyGroup["items"][number];
+
+interface ContextMenuState {
+    x: number;
+    y: number;
+    items: Array<{
+        label?: string;
+        onClick?: () => void;
+        disabled?: boolean;
+        divider?: boolean;
+    }>;
+}
+
+>>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 const COPY_TOAST_DURATION = 1200;
 const SEARCH_DEBOUNCE_MS = 120;
 >>>>>>> 5ad60f3 (refactor(UI组件): 优化多个组件样式和交互逻辑)
@@ -135,6 +157,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState("");
     const [copiedVisible, setCopiedVisible] = useState(false);
+    const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const copyTimerRef = useRef<number | null>(null);
 
     const debouncedSearchQuery = useDebouncedValue(
@@ -153,6 +176,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     useEffect(() => {
         setCollapsed(new Set());
         setSearchQuery("");
+        setContextMenu(null);
     }, [selectedProps]);
 
     const filteredProps = useMemo(() => {
@@ -202,35 +226,180 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         }
     };
 
-    const toggleGroup = (group: string) => {
+    const getGroupText = (group: PropertyGroup) => {
+        return [
+            `[${group.name}]`,
+            ...group.items.map((item) => `${item.key}: ${item.value}`)
+        ].join("\n");
+    };
+
+    const getItemText = (item: PropertyItem) => {
+        return `${item.key}: ${item.value}`;
+    };
+
+    const toggleGroup = (groupName: string) => {
         setCollapsed((prev) => {
             const next = new Set(prev);
 
-            if (next.has(group)) {
-                next.delete(group);
+            if (next.has(groupName)) {
+                next.delete(groupName);
             } else {
-                next.add(group);
+                next.add(groupName);
             }
 
             return next;
         });
     };
 
+    const expandAll = () => {
+        setCollapsed(new Set());
+    };
+
+    const collapseAll = () => {
+        if (!filteredProps) return;
+        setCollapsed(new Set(filteredProps.map((group) => group.name)));
+    };
+
     const clearSearch = () => {
         setSearchQuery("");
     };
 
-    const copyGroup = (groupName: string, items: Array<{ key: string; value: string }>) => {
-        const text = [
-            `[${groupName}]`,
-            ...items.map((item) => `${item.key}: ${item.value}`)
-        ].join("\n");
+    const closeContextMenu = () => {
+        setContextMenu(null);
+    };
 
-        handleCopy(text);
+    const openPanelContextMenu = (event: React.MouseEvent) => {
+        event.preventDefault();
+
+        const items: ContextMenuState["items"] = [
+            {
+                label: t("expand_all") || "全部展开",
+                onClick: expandAll,
+                disabled: !filteredProps || filteredProps.length === 0
+            },
+            {
+                label: t("collapse_all") || "全部折叠",
+                onClick: collapseAll,
+                disabled: !filteredProps || filteredProps.length === 0
+            },
+            {
+                divider: true
+            },
+            {
+                label: t("copy_all_props") || "复制全部",
+                onClick: () => {
+                    if (selectedProps) {
+                        handleCopy(serializePropertyGroups(selectedProps));
+                    }
+                },
+                disabled: !selectedProps
+            }
+        ];
+
+        setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            items
+        });
+    };
+
+    const openGroupContextMenu = (event: React.MouseEvent, group: PropertyGroup) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const isCollapsed = collapsed.has(group.name);
+
+        const items: ContextMenuState["items"] = [
+            {
+                label: isCollapsed
+                    ? t("expand_group") || "展开分组"
+                    : t("collapse_group") || "折叠分组",
+                onClick: () => toggleGroup(group.name)
+            },
+            {
+                label: t("expand_all") || "全部展开",
+                onClick: expandAll
+            },
+            {
+                label: t("collapse_all") || "全部折叠",
+                onClick: collapseAll
+            },
+            {
+                divider: true
+            },
+            {
+                label: t("copy_group_props") || "复制分组",
+                onClick: () => handleCopy(getGroupText(group))
+            },
+            {
+                label: t("copy_all_props") || "复制全部",
+                onClick: () => {
+                    if (selectedProps) {
+                        handleCopy(serializePropertyGroups(selectedProps));
+                    }
+                },
+                disabled: !selectedProps
+            }
+        ];
+
+        setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            items
+        });
+    };
+
+    const openItemContextMenu = (
+        event: React.MouseEvent,
+        group: PropertyGroup,
+        item: PropertyItem
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const items: ContextMenuState["items"] = [
+            {
+                label: t("copy_item_props") || "复制单个",
+                onClick: () => handleCopy(getItemText(item))
+            },
+            {
+                label: t("copy_prop_key") || "复制属性名",
+                onClick: () => handleCopy(item.key)
+            },
+            {
+                label: t("copy_prop_value") || "复制属性值",
+                onClick: () => handleCopy(item.value)
+            },
+            {
+                divider: true
+            },
+            {
+                label: t("copy_group_props") || "复制分组",
+                onClick: () => handleCopy(getGroupText(group))
+            },
+            {
+                label: t("copy_all_props") || "复制全部",
+                onClick: () => {
+                    if (selectedProps) {
+                        handleCopy(serializePropertyGroups(selectedProps));
+                    }
+                },
+                disabled: !selectedProps
+            }
+        ];
+
+        setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            items
+        });
     };
 
     return (
-        <div className="ui-properties-panel">
+        <div
+            className="ui-properties-panel"
+            onContextMenu={openPanelContextMenu}
+        >
             {selectedProps && (
                 <div className="ui-properties-toolbar">
                     <div className="ui-search-input-wrap">
@@ -269,21 +438,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                             {t("prop_items") || "属性项"}: {itemCount}
 >>>>>>> 5ad60f3 (refactor(UI组件): 优化多个组件样式和交互逻辑)
                         </div>
-
-                        <div className="ui-properties-actions">
-                            <button
-                                type="button"
-                                className="ui-properties-action ui-properties-icon-btn"
-                                onClick={() =>
-                                    selectedProps &&
-                                    handleCopy(serializePropertyGroups(selectedProps))
-                                }
-                                disabled={!selectedProps}
-                                title={t("copy_all_props") || "复制全部属性"}
-                            >
-                                <IconCopy size={14} />
-                            </button>
-                        </div>
                     </div>
                 </div>
             )}
@@ -299,28 +453,23 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                             const isCollapsed = collapsed.has(group.name);
 
                             return (
-                                <div key={group.name}>
+                                <div
+                                    key={group.name}
+                                    className="ui-prop-group-block"
+                                    style={{
+                                        margin: isCollapsed ? "4px 0" : "0"
+                                    }}
+                                >
                                     <div
                                         className={`ui-prop-group${isCollapsed ? " collapsed" : ""}`}
                                         onClick={() => toggleGroup(group.name)}
+                                        onContextMenu={(event) => openGroupContextMenu(event, group)}
                                     >
                                         <span className="truncate">
                                             {group.name}
                                         </span>
 
                                         <div className="ui-prop-group-actions">
-                                            <button
-                                                type="button"
-                                                className="ui-prop-copy"
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    copyGroup(group.name, group.items);
-                                                }}
-                                                title={t("copy_group_props") || "复制本组属性"}
-                                            >
-                                                <IconCopy size={12} />
-                                            </button>
-
                                             <span className="ui-result-item-secondary">
                                                 {group.items.length}
                                             </span>
@@ -337,11 +486,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
                                     {!isCollapsed &&
                                         group.items.map((item) => (
-                                            <div key={item.id} className="ui-prop-row">
+                                            <div
+                                                key={item.id}
+                                                className="ui-prop-row"
+                                                onContextMenu={(event) =>
+                                                    openItemContextMenu(event, group, item)
+                                                }
+                                            >
                                                 <div
                                                     className="ui-prop-key"
                                                     title={`${item.path} (${t("click_to_copy") || "点击复制"})`}
-                                                    onClick={() => handleCopy(item.key)}
+                                                    onDoubleClick={() => handleCopy(item.key)}
                                                 >
                                                     {item.key}
                                                 </div>
@@ -349,7 +504,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                                 <div
                                                     className="ui-prop-value"
                                                     title={`${item.value}\n${item.path}`}
-                                                    onClick={() => handleCopy(item.value)}
+                                                    onDoubleClick={() => handleCopy(item.value)}
                                                 >
                                                     {item.value}
                                                 </div>
@@ -366,8 +521,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 )}
             </div>
 
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    items={contextMenu.items}
+                    onClose={closeContextMenu}
+                />
+            )}
+
             {copiedVisible && (
-                <div className="ui-copy-toast">
+                <div className="ui-toast">
                     {t("copied") || "已复制"}
                 </div>
             )}
