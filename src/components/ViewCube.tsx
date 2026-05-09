@@ -299,16 +299,10 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh', theme
     return (
         <div 
             ref={containerRef}
+            className="ui-viewcube"
             style={{
-                position: "absolute",
-                top: "10px",
-                right: "10px",
                 width: `${cubeSize}px`,
                 height: `${cubeSize}px`,
-                zIndex: 100,
-                pointerEvents: "auto",
-                borderRadius: "var(--radius-lg)",
-                overflow: "hidden",
             }}
             onClick={handleClick}
             onMouseMove={handleMouseMove}

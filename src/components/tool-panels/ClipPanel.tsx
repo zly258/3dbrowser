@@ -37,12 +37,7 @@ const AxisSliderRow: React.FC<{
       <Checkbox
         checked={active}
         onChange={(e) => onToggle(e)}
-        style={{
-          width: "16px",
-          height: "16px",
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
+        className="ui-clip-axis-checkbox"
       />
 
       {/* Axis label */}

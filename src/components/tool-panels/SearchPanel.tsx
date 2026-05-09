@@ -135,46 +135,41 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 value={condition.connector || "AND"}
                 options={connectorOptions.map((item) => ({ value: item.value, label: t(item.labelKey) || item.fallback }))}
                 onChange={(value) => updateCondition(condition.id, { connector: value as SearchConnector })}
-                className="ui-input-compact"
-                style={{ width: '64px', flexShrink: 0 }}
+                className="ui-input-compact ui-search-connector"
               />
             )}
 
             <input
-              className="ui-input ui-input-compact"
+              className="ui-input ui-input-compact ui-search-field-input"
               placeholder={t("search_field_name") || "属性名"}
               value={condition.propertyName}
               onChange={(e) => updateCondition(condition.id, { propertyName: e.target.value })}
-              style={{ flex: 1, minWidth: 0 }}
             />
 
             <Select
               value={condition.operator}
               options={operatorOptions.map((item) => ({ value: item.value, label: t(item.labelKey) || item.fallback }))}
               onChange={(value) => updateCondition(condition.id, { operator: value as SearchOperator })}
-              className="ui-input-compact"
-              style={{ width: '92px' }}
+              className="ui-input-compact ui-search-operator"
             />
 
             <input
-              className="ui-input ui-input-compact"
+              className="ui-input ui-input-compact ui-search-value-input"
               placeholder={t("search_field_value") || "属性值"}
               value={condition.value}
               onChange={(e) => updateCondition(condition.id, { value: e.target.value })}
-              style={{ flex: 1, minWidth: 0 }}
             />
 
             {index > 0 ? (
               <button
-                className="ui-search-clear ui-search-clear-static"
+                className="ui-search-clear ui-search-clear-static ui-search-remove-btn"
                 onClick={() => removeCondition(condition.id)}
                 title={t("remove_condition") || "移除条件"}
-                style={{ flexShrink: 0, width: '24px' }}
               >
                 <IconClose width={14} height={14} />
               </button>
             ) : (
-              <div style={{ width: '24px', flexShrink: 0 }} />
+              <div className="ui-search-spacer" />
             )}
           </div>
         ))}
@@ -191,8 +186,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 { value: "50", label: "50" },
                 { value: "100", label: "100" }
               ]}
-              className="ui-input-compact"
-              style={{ minWidth: 68 }}
+              className="ui-input-compact ui-search-page-size"
             />
           </div>
         </div>

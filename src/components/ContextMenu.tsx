@@ -60,8 +60,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
                 }
                 if (item.slider) {
                     return (
-                        <div key={index} className="ui-context-menu-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'default' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-secondary)' }}>
+                        <div key={index} className="ui-context-menu-item ui-context-menu-slider">
+                            <div className="ui-context-menu-slider-row">
                                 <span>{item.label}</span>
                                 <span>{Math.round((item.value || 0) * 100)}%</span>
                             </div>
@@ -70,7 +70,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
                                 min="0" max="1" step="0.01" 
                                 value={item.value || 0} 
                                 onChange={(e) => item.onChange?.(parseFloat(e.target.value))}
-                                style={{ width: '100%', cursor: 'pointer' }}
+                                className="ui-context-menu-slider-input"
                             />
                         </div>
                     );
