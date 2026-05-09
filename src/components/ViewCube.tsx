@@ -10,35 +10,37 @@ interface ViewCubeProps {
     theme?: ThemeColors;
 }
 
-export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh', theme }) => {
+type ViewCubeMesh = THREE.Mesh<THREE.BoxGeometry, THREE.MeshLambertMaterial>;
+
+export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const cubeRef = useRef<THREE.Group | null>(null);
+    const clickablePartsRef = useRef<ViewCubeMesh[]>([]);
     const raycaster = useRef(new THREE.Raycaster());
     const mouse = useRef(new THREE.Vector2());
-    const hoveredPart = useRef<THREE.Mesh | null>(null);
+    const hoveredPart = useRef<ViewCubeMesh | null>(null);
 
-    const cubeSize = sceneMgr?.settings?.viewCubeSize || 120;
+    const cubeSize = sceneMgr?.settings?.viewCubeSize || 132;
     const t = (key: string) => getTranslation(lang as Lang, key);
+    void theme;
 
     useEffect(() => {
         if (!canvasRef.current || !containerRef.current) return;
 
         const width = cubeSize;
         const height = cubeSize;
-
-        // 渲染器
         const canvas = canvasRef.current;
-        // 预先初始化 WebGL2 上下文，先设置状态再创建 Three.js 渲染器，避免内部纹理初始化触发 INVALID_OPERATION
-        const gl = canvas.getContext('webgl2', { 
-            antialias: true, 
+
+        const gl = canvas.getContext("webgl2", {
+            antialias: true,
             alpha: true,
             preserveDrawingBuffer: false
         });
-        
+
         if (gl) {
             gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
             gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -49,266 +51,376 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = 'zh', theme
             context: gl || undefined,
             antialias: true,
             alpha: true,
-            precision: 'mediump'
+            precision: "mediump"
         });
-        
-        renderer.setSize(width, height);
-        renderer.setPixelRatio(window.devicePixelRatio);
+
+        renderer.setSize(width, height, false);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setClearColor(0x000000, 0);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
         rendererRef.current = renderer;
 
-        // 场景
         const scene = new THREE.Scene();
         sceneRef.current = scene;
 
-        // 相机
-        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-        camera.position.set(0, 0, 3.5);
+        const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+        camera.position.set(0, 0, 3.8);
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
-        // 灯光
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.9);
         scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight.position.set(5, 5, 5);
-        scene.add(dirLight);
 
-        // 立方体组
+        const mainLight = new THREE.DirectionalLight(0xffffff, 0.35);
+        mainLight.position.set(3, 4, 5);
+        scene.add(mainLight);
+
         const cubeGroup = new THREE.Group();
         scene.add(cubeGroup);
         cubeRef.current = cubeGroup;
+        clickablePartsRef.current = [];
 
-        // 生成面贴图
+        const readCssVar = (name: string, fallback: string) => {
+            const root = getComputedStyle(document.documentElement);
+            const value = root.getPropertyValue(name).trim();
+            return value || fallback;
+        };
+
+        const accentCss = readCssVar("--accent", "#0C62A2");
+        const faceColor = new THREE.Color("#F3F6FA");
+        const sideColor = new THREE.Color("#E6ECF3");
+        const edgeColor = new THREE.Color("#C9D3DF");
+        const cornerColor = new THREE.Color("#D5DEE9");
+        const lineColor = new THREE.Color("#8F9DAE");
+        const hoverColor = new THREE.Color(accentCss);
+
+        const createRoundedRectPath = (
+            ctx: CanvasRenderingContext2D,
+            x: number,
+            y: number,
+            w: number,
+            h: number,
+            r: number
+        ) => {
+            const radius = Math.min(r, w / 2, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + w - radius, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+            ctx.lineTo(x + w, y + h - radius);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+            ctx.lineTo(x + radius, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        };
+
         const createFaceTexture = (text: string, rotation: number = 0) => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const context = canvas.getContext('2d');
+            const textureCanvas = document.createElement("canvas");
+            const size = 256;
+            textureCanvas.width = size;
+            textureCanvas.height = size;
+
+            const context = textureCanvas.getContext("2d");
+
             if (context) {
-                // 背景
-                context.fillStyle = '#f8f9fa';
-                context.fillRect(0, 0, 128, 128);
-                
-                // 文字
+                context.clearRect(0, 0, size, size);
+
+                context.fillStyle = "#F3F6FA";
+                context.fillRect(0, 0, size, size);
+
+                context.fillStyle = "#EAF0F6";
+                createRoundedRectPath(context, 24, 24, 208, 208, 12);
+                context.fill();
+
+                context.strokeStyle = "rgba(143,157,174,0.75)";
+                context.lineWidth = 3;
+                createRoundedRectPath(context, 28, 28, 200, 200, 10);
+                context.stroke();
+
                 context.save();
-                context.translate(64, 64);
+                context.translate(size / 2, size / 2);
+
                 if (rotation !== 0) {
                     context.rotate((rotation * Math.PI) / 180);
                 }
-                context.fillStyle = '#333333';
-                context.font = lang === 'zh' ? 'bold 54px "Microsoft YaHei", sans-serif' : 'bold 32px Arial, sans-serif';
-                context.textAlign = 'center';
-                context.textBaseline = 'middle';
-                context.fillText(text, 0, 0);
+
+                context.fillStyle = "#1F2933";
+                context.font = lang === "zh"
+                    ? '700 82px "Microsoft YaHei", "PingFang SC", sans-serif'
+                    : '700 48px "Segoe UI", Arial, sans-serif';
+                context.textAlign = "center";
+                context.textBaseline = "middle";
+                context.fillText(text, 0, 2);
                 context.restore();
-                
-                // 边框
-                context.strokeStyle = '#cccccc';
-                context.lineWidth = 4;
-                context.strokeRect(2, 2, 124, 124);
             }
-            const texture = new THREE.CanvasTexture(canvas);
+
+            const texture = new THREE.CanvasTexture(textureCanvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = 4;
+            texture.needsUpdate = true;
             return texture;
         };
 
-        const faceColor = 0xf8f9fa;
-        const edgeColor = 0xf8f9fa;
-        const cornerColor = 0xf8f9fa;
+        const createLineFrame = (mesh: ViewCubeMesh) => {
+            const edgesGeometry = new THREE.EdgesGeometry(mesh.geometry, 24);
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: lineColor,
+                transparent: true,
+                opacity: 0.72
+            });
+            const line = new THREE.LineSegments(edgesGeometry, lineMaterial);
+            line.userData.isViewCubeFrame = true;
+            mesh.add(line);
+        };
 
-        // 创建立方体部件
-        const createPart = (size: THREE.Vector3, pos: THREE.Vector3, name: string, color: number, text?: string, rotation: number = 0) => {
+        const createPart = (
+            size: THREE.Vector3,
+            pos: THREE.Vector3,
+            name: string,
+            color: THREE.Color,
+            text?: string,
+            rotation: number = 0
+        ) => {
             const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-            let material;
-            if (text) {
-                const texture = createFaceTexture(text, rotation);
-                material = new THREE.MeshPhongMaterial({
-                    map: texture,
-                    transparent: true,
-                    opacity: 0.98,
-                    shininess: 30
-                });
-            } else {
-                material = new THREE.MeshPhongMaterial({
-                    color: color,
-                    transparent: true,
-                    opacity: 0.98,
-                    shininess: 30
-                });
-            }
-            const mesh = new THREE.Mesh(geometry, material);
+
+            const material = new THREE.MeshLambertMaterial({
+                color: text ? new THREE.Color("#FFFFFF") : color,
+                map: text ? createFaceTexture(text, rotation) : undefined,
+                transparent: true,
+                opacity: text ? 0.98 : 0.96
+            });
+
+            const mesh = new THREE.Mesh(geometry, material) as ViewCubeMesh;
             mesh.position.copy(pos);
             mesh.name = name;
-            // 保存初始颜色/透明度，用于悬停恢复
             mesh.userData.originalOpacity = material.opacity;
             mesh.userData.originalColor = material.color.clone();
             mesh.userData.isFace = !!text;
+            mesh.userData.clickable = true;
+
+            createLineFrame(mesh);
             cubeGroup.add(mesh);
+            clickablePartsRef.current.push(mesh);
+
             return mesh;
         };
 
-        const faceSize = 0.88;
+        const faceSize = 0.84;
         const edgeSize = 0.12;
-        const cornerSize = 0.12;
+        const cornerSize = 0.14;
+        const faceThickness = 0.055;
         const offset = 0.5;
 
-        // 面（SceneManager：Z 向上，Y- 为前）
-        createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, t("cube_front"));
-        createPart(new THREE.Vector3(faceSize, 0.05, faceSize), new THREE.Vector3(0, offset, 0), "back", faceColor, t("cube_back"), 180);
-        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, offset), "top", faceColor, t("cube_top"), 360);
-        createPart(new THREE.Vector3(faceSize, faceSize, 0.05), new THREE.Vector3(0, 0, -offset), "bottom", faceColor, t("cube_bottom"));
-        createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(-offset, 0, 0), "left", faceColor, t("cube_left"), 90);
-        createPart(new THREE.Vector3(0.05, faceSize, faceSize), new THREE.Vector3(offset, 0, 0), "right", faceColor, t("cube_right"), 270);
+        createPart(new THREE.Vector3(faceSize, faceThickness, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, t("cube_front"));
+        createPart(new THREE.Vector3(faceSize, faceThickness, faceSize), new THREE.Vector3(0, offset, 0), "back", faceColor, t("cube_back"), 180);
+        createPart(new THREE.Vector3(faceSize, faceSize, faceThickness), new THREE.Vector3(0, 0, offset), "top", faceColor, t("cube_top"), 360);
+        createPart(new THREE.Vector3(faceSize, faceSize, faceThickness), new THREE.Vector3(0, 0, -offset), "bottom", sideColor, t("cube_bottom"));
+        createPart(new THREE.Vector3(faceThickness, faceSize, faceSize), new THREE.Vector3(-offset, 0, 0), "left", sideColor, t("cube_left"), 90);
+        createPart(new THREE.Vector3(faceThickness, faceSize, faceSize), new THREE.Vector3(offset, 0, 0), "right", sideColor, t("cube_right"), 270);
 
-        // 边
-        // 顶部边（Z = offset）
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, -offset, offset), "top-front", edgeColor);
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, offset, offset), "top-back", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(-offset, 0, offset), "top-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(offset, 0, offset), "top-right", edgeColor);
-        // 底部边（Z = -offset）
+
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, -offset, -offset), "bottom-front", edgeColor);
         createPart(new THREE.Vector3(faceSize, edgeSize, edgeSize), new THREE.Vector3(0, offset, -offset), "bottom-back", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(-offset, 0, -offset), "bottom-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, faceSize, edgeSize), new THREE.Vector3(offset, 0, -offset), "bottom-right", edgeColor);
-        // 中间边（Z = 0）
+
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(-offset, -offset, 0), "front-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(offset, -offset, 0), "front-right", edgeColor);
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(-offset, offset, 0), "back-left", edgeColor);
         createPart(new THREE.Vector3(edgeSize, edgeSize, faceSize), new THREE.Vector3(offset, offset, 0), "back-right", edgeColor);
 
-        // 角
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, -offset, offset), "top-front-left", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(offset, -offset, offset), "top-front-right", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, offset, offset), "top-back-left", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(offset, offset, offset), "top-back-right", cornerColor);
+
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, -offset, -offset), "bottom-front-left", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(offset, -offset, -offset), "bottom-front-right", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(-offset, offset, -offset), "bottom-back-left", cornerColor);
         createPart(new THREE.Vector3(cornerSize, cornerSize, cornerSize), new THREE.Vector3(offset, offset, -offset), "bottom-back-right", cornerColor);
 
-        // 动画循环
-        let animationId: number;
+        cubeGroup.rotation.set(0, 0, 0);
+
+        let animationId = 0;
+
         const animate = () => {
             animationId = requestAnimationFrame(animate);
 
             if (sceneMgr && cubeRef.current) {
-                // 与主相机旋转保持同步
                 cubeRef.current.quaternion.copy(sceneMgr.camera.quaternion).invert();
             }
 
             renderer.render(scene, camera);
         };
+
         animate();
 
-        // 清理
         return () => {
             cancelAnimationFrame(animationId);
+            clickablePartsRef.current = [];
             renderer.dispose();
+
             scene.traverse((obj) => {
                 if (obj instanceof THREE.Mesh) {
                     obj.geometry.dispose();
-                    if (Array.isArray(obj.material)) {
-                        obj.material.forEach(m => m.dispose());
+
+                    const mat = obj.material;
+
+                    if (Array.isArray(mat)) {
+                        mat.forEach((m) => {
+                            if ("map" in m && m.map) m.map.dispose();
+                            m.dispose();
+                        });
                     } else {
-                        obj.material.dispose();
+                        if (mat.map) mat.map.dispose();
+                        mat.dispose();
+                    }
+                }
+
+                if (obj instanceof THREE.LineSegments) {
+                    obj.geometry.dispose();
+
+                    const mat = obj.material;
+
+                    if (Array.isArray(mat)) {
+                        mat.forEach((m) => m.dispose());
+                    } else {
+                        mat.dispose();
                     }
                 }
             });
         };
     }, [sceneMgr, cubeSize, lang]);
 
-    const handleMouseMove = (event: React.MouseEvent) => {
-        if (!canvasRef.current || !sceneRef.current || !cameraRef.current || !cubeRef.current) return;
+    const resetPartState = (mesh: ViewCubeMesh | null) => {
+        if (!mesh) return;
+
+        const mat = mesh.material;
+        mat.opacity = mesh.userData.originalOpacity;
+        mat.color.copy(mesh.userData.originalColor);
+        mesh.scale.set(1, 1, 1);
+    };
+
+    const setHoverState = (mesh: ViewCubeMesh) => {
+        const mat = mesh.material;
+
+        if (mesh.userData.isFace) {
+            mat.color.set(0xffffff);
+            mat.opacity = 1;
+        } else {
+            mat.color.set(0xb9d8ff);
+            mat.opacity = 1;
+        }
+
+        mesh.scale.set(1.02, 1.02, 1.02);
+    };
+
+    const pickPart = (event: React.MouseEvent) => {
+        if (!canvasRef.current || !cameraRef.current) return null;
 
         const rect = canvasRef.current.getBoundingClientRect();
+
         mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.current.setFromCamera(mouse.current, cameraRef.current);
-        const intersects = raycaster.current.intersectObjects(cubeRef.current.children);
 
-        if (intersects.length > 0) {
-            const mesh = intersects[0].object as THREE.Mesh;
+        const intersects = raycaster.current.intersectObjects(clickablePartsRef.current, false);
+
+        if (intersects.length === 0) return null;
+
+        return intersects[0].object as ViewCubeMesh;
+    };
+
+    const handleMouseMove = (event: React.MouseEvent) => {
+        if (!containerRef.current) return;
+
+        const mesh = pickPart(event);
+
+        if (mesh) {
             if (hoveredPart.current !== mesh) {
-                if (hoveredPart.current) {
-                    const mat = hoveredPart.current.material as THREE.MeshPhongMaterial;
-                    mat.opacity = hoveredPart.current.userData.originalOpacity;
-                    mat.color.copy(hoveredPart.current.userData.originalColor);
-                }
+                resetPartState(hoveredPart.current);
                 hoveredPart.current = mesh;
-                const mat = mesh.material as THREE.MeshPhongMaterial;
-                mat.opacity = 1.0;
-                mat.color.set(0x0078d4); // 高亮色
+                setHoverState(mesh);
             }
-            containerRef.current!.style.cursor = 'pointer';
+
+            containerRef.current.style.cursor = "pointer";
         } else {
-            if (hoveredPart.current) {
-                const mat = hoveredPart.current.material as THREE.MeshPhongMaterial;
-                mat.opacity = hoveredPart.current.userData.originalOpacity;
-                mat.color.copy(hoveredPart.current.userData.originalColor);
-                hoveredPart.current = null;
-            }
-            containerRef.current!.style.cursor = 'default';
+            resetPartState(hoveredPart.current);
+            hoveredPart.current = null;
+            containerRef.current.style.cursor = "default";
         }
     };
 
     const handleMouseLeave = () => {
-        if (hoveredPart.current) {
-            const mat = hoveredPart.current.material as THREE.MeshPhongMaterial;
-            mat.opacity = hoveredPart.current.userData.originalOpacity;
-            mat.color.copy(hoveredPart.current.userData.originalColor);
-            hoveredPart.current = null;
+        resetPartState(hoveredPart.current);
+        hoveredPart.current = null;
+
+        if (containerRef.current) {
+            containerRef.current.style.cursor = "default";
         }
     };
 
     const handleClick = (event: React.MouseEvent) => {
-        if (!canvasRef.current || !sceneRef.current || !cameraRef.current || !sceneMgr) return;
+        if (!sceneMgr) return;
 
-        const rect = canvasRef.current.getBoundingClientRect();
-        mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        const mesh = pickPart(event);
 
-        raycaster.current.setFromCamera(mouse.current, cameraRef.current);
-        const intersects = raycaster.current.intersectObjects(cubeRef.current!.children);
+        if (!mesh) return;
 
-        if (intersects.length > 0) {
-            const name = intersects[0].object.name;
-            handleViewChange(name);
-        }
+        handleViewChange(mesh.name);
     };
 
     const handleViewChange = (viewName: string) => {
         if (!sceneMgr) return;
-        
-        // 将立方体部件名称映射为 SceneManager 视图名称
-        // SceneManager 支持：'top', 'bottom', 'front', 'back', 'left', 'right', 'se', 'sw', 'ne', 'nw'
-        
-        let targetView = viewName;
-        
-        // 将部分组合部件映射到当前支持的视图
-        
-        if (viewName === "top-front-right") targetView = "se";
-        else if (viewName === "top-front-left") targetView = "sw";
-        else if (viewName === "top-back-right") targetView = "ne";
-        else if (viewName === "top-back-left") targetView = "nw";
-        
-        // 其它情况直接使用名称（或回退）
-        sceneMgr.setView(targetView);
+
+        const viewMap: Record<string, string> = {
+            top: "top",
+            bottom: "bottom",
+            front: "front",
+            back: "back",
+            left: "left",
+            right: "right",
+            "top-front-right": "se",
+            "top-front-left": "sw",
+            "top-back-right": "ne",
+            "top-back-left": "nw",
+            "front-right": "right",
+            "front-left": "left",
+            "back-right": "right",
+            "back-left": "left",
+            "top-front": "front",
+            "top-back": "back",
+            "top-left": "left",
+            "top-right": "right",
+            "bottom-front": "front",
+            "bottom-back": "back",
+            "bottom-left": "left",
+            "bottom-right": "right"
+        };
+
+        sceneMgr.setView(viewMap[viewName] || viewName);
     };
 
     return (
-        <div 
+        <div
             ref={containerRef}
-            className="ui-viewcube"
+            className="ui-viewcube ui-viewcube-clean"
             style={{
                 width: `${cubeSize}px`,
-                height: `${cubeSize}px`,
+                height: `${cubeSize}px`
             }}
             onClick={handleClick}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
         >
-            <canvas ref={canvasRef} />
+            <canvas ref={canvasRef} className="ui-viewcube-canvas" />
         </div>
     );
 };

@@ -92,7 +92,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={320}
-      height={420}
+      height={440}
       resizable={false}
       storageId="tool_clip"
     >
