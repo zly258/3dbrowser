@@ -7,7 +7,7 @@ interface AboutModalProps {
     isOpen: boolean;
     onClose: () => void;
     t: TFunc;
-        theme: any;
+    theme: any;
 }
 
 declare const __APP_VERSION__: string;
@@ -17,10 +17,13 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
 
     const [showLicenseDetails, setShowLicenseDetails] = useState(false);
 
+    if (!isOpen) return null;
+
     return (
         <FloatingPanel
             title={t("about_title")}
             onClose={onClose}
+            closeLabel={t("panel_close") || "关闭"}
             width={400}
             height={showLicenseDetails ? 500 : 350}
             modal={true}
@@ -44,29 +47,52 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
                     </div>
                     <div className="ui-about-meta-row">
                         <span className="ui-about-meta-label">{t("project_url")}</span>
-                        <a href="https://github.com/zly258/3dbrowser" target="_blank" rel="noopener noreferrer" className="ui-link">
+                        <a
+                            href="https://github.com/zly258/3dbrowser"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ui-link"
+                        >
                             github.com/zly258/3dbrowser
                         </a>
                     </div>
                     <div className="ui-about-meta-row">
                         <span className="ui-about-meta-label">{t("about_license")}</span>
-                        <span className="ui-about-meta-value ui-about-license-badge">{t("about_license_nc")}</span>
+                        <span className="ui-about-meta-value ui-about-license-badge">
+                            {t("about_license_nc")}
+                        </span>
                     </div>
                 </div>
 
                 <div className="ui-about-license-card">
-                    <div
+                    <button
+                        type="button"
                         className="ui-about-license-toggle"
-                        onClick={() => setShowLicenseDetails(!showLicenseDetails)}
+                        onClick={() => setShowLicenseDetails((prev) => !prev)}
                     >
                         <span className="ui-about-license-title">{t("license_details")}</span>
-                        {showLicenseDetails ? <IconChevronUp width={14} height={14} /> : <IconChevronDown width={14} height={14} />}
-                    </div>
+                        {showLicenseDetails ? (
+                            <IconChevronUp width={14} height={14} />
+                        ) : (
+                            <IconChevronDown width={14} height={14} />
+                        )}
+                    </button>
+
                     {showLicenseDetails && (
                         <div className="ui-about-license-content">
-                            <div className="ui-about-license-summary">{t("license_summary")}</div>
+                            <div className="ui-about-license-summary">
+                                {t("license_summary")}
+                            </div>
                             <div className="ui-about-license-link">
-                                {t("full_license")} <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer" className="ui-link">CC BY-NC 4.0</a>
+                                {t("full_license")}{" "}
+                                <a
+                                    href="https://creativecommons.org/licenses/by-nc/4.0/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ui-link"
+                                >
+                                    CC BY-NC 4.0
+                                </a>
                             </div>
                         </div>
                     )}

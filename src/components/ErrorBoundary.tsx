@@ -1,10 +1,9 @@
 import React, { Component } from "react";
-import { DEFAULT_FONT } from "../theme/styles";
 
 interface ErrorBoundaryProps {
     children: React.ReactNode;
-    t: any;
-        theme: any;
+    t: (key: string) => string;
+    theme?: any;
 }
 
 interface ErrorBoundaryState {
@@ -12,48 +11,83 @@ interface ErrorBoundaryState {
     error: Error | null;
 }
 
-// 错误边界组件
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-    public state: ErrorBoundaryState;
+    public state: ErrorBoundaryState = {
+        hasError: false,
+        error: null
+    };
 
-    constructor(props: ErrorBoundaryProps) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
-
-    static getDerivedStateFromError(error: Error) {
-        return { hasError: true, error };
+    static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+        return {
+            hasError: true,
+            error
+        };
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error("ErrorBoundary捕获到错误:", error, errorInfo);
+        console.error("ErrorBoundary captured error:", error, errorInfo);
     }
 
+    private handleReload = () => {
+        window.location.reload();
+    };
+
+    private handleReset = () => {
+        this.setState({
+            hasError: false,
+            error: null
+        });
+    };
+
     render() {
-        if (this.state.hasError) {
-            const { t, theme } = this.props;
-            return (
-                <div className="ui-error-boundary" style={{
-                    backgroundColor: theme.bg, color: theme.text,
-                    fontFamily: DEFAULT_FONT
-                }}>
-                    <div className="ui-error-icon">⚠️</div>
-                    <h1 className="ui-error-title">{t("error_title")}</h1>
-                    <p className="ui-error-message" style={{ color: theme.textMuted }}>
-                        {t("error_msg")}
-                    </p>
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="ui-error-reload-btn"
-                        style={{
-                            backgroundColor: theme.accent, color: '#fff'
-                        }}
+        const { children, t, theme } = this.props;
+        void theme;
+
+        if (!this.state.hasError) {
+            return children;
+        }
+
+        return (
+            <div className="ui-error-boundary">
+                <div className="ui-error-icon">⚠</div>
+
+                <h1 className="ui-error-title">
+                    {t("error_title") || "程序发生错误"}
+                </h1>
+
+                <p className="ui-error-message">
+                    {t("error_msg") || "界面渲染过程中发生异常，可以尝试恢复界面或重新加载。"}
+                </p>
+
+                {this.state.error?.message && (
+                    <div className="ui-toolpanel-overlay-card">
+                        <div className="ui-toolpanel-overlay-title">
+                            {t("error_detail") || "错误详情"}
+                        </div>
+                        <div className="ui-toolpanel-caption">
+                            {this.state.error.message}
+                        </div>
+                    </div>
+                )}
+
+                <div className="ui-error-actions">
+                    <button
+                        type="button"
+                        className="ui-btn ui-btn-default ui-modal-action-btn"
+                        onClick={this.handleReset}
                     >
-                        {t("error_reload")}
+                        {t("btn_cancel") || "尝试恢复"}
+                    </button>
+
+                    <button
+                        type="button"
+                        className="ui-btn ui-btn-primary ui-modal-action-btn"
+                        onClick={this.handleReload}
+                    >
+                        {t("error_reload") || "重新加载"}
                     </button>
                 </div>
-            );
-        }
-        return this.props.children;
+            </div>
+        );
     }
 }
