@@ -14,7 +14,8 @@ export type ViewerTool =
     | "search"
     | "boxSelect"
     | "explode"
-    | "clash";
+    | "clash"
+    | "sun";
 
 export type ExplodeMode = "radial" | "horizontal" | "vertical";
 
