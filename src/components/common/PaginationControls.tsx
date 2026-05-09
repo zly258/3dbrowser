@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "./Button";
 import { IconChevronLeft, IconChevronRight } from "../../theme/Icons";
 
-interface PaginationControlsProps {
+export interface PaginationControlsProps {
   prevTitle: string;
   nextTitle: string;
   currentPage: number;
@@ -24,30 +24,15 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   return (
     <div className="ui-page-nav-wrap">
       <div className="ui-page-nav-group">
-        <Button
-          variant="ghost"
-          className="ui-properties-action ui-icon-btn ui-page-nav-btn"
-          onClick={onPrev}
-          disabled={currentPage <= 1}
-          title={prevTitle}
-        >
+        <Button variant="ghost" className="ui-properties-action ui-icon-btn ui-page-nav-btn" onClick={onPrev} disabled={currentPage <= 1} title={prevTitle}>
           <IconChevronLeft size={20} />
         </Button>
-        <span className="ui-page-nav-indicator">
-          {currentPage}/{totalPages}
-        </span>
-        <Button
-          variant="ghost"
-          className="ui-properties-action ui-icon-btn ui-page-nav-btn"
-          onClick={onNext}
-          disabled={currentPage >= totalPages}
-          title={nextTitle}
-        >
+        <span className="ui-page-nav-indicator">{currentPage}/{totalPages}</span>
+        <Button variant="ghost" className="ui-properties-action ui-icon-btn ui-page-nav-btn" onClick={onNext} disabled={currentPage >= totalPages} title={nextTitle}>
           <IconChevronRight size={20} />
         </Button>
       </div>
-      {rightContent}
+      {rightContent && <div className="ui-page-nav-right">{rightContent}</div>}
     </div>
   );
 };
-

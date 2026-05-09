@@ -12,15 +12,11 @@ import {
 
 type SettingsTab = "general" | "lighting" | "viewport" | "highlight";
 
-/**
- * Row - 设置面板中的行布局组件
- * 用于标签和控件的水平排列
- */
 const Row: React.FC<{
-  label: string;       // 行标签文本
-  children?: React.ReactNode;  // 行控件
-  labelWidth?: string; // 标签宽度
-  stretch?: boolean;   // 是否拉伸子控件填充剩余空间
+  label: string;
+  children?: React.ReactNode;
+  labelWidth?: string;
+  stretch?: boolean;
 }> = ({ label, children, labelWidth = '80px', stretch = false }) => (
   <div
     className="ui-form-row ui-form-row-tight"
@@ -39,21 +35,16 @@ const Row: React.FC<{
   </div>
 );
 
-/**
- * SettingsPanel - 设置面板主组件
- * 提供主题、语言和视口相关配置
- */
 export const SettingsPanel: React.FC<SettingsModalProps> = ({
-  t,              // 翻译函数
-  onClose,        // 关闭回调
-  settings,       // 场景设置
-  onUpdate,       // 设置更新回调
-  currentLang,    // 当前语言
-  setLang,        // 设置语言回调
-  showStats,      // 是否显示统计
-  setShowStats,   // 设置统计显示回调
-  // 样式配置
-  theme           // 主题配置
+  t,
+  onClose,
+  settings,
+  onUpdate,
+  currentLang,
+  setLang,
+  showStats,
+  setShowStats,
+  theme
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
@@ -226,18 +217,14 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   );
 };
 
-/**
- * SettingsModalProps - 设置面板属性接口
- */
 interface SettingsModalProps {
-  t: TFunc;                    // 翻译函数
-  onClose: () => void;        // 关闭回调
-  settings: SceneSettings;     // 场景设置
-  onUpdate: (s: Partial<SceneSettings>) => void;  // 更新设置回调
-  currentLang: Lang;           // 当前语言
-  setLang: (l: Lang) => void; // 设置语言回调
-  showStats: boolean;          // 是否显示统计信息
-  setShowStats: (v: boolean) => void;  // 设置统计显示回调
-                  // 自定义样式
-  theme?: any;                 // 主题配置
+  t: TFunc;
+  onClose: () => void;
+  settings: SceneSettings;
+  onUpdate: (s: Partial<SceneSettings>) => void;
+  currentLang: Lang;
+  setLang: (l: Lang) => void;
+  showStats: boolean;
+  setShowStats: (v: boolean) => void;
+  theme?: any;
 }

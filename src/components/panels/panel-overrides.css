@@ -1,0 +1,178 @@
+.ui-search-panel-body {
+  padding: 12px;
+  gap: 10px;
+  overflow-x: hidden;
+}
+
+.ui-search-condition-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 86px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-search-condition-row + .ui-search-condition-row {
+  margin-top: 8px;
+}
+
+.ui-search-condition-connector-cell,
+.ui-search-condition-action-cell {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ui-search-field-input,
+.ui-search-value-input,
+.ui-search-operator,
+.ui-search-connector,
+.ui-search-page-size {
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-search-remove-btn {
+  position: static;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+}
+
+.ui-search-condition-row .ui-select-custom,
+.ui-search-condition-row .ui-select-selector,
+.ui-search-condition-row .ui-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-clip-panel-body {
+  padding: 12px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.ui-clip-panel-section {
+  flex: 0 0 auto;
+}
+
+.ui-clip-form-row {
+  min-height: 30px;
+  padding: 3px 0;
+}
+
+.ui-clip-opacity-field {
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-clip-range-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 2px 0;
+  overflow: visible;
+}
+
+.ui-clip-axis-row {
+  display: grid;
+  grid-template-columns: 22px 18px minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-light);
+  overflow: hidden;
+}
+
+.ui-clip-axis-row:last-child {
+  border-bottom: none;
+}
+
+.ui-clip-axis-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ui-clip-axis-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1;
+}
+
+.ui-clip-axis-label.is-active {
+  color: var(--accent);
+}
+
+.ui-clip-axis-slider {
+  min-width: 0;
+  width: 100%;
+  overflow: visible;
+}
+
+.ui-clip-axis-value {
+  font-size: 11px;
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ui-clip-panel-footer {
+  flex: 0 0 auto;
+  padding-top: 2px;
+  margin-top: 0;
+}
+
+.ui-clip-panel-footer .ui-btn {
+  width: 100%;
+  min-height: 30px;
+}
+
+.ui-toolpanel-body-compact,
+.ui-toolpanel-body-dense {
+  padding: 12px;
+  gap: 10px;
+}
+
+.ui-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ui-form-row-tight {
+  min-height: 30px;
+  padding: 3px 0;
+}
+
+.ui-form-label-dynamic {
+  width: var(--label-width);
+  min-width: var(--label-width);
+}
+
+.ui-inline-actions,
+.ui-inline-actions-stretch,
+.ui-form-value-stretch,
+.ui-slider-field {
+  min-width: 0;
+}
+
+.ui-inline-actions-stretch {
+  flex: 1;
+  width: 100%;
+}
+
+.ui-selection-box,
+.ui-toolpanel-results-box,
+.ui-viewpoint-list-wrap {
+  min-width: 0;
+}

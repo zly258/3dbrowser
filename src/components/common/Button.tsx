@@ -1,37 +1,50 @@
-import React from 'react';
+import React from "react";
+import { ComponentSize, ComponentVariant } from "./types";
+import { cx } from "./utils";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'default';
-    size?: 'sm' | 'md' | 'lg';
-    active?: boolean;
-    theme?: any;
+  variant?: ComponentVariant;
+  size?: ComponentSize;
+  active?: boolean;
+  theme?: any;
 }
 
-export const Button: React.FC<ButtonProps> = ({ 
-    children, 
-    variant = 'default', 
-    size = 'md',
-    active, 
-    theme, 
-    style, 
-    className = '',
-    ...props 
-}) => {
-    let btnClass = 'ui-btn';
-    if (variant === 'primary') btnClass += ' ui-btn-primary';
-    else if (variant === 'danger') btnClass += ' ui-btn-danger';
-    else if (variant === 'ghost') btnClass += ' ui-btn-ghost';
-    else btnClass += ' ui-btn-default';
-    
-    if (size === 'sm') btnClass += ' ui-btn-sm';
-    else if (size === 'lg') btnClass += ' ui-btn-lg';
-    else btnClass += ' ui-btn-md';
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
+  children,
+  variant = "default",
+  size = "md",
+  active = false,
+  theme,
+  className,
+  type = "button",
+  ...props
+}, ref) => {
+  void theme;
 
-    if (active) btnClass += ' active';
+  const variantClass = variant === "primary"
+    ? "ui-btn-primary"
+    : variant === "danger"
+      ? "ui-btn-danger"
+      : variant === "ghost"
+        ? "ui-btn-ghost"
+        : "ui-btn-default";
 
-    return (
-        <button className={`${btnClass} ${className}`} style={style} {...props}>
-            {children}
-        </button>
-    );
-};
+  const sizeClass = size === "sm"
+    ? "ui-btn-sm"
+    : size === "lg"
+      ? "ui-btn-lg"
+      : "ui-btn-md";
+
+  return (
+    <button
+      ref={ref}
+      type={type}
+      className={cx("ui-btn", variantClass, sizeClass, active && "active", className)}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+});
+
+Button.displayName = "Button";

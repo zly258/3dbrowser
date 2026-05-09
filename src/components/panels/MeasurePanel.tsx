@@ -1,8 +1,6 @@
 import React, { useMemo } from "react";
 import { FloatingPanel } from "./FloatingPanel";
 import { Button } from "../common";
-
-// ==================== 图标组件 ====================
 const Icons = {
   Trash: () => (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -44,8 +42,6 @@ const ClearButton: React.FC<{ onClick: () => void; disabled: boolean }> = ({ onC
     </Button>
   );
 };
-
-// CAD风格数据面板
 const DataPanel: React.FC<{
   children: React.ReactNode;
   empty: boolean;
@@ -61,8 +57,6 @@ const DataPanel: React.FC<{
     </div>
   );
 };
-
-// 测量历史项
 const MeasureItem: React.FC<{
   item: any;
   isHighlighted: boolean;
@@ -89,8 +83,6 @@ const MeasureItem: React.FC<{
     </div>
   );
 };
-
-// 类型分组标题
 const TypeHeader: React.FC<{ label: string }> = ({ label }) => {
   return (
     <div className="ui-group-title">{label}</div>

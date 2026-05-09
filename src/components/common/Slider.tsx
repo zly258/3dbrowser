@@ -1,96 +1,73 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useCallback, useRef } from "react";
+import { cx, getValueFromClientX, normalizeNumber, valueToPercent } from "./utils";
 
-/**
- * SliderProps - 滑块组件属性接口
- */
 export interface SliderProps {
-    min: number;              // 最小值
-    max: number;              // 最大值
-    step?: number;            // 步进值，默认1
-    value: number;            // 当前值
-    onChange: (value: number) => void;  // 值变化回调
-    theme?: any;              // 主题配置
-    disabled?: boolean;        // 是否禁用
-    style?: React.CSSProperties;  // 自定义样式
-    showValue?: boolean;      // 是否显示数值
+  min: number;
+  max: number;
+  step?: number;
+  value: number;
+  onChange: (value: number) => void;
+  theme?: any;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+  showValue?: boolean;
+  className?: string;
 }
 
-/**
- * Slider - 基础滑块组件
- * 支持拖拽操作，步进值控制
- */
 export const Slider: React.FC<SliderProps> = ({
-    min, max, step = 1, value, onChange, theme, disabled = false, style
+  min,
+  max,
+  step = 1,
+  value,
+  onChange,
+  theme,
+  disabled = false,
+  style,
+  className
 }) => {
-    // 计算当前值对应的百分比
-    const percentage = ((value - min) / (max - min)) * 100;
-    // 滑块容器引用
-    const sliderRef = useRef<HTMLDivElement>(null);
+  void theme;
 
-    /**
-     * 根据鼠标位置计算新值
-     */
-    const calcValueFromX = useCallback((clientX: number): number => {
-        if (!sliderRef.current) return value;
-        const rect = sliderRef.current.getBoundingClientRect();
-        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-        const newValue = min + percent * (max - min);
-        return Math.round(newValue / step) * step;
-    }, [min, max, step, value]);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const safeValue = normalizeNumber(value, min, max, step);
+  const percentage = valueToPercent(safeValue, min, max);
 
-    /**
-     * 处理鼠标按下事件 - 支持点击轨道和拖拽手柄
-     */
-    const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        if (disabled) return;
-        e.preventDefault();
-        const targetValue = calcValueFromX(e.clientX);
-        onChange(Math.max(min, Math.min(max, targetValue)));
+  const updateValueByClientX = useCallback((clientX: number) => {
+    if (!sliderRef.current) return;
+    const rect = sliderRef.current.getBoundingClientRect();
+    onChange(getValueFromClientX(clientX, rect, min, max, step));
+  }, [min, max, step, onChange]);
 
-        const handleMouseMove = (moveEvent: MouseEvent) => {
-            const newValue = calcValueFromX(moveEvent.clientX);
-            onChange(Math.max(min, Math.min(max, newValue)));
-        };
+  const handleMouseDown = useCallback((event: React.MouseEvent) => {
+    if (disabled) return;
+    event.preventDefault();
+    updateValueByClientX(event.clientX);
 
-        const handleMouseUp = () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
+    const handleMouseMove = (moveEvent: MouseEvent) => updateValueByClientX(moveEvent.clientX);
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
 
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    }, [calcValueFromX, onChange, min, max, disabled]);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [disabled, updateValueByClientX]);
 
-    return (
-        <div
-            ref={sliderRef}
-            className={`ui-slider ui-slider-control ${disabled ? 'ui-slider-control-disabled' : 'ui-slider-control-interactive'}`}
-            style={{
-                width: '100%',
-                minWidth: 0,
-                ...style
-            }}
-            onMouseDown={handleMouseDown}
-        >
-            {/* 滑块轨道背景 */}
-            <div
-                className="ui-slider-track"
-            />
-            {/* 滑块进度填充 */}
-            <div
-                className="ui-slider-progress"
-                style={{
-                    width: `${percentage}%`,
-                }}
-            />
-            {/* 滑块拖拽手柄 */}
-            <div
-                className="ui-slider-thumb"
-                style={{
-                    left: `${percentage}%`,
-                    cursor: disabled ? 'not-allowed' : 'default',
-                }}
-            />
-        </div>
-    );
+  return (
+    <div
+      ref={sliderRef}
+      className={cx("ui-slider", "ui-slider-control", disabled ? "ui-slider-control-disabled" : "ui-slider-control-interactive", className)}
+      style={style}
+      onMouseDown={handleMouseDown}
+      role="slider"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={safeValue}
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+    >
+      <div className="ui-slider-track" />
+      <div className="ui-slider-progress" style={{ width: `${percentage}%` }} />
+      <div className="ui-slider-thumb" style={{ left: `${percentage}%`, cursor: disabled ? "not-allowed" : "default" }} />
+    </div>
+  );
 };

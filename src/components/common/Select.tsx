@@ -1,74 +1,100 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ValueOption } from "./types";
+import { cx } from "./utils";
 
-export interface SelectOption {
-    value: string;
-    label: string;
+export type SelectOption<T extends string = string> = ValueOption<T>;
+
+export interface SelectProps<T extends string = string> {
+  value: T;
+  options: Array<SelectOption<T>>;
+  onChange: (value: T) => void;
+  className?: string;
+  style?: React.CSSProperties;
+  disabled?: boolean;
+  placeholder?: React.ReactNode;
 }
 
-export interface SelectProps {
-    value: string;
-    options: SelectOption[];
-    onChange: (value: string) => void;
-    className?: string;
-    style?: React.CSSProperties;
-    disabled?: boolean;
-}
+export function Select<T extends string = string>({
+  value,
+  options,
+  onChange,
+  className,
+  style,
+  disabled = false,
+  placeholder
+}: SelectProps<T>) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-export const Select: React.FC<SelectProps> = ({ value, options, onChange, className = '', style, disabled }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
+  const selectedOption = useMemo(
+    () => options.find((item) => item.value === value),
+    [options, value]
+  );
 
-    const selectedOption = options.find(opt => opt.value === value) || options[0];
+  useEffect(() => {
+    if (!isOpen) return;
 
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isOpen]);
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
 
-    return (
-        <div 
-            ref={containerRef}
-            className={`ui-select-custom ${isOpen ? 'open' : ''} ${disabled ? 'disabled' : ''}`}
-            style={style}
-        >
-            <div 
-                className={`ui-select-selector ui-input ${className}`} 
-                onClick={() => !disabled && setIsOpen(!isOpen)}
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (option: SelectOption<T>) => {
+    if (option.disabled) return;
+    onChange(option.value);
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} className={cx("ui-select-custom", isOpen && "open", disabled && "disabled")} style={style}>
+      <button
+        type="button"
+        className={cx("ui-select-selector", "ui-input", className)}
+        onClick={() => !disabled && setIsOpen((prev) => !prev)}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <span className="ui-select-selection-item">
+          {selectedOption?.label ?? placeholder ?? ""}
+        </span>
+        <span className="ui-select-arrow" aria-hidden="true">
+          <svg viewBox="64 64 896 896" width="12" height="12" fill="currentColor">
+            <path d="M884 256h-75c-5.1 0-9.9 2.5-12.9 6.6L512 654.2 227.9 262.6c-3-4.1-7.8-6.6-12.9-6.6h-75c-6.5 0-10.3 7.4-6.5 12.7l352.6 486.1c12.8 17.6 39 17.6 51.7 0l352.6-486.1c3.9-5.3.1-12.7-6.4-12.7z" />
+          </svg>
+        </span>
+      </button>
+      {isOpen && !disabled && (
+        <div className="ui-select-dropdown" role="listbox">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={cx("ui-select-item", option.value === value && "selected", option.disabled && "disabled")}
+              onClick={() => handleSelect(option)}
+              disabled={option.disabled}
+              role="option"
+              aria-selected={option.value === value}
             >
-                <span className="ui-select-selection-item">
-                    {selectedOption?.label}
-                </span>
-                <span className="ui-select-arrow">
-                    <svg viewBox="64 64 896 896" width="12" height="12" fill="currentColor">
-                        <path d="M884 256h-75c-5.1 0-9.9 2.5-12.9 6.6L512 654.2 227.9 262.6c-3-4.1-7.8-6.6-12.9-6.6h-75c-6.5 0-10.3 7.4-6.5 12.7l352.6 486.1c12.8 17.6 39 17.6 51.7 0l352.6-486.1c3.9-5.3.1-12.7-6.4-12.7z"></path>
-                    </svg>
-                </span>
-            </div>
-            {isOpen && !disabled && (
-                <div className="ui-select-dropdown">
-                    {options.map((option) => (
-                        <div 
-                            key={option.value}
-                            className={`ui-select-item ${option.value === value ? 'selected' : ''}`}
-                            onClick={() => {
-                                onChange(option.value);
-                                setIsOpen(false);
-                            }}
-                        >
-                            {option.label}
-                        </div>
-                    ))}
-                </div>
-            )}
+              {option.label}
+            </button>
+          ))}
         </div>
-    );
-};
+      )}
+    </div>
+  );
+}
