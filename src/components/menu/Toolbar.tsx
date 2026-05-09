@@ -198,7 +198,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                         <ImageButton
                             icon={<IconMaximize />}
                             label={t("tb_fit") || "充满"}
-                            onClick={() => props.sceneMgr?.fitView()}
+                            onClick={() => props.sceneMgr?.restoreView()}
                             theme={theme}
                         />
                     )}

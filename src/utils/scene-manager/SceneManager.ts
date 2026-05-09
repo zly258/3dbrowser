@@ -205,7 +205,7 @@ export class SceneManager {
     private highlightedUuids: Set<string> = new Set();
     private locateFocusUuid: string | null = null;
     private locateResultSet = new Set<string>();
-    private locateMaterialCache = new Map<string, { transparent: boolean; opacity: number; depthWrite: boolean }>();
+    private locateMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number; originalVisible: boolean }>();
     private clashPairObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
@@ -445,6 +445,8 @@ export class SceneManager {
     private chunkRegistrationBatchSize = 18;
     private chunkGhostBatchSize = 24;
     private animationFrameId: number | null = null;
+    private cameraFlightFrameId: number | null = null;
+    private cameraFlightToken = 0;
     private animateFramePending = false;
     private disposed = false;
     private interactionShadowDowngraded = false;
@@ -3055,12 +3057,30 @@ export class SceneManager {
                 locateFocusUuid: this.locateFocusUuid,
                 lastSelectedUuid: this.lastSelectedUuid
             },
+            totalMeshCount: this.originalStats.meshes,
             locateMaterialCache: this.locateMaterialCache,
             locateObjectMaterialCache: this.locateObjectMaterialCache,
             locateDimmedInstances: this.locateDimmedInstances,
             clearClashPairHighlight: () => this.clearClashPairHighlight(),
             nodeMap: this.nodeMap
         };
+    }
+
+    private cancelCameraFlight() {
+        this.cameraFlightToken += 1;
+        if (this.cameraFlightFrameId !== null) {
+            cancelAnimationFrame(this.cameraFlightFrameId);
+            this.cameraFlightFrameId = null;
+        }
+    }
+
+    private isWorldVisible(object: THREE.Object3D) {
+        let current: THREE.Object3D | null = object;
+        while (current) {
+            if (!current.visible) return false;
+            current = current.parent;
+        }
+        return true;
     }
 
     private getPickingContext() {
@@ -3574,10 +3594,32 @@ export class SceneManager {
     }
 
     clearLocateFocus() {
+        if (
+            this.locateResultSet.size === 0 &&
+            this.locateObjectMaterialCache.size === 0 &&
+            this.locateDimmedInstances.size === 0 &&
+            !this.locateFocusUuid &&
+            this.highlightedUuids.size === 0
+        ) {
+            return;
+        }
         const context = this.getHighlightContext();
         const result = applyClearLocateFocus(context);
         this.syncHighlightState(context.state);
         if (result.needsRender) this.markSceneDirty();
+    }
+
+    restoreView(keepOrientation = true) {
+        this.cancelCameraFlight();
+        if (this.locateResultSet.size > 0 || this.locateObjectMaterialCache.size > 0 || this.locateDimmedInstances.size > 0) {
+            this.clearLocateFocus();
+            requestAnimationFrame(() => {
+                if (this.disposed) return;
+                this.fitView(keepOrientation);
+            });
+            return;
+        }
+        this.fitView(keepOrientation);
     }
 
     private expandLocateTargets(ids: string[]) {
@@ -3778,7 +3820,8 @@ export class SceneManager {
         this.fitBox(box, !keepOrientation);
     }
 
-    private unionObjectBounds(obj: THREE.Object3D, targetBox: THREE.Box3) {
+    private unionObjectBounds(obj: THREE.Object3D, targetBox: THREE.Box3, visibleOnly = false) {
+        if (visibleOnly && !this.isWorldVisible(obj)) return;
         const box = new THREE.Box3();
         if (obj.userData?.boundingBox) {
             box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
@@ -3788,7 +3831,8 @@ export class SceneManager {
         if (!box.isEmpty()) targetBox.union(box);
     }
 
-    private unionTilesNodeBounds(node: any, targetBox: THREE.Box3) {
+    private unionTilesNodeBounds(node: any, targetBox: THREE.Box3, visibleOnly = false) {
+        if (visibleOnly && node?.visible === false) return;
         const encodedBox = node?.userData?.tilesBoundingVolumeBox;
         if (!Array.isArray(encodedBox) || encodedBox.length < 12) return;
 
@@ -3801,12 +3845,13 @@ export class SceneManager {
         if (!box.isEmpty()) targetBox.union(box);
     }
 
-    private unionOptimizedBounds(uuid: string, targetBox: THREE.Box3) {
+    private unionOptimizedBounds(uuid: string, targetBox: THREE.Box3, visibleOnly = false) {
         const mappings = this.optimizedMapping.get(uuid);
         if (!mappings || mappings.length === 0) return;
 
         const instanceMatrix = new THREE.Matrix4();
         for (const mapping of mappings) {
+            if (visibleOnly && !this.isWorldVisible(mapping.mesh)) continue;
             const geometry = mapping.geometry || mapping.mesh.geometry;
             if (!geometry.boundingBox) geometry.computeBoundingBox();
             if (!geometry.boundingBox) continue;
@@ -3817,23 +3862,23 @@ export class SceneManager {
         }
     }
 
-    private unionNodeBounds(uuid: string, targetBox: THREE.Box3, visited = new Set<string>()) {
+    private unionNodeBounds(uuid: string, targetBox: THREE.Box3, visited = new Set<string>(), visibleOnly = false) {
         if (!uuid || visited.has(uuid)) return;
         visited.add(uuid);
 
         const obj = this.contentGroup.getObjectByProperty("uuid", uuid);
         if (obj) {
-            this.unionObjectBounds(obj, targetBox);
+            this.unionObjectBounds(obj, targetBox, visibleOnly);
         }
 
-        this.unionOptimizedBounds(uuid, targetBox);
+        this.unionOptimizedBounds(uuid, targetBox, visibleOnly);
 
         const nodes = this.nodeMap.get(uuid) || [];
         for (const node of nodes) {
-            this.unionTilesNodeBounds(node, targetBox);
+            this.unionTilesNodeBounds(node, targetBox, visibleOnly);
             const children = Array.isArray(node.children) ? node.children : [];
             for (const child of children) {
-                this.unionNodeBounds(child.id, targetBox, visited);
+                this.unionNodeBounds(child.id, targetBox, visited, visibleOnly);
             }
         }
     }
@@ -3842,7 +3887,7 @@ export class SceneManager {
         let box = collectRenderableBoundsForIds(this.getHighlightContext(), [uuid]);
         if (box.isEmpty()) {
             box = new THREE.Box3();
-            this.unionNodeBounds(uuid, box);
+            this.unionNodeBounds(uuid, box, new Set<string>(), true);
         }
         if (!box.isEmpty()) this.fitBox(box, false, 1.14);
     }
@@ -3852,7 +3897,7 @@ export class SceneManager {
         let box = collectRenderableBoundsForIds(this.getHighlightContext(), [uuid]);
         if (box.isEmpty()) {
             box = new THREE.Box3();
-            this.unionNodeBounds(uuid, box);
+            this.unionNodeBounds(uuid, box, new Set<string>(), true);
         }
         return box.isEmpty() ? null : box;
     }
@@ -3863,7 +3908,7 @@ export class SceneManager {
 
         const box = new THREE.Box3();
         const unique = Array.from(new Set((uuids || []).filter(Boolean)));
-        unique.forEach((uuid) => this.unionNodeBounds(uuid, box));
+        unique.forEach((uuid) => this.unionNodeBounds(uuid, box, new Set<string>(), true));
         return box;
     }
 
@@ -3873,6 +3918,8 @@ export class SceneManager {
     }
 
     fitBox(box: THREE.Box3, updateCameraPosition: boolean = true, paddingOverride?: number) {
+        this.cancelCameraFlight();
+
         if (box.isEmpty()) {
             this.camera.zoom = 1;
             this.camera.position.set(1000, 1000, 1000);
@@ -3906,42 +3953,62 @@ export class SceneManager {
         let targetRight = fW / 2;
         let targetTop = fH / 2;
         let targetBottom = -fH / 2;
+        const flightToken = this.cameraFlightToken;
 
         if (updateCameraPosition) {
             const offset = new THREE.Vector3(1, -1, 1).normalize();
             const dist = Math.max(extent * 2.2, 5);
             const targetPosition = center.clone().add(offset.multiplyScalar(dist));
             const targetLookAt = center.clone();
+            const startLeft = this.camera.left;
+            const startRight = this.camera.right;
+            const startTop = this.camera.top;
+            const startBottom = this.camera.bottom;
 
-            // 动画过渡
+            const positionDelta = this.camera.position.distanceTo(targetPosition);
+            const targetDelta = this.controls.target.distanceTo(targetLookAt);
+            if (positionDelta < 1e-3 && targetDelta < 1e-3) {
+                this.controls.target.copy(targetLookAt);
+                this.camera.position.copy(targetPosition);
+                this.camera.left = targetLeft;
+                this.camera.right = targetRight;
+                this.camera.top = targetTop;
+                this.camera.bottom = targetBottom;
+                this.camera.zoom = targetZoom;
+                this.camera.lookAt(this.controls.target);
+                this.camera.updateProjectionMatrix();
+                this.controls.update();
+                this.markSceneDirty({ needsCulling: true });
+                return;
+            }
+
             const startPosition = this.camera.position.clone();
             const startTarget = this.controls.target.clone();
             const startTime = performance.now();
-            const duration = 600; // 600ms 动画
+            const duration = 420;
 
             const animate = () => {
+                if (flightToken !== this.cameraFlightToken) return;
                 const elapsed = performance.now() - startTime;
                 const progress = Math.min(elapsed / duration, 1);
-                const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+                const eased = 1 - Math.pow(1 - progress, 3);
 
-                // 插值位置
                 this.camera.position.lerpVectors(startPosition, targetPosition, eased);
                 this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
                 this.camera.lookAt(this.controls.target);
-
-                // 插值 zoom 和边界
-                this.camera.zoom = 1 + (targetZoom - 1) * eased;
-                this.camera.left = this.camera.left + (targetLeft - this.camera.left) * eased;
-                this.camera.right = this.camera.right + (targetRight - this.camera.right) * eased;
-                this.camera.top = this.camera.top + (targetTop - this.camera.top) * eased;
-                this.camera.bottom = this.camera.bottom + (targetBottom - this.camera.bottom) * eased;
+                this.camera.zoom = targetZoom;
+                this.camera.left = startLeft + (targetLeft - startLeft) * eased;
+                this.camera.right = startRight + (targetRight - startRight) * eased;
+                this.camera.top = startTop + (targetTop - startTop) * eased;
+                this.camera.bottom = startBottom + (targetBottom - startBottom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
                 this.markSceneDirty({ needsCulling: true });
 
                 if (progress < 1) {
-                    requestAnimationFrame(animate);
+                    this.cameraFlightFrameId = requestAnimationFrame(animate);
                 } else {
+                    this.cameraFlightFrameId = null;
                     this.markSceneDirty({ needsCulling: true });
                 }
             };
@@ -3953,7 +4020,6 @@ export class SceneManager {
             const targetPosition = center.clone().add(direction.multiplyScalar(-dist));
             const targetLookAt = center.clone();
 
-            // 在保持当前视角方向的前提下，按相机朝向投影模型范围并计算充满视口所需 zoom
             const paddingForOrientationFit = 1.01;
             const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
             const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
@@ -3981,19 +4047,33 @@ export class SceneManager {
 
             const safeHalfX = Math.max(1e-3, maxProjX * paddingForOrientationFit);
             const safeHalfY = Math.max(1e-3, maxProjY * paddingForOrientationFit);
-            const targetZoom = Math.max(
+            targetZoom = Math.max(
                 1e-4,
                 Math.min(1e6, Math.min(halfBaseWidth / safeHalfX, halfBaseHeight / safeHalfY))
             );
 
-            // 动画过渡
             const startPosition = this.camera.position.clone();
             const startTarget = this.controls.target.clone();
             const startZoom = this.camera.zoom;
             const startTime = performance.now();
-            const duration = 600;
+            const positionDelta = this.camera.position.distanceTo(targetPosition);
+            const targetDelta = this.controls.target.distanceTo(targetLookAt);
+            const zoomDelta = Math.abs(this.camera.zoom - targetZoom);
+            if (positionDelta < 1e-3 && targetDelta < 1e-3 && zoomDelta < 1e-4) {
+                this.camera.position.copy(targetPosition);
+                this.controls.target.copy(targetLookAt);
+                this.camera.lookAt(this.controls.target);
+                this.camera.zoom = targetZoom;
+                this.camera.updateProjectionMatrix();
+                this.controls.update();
+                this.markSceneDirty({ needsCulling: true });
+                return;
+            }
+
+            const duration = 420;
 
             const animate = () => {
+                if (flightToken !== this.cameraFlightToken) return;
                 const elapsed = performance.now() - startTime;
                 const progress = Math.min(elapsed / duration, 1);
                 const eased = 1 - Math.pow(1 - progress, 3);
@@ -4007,8 +4087,9 @@ export class SceneManager {
                 this.markSceneDirty({ needsCulling: true });
 
                 if (progress < 1) {
-                    requestAnimationFrame(animate);
+                    this.cameraFlightFrameId = requestAnimationFrame(animate);
                 } else {
+                    this.cameraFlightFrameId = null;
                     this.markSceneDirty({ needsCulling: true });
                 }
             };
@@ -4332,6 +4413,7 @@ export class SceneManager {
     dispose() {
         this.disposed = true;
         this.animateFramePending = false;
+        this.cancelCameraFlight();
         this.cancelBoxSelect();
         disposeSceneManagerResources({
             cancelDeferredStructureBuild: () => this.cancelDeferredStructureBuild(),

@@ -128,7 +128,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                                 <ClassicSubItem
                                     label={t("menu_fit_view") || "充满视图"}
                                     onClick={() => {
-                                        props.sceneMgr?.fitView();
+                                        props.sceneMgr?.restoreView();
                                         close();
                                     }}
                                 />
