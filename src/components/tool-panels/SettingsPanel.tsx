@@ -75,7 +75,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       movable={false}
       theme={theme}
     >
-      <div className="ui-toolpanel-body" style={{ flex: 1, minHeight: 0 }}>
+      <div className="ui-toolpanel-body ui-settings-panel-body">
         <div className="ui-toolpanel-sticky-tabs">
           <SegmentedControl
             options={tabOptions}

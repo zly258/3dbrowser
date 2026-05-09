@@ -261,23 +261,21 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 <div>
                   <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_tolerance") || "容差"}</div>
                   <InputNumber
-                    className="ui-input-compact"
+                    className="ui-input-compact ui-clash-input-full"
                     value={Number.isFinite(tolerance) ? tolerance : 0}
                     min={0}
                     step={0.001}
                     onChange={(value) => onToleranceChange(Math.max(0, value || 0))}
-                    style={{ width: "100%" }}
                   />
                 </div>
                 <div>
                   <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_min_overlap") || "最小重叠体积"}</div>
                   <InputNumber
-                    className="ui-input-compact"
+                    className="ui-input-compact ui-clash-input-full"
                     value={Number.isFinite(minOverlapVolume) ? minOverlapVolume : 0}
                     min={0}
                     step={0.000001}
                     onChange={(value) => onMinOverlapVolumeChange(Math.max(0, value || 0))}
-                    style={{ width: "100%" }}
                   />
                 </div>
               </div>
@@ -285,12 +283,11 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 <div>
                   <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">{t("clash_clearance_distance") || "最小净空距离"}</div>
                   <InputNumber
-                    className="ui-input-compact"
+                    className="ui-input-compact ui-clash-input-full"
                     value={Number.isFinite(clearanceDistance) ? clearanceDistance : 0}
                     min={0}
                     step={0.001}
                     onChange={(value) => onClearanceDistanceChange(Math.max(0, value || 0))}
-                    style={{ width: "100%" }}
                   />
                 </div>
                 <div className="ui-clash-option-stack">
@@ -334,8 +331,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 { value: "50", label: "50" },
                 { value: "100", label: "100" }
               ]}
-              className="ui-input-compact"
-              style={{ minWidth: 68 }}
+              className="ui-input-compact ui-search-page-size"
             />
           </div>
         </div>

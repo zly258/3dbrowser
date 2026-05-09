@@ -3904,3 +3904,168 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   display: none;
 }
 
+/* ==================== ContextMenu 右键菜单 ==================== */
+.ui-context-menu-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: default;
+}
+
+.ui-context-menu-slider-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-secondary);
+}
+
+.ui-context-menu-slider-input {
+  width: 100%;
+  cursor: pointer;
+}
+
+/* ==================== ErrorBoundary 错误边界 ==================== */
+.ui-error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  gap: 20px;
+  padding: 40px;
+  text-align: center;
+}
+
+.ui-error-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.ui-error-title {
+  font-size: var(--font-size-title);
+  margin: 0;
+  font-weight: 700;
+}
+
+.ui-error-message {
+  max-width: 600px;
+  line-height: 1.6;
+  font-size: var(--font-size-body);
+}
+
+.ui-error-reload-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--font-size-body);
+  min-height: var(--control-h-md);
+}
+
+/* ==================== SceneTree 场景树 ==================== */
+.ui-tree-virtual-list {
+  position: relative;
+  min-width: max-content;
+}
+
+.ui-tree-virtual-chunk {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-width: max-content;
+}
+
+.ui-tree-node-checkbox {
+  margin-right: 4px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.ui-tree-clash-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--radius-xl);
+  font-size: var(--font-size-label);
+  line-height: 16px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+/* ==================== SearchPanel 搜索面板 ==================== */
+.ui-search-connector {
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.ui-search-field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-search-operator {
+  width: 92px;
+}
+
+.ui-search-value-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-search-remove-btn {
+  flex-shrink: 0;
+  width: 24px;
+}
+
+.ui-search-spacer {
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.ui-search-page-size {
+  min-width: 68px;
+}
+
+/* ==================== ClashPanel 碰撞面板 ==================== */
+.ui-clash-input-full {
+  width: 100%;
+}
+
+/* ==================== MeasurePanel 测量面板 ==================== */
+.ui-measure-item-delete {
+  opacity: 0.6;
+  margin-left: 8px;
+}
+
+.ui-measure-item-delete:hover {
+  opacity: 1;
+}
+
+/* ==================== SettingsPanel 设置面板 ==================== */
+.ui-settings-panel-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ==================== ClipPanel 裁剪面板 ==================== */
+.ui-clip-axis-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ==================== ViewCube 视图方块 ==================== */
+.ui-viewcube {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+  pointer-events: auto;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+
+

@@ -33,22 +33,20 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         if (this.state.hasError) {
             const { t, theme } = this.props;
             return (
-                <div style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', width: '100%', backgroundColor: theme.bg, color: theme.text,
-                    fontFamily: DEFAULT_FONT, gap: '20px', padding: '40px', textAlign: 'center'
+                <div className="ui-error-boundary" style={{
+                    backgroundColor: theme.bg, color: theme.text,
+                    fontFamily: DEFAULT_FONT
                 }}>
-                    <div style={{ fontSize: '48px', lineHeight: 1 }}>⚠️</div>
-                    <h1 style={{ fontSize: 'var(--font-size-title)', margin: 0, fontWeight: 700 }}>{t("error_title")}</h1>
-                    <p style={{ color: theme.textMuted, maxWidth: '600px', lineHeight: '1.6', fontSize: 'var(--font-size-body)' }}>
+                    <div className="ui-error-icon">⚠️</div>
+                    <h1 className="ui-error-title">{t("error_title")}</h1>
+                    <p className="ui-error-message" style={{ color: theme.textMuted }}>
                         {t("error_msg")}
                     </p>
                     <button 
                         onClick={() => window.location.reload()}
+                        className="ui-error-reload-btn"
                         style={{
-                            padding: '10px 24px', backgroundColor: theme.accent, color: '#fff',
-                            border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: 600,
-                            fontSize: 'var(--font-size-body)', minHeight: 'var(--control-h-md)'
+                            backgroundColor: theme.accent, color: '#fff'
                         }}
                     >
                         {t("error_reload")}

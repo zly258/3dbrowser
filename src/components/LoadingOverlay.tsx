@@ -22,10 +22,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ t, loading, stat
                 <div className="ui-progress-bar ui-loading-progress">
                     <div 
                         className="ui-progress-fill"
-                        style={{
-                            width: `${progress}%`,
-                            transition: 'width 0.3s ease-out',
-                        }}
+                        style={{ width: `${progress}%` }}
                     />
                 </div>
                 

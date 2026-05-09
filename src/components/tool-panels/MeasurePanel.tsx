@@ -82,10 +82,7 @@ const MeasureItem: React.FC<{
           e.stopPropagation();
           onDelete();
         }}
-        className="ui-btn ui-btn-icon-sm ui-btn-ghost"
-        style={{ opacity: 0.6, marginLeft: '8px' }}
-        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.6')}
+        className="ui-btn ui-btn-icon-sm ui-btn-ghost ui-measure-item-delete"
       >
         <Icons.Close />
       </button>
