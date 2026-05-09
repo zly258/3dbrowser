@@ -12,6 +12,9 @@ export interface SelectProps<T extends string = string> {
   style?: React.CSSProperties;
   disabled?: boolean;
   placeholder?: React.ReactNode;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyText?: string;
 }
 
 export function Select<T extends string = string>({
@@ -21,15 +24,28 @@ export function Select<T extends string = string>({
   className,
   style,
   disabled = false,
-  placeholder
+  placeholder,
+  searchable = false,
+  searchPlaceholder,
+  emptyText = "暂无数据"
 }: SelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = useMemo(
     () => options.find((item) => item.value === value),
     [options, value]
   );
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable || !searchText.trim()) return options;
+    const query = searchText.trim().toLocaleLowerCase();
+    return options.filter((item) =>
+      String(item.label ?? item.value).toLocaleLowerCase().includes(query)
+      || String(item.value ?? "").toLocaleLowerCase().includes(query)
+    );
+  }, [options, searchable, searchText]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -57,6 +73,7 @@ export function Select<T extends string = string>({
     if (option.disabled) return;
     onChange(option.value);
     setIsOpen(false);
+    setSearchText("");
   };
 
   return (
@@ -80,19 +97,35 @@ export function Select<T extends string = string>({
       </button>
       {isOpen && !disabled && (
         <div className="ui-select-dropdown" role="listbox">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={cx("ui-select-item", option.value === value && "selected", option.disabled && "disabled")}
-              onClick={() => handleSelect(option)}
-              disabled={option.disabled}
-              role="option"
-              aria-selected={option.value === value}
-            >
-              {option.label}
-            </button>
-          ))}
+          {searchable && (
+            <div className="ui-select-search-wrap">
+              <input
+                className="ui-input ui-input-compact ui-select-search-input"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder={searchPlaceholder || "搜索..."}
+                onClick={(event) => event.stopPropagation()}
+                autoFocus
+              />
+            </div>
+          )}
+          {filteredOptions.length === 0 ? (
+            <div className="ui-select-empty">{emptyText}</div>
+          ) : (
+            filteredOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={cx("ui-select-item", option.value === value && "selected", option.disabled && "disabled")}
+                onClick={() => handleSelect(option)}
+                disabled={option.disabled}
+                role="option"
+                aria-selected={option.value === value}
+              >
+                {option.label}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

@@ -89,10 +89,26 @@ export async function loadSceneItems({
         if (isStale?.()) return;
         const obj = loadedObjects[index];
         const objectBase = 92 + Math.round((index / totalObjects) * 8);
-        await manager.addModel(obj, (p: number, msg: string) => {
-            const stagedProgress = Math.min(100, objectBase + Math.round((p / 100) * (8 / totalObjects)));
-            onProgress(stagedProgress, msg);
-        });
+        try {
+            let meshCount = 0;
+            obj.traverse((child: any) => {
+                if (child?.isMesh && child.geometry) meshCount++;
+            });
+            if (meshCount <= 0) {
+                throw new Error(`${obj.name || "Model"} has no renderable mesh`);
+            }
+
+            await manager.addModel(obj, (p: number, msg: string) => {
+                const stagedProgress = Math.min(100, objectBase + Math.round((p / 100) * (8 / totalObjects)));
+                onProgress(stagedProgress, msg);
+            });
+        } catch (error) {
+            try {
+                await manager.removeModel(obj.uuid);
+            } catch {
+            }
+            throw error;
+        }
         manager.invalidateRender?.({
             invalidateInteractables: true,
             needsBoundsUpdate: true,

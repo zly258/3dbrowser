@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { sanitizeFileStem, stripFileExtension } from "../../viewer/exportNaming";
 import type { StructureTreeNode } from "./types";
+import type { NbimPropertyDocument, NbimPropertyNameIndexItem, NbimPropertyRow } from "../scene-core/nbimIO";
 
 const INVALID_DISPLAY_LABELS = new Set(["", "n/a", "na", "undefined", "null", "-", "--"]);
 
@@ -99,7 +100,8 @@ export function encodeNbimManifest(manifest: {
     chunks: unknown[];
     structureTree: any;
     bimIdTable: string[];
-    bimProperties: Record<string, any>;
+    bimPropertyDocs?: Record<string, NbimPropertyDocument>;
+    propertyNameIndex?: NbimPropertyNameIndexItem[];
 }, structureRoot: StructureTreeNode) {
     let manifestString: string;
     try {
@@ -115,7 +117,8 @@ export function encodeNbimManifest(manifest: {
                 children: structureRoot.children ? [] : []
             },
             bimIdTable: manifest.bimIdTable,
-            bimProperties: {}
+            bimPropertyDocs: manifest.bimPropertyDocs || {},
+            propertyNameIndex: manifest.propertyNameIndex || []
         });
     }
 
@@ -229,6 +232,173 @@ export function collectIfcModelReferences(contentGroup: THREE.Group) {
     };
 }
 
+function toSearchablePropertyText(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => toSearchablePropertyText(item))
+            .filter(Boolean)
+            .join(", ");
+    }
+    return "";
+}
+
+function appendPropertyRow(
+    rows: NbimPropertyRow[],
+    group: string,
+    key: string,
+    value: unknown,
+    source?: string,
+    rawKey?: string
+) {
+    const text = toSearchablePropertyText(value);
+    const safeGroup = String(group || "").trim();
+    const safeKey = String(key || "").trim();
+    if (!safeGroup || !safeKey || !text) return;
+
+    rows.push({
+        group: safeGroup,
+        key: safeKey,
+        rawKey,
+        path: `${safeGroup}.${safeKey}`,
+        value: text,
+        source
+    });
+}
+
+function flattenRecordToRows(
+    rows: NbimPropertyRow[],
+    group: string,
+    record: any,
+    source: string,
+    prefix = ""
+) {
+    if (!record || typeof record !== "object") return;
+
+    if (Array.isArray(record)) {
+        record.forEach((item, index) => {
+            if (item && typeof item === "object" && "key" in item) {
+                appendPropertyRow(
+                    rows,
+                    group,
+                    String(item.key || ""),
+                    item.value,
+                    item.source || source,
+                    item.rawKey
+                );
+                return;
+            }
+
+            if (item && typeof item === "object") {
+                flattenRecordToRows(rows, group, item, source, `${prefix || "Item"}${index + 1}`);
+                return;
+            }
+
+            appendPropertyRow(rows, group, `${prefix || "Item"}${index + 1}`, item, source);
+        });
+        return;
+    }
+
+    Object.entries(record).forEach(([key, value]) => {
+        const nextKey = prefix ? `${prefix}.${key}` : key;
+        if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+            flattenRecordToRows(rows, group, value, source, nextKey);
+        } else {
+            appendPropertyRow(rows, group, nextKey, value, source, key);
+        }
+    });
+}
+
+export function buildPropertyNameIndex(docs: Record<string, NbimPropertyDocument>): NbimPropertyNameIndexItem[] {
+    const map = new Map<string, NbimPropertyNameIndexItem>();
+
+    Object.values(docs || {}).forEach((doc) => {
+        (doc.rows || []).forEach((row) => {
+            if (!row?.group || !row?.key) return;
+            const path = row.path || `${row.group}.${row.key}`;
+            if (!map.has(path)) {
+                map.set(path, {
+                    group: row.group,
+                    key: row.key,
+                    path,
+                    rawKey: row.rawKey,
+                    count: 0
+                });
+            }
+            map.get(path)!.count++;
+        });
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.path.localeCompare(b.path, "zh-Hans-CN"));
+}
+
+function collectBasicRowsFromNode(node: StructureTreeNode, originalUuid: string): NbimPropertyRow[] {
+    const rows: NbimPropertyRow[] = [];
+    appendPropertyRow(rows, "基本信息", "UUID", node.id, "nbim");
+    appendPropertyRow(rows, "基本信息", "名称", node.name, "nbim");
+    appendPropertyRow(rows, "基本信息", "类型", node.type, "nbim");
+    appendPropertyRow(rows, "基本信息", "模型ID", originalUuid, "nbim");
+    appendPropertyRow(rows, "基本信息", "BIM_ID", node.bimId, "nbim");
+    appendPropertyRow(rows, "基本信息", "ExpressID", node.userData?.expressID, "nbim");
+    return rows;
+}
+
+async function appendIfcRowsForExpressId(options: {
+    rows: NbimPropertyRow[];
+    oldCompat: any;
+    originalUuid: string;
+    expressID: unknown;
+    ifcApiByModel: Map<string, IfcApiRef>;
+    ifcManagerByModel: Map<string, IfcManagerRef>;
+}) {
+    const { rows, oldCompat, originalUuid, expressID, ifcApiByModel, ifcManagerByModel } = options;
+    if (expressID === undefined || expressID === null || expressID === "") return;
+    const id = Number(expressID);
+    if (!Number.isFinite(id)) return;
+
+    if (ifcApiByModel.has(originalUuid)) {
+        try {
+            const { ifcApi, modelID } = ifcApiByModel.get(originalUuid)!;
+            const entity = ifcApi.GetLine(modelID, id);
+            if (entity) {
+                const ifcType = entity.is_a || "";
+                const globalId = entity.GlobalId?.value || "";
+                const ifcName = entity.Name?.value || "";
+                oldCompat.ifcType = ifcType;
+                oldCompat.globalId = globalId;
+                oldCompat.ifcName = ifcName;
+                appendPropertyRow(rows, "IFC 标识", "类型", ifcType, "ifc", "is_a");
+                appendPropertyRow(rows, "IFC 标识", "GlobalId", globalId, "ifc", "GlobalId");
+                appendPropertyRow(rows, "IFC 标识", "名称", ifcName, "ifc", "Name");
+            }
+        } catch {}
+    }
+
+    if (ifcManagerByModel.has(originalUuid)) {
+        try {
+            const { ifcManager, modelID } = ifcManagerByModel.get(originalUuid)!;
+            const fullProps = await ifcManager.getItemProperties(modelID, id);
+            const rawGroups = fullProps?.rawGroups || fullProps?.groups || null;
+            const normalizedGroups = fullProps?.normalizedGroups || null;
+
+            if (rawGroups && Object.keys(rawGroups).length > 0) oldCompat.ifcRawGroups = rawGroups;
+            if (normalizedGroups && Object.keys(normalizedGroups).length > 0) oldCompat.ifcNormalizedGroups = normalizedGroups;
+
+            if (normalizedGroups && Object.keys(normalizedGroups).length > 0) {
+                Object.entries(normalizedGroups).forEach(([groupName, groupValue]) => {
+                    flattenRecordToRows(rows, groupName, groupValue, "ifc-normalized");
+                });
+            } else if (rawGroups && Object.keys(rawGroups).length > 0) {
+                Object.entries(rawGroups).forEach(([groupName, groupValue]) => {
+                    flattenRecordToRows(rows, groupName, groupValue, "ifc-raw");
+                });
+            }
+        } catch {}
+    }
+}
+
 export async function collectNbimBimProperties(options: {
     structureRoot: StructureTreeNode;
     ifcApiByModel: Map<string, IfcApiRef>;
@@ -236,6 +406,7 @@ export async function collectNbimBimProperties(options: {
 }) {
     const { structureRoot, ifcApiByModel, ifcManagerByModel } = options;
     const bimProperties: Record<string, any> = {};
+    const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
     const stack: StructureTreeNode[] = [structureRoot];
 
     while (stack.length > 0) {
@@ -244,36 +415,26 @@ export async function collectNbimBimProperties(options: {
 
         if (node.bimId) {
             const key = `${originalUuid}::${node.bimId}`;
-            if (!bimProperties[key]) {
-                bimProperties[key] = { uuid: node.id, name: node.name };
-                const expressID = node.userData?.expressID;
+            if (!bimPropertyDocs[key]) {
+                const rows = collectBasicRowsFromNode(node, originalUuid);
+                const oldCompat: any = { uuid: node.id, name: node.name };
+                await appendIfcRowsForExpressId({
+                    rows,
+                    oldCompat,
+                    originalUuid,
+                    expressID: node.userData?.expressID,
+                    ifcApiByModel,
+                    ifcManagerByModel
+                });
 
-                if (expressID !== undefined && ifcApiByModel.has(originalUuid)) {
-                    try {
-                        const { ifcApi, modelID } = ifcApiByModel.get(originalUuid)!;
-                        const entity = ifcApi.GetLine(modelID, Number(expressID));
-                        if (entity) {
-                            bimProperties[key].ifcType = entity.is_a || "";
-                            bimProperties[key].globalId = entity.GlobalId?.value || "";
-                            bimProperties[key].ifcName = entity.Name?.value || "";
-                        }
-                    } catch {}
-                }
-
-                if (expressID !== undefined && ifcManagerByModel.has(originalUuid)) {
-                    try {
-                        const { ifcManager, modelID } = ifcManagerByModel.get(originalUuid)!;
-                        const fullProps = await ifcManager.getItemProperties(modelID, Number(expressID));
-                        const rawGroups = fullProps?.rawGroups || fullProps?.groups || null;
-                        const normalizedGroups = fullProps?.normalizedGroups || null;
-                        if (rawGroups && Object.keys(rawGroups).length > 0) {
-                            bimProperties[key].ifcRawGroups = rawGroups;
-                        }
-                        if (normalizedGroups && Object.keys(normalizedGroups).length > 0) {
-                            bimProperties[key].ifcNormalizedGroups = normalizedGroups;
-                        }
-                    } catch {}
-                }
+                bimProperties[key] = oldCompat;
+                bimPropertyDocs[key] = {
+                    owner: originalUuid,
+                    bimId: String(node.bimId),
+                    uuid: String(node.id),
+                    name: String(node.name || ""),
+                    rows
+                };
             }
         }
 
@@ -284,7 +445,126 @@ export async function collectNbimBimProperties(options: {
         }
     }
 
-    return bimProperties;
+    return {
+        bimProperties,
+        bimPropertyDocs,
+        propertyNameIndex: buildPropertyNameIndex(bimPropertyDocs)
+    };
+}
+
+export async function collectIfcObjectPropertyIndex(options: {
+    object: THREE.Object3D;
+    ifcApiByModel: Map<string, IfcApiRef>;
+    ifcManagerByModel: Map<string, IfcManagerRef>;
+    onProgress?: (processed: number, total: number) => void;
+}) {
+    const { object, ifcApiByModel, ifcManagerByModel, onProgress } = options;
+    const bimProperties: Record<string, any> = {};
+    const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
+    const owner = String(object.uuid);
+    const meshes: THREE.Object3D[] = [];
+    const seen = new Set<string>();
+
+    object.traverse((child) => {
+        const expressID = child.userData?.expressID;
+        if (expressID === undefined || expressID === null || expressID === "") return;
+        const key = `${owner}::${expressID}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        meshes.push(child);
+    });
+
+    for (let index = 0; index < meshes.length; index++) {
+        const child = meshes[index];
+        const expressID = child.userData?.expressID;
+        const key = `${owner}::${expressID}`;
+        const rows: NbimPropertyRow[] = [];
+        const oldCompat: any = { uuid: child.uuid, name: child.name };
+
+        appendPropertyRow(rows, "基本信息", "UUID", child.uuid, "ifc-object");
+        appendPropertyRow(rows, "基本信息", "名称", child.name, "ifc-object");
+        appendPropertyRow(rows, "基本信息", "类型", child.type, "ifc-object");
+        appendPropertyRow(rows, "基本信息", "模型ID", owner, "ifc-object");
+        appendPropertyRow(rows, "基本信息", "BIM_ID", expressID, "ifc-object");
+        appendPropertyRow(rows, "基本信息", "ExpressID", expressID, "ifc-object");
+
+        const ifcMeta = child.userData?.ifcMetadata;
+        if (ifcMeta && typeof ifcMeta === "object") {
+            flattenRecordToRows(rows, "IFC 元数据", ifcMeta, "ifc-metadata");
+        }
+
+        await appendIfcRowsForExpressId({
+            rows,
+            oldCompat,
+            originalUuid: owner,
+            expressID,
+            ifcApiByModel,
+            ifcManagerByModel
+        });
+
+        bimProperties[key] = oldCompat;
+        bimPropertyDocs[key] = {
+            owner,
+            bimId: String(expressID),
+            uuid: child.uuid,
+            name: child.name || String(expressID),
+            rows
+        };
+
+        if (index > 0 && index % 120 === 0) {
+            onProgress?.(index, meshes.length);
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+    }
+
+    onProgress?.(meshes.length, meshes.length);
+
+    return {
+        bimProperties,
+        bimPropertyDocs,
+        propertyNameIndex: buildPropertyNameIndex(bimPropertyDocs)
+    };
+}
+
+export function convertLegacyBimPropertiesToDocs(
+    bimProperties: Record<string, any>
+) {
+    const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
+
+    Object.entries(bimProperties || {}).forEach(([key, value]: [string, any]) => {
+        const separatorIndex = key.indexOf("::");
+        const owner = separatorIndex > 0 ? key.slice(0, separatorIndex) : "";
+        const bimId = separatorIndex > 0 ? key.slice(separatorIndex + 2) : key;
+        const rows: NbimPropertyRow[] = [];
+
+        appendPropertyRow(rows, "基本信息", "UUID", value?.uuid || bimId, "legacy-nbim");
+        appendPropertyRow(rows, "基本信息", "名称", value?.name || "", "legacy-nbim");
+        appendPropertyRow(rows, "基本信息", "BIM_ID", bimId, "legacy-nbim");
+        flattenRecordToRows(rows, "NBIM", value, "legacy-nbim");
+
+        if (value?.ifcNormalizedGroups) {
+            Object.entries(value.ifcNormalizedGroups).forEach(([groupName, groupValue]) => {
+                flattenRecordToRows(rows, groupName, groupValue, "legacy-ifc");
+            });
+        } else if (value?.ifcRawGroups) {
+            Object.entries(value.ifcRawGroups).forEach(([groupName, groupValue]) => {
+                flattenRecordToRows(rows, groupName, groupValue, "legacy-ifc");
+            });
+        }
+
+        bimPropertyDocs[key] = {
+            owner,
+            bimId,
+            uuid: value?.uuid || bimId,
+            name: value?.name || "",
+            rows
+        };
+    });
+
+    return {
+        bimPropertyDocs,
+        propertyNameIndex: buildPropertyNameIndex(bimPropertyDocs)
+    };
 }
 
 function decodeChunkBinaryV8(buffer: ArrayBuffer, bimIdTable: string[]) {

@@ -33,6 +33,7 @@ export interface SceneSettings {
     maxPixelRatio?: number;
     targetFps?: number;
     performanceMode?: "balanced" | "smooth" | "quality";
+    locateIsolateMode?: boolean;
 }
 
 export interface StructureTreeNode {

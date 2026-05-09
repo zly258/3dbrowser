@@ -838,41 +838,6 @@ export const loadIFC = async (
 
     loadSpatialStructure();
 
-    // 空间结构剪枝：自底向上删除没有任何可渲染几何子节点的空虚容器节点
-    // 对于大型建筑 IFC 文件（Revit 导出），可显著削减 IFCSPACE/IFCZONE 等空节点
-    const pruneEmptySpatialNodes = (node: THREE.Object3D): boolean => {
-        // 叶节点是 Mesh 或带几何的实体，直接保留
-        if ((node as THREE.Mesh).isMesh) return true;
-
-        // 非空间容器节点（如后续挂载的普通 Group）保留
-        if (!node.userData?.isSpatial) return true;
-
-        // 递归裁剪子节点
-        const toRemove: THREE.Object3D[] = [];
-        node.children.forEach(child => {
-            const hasContent = pruneEmptySpatialNodes(child);
-            if (!hasContent) toRemove.push(child);
-        });
-        toRemove.forEach(child => {
-            node.remove(child);
-            nodesMap.delete(child.userData?.expressID);
-        });
-
-        // 裁剪后再判断自身是否还有子内容
-        return node.children.length > 0;
-    };
-
-    // 只对 rootGroup 的直接子节点（IfcProject 层）向下剪枝
-    const toRemoveFromRoot: THREE.Object3D[] = [];
-    rootGroup.children.forEach(child => {
-        const hasContent = pruneEmptySpatialNodes(child);
-        if (!hasContent) toRemoveFromRoot.push(child);
-    });
-    toRemoveFromRoot.forEach(child => {
-        rootGroup.remove(child);
-        nodesMap.delete(child.userData?.expressID);
-    });
-
     const buildIfcGridHelpers = () => {
         try {
             const gridType = getIfcTypeCode(ifcApi, "IFCGRID");
@@ -995,18 +960,7 @@ export const loadIFC = async (
             }
         }
     };
-    if (shouldDeferMetadata) {
-        onProgress(42, `${t("analyzing")}...`);
-        setTimeout(() => {
-            buildLayerMap();
-            buildPropertyMap();
-            buildTypeAssignments();
-            buildClassificationMap();
-            buildMaterialMap();
-            buildSystemMap();
-            applyLayerMetadata();
-        }, 0);
-    } else {
+    const buildDeferredMetadata = () => {
         buildLayerMap();
         buildPropertyMap();
         buildTypeAssignments();
@@ -1014,6 +968,19 @@ export const loadIFC = async (
         buildMaterialMap();
         buildSystemMap();
         applyLayerMetadata();
+    };
+
+    if (shouldDeferMetadata) {
+        onProgress(42, `${t("analyzing")}...`);
+        rootGroup.userData.ifcMetadataReady = new Promise<void>((resolve) => {
+            setTimeout(() => {
+                buildDeferredMetadata();
+                resolve();
+            }, 0);
+        });
+    } else {
+        buildDeferredMetadata();
+        rootGroup.userData.ifcMetadataReady = Promise.resolve();
     }
     // --- 空间结构解析结束 ---
 
@@ -1584,6 +1551,46 @@ export const loadIFC = async (
             }
         }
     });
+
+    // 几何挂载完成后再剪枝空间结构。
+    // 之前在 StreamAllMeshes 之前剪枝，会把所有尚未挂载 Mesh 的空间/构件节点删除，
+    // 导致 IFC 打开后模型结构只剩根节点、属性索引也缺少结构层级。
+    // 空间结构剪枝：自底向上删除没有任何可渲染几何子节点的空虚容器节点
+    // 对于大型建筑 IFC 文件（Revit 导出），可显著削减 IFCSPACE/IFCZONE 等空节点
+    const pruneEmptySpatialNodes = (node: THREE.Object3D): boolean => {
+        // 叶节点是 Mesh 或带几何的实体，直接保留
+        if ((node as THREE.Mesh).isMesh) return true;
+
+        // 非空间容器节点（如后续挂载的普通 Group）保留
+        if (!node.userData?.isSpatial) return true;
+
+        // 递归裁剪子节点
+        const toRemove: THREE.Object3D[] = [];
+        node.children.forEach(child => {
+            const hasContent = pruneEmptySpatialNodes(child);
+            if (!hasContent) toRemove.push(child);
+        });
+        toRemove.forEach(child => {
+            node.remove(child);
+            nodesMap.delete(child.userData?.expressID);
+        });
+
+        // 裁剪后再判断自身是否还有子内容
+        return node.children.length > 0;
+    };
+
+    // 只对 rootGroup 的直接子节点（IfcProject 层）向下剪枝
+    const toRemoveFromRoot: THREE.Object3D[] = [];
+    rootGroup.children.forEach(child => {
+        const hasContent = pruneEmptySpatialNodes(child);
+        if (!hasContent) toRemoveFromRoot.push(child);
+    });
+    toRemoveFromRoot.forEach(child => {
+        rootGroup.remove(child);
+        nodesMap.delete(child.userData?.expressID);
+    });
+
+
 
     console.log(`Loaded ${meshCount} meshes from IFC.`);
     onProgress(100, t("success"));

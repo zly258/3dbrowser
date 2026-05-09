@@ -81,6 +81,47 @@ function buildObbFromGeometry(geometry: THREE.BufferGeometry, matrixWorld: THREE
   return new OBB(center, halfSize, rotation);
 }
 
+function normalizeDisplayName(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function readSearchRowValue(doc: any, keys: string[]) {
+  if (!doc || !Array.isArray(doc.rows)) return "";
+  const normalizedKeys = keys.map((key) => key.toLowerCase());
+  const row = doc.rows.find((item: any) => {
+    const key = String(item?.key || "").toLowerCase();
+    const path = String(item?.path || "").toLowerCase();
+    const rawKey = String(item?.rawKey || "").toLowerCase();
+    return normalizedKeys.some((target) => key === target || path === target || rawKey === target || path.endsWith(`.${target}`));
+  });
+  return normalizeDisplayName(row?.value);
+}
+
+function getClashDisplayName(sceneMgr: SceneManager, uuid: string, obj: THREE.Object3D | null, fallback = "") {
+  const doc = (sceneMgr as any).getNbimPropertySearchDocument?.(uuid);
+  const expressId = normalizeDisplayName(
+    readSearchRowValue(doc, ["ExpressID", "IFC 标识.ExpressID", "IFC.ExpressID"])
+    || obj?.userData?.expressID
+  );
+  const bimId = normalizeDisplayName((sceneMgr as any).getBimIdByUuid?.(uuid) || doc?.bimId || obj?.userData?.bimId);
+  const ifcType = normalizeDisplayName(
+    readSearchRowValue(doc, ["类型", "IFC 标识.类型", "ifcType"])
+    || obj?.userData?.ifcType
+    || obj?.type
+  );
+  const name = normalizeDisplayName(
+    readSearchRowValue(doc, ["名称", "Name"])
+    || obj?.name
+    || doc?.name
+    || fallback
+  );
+
+  if (bimId && bimId !== uuid) return bimId;
+  if (expressId) return `${ifcType && ifcType !== "Mesh" ? ifcType : "IFC"} #${expressId}`;
+  if (name && name !== "Mesh" && name !== uuid) return name;
+  return fallback || uuid;
+}
+
 export function useClashCheck({
   sceneMgrRef,
   treeRoot,
@@ -168,7 +209,7 @@ export function useClashCheck({
       const candidate: ClashCandidate = {
         key: target.key,
         uuid: target.uuid,
-        name: target.name || target.uuid,
+        name: getClashDisplayName(sceneMgr, target.uuid, target.object, target.name || target.uuid),
         modelId,
         modelName: clashModelNameById.get(modelId) || modelId || target.name || target.uuid,
         box: target.box.clone(),

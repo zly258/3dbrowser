@@ -6,6 +6,8 @@ interface FocusInViewOptions {
   sceneMgrRef: MutableRefObject<SceneManager | null>;
   setSelectedUuids: Dispatch<SetStateAction<string[]>>;
   setSelectedProps?: Dispatch<SetStateAction<PropertyGroups | null>>;
+  isolateLocate?: boolean;
+  onIsolateLocate?: (uuids: string[]) => void;
 }
 
 interface FocusRequest {
@@ -18,7 +20,9 @@ interface FocusRequest {
 export function useFocusInView({
   sceneMgrRef,
   setSelectedUuids,
-  setSelectedProps
+  setSelectedProps,
+  isolateLocate = false,
+  onIsolateLocate
 }: FocusInViewOptions) {
   const focusObjectsInView = useCallback(({
     uuids,
@@ -34,6 +38,11 @@ export function useFocusInView({
 
     const targetFocus = focusUuid && normalized.includes(focusUuid) ? focusUuid : normalized[0];
 
+    if (isolateLocate) {
+      sceneManager.isolateObjects(normalized);
+      onIsolateLocate?.(normalized);
+    }
+
     // 统一高亮入口：高亮目标 + 背景灰化 + 飞到目标
     sceneManager.focusHighlightObjects(normalized, {
       fitView: true,
@@ -47,7 +56,7 @@ export function useFocusInView({
     }
 
     return true;
-  }, [sceneMgrRef, setSelectedProps, setSelectedUuids]);
+  }, [isolateLocate, onIsolateLocate, sceneMgrRef, setSelectedProps, setSelectedUuids]);
 
   return {
     focusObjectsInView

@@ -243,6 +243,7 @@ export const ThreeViewer = ({
             maxPixelRatio: 2,
             targetFps: 50,
             performanceMode: 'balanced',
+            locateIsolateMode: false,
             backLightInt: 0.5,
             highlightColor: "#0c62a2",
             highlightShowBox: false,
@@ -269,10 +270,13 @@ export const ThreeViewer = ({
     const viewportRef = useRef<HTMLDivElement>(null);
     const sceneMgr = useRef<SceneManager | null>(null);
     const ifcPropertyCacheRef = useRef<Map<string, Record<string, PropertyGroupInput>>>(new Map());
+    const focusLocateIsolationRef = useRef<(uuids: string[]) => void>(() => {});
     const { focusObjectsInView } = useFocusInView({
         sceneMgrRef: sceneMgr,
         setSelectedUuids,
-        setSelectedProps
+        setSelectedProps,
+        isolateLocate: sceneSettings.locateIsolateMode === true,
+        onIsolateLocate: (uuids) => focusLocateIsolationRef.current(uuids)
     });
     const {
         leftWidth,
@@ -641,6 +645,20 @@ export const ThreeViewer = ({
         resetLocateState: () => resetLocateStateRef.current()
     });
 
+
+    focusLocateIsolationRef.current = (uuids: string[]) => {
+        if (!sceneSettings.locateIsolateMode) return;
+        const normalized = Array.from(new Set((uuids || []).map((id) => String(id || "").trim()).filter(Boolean)));
+        if (normalized.length === 0) return;
+        setHiddenUuids((prev) => prev.size === 0 ? prev : new Set());
+        setIsolatedUuids((prev) => {
+            if (prev.size === normalized.length && normalized.every((id) => prev.has(id))) return prev;
+            return new Set(normalized);
+        });
+        // 这里不要同步 rebuild 模型树。定位隔离会频繁触发，如果每次都重建大树会导致界面卡死。
+        // 用户点击状态栏“恢复显示”时再统一恢复可见性并刷新模型树。
+    };
+
     const handleDeleteObject = (uuid: string) => {
         if (!sceneMgr.current) return;
         
@@ -784,6 +802,7 @@ export const ThreeViewer = ({
         searching,
         searchProgress,
         searchStatus,
+        propertyFieldOptions,
         handleRunPropertySearch,
         handleApplySearchResultHighlight,
         handleClearSearchResult,
@@ -799,7 +818,7 @@ export const ThreeViewer = ({
     });
 
     const modeTrayItems = useMemo(() => {
-        const items: Array<{ key: string; label: string; onClear: () => void }> = [];
+        const items: Array<{ key: string; label: string; onClear: () => void; clearLabel?: string }> = [];
 
         if (measureType !== "none") {
             items.push({
@@ -836,7 +855,8 @@ export const ThreeViewer = ({
             items.push({
                 key: "hidden",
                 label: `${t("mode_hidden")} ${hiddenUuids.size}`,
-                onClear: handleShowAll
+                onClear: handleShowAll,
+                clearLabel: t("mode_restore_visibility") || t("mode_clear")
             });
         }
 
@@ -844,7 +864,8 @@ export const ThreeViewer = ({
             items.push({
                 key: "isolated",
                 label: `${t("mode_isolated")} ${isolatedUuids.size}`,
-                onClear: handleShowAll
+                onClear: handleShowAll,
+                clearLabel: t("mode_restore_visibility") || t("mode_clear")
             });
         }
 
@@ -1247,6 +1268,7 @@ export const ThreeViewer = ({
                             searching={searching}
                             searchProgress={searchProgress}
                             searchStatus={searchStatus}
+                            propertyFieldOptions={propertyFieldOptions}
                             onConditionsChange={setSearchConditions}
                             onSearch={() => void handleRunPropertySearch()}
                             onCancelSearch={handleCancelSearch}
@@ -1376,7 +1398,7 @@ export const ThreeViewer = ({
                                 <div key={item.key} className="ui-mode-pill">
                                     <span>{item.label}</span>
                                     <button onClick={item.onClear}>
-                                        {t("mode_clear")}
+                                        {item.clearLabel || t("mode_clear")}
                                     </button>
                                 </div>
                             ))}
