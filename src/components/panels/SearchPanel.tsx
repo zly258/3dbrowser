@@ -36,6 +36,7 @@ interface SearchPanelProps {
   searching: boolean;
   searchProgress: number;
   searchStatus: string;
+  propertyFieldOptions: Array<{ value: string; label: string; count?: number }>;
   onConditionsChange: (next: PropertySearchCondition[]) => void;
   onSearch: () => void;
   onCancelSearch: () => void;
@@ -73,6 +74,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   searching,
   searchProgress,
   searchStatus,
+  propertyFieldOptions,
   onConditionsChange,
   onSearch,
   onCancelSearch,
@@ -139,9 +141,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       title={t("tb_search") || "属性搜索"}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={460}
+      width={680}
+      height={560}
+      resizable={true}
       storageId="tool_search"
-      autoHeight={true}
+      autoHeight={false}
       theme={theme}
     >
       <div className="ui-toolpanel-body ui-search-panel-body">
@@ -185,13 +189,20 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               )}
             </div>
 
-            <input
-              className="ui-input ui-input-compact ui-search-field-input"
-              placeholder={t("search_field_name") || "属性名"}
+            <Select
               value={condition.propertyName}
-              onChange={(e) =>
-                updateCondition(condition.id, { propertyName: e.target.value })
+              options={propertyFieldOptions.map((item) => ({
+                value: item.value,
+                label: item.label
+              }))}
+              onChange={(value) =>
+                updateCondition(condition.id, { propertyName: value })
               }
+              placeholder={t("search_field_name") || "属性名"}
+              searchable={true}
+              searchPlaceholder={t("search_field_filter") || "搜索属性名"}
+              emptyText={t("search_no_fields") || "暂无可用属性"}
+              className="ui-input-compact ui-search-field-input"
             />
 
             <Select
@@ -251,6 +262,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </div>
 
         <div className="ui-toolpanel-results-box ui-search-results-box">
+          <div className="ui-search-hint-strip">
+            {t("search_fields_total") || "可搜索属性"}: {propertyFieldOptions.length}
+          </div>
           {results.length === 0 ? (
             <div className="ui-toolpanel-results-empty">
               {t("search_no_results") || "暂无结果"}
@@ -279,6 +293,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </div>
 
         {results.length > 0 && (
+          <div className="ui-search-pagination">
           <PaginationControls
             prevTitle={t("search_page_prev") || "上一页"}
             nextTitle={t("search_page_next") || "下一页"}
@@ -292,6 +307,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               </Button>
             }
           />
+          </div>
         )}
 
         {searching && (

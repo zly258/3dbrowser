@@ -94,6 +94,26 @@ export async function fetchIfcGroups(
     }
 }
 
+
+function buildPropertyGroupsFromRows(rows: Array<{ group?: string; key?: string; value?: unknown; rawKey?: string; source?: string; path?: string }> | null | undefined): Record<string, PropertyGroupInput> | null {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const grouped: Record<string, any[]> = {};
+    rows.forEach((row, index) => {
+        const group = String(row.group || "NBIM").trim();
+        const key = String(row.key || "").trim();
+        if (!group || !key) return;
+        if (!grouped[group]) grouped[group] = [];
+        grouped[group].push({
+            key,
+            value: row.value,
+            rawKey: row.rawKey,
+            source: row.source || "property-index",
+            id: `property-index::${row.path || `${group}.${key}`}::${index}`
+        });
+    });
+    return Object.keys(grouped).length > 0 ? grouped : null;
+}
+
 interface BuildSelectionPropertyGroupsArgs {
     sceneManager: SceneManager;
     focusUuid: string;
@@ -171,6 +191,8 @@ export function buildSelectionPropertyGroups({
         geoProps[t("prop_dim")] = `${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`;
     }
 
+    const searchDoc = sceneManager.getNbimPropertySearchDocument(focusUuid);
+    const indexedGroups = buildPropertyGroupsFromRows(searchDoc?.rows);
     const nbimProps = sceneManager.getNbimProperties(focusUuid);
     const nbimIfcGroups = sceneManager.getNbimIfcPropertyGroups(focusUuid, "raw");
 
@@ -193,7 +215,7 @@ export function buildSelectionPropertyGroups({
         geoLabel: t("pg_geo"),
         basicProps,
         geoProps,
-        ifcProps: ifcGroups || nbimIfcGroups || null,
+        ifcProps: ifcGroups || indexedGroups || nbimIfcGroups || null,
         nbimProps: null
     });
 

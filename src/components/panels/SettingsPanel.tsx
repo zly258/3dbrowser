@@ -92,12 +92,22 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             </Row>
 
             {/* 显示统计 */}
-            <Row label={t("st_monitor")} labelWidth="70px">
+            <Row label={t("st_monitor")} labelWidth="82px">
               <Switch
                 checked={showStats}
                 onChange={(v) => setShowStats(v)}
               />
             </Row>
+
+            <Row label={t("st_locate_isolate") || "定位隔离"} labelWidth="82px">
+              <Switch
+                checked={settings.locateIsolateMode === true}
+                onChange={(v) => onUpdate({ locateIsolateMode: v })}
+              />
+            </Row>
+            <div className="ui-toolpanel-caption ui-toolpanel-caption-muted ui-settings-hint">
+              {t("st_locate_isolate_hint") || "搜索、碰撞、模型树定位时只显示定位对象。"}
+            </div>
           </div>
         )}
 

@@ -10,7 +10,7 @@ import {
 import { deriveInitialRuntimeFromHardware } from "../scene-core/chunkRuntime";
 import { debugLog } from "../scene-core/debugLogger";
 import { stableExplodeDirection } from "../scene-core/explode";
-import { readNbimHeader, readNbimManifest, type NbimManifest } from "../scene-core/nbimIO";
+import { readNbimHeader, readNbimManifest, type NbimManifest, type NbimPropertyDocument, type NbimPropertyNameIndexItem } from "../scene-core/nbimIO";
 import {
     applyCancelBoxSelect,
     applyEndBoxSelect,
@@ -67,6 +67,7 @@ import { getObjectGeometryDataFromScene } from "./geometry";
 import {
     buildExportStructureTree,
     collectIfcModelReferences,
+    collectIfcObjectPropertyIndex,
     collectNbimBimProperties,
     countStructureRenderableNodes,
     createNbimContainerGroup,
@@ -295,6 +296,10 @@ export class SceneManager {
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
     private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
     private nbimPropsByOriginalUuid: Map<string, Record<string, any>> = new Map();
+    private nbimPropertyDocsByOriginalUuid: Map<string, Record<string, NbimPropertyDocument>> = new Map();
+    private nbimSearchDocsByUuid: Map<string, NbimPropertyDocument> = new Map();
+    private nbimPropertyNameIndex: Map<string, NbimPropertyNameIndexItem> = new Map();
+    private nbimPropertyNameIndexVersion = 0;
     private sharedMaterial = new THREE.MeshStandardMaterial({
         color: 0xd9dce1,
         roughness: 0.82,
@@ -2426,6 +2431,7 @@ export class SceneManager {
         });
         this.finalizeModelStage(previewGhost, onProgress);
         this.scheduleDeferredStructureReplacement(object, shouldDeferStructure, deferredPlaceholderId);
+        await this.rebuildSearchPropertyIndexForObject(object, onProgress);
         this.markSceneDirty({
             invalidateInteractables: true,
             needsBoundsUpdate: true,
@@ -2699,6 +2705,89 @@ export class SceneManager {
         return buffer;
     }
 
+    private registerPropertyDocuments(options: {
+        docs: Record<string, NbimPropertyDocument>;
+        propertyNameIndex?: NbimPropertyNameIndexItem[];
+        rootId?: string;
+        preferNodeMapping?: boolean;
+    }) {
+        const { docs, propertyNameIndex, rootId, preferNodeMapping = false } = options;
+        let changed = false;
+
+        Object.entries(docs || {}).forEach(([key, doc]) => {
+            if (!doc || !Array.isArray(doc.rows)) return;
+            const separatorIndex = key.indexOf("::");
+            const owner = doc.owner || (separatorIndex > 0 ? key.slice(0, separatorIndex) : rootId || "");
+            const bimId = doc.bimId || (separatorIndex > 0 ? key.slice(separatorIndex + 2) : "");
+            let uuid = doc.uuid || bimId;
+
+            if (preferNodeMapping && owner && bimId) {
+                const nodeIds = this.bimIdToNodeIds.get(`${owner}::${bimId}`) || [];
+                if (nodeIds.length > 0) uuid = nodeIds[0];
+            }
+
+            const normalizedDoc: NbimPropertyDocument = {
+                ...doc,
+                owner,
+                bimId: String(bimId || ""),
+                uuid: String(uuid || doc.uuid || bimId || key),
+                name: String(doc.name || ""),
+                rows: doc.rows
+            };
+
+            if (!this.nbimPropertyDocsByOriginalUuid.has(owner)) {
+                this.nbimPropertyDocsByOriginalUuid.set(owner, {});
+            }
+            this.nbimPropertyDocsByOriginalUuid.get(owner)![key] = normalizedDoc;
+            this.nbimSearchDocsByUuid.set(normalizedDoc.uuid, normalizedDoc);
+            changed = true;
+        });
+
+        (propertyNameIndex || []).forEach((item) => {
+            if (!item?.path) return;
+            const old = this.nbimPropertyNameIndex.get(item.path);
+            this.nbimPropertyNameIndex.set(item.path, {
+                ...item,
+                count: (old?.count || 0) + (item.count || 0)
+            });
+            changed = true;
+        });
+
+        if (changed) this.nbimPropertyNameIndexVersion++;
+    }
+
+    private async rebuildSearchPropertyIndexForObject(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
+        if (!object?.userData?.isIFC) return;
+
+        const metadataReady = object.userData?.ifcMetadataReady;
+        if (metadataReady && typeof metadataReady.then === "function") {
+            if (onProgress) onProgress(95, "正在完成 IFC 属性资源解析...");
+            await metadataReady;
+        }
+
+        const refs = collectIfcModelReferences(this.contentGroup);
+        if (!refs.ifcManagerByModel.has(object.uuid) && !refs.ifcApiByModel.has(object.uuid)) return;
+
+        if (onProgress) onProgress(96, "正在建立属性索引...");
+        const { bimProperties, bimPropertyDocs, propertyNameIndex } = await collectIfcObjectPropertyIndex({
+            object,
+            ifcApiByModel: refs.ifcApiByModel,
+            ifcManagerByModel: refs.ifcManagerByModel,
+            onProgress: (processed, total) => {
+                if (!onProgress || total <= 0) return;
+                const p = 96 + Math.floor((processed / total) * 3);
+                onProgress(Math.min(99, p), `正在建立属性索引... (${processed}/${total})`);
+            }
+        });
+
+        this.nbimPropsByOriginalUuid.set(object.uuid, bimProperties);
+        this.registerPropertyDocuments({
+            docs: bimPropertyDocs,
+            propertyNameIndex,
+            rootId: object.uuid
+        });
+    }
+
     async exportNbim(fileName?: string) {
         if (this.chunks.length === 0) throw new Error("无模型数据可导出");
 
@@ -2718,7 +2807,7 @@ export class SceneManager {
         traverseBimIds(this.structureRoot);
 
         const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
-        const bimProperties = await collectNbimBimProperties({
+        const { bimPropertyDocs, propertyNameIndex } = await collectNbimBimProperties({
             structureRoot: this.structureRoot,
             ifcApiByModel,
             ifcManagerByModel
@@ -2741,7 +2830,8 @@ export class SceneManager {
             stats: this.originalStats,
             structureTree: buildExportStructureTree(this.structureRoot),
             bimIdTable,
-            bimProperties
+            bimPropertyDocs,
+            propertyNameIndex
         };
 
         const manifestBytes = encodeNbimManifest(manifest, this.structureRoot);
@@ -2769,7 +2859,6 @@ export class SceneManager {
     async loadNbim(file: File, onProgress?: (p: number, msg: string) => void) {
         // 不再自动清空场景，支持多模型
         const fileId = `nbim_${file.name}_${new Date().getTime()}`;
-        this.nbimFiles.set(fileId, file);
 
         if (onProgress) onProgress(10, "正在解析 NBIM 文件头...");
         const header = await readNbimHeader(file);
@@ -2784,6 +2873,18 @@ export class SceneManager {
         if (onProgress) onProgress(20, "正在读取元数据...");
         const manifest = await readNbimManifest(file, header) as NbimManifest;
 
+        const manifestDocs = (manifest?.bimPropertyDocs && typeof manifest.bimPropertyDocs === "object")
+            ? manifest.bimPropertyDocs as Record<string, NbimPropertyDocument>
+            : null;
+        const manifestPropertyNameIndex = Array.isArray(manifest.propertyNameIndex)
+            ? manifest.propertyNameIndex as NbimPropertyNameIndexItem[]
+            : null;
+
+        if (!manifestDocs || !manifestPropertyNameIndex) {
+            throw new Error("不支持旧版 NBIM：缺少 bimPropertyDocs 或 propertyNameIndex。请使用当前版本重新导出 NBIM。");
+        }
+
+        this.nbimFiles.set(fileId, file);
         this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
 
         const boundsState = applyNbimGlobalBounds({
@@ -2839,6 +2940,13 @@ export class SceneManager {
             defaultOwner,
             nodeMap: this.nodeMap,
             bimIdToNodeIds: this.bimIdToNodeIds
+        });
+
+        this.registerPropertyDocuments({
+            docs: manifestDocs,
+            propertyNameIndex: manifestPropertyNameIndex,
+            rootId,
+            preferNodeMapping: true
         });
 
         // 注册分块
@@ -2954,6 +3062,10 @@ export class SceneManager {
             this.nbimFiles.clear();
             this.nbimMeta.clear();
             this.nbimPropsByOriginalUuid.clear();
+            this.nbimPropertyDocsByOriginalUuid.clear();
+            this.nbimSearchDocsByUuid.clear();
+            this.nbimPropertyNameIndex.clear();
+            this.nbimPropertyNameIndexVersion++;
             this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
             this.nodeMap.clear();
             this.bimIdToNodeIds.clear();
@@ -3031,6 +3143,27 @@ export class SceneManager {
             nodeMap: this.nodeMap,
             nbimPropsByOriginalUuid: this.nbimPropsByOriginalUuid
         }, mode);
+    }
+
+    getNbimPropertyNameIndex(): NbimPropertyNameIndexItem[] {
+        return Array.from(this.nbimPropertyNameIndex.values()).sort((a, b) => a.path.localeCompare(b.path, "zh-Hans-CN"));
+    }
+
+    getNbimPropertyNameIndexVersion(): number {
+        return this.nbimPropertyNameIndexVersion;
+    }
+
+    getNbimPropertySearchDocument(uuid: string): NbimPropertyDocument | null {
+        return this.nbimSearchDocsByUuid.get(uuid) || null;
+    }
+
+    getAllNbimPropertySearchDocuments(): NbimPropertyDocument[] {
+        return Array.from(this.nbimSearchDocsByUuid.values());
+    }
+
+    hasRenderableTarget(uuid: string): boolean {
+        if (!uuid) return false;
+        return this.collectRenderableTargets([uuid]).length > 0;
     }
 
     private getVisibilityContext() {

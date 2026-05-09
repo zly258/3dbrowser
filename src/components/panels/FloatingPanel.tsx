@@ -36,8 +36,16 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     closeLabel = "Close"
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
-    const minWidth = storageId === 'tool_measure' ? 320 : 220;
-    const minHeight = storageId === 'tool_measure' ? 400 : 120;
+    const minWidth = storageId === 'tool_measure'
+        ? 320
+        : storageId === 'tool_search'
+            ? 560
+            : 220;
+    const minHeight = storageId === 'tool_measure'
+        ? 400
+        : storageId === 'tool_search'
+            ? 480
+            : 120;
     const getInitialPos = () => {
         if (modal) {
             return {
@@ -241,6 +249,9 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
 
     const pos = posRef.current;
     const size = sizeRef.current;
+    const viewportLimitedHeight = typeof window !== "undefined"
+        ? Math.max(minHeight, Math.min(size.h, window.innerHeight - 64))
+        : size.h;
 
     return (
         <>
@@ -258,8 +269,8 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                     top: 0,
                     transform: `translate(${pos.x}px, ${pos.y}px)`,
                     width: size.w,
-                    height: autoHeight ? 'auto' : size.h,
-                    maxHeight: autoHeight ? 'calc(100vh - 64px)' : undefined,
+                    height: autoHeight ? 'auto' : viewportLimitedHeight,
+                    maxHeight: 'calc(100vh - 64px)',
                     zIndex: modal ? 2000 : 200,
                     willChange: isDragging.current || isResizing.current ? 'transform, width, height' : 'auto',
                 }}
