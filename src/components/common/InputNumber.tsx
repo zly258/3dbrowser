@@ -1,116 +1,89 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
+import { clamp, cx, normalizeNumber } from "./utils";
 
-export interface InputNumberProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
-    value: number;
-    onChange: (value: number) => void;
-    min?: number;
-    max?: number;
-    step?: number;
-    unit?: string;
+export interface InputNumberProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value"> {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
 }
 
 export const InputNumber: React.FC<InputNumberProps> = ({
-    value,
-    onChange,
-    min,
-    max,
-    step = 1,
-    unit,
-    className = '',
-    style,
-    ...props
+  value,
+  onChange,
+  min = Number.NEGATIVE_INFINITY,
+  max = Number.POSITIVE_INFINITY,
+  step = 1,
+  unit,
+  className,
+  style,
+  disabled,
+  ...props
 }) => {
-    const [text, setText] = useState(() => String(value));
+  const [text, setText] = useState(() => String(value));
 
-    useEffect(() => {
-        setText(String(value));
-    }, [value]);
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
 
-    const clampValue = (nextValue: number) => {
-        let val = nextValue;
-        if (min !== undefined) val = Math.max(min, val);
-        if (max !== undefined) val = Math.min(max, val);
-        return val;
-    };
+  const commit = (nextText: string) => {
+    if (nextText.trim() === "") {
+      setText(String(value));
+      return;
+    }
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const nextText = e.target.value;
-        setText(nextText);
-        if (nextText.trim() === '') return;
+    const parsed = Number(nextText);
+    if (!Number.isFinite(parsed)) {
+      setText(String(value));
+      return;
+    }
 
-        const parsed = parseFloat(nextText);
-        if (isNaN(parsed)) return;
-        onChange(clampValue(parsed));
-    };
+    const nextValue = clamp(parsed, min, max);
+    setText(String(nextValue));
+    if (nextValue !== value) onChange(nextValue);
+  };
 
-    const handleBlur = () => {
-        if (text.trim() === '') {
-            setText(String(value));
-            return;
-        }
-        const parsed = parseFloat(text);
-        if (isNaN(parsed)) {
-            setText(String(value));
-            return;
-        }
-        const clamped = clampValue(parsed);
-        setText(String(clamped));
-        if (clamped !== value) {
-            onChange(clamped);
-        }
-    };
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextText = event.target.value;
+    setText(nextText);
 
-    const stepUp = () => {
-        const nextValue = clampValue(value + step);
-        setText(String(nextValue));
-        onChange(nextValue);
-    };
+    if (nextText.trim() === "") return;
 
-    const stepDown = () => {
-        const nextValue = clampValue(value - step);
-        setText(String(nextValue));
-        onChange(nextValue);
-    };
+    const parsed = Number(nextText);
+    if (!Number.isFinite(parsed)) return;
 
-    return (
-        <div 
-            className={`ui-input-number ui-input-number-root ${className}`} 
-            style={style}
-        >
-            <input
-                type="number"
-                value={text}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                min={min}
-                max={max}
-                step={step}
-                className={`ui-input ui-input-number-input ${unit ? 'ui-input-number-input-with-unit' : 'ui-input-number-input-with-controls'}`}
-                {...props}
-            />
-            {unit && (
-                <span className="ui-input-number-unit">
-                    {unit}
-                </span>
-            )}
-            <div className="ui-input-number-controls">
-                <button 
-                    onClick={stepUp}
-                    className="ui-input-number-btn"
-                    title="Increase"
-                    style={{ flex: 1 }}
-                >
-                    ▲
-                </button>
-                <button 
-                    onClick={stepDown}
-                    className="ui-input-number-btn"
-                    title="Decrease"
-                    style={{ flex: 1 }}
-                >
-                    ▼
-                </button>
-            </div>
-        </div>
-    );
+    const nextValue = clamp(parsed, min, max);
+    if (nextValue !== value) onChange(nextValue);
+  };
+
+  const stepBy = (direction: 1 | -1) => {
+    if (disabled) return;
+    const nextValue = normalizeNumber(value + step * direction, min, max, step);
+    setText(String(nextValue));
+    onChange(nextValue);
+  };
+
+  return (
+    <div className={cx("ui-input-number", "ui-input-number-root", disabled && "disabled", className)} style={style}>
+      <input
+        type="number"
+        value={text}
+        onChange={handleChange}
+        onBlur={() => commit(text)}
+        min={Number.isFinite(min) ? min : undefined}
+        max={Number.isFinite(max) ? max : undefined}
+        step={step}
+        disabled={disabled}
+        className={cx("ui-input", "ui-input-number-input", unit ? "ui-input-number-input-with-unit" : "ui-input-number-input-with-controls")}
+        {...props}
+      />
+      {unit && <span className="ui-input-number-unit">{unit}</span>}
+      <div className="ui-input-number-controls">
+        <button type="button" onClick={() => stepBy(1)} className="ui-input-number-btn" title="Increase" disabled={disabled}>▲</button>
+        <button type="button" onClick={() => stepBy(-1)} className="ui-input-number-btn" title="Decrease" disabled={disabled}>▼</button>
+      </div>
+    </div>
+  );
 };

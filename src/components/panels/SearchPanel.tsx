@@ -139,12 +139,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       title={t("tb_search") || "属性搜索"}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={420}
+      width={460}
       storageId="tool_search"
       autoHeight={true}
       theme={theme}
     >
-      <div className="ui-toolpanel-body">
+      <div className="ui-toolpanel-body ui-search-panel-body">
         <div className="ui-toolpanel-row-between">
           <div className="ui-toolpanel-caption">
             {t("search_conditions") || "搜索条件"}

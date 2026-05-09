@@ -18,8 +18,6 @@ interface ClipPanelProps {
   setClipHelperOpacity: (opacity: number) => void;
   theme?: any;
 }
-
-// Axis Slider Row
 const AxisSliderRow: React.FC<{
   axis: "x" | "y" | "z";
   label: string;
@@ -39,16 +37,12 @@ const AxisSliderRow: React.FC<{
         onChange={(e) => onToggle(e)}
         className="ui-clip-axis-checkbox"
       />
-
-      {/* Axis label */}
-      <span
+<span
         className={`ui-clip-axis-label${active ? " is-active" : ""}`}
       >
         {axis.toUpperCase()}
       </span>
-
-      {/* Dual Slider */}
-      <div className="ui-inline-actions-stretch">
+<div className="ui-clip-axis-slider">
         <DualSlider
           min={0}
           max={100}
@@ -57,9 +51,7 @@ const AxisSliderRow: React.FC<{
           disabled={disabled || !active}
         />
       </div>
-
-      {/* Value display */}
-      <span
+<span
         className="ui-clip-axis-value"
       >
         {String(Math.round(value[0])).padStart(2, "0")}-{String(Math.round(value[1])).padStart(2, "0")}%
@@ -92,20 +84,20 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={320}
-      height={440}
+      height={360}
       resizable={false}
       storageId="tool_clip"
     >
-      <div className="ui-toolpanel-body">
-        <div className="ui-panel-section">
-          <div className="ui-form-row">
+      <div className="ui-toolpanel-body ui-clip-panel-body">
+        <div className="ui-panel-section ui-clip-panel-section">
+          <div className="ui-form-row ui-clip-form-row">
             <span className="ui-form-label">{t("clip_enable")}</span>
             <div className="ui-form-value">
               <Switch checked={clipEnabled} onChange={(v) => setClipEnabled(v)} />
             </div>
           </div>
 
-          <div className="ui-form-row">
+          <div className="ui-form-row ui-clip-form-row">
             <span className="ui-form-label">{t("clip_helper_visible")}</span>
             <div className="ui-form-value">
               <Switch
@@ -116,10 +108,10 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
             </div>
           </div>
 
-          <div className="ui-form-row">
+          <div className="ui-form-row ui-clip-form-row">
             <span className="ui-form-label">{t("clip_helper_opacity")}</span>
             <div className="ui-form-value ui-form-value-stretch">
-              <div className="ui-slider-field">
+              <div className="ui-slider-field ui-clip-opacity-field">
                 <Slider
                   min={0.05}
                   max={0.35}
@@ -135,7 +127,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
         </div>
 
         <div
-          className={`ui-panel-section ui-panel-section-fill${clipEnabled ? "" : " ui-is-disabled"}`}
+          className={`ui-panel-section ui-clip-range-section${clipEnabled ? "" : " ui-is-disabled"}`}
         >
           <AxisSliderRow
             axis="x"
@@ -166,7 +158,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
           />
         </div>
 
-        <div className="ui-panel-footer">
+        <div className="ui-panel-footer ui-clip-panel-footer">
           <Button variant="default" onClick={handleReset} disabled={!clipEnabled}>
             {t("clip_reset") || "重置范围"}
           </Button>

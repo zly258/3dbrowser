@@ -38,8 +38,6 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     const panelRef = useRef<HTMLDivElement>(null);
     const minWidth = storageId === 'tool_measure' ? 320 : 220;
     const minHeight = storageId === 'tool_measure' ? 400 : 120;
-
-    // 立即计算初始值（不是在useEffect中）
     const getInitialPos = () => {
         if (modal) {
             return {
@@ -59,7 +57,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         };
                     }
                 }
-            } catch (e) { }
+            } catch { }
         }
         if (x === 100 && y === 100 && !storageId) {
             return {
@@ -83,24 +81,18 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         };
                     }
                 }
-            } catch (e) { }
+            } catch { }
         }
         return { w: width, h: height ?? minHeight };
     };
-
-    // 立即初始化ref，避免首次渲染闪烁
     const posRef = useRef(getInitialPos());
     const sizeRef = useRef(getInitialSize());
-
-    // 拖拽状态
     const isDragging = useRef(false);
     const isResizing = useRef(false);
     const resizeDirection = useRef<ResizeDirection | null>(null);
     const dragStart = useRef({ x: 0, y: 0 });
     const startPos = useRef({ x: 0, y: 0 });
     const startSize = useRef({ w: 0, h: 0 });
-
-    // 直接操作DOM
     const applyStyle = useCallback(() => {
         const panel = panelRef.current;
         if (!panel) return;
@@ -180,7 +172,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                         pos: posRef.current,
                         size: sizeRef.current
                     }));
-                } catch (e) { }
+                } catch { }
             }
         }
         isDragging.current = false;
@@ -197,8 +189,6 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             document.removeEventListener('mouseup', handleMouseUp);
         };
     }, [handleMouseMove, handleMouseUp]);
-
-    // 模态模式居中
     useEffect(() => {
         if (!modal) return;
         const centerPanel = () => {
@@ -235,8 +225,6 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         dragStart.current = { x: e.clientX, y: e.clientY };
         startSize.current = { ...sizeRef.current };
         startPos.current = { ...posRef.current };
-        
-        // 设置拉伸光标
         const cursors: Record<ResizeDirection, string> = {
             'n': 'ns-resize', 's': 'ns-resize',
             'e': 'ew-resize', 'w': 'ew-resize',
