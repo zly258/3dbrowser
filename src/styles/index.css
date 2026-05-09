@@ -1,7 +1,10 @@
+<<<<<<< HEAD
 /* =========================================================
    01. Theme Variables
    ========================================================= */
 
+=======
+>>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 :root {
   --surface: #F7FAFE;
   --surface-dim: #EEF3F8;
@@ -1266,10 +1269,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
   background: var(--warning);
 }
 
+<<<<<<< HEAD
 /* =========================================================
    07. Utility Classes
    ========================================================= */
 
+=======
+>>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 .flex {
   display: flex;
 }
@@ -1743,10 +1749,13 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 .overflow-ellipsis {
   text-overflow: ellipsis;
 }
+<<<<<<< HEAD
 
 /* =========================================================
    13. Animations
    ========================================================= */
+=======
+>>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -4760,6 +4769,10 @@ input[type="number"].ui-input::-webkit-outer-spin-button {
 
 .ui-clip-axis-row {
   display: grid;
+<<<<<<< HEAD
+=======
+  grid-template-columns: 22px 18px minmax(0, 1fr) 62px;
+>>>>>>> 6f6dfcd (feat(PropertiesPanel): 添加右键菜单功能支持复制操作)
   gap: 8px;
   padding: 6px 0;
   overflow: hidden;
