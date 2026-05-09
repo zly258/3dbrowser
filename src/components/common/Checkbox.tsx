@@ -5,16 +5,17 @@ export interface CheckboxProps {
     checked: boolean;
     onChange: (checked: boolean) => void;
     disabled?: boolean;
+    className?: string;
     style?: React.CSSProperties;
     labelStyle?: React.CSSProperties;
 }
 
 export const Checkbox: React.FC<CheckboxProps> = ({ 
-    label, checked, onChange, disabled = false, style, labelStyle 
+    label, checked, onChange, disabled = false, className = '', style, labelStyle 
 }) => {
     return (
         <label
-            className={`ui-checkbox ${disabled ? 'ui-checkbox-disabled' : ''}`}
+            className={`ui-checkbox ${disabled ? 'ui-checkbox-disabled' : ''} ${className}`}
             style={style}
             onClick={(e) => {
                 if (disabled) return;
