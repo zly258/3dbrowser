@@ -99,14 +99,20 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               />
             </Row>
 
-            <Row label={t("st_locate_isolate") || "定位隔离"} labelWidth="82px">
-              <Switch
-                checked={settings.locateIsolateMode === true}
-                onChange={(v) => onUpdate({ locateIsolateMode: v })}
+            <Row label={t("st_locate_mode") || "定位方式"} labelWidth="82px" stretch={true}>
+              <SegmentedControl
+                options={[
+                  { value: "normal", label: t("st_locate_mode_normal") || "普通定位" },
+                  { value: "isolate", label: t("st_locate_mode_isolate") || "隔离定位" }
+                ]}
+                value={settings.locateIsolateMode === true ? "isolate" : "normal"}
+                onChange={(v) => onUpdate({ locateIsolateMode: v === "isolate" })}
               />
             </Row>
             <div className="ui-toolpanel-caption ui-toolpanel-caption-muted ui-settings-hint">
-              {t("st_locate_isolate_hint") || "搜索、碰撞、模型树定位时只显示定位对象。"}
+              {settings.locateIsolateMode === true
+                ? (t("st_locate_mode_isolate_hint") || "定位时临时隐藏其他对象，大模型恢复时可能较慢。")
+                : (t("st_locate_mode_normal_hint") || "只移动视图并高亮对象，速度最快。")}
             </div>
           </div>
         )}
@@ -214,12 +220,15 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               onChange={(value) => onUpdate({ highlightColor: value })}
             />
           </Row>
-          <Row label={t("st_highlight_box") || "显示包围盒"} labelWidth="90px">
+          <Row label={t("st_highlight_box") || "高亮/定位包围盒"} labelWidth="110px">
             <Switch
               checked={settings.highlightShowBox === true}
               onChange={(value) => onUpdate({ highlightShowBox: value })}
             />
           </Row>
+          <div className="ui-toolpanel-caption ui-toolpanel-caption-muted ui-settings-hint">
+            {t("st_highlight_box_hint") || "开启后，高亮和定位都会显示包围盒；关闭后只保留颜色高亮和视图定位。"}
+          </div>
           </div>
         )}
       </div>

@@ -140,7 +140,7 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
       storageId="tool_measure"
     >
       <div className="ui-toolpanel-body">
-        <div className="ui-toolpanel-row-between">
+        <div className="ui-toolpanel-row-between ui-measure-header">
           <div className="ui-segmented ui-measure-types">
             <button
               className={`ui-segmented-item ${measureType === 'none' ? 'active' : ''}`}

@@ -30,9 +30,9 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
             title={t("op_screenshot") || "场景截图"}
             closeLabel={t("panel_close") || "关闭"}
             onClose={onClose}
-            width={320}
+            width={360}
             height={340}
-            resizable={false}
+            resizable={true}
             theme={theme}
             storageId="tool_screenshot"
         >
