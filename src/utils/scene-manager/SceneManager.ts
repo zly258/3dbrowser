@@ -1165,6 +1165,24 @@ export class SceneManager {
             mesh: bm,
             optimizedMapping: this.optimizedMapping
         });
+
+        // 如果当前处于定位隔离或用户隐藏状态，新加载的 NBIM 分块也必须继承结构树可见性。
+        // 否则只会隐藏当前已加载分块，后续加载/预取的分块仍然显示，表现为“隔离不彻底”。
+        const batchIdToUuid = bm.userData.batchIdToUuid as Map<number, string> | undefined;
+        if (!batchIdToUuid) return;
+
+        let changed = false;
+        batchIdToUuid.forEach((uuid, batchId) => {
+            const nodes = this.nodeMap.get(uuid);
+            if (!nodes || nodes.length === 0) return;
+            const visible = nodes.some((node) => node.visible !== false);
+            bm.setVisibleAt(batchId, visible);
+            changed = true;
+        });
+
+        if (changed) {
+            bm.computeBoundingSphere?.();
+        }
     }
 
     private acquireGhostLine() {
@@ -3470,11 +3488,65 @@ export class SceneManager {
             if (target.ownerUuid) targetIds.add(target.ownerUuid);
         });
 
+        const addDescendants = (node: StructureTreeNode | undefined) => {
+            if (!node) return;
+            targetIds.add(node.id);
+            node.children?.forEach(addDescendants);
+        };
+
+        Array.from(targetIds).forEach((id) => {
+            const nodes = this.nodeMap.get(id);
+            nodes?.forEach(addDescendants);
+        });
+
+        const keepIds = new Set<string>();
+        const walkKeep = (node: StructureTreeNode, ancestors: string[]): boolean => {
+            const isTarget = targetIds.has(node.id);
+            let childMatched = false;
+            node.children?.forEach((child) => {
+                if (walkKeep(child, [...ancestors, node.id])) {
+                    childMatched = true;
+                }
+            });
+
+            if (isTarget || childMatched) {
+                keepIds.add(node.id);
+                ancestors.forEach((id) => keepIds.add(id));
+            }
+
+            return isTarget || childMatched;
+        };
+
+        this.structureRoot.children?.forEach((child) => walkKeep(child, []));
+        targetIds.forEach((id) => keepIds.add(id));
+
         const hiddenIds = new Set<string>();
+        const collectHiddenRoots = (node: StructureTreeNode) => {
+            if (!node.id || keepIds.has(node.id)) {
+                node.children?.forEach(collectHiddenRoots);
+                return;
+            }
+
+            const mirrored = this.nodeMap.get(node.id);
+            const currentlyVisible = mirrored
+                ? mirrored.some((item) => item.visible !== false)
+                : node.visible !== false;
+            if (currentlyVisible) {
+                hiddenIds.add(node.id);
+            }
+        };
+
+        this.structureRoot.children?.forEach(collectHiddenRoots);
+
+        // 兜底：如果结构树映射不完整，至少隐藏当前已加载的非目标可渲染对象。
         this.collectRenderableTargets().forEach((target) => {
             const id = target.ownerUuid || target.uuid;
-            if (!id || targetIds.has(id) || targetIds.has(target.uuid)) return;
-            hiddenIds.add(id);
+            if (!id || keepIds.has(id) || keepIds.has(target.uuid)) return;
+            const nodes = this.nodeMap.get(id);
+            const currentlyVisible = nodes
+                ? nodes.some((node) => node.visible !== false)
+                : target.object.visible !== false;
+            if (currentlyVisible) hiddenIds.add(id);
         });
 
         if (hiddenIds.size === 0) {

@@ -83,7 +83,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   theme,
 }) => {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setPage(1);
@@ -291,11 +291,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               <div className="ui-search-page-actions">
                 <Select
                   value={String(pageSize)}
-                  onChange={(value) => setPageSize(Number(value) || 50)}
+                  onChange={(value) => setPageSize(Number(value) || 10)}
                   options={[
+                    { value: "10", label: "10" },
                     { value: "20", label: "20" },
                     { value: "50", label: "50" },
-                    { value: "100", label: "100" },
                   ]}
                   className="ui-input-compact ui-search-page-size"
                 />

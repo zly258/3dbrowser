@@ -248,6 +248,7 @@ const resources: Record<Lang, Record<string, string>> = {
     clash_scope_visible: "Scope: Visible objects",
     clash_candidates: "Candidates",
     clash_overlap_volume: "Overlap Volume",
+    clash_distance: "Clearance Distance",
     clash_insufficient_candidates:
       "Not enough candidates (at least 2 required)",
     clash_set_a: "Model Set A",
@@ -660,6 +661,7 @@ const resources: Record<Lang, Record<string, string>> = {
     clash_scope_visible: "范围：当前可见构件",
     clash_candidates: "候选",
     clash_overlap_volume: "重叠体积",
+    clash_distance: "净空距离",
     clash_insufficient_candidates: "可检测构件不足（至少需要2个）",
     clash_set_a: "模型集 A",
     clash_set_b: "模型集 B",

@@ -122,6 +122,72 @@ function getClashDisplayName(sceneMgr: SceneManager, uuid: string, obj: THREE.Ob
   return fallback || uuid;
 }
 
+function collectTreeNodeUuids(nodes: any[]): string[] {
+  const result: string[] = [];
+  const stack = Array.isArray(nodes) ? [...nodes] : [];
+  const visited = new Set<string>();
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node) continue;
+    const uuid = String(node.uuid || node.id || "").trim();
+    if (uuid && !visited.has(uuid)) {
+      visited.add(uuid);
+      result.push(uuid);
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (let index = children.length - 1; index >= 0; index--) {
+      stack.push(children[index]);
+    }
+  }
+
+  return result;
+}
+
+function collectFallbackMeshTargets(sceneMgr: SceneManager) {
+  const targets: Array<{
+    key: string;
+    uuid: string;
+    name: string;
+    object: THREE.Object3D;
+    geometry: THREE.BufferGeometry;
+    matrixWorld: THREE.Matrix4;
+    box: THREE.Box3;
+  }> = [];
+
+  const contentGroup = (sceneMgr as any).contentGroup as THREE.Group | undefined;
+  if (!contentGroup) return targets;
+
+  contentGroup.updateMatrixWorld(true);
+  contentGroup.traverse((object: THREE.Object3D) => {
+    const mesh = object as THREE.Mesh;
+    if (!(mesh as any).isMesh) return;
+    if (!mesh.visible || !mesh.geometry || mesh.userData?.isIfcGridHelper) return;
+
+    // 普通 Mesh 兜底：用于 collectRenderableTargets 因语义映射缺失而返回空的情况。
+    // BatchedMesh 没有可靠的单构件映射时，不在这里拆分实例，避免误判；若优化映射存在，collectRenderableTargets 会优先处理。
+    if ((mesh as any).isBatchedMesh) return;
+
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    if (!mesh.geometry.boundingBox) return;
+
+    const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+    if (box.isEmpty()) return;
+
+    targets.push({
+      key: `fallback:${mesh.uuid}`,
+      uuid: mesh.uuid,
+      name: mesh.name || mesh.uuid,
+      object: mesh,
+      geometry: mesh.geometry,
+      matrixWorld: mesh.matrixWorld.clone(),
+      box
+    });
+  });
+
+  return targets;
+}
+
 export function useClashCheck({
   sceneMgrRef,
   treeRoot,
@@ -187,17 +253,50 @@ export function useClashCheck({
     const cached = clashCandidateCacheRef.current;
     cached.clear();
 
-    sceneMgr.collectRenderableTargets().forEach((target) => {
-      // collectRenderableTargets 已经只返回可渲染目标。
-      // 不能再用 mesh.uuid 过滤 target.uuid：NBIM/合批/结构映射时 target.uuid 可能是语义节点 id，
-      // 不是实际 Mesh 的 uuid，否则会把全部候选过滤掉，导致碰撞检查显示“候选 0”。
-      if (target.box.isEmpty()) return;
+    const modelIds = clashModelOptions.map((item) => item.id).filter(Boolean);
+    const treeIds = collectTreeNodeUuids(treeRoot);
+
+    // 先走 SceneManager 的标准可渲染目标。
+    // 某些 NBIM/合批模型在 collectAllRenderableTargets 阶段可能依赖语义映射，若映射尚未恢复，
+    // 直接全量收集会得到 0；此时再按模型 id / 树节点 id 反查一次。
+    let targets = sceneMgr.collectRenderableTargets();
+
+    if (targets.length === 0 && modelIds.length > 0) {
+      targets = sceneMgr.collectRenderableTargets(modelIds);
+    }
+
+    if (targets.length === 0 && treeIds.length > 0) {
+      // 树节点很多时分批调用，避免一次传入过大数组导致内部递归过深。
+      const targetMap = new Map<string, any>();
+      const batchSize = 512;
+      for (let index = 0; index < treeIds.length; index += batchSize) {
+        sceneMgr.collectRenderableTargets(treeIds.slice(index, index + batchSize)).forEach((target: any) => {
+          targetMap.set(target.key || target.uuid, target);
+        });
+      }
+      targets = Array.from(targetMap.values());
+    }
+
+    if (targets.length === 0) {
+      targets = collectFallbackMeshTargets(sceneMgr) as any;
+    }
+
+    targets.forEach((target) => {
+      if (!target?.box || target.box.isEmpty()) return;
 
       const nodes = sceneMgr.getStructureNodes(target.uuid) || [];
       if (nodes.length > 0 && nodes.every((node) => node.visible === false)) return;
-      const modelId = nodes[0]?.userData?.originalUuid
+
+      let modelId = nodes[0]?.userData?.originalUuid
         ? String(nodes[0].userData.originalUuid)
         : resolveModelOwner(target.object);
+
+      // 兜底：单模型或当前只有一个模型选项时，目标没有 owner 也应归到该模型，
+      // 否则会被 A/B 模型集过滤掉。
+      if (!modelId && modelIds.length === 1) {
+        modelId = modelIds[0];
+      }
+
       const candidate: ClashCandidate = {
         key: target.key,
         uuid: target.uuid,
@@ -213,7 +312,7 @@ export function useClashCheck({
     });
 
     return Array.from(cached.values());
-  }, [buildMeshInfo, clashModelNameById, clashUseNarrowPhase, resolveModelOwner, sceneMgrRef]);
+  }, [buildMeshInfo, clashModelNameById, clashModelOptions, clashUseNarrowPhase, resolveModelOwner, sceneMgrRef, treeRoot]);
 
   const collectTriangleCentersInBox = useCallback((meshInfo: ClashMeshInfo, box: THREE.Box3, maxCenters: number, maxTrianglesToScan: number) => {
     const centers: THREE.Vector3[] = [];
@@ -316,7 +415,9 @@ export function useClashCheck({
       const hasA = setAFilter.size > 0;
       const hasB = setBFilter.size > 0;
       const pairAllowed = (aModelId: string, bModelId: string) => {
+        const singleModelFallback = clashModelOptions.length <= 1 && (!aModelId || !bModelId);
         if (!clashIncludeSameModel && aModelId && bModelId && aModelId === bModelId) return false;
+        if (singleModelFallback) return true;
         if (hasA && hasB) {
           return (setAFilter.has(aModelId) && setBFilter.has(bModelId))
             || (setAFilter.has(bModelId) && setBFilter.has(aModelId));
@@ -326,6 +427,7 @@ export function useClashCheck({
         return true;
       };
       const candidateEligible = (modelId: string) => {
+        if (!modelId && clashModelOptions.length <= 1) return true;
         if (hasA && hasB) return setAFilter.has(modelId) || setBFilter.has(modelId);
         if (hasA) return setAFilter.has(modelId);
         if (hasB) return setBFilter.has(modelId);
