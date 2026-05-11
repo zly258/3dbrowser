@@ -103,6 +103,16 @@ const formatNumber = (value: number) => {
   return String(value);
 };
 
+const getSeverityText = (tr: (key: string, fallback: string) => string, severity: ClashResultItem["severity"]) => {
+  if (severity === "high") return tr("clash_severity_high", "高");
+  if (severity === "medium") return tr("clash_severity_medium", "中");
+  return tr("clash_severity_low", "低");
+};
+
+const getClashTypeText = (tr: (key: string, fallback: string) => string, type: ClashResultItem["type"]) => {
+  return type === "hard" ? tr("clash_type_hard", "硬碰撞") : tr("clash_type_clearance", "净空碰撞");
+};
+
 export const ClashPanel: React.FC<ClashPanelProps> = ({
   t,
   onClose,
@@ -136,7 +146,6 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   onRestoreVisibility,
   typeFilter,
   onTypeFilterChange,
-  onUpdateResultStatus,
   onSetASelectAll,
   onSetAClear,
   onSetBSelectAll,
@@ -146,7 +155,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
 }) => {
   const tr = useSafeText(t);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(10);
   const [scopeExpanded, setScopeExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
 
@@ -371,11 +380,11 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                   />
                   <Select
                     value={String(pageSize)}
-                    onChange={(value) => setPageSize(Number(value) || 50)}
+                    onChange={(value) => setPageSize(Number(value) || 10)}
                     options={[
+                      { value: "10", label: "10 / 页" },
                       { value: "20", label: "20 / 页" },
-                      { value: "50", label: "50 / 页" },
-                      { value: "100", label: "100 / 页" }
+                      { value: "50", label: "50 / 页" }
                     ]}
                     className="ui-input-compact ui-clash-page-size"
                     style={{ width: 96 }}
@@ -400,22 +409,17 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                       >
                         <div className="ui-clash-result-top">
                           <span className="ui-clash-result-title">{item.aName || item.aUuid} {" <> "} {item.bName || item.bUuid}</span>
-                          <span className={`ui-clash-badge ui-clash-badge-${item.severity}`}>{item.severity}</span>
+                          <span className={`ui-clash-badge ui-clash-badge-${item.severity}`}>{getSeverityText(tr, item.severity)}</span>
                         </div>
                         <div className="ui-toolpanel-row-between ui-clash-result-meta">
                           <span className="ui-result-item-secondary">
-                            {item.aUuid} {" <> "} {item.bUuid}
+                            {getClashTypeText(tr, item.type)} · {item.type === "hard" ? tr("clash_overlap_volume", "重叠体积") : tr("clash_distance", "净空距离")}
                           </span>
                           <span className="ui-result-item-secondary-value">
                             {item.type === "hard"
                               ? item.overlapVolume.toFixed(6)
                               : item.distance.toFixed(6)}
                           </span>
-                        </div>
-                        <div className="ui-clash-result-actions" onClick={(event) => event.stopPropagation()}>
-                          <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={() => onUpdateResultStatus(item.id, "new")}>{tr("clash_group_new", "新建")}</button>
-                          <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={() => onUpdateResultStatus(item.id, "confirmed")}>{tr("clash_group_confirmed", "确认")}</button>
-                          <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={() => onUpdateResultStatus(item.id, "resolved")}>{tr("clash_group_resolved", "解决")}</button>
                         </div>
                       </button>
                     ))
