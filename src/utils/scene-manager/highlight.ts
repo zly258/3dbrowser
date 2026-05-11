@@ -149,7 +149,9 @@ function updateSelectionHelpers(context: SceneManagerHighlightContext, target: S
             const pad = Math.max(union.getSize(new THREE.Vector3()).length() * 0.048, 0.22);
             context.selectionBox.box.expandByScalar(pad);
         }
-        context.selectionBox.visible = locatingFocus || !!context.settings.highlightShowBox;
+        // 包围盒是否显示只由 settings.highlightShowBox 控制。
+        // 定位与普通高亮共用同一个开关，避免“定位总是强制显示包围盒”。
+        context.selectionBox.visible = !!context.settings.highlightShowBox;
     }
 
     const focusId = context.state.locateFocusUuid || context.state.lastSelectedUuid;
@@ -519,7 +521,18 @@ export function applyClearLocateFocus(
     context: SceneManagerHighlightContext
 ): SceneHighlightResult {
     context.clearClashPairHighlight();
-    clearLocateVisualCaches(context);
+
+    // 清除定位/高亮时只恢复上一次真正改过的实例颜色，
+    // 不再遍历全模型，也不刷新模型树。
+    restoreHighlightedInstanceColors(context, context.state.highlightedUuids);
+
+    if (
+        context.locateObjectMaterialCache.size > 0 ||
+        context.locateDimmedInstances.size > 0 ||
+        context.locateMaterialCache.size > 0
+    ) {
+        clearLocateVisualCaches(context);
+    }
 
     context.state.locateResultSet.clear();
     context.state.locateFocusUuid = null;
@@ -537,77 +550,69 @@ export function applySetLocateResultSet(
     focusUuid: string | null = null,
     options?: LocateHighlightOptions
 ): SceneHighlightResult {
-    void options;
-
     const normalized = Array.from(new Set(uuids.filter(Boolean)));
     if (normalized.length === 0) {
         return applyClearLocateFocus(context);
     }
 
+    context.clearClashPairHighlight();
+
+    // 定位高亮只做“目标高亮 + 选择框/包围盒”，不再灰化/透明化其他对象。
+    // 之前这里会遍历全模型、替换材质、修改透明度/实例颜色，恢复时也要全量还原，
+    // 大模型下搜索定位和恢复显示都会明显卡顿。
+    if (
+        context.locateObjectMaterialCache.size > 0 ||
+        context.locateDimmedInstances.size > 0 ||
+        context.locateMaterialCache.size > 0
+    ) {
+        clearLocateVisualCaches(context);
+    }
+
     const expandedTargets = expandLocateTargets(context.nodeMap, normalized);
     const expandedList = Array.from(expandedTargets);
-    const previousTargets = new Set(context.state.locateResultSet);
-    const previousFocusUuid = context.state.locateFocusUuid;
-    const accentColor = getHighlightColor(context.settings);
+    const previousHighlighted = new Set(context.state.highlightedUuids);
     const highlightColors = options?.highlightColors;
+    const focusKey = focusUuid && expandedTargets.has(focusUuid)
+        ? focusUuid
+        : expandedList[0] || null;
+
+    // 增量高亮：只恢复离开的对象，只设置新进入的对象，以及焦点/颜色发生变化的对象。
+    // 不再每次对 expandedTargets 全量 setColorAt，避免大模型 BatchedMesh 反复刷新。
+    const exiting = Array.from(previousHighlighted).filter((id) => !expandedTargets.has(id));
+    const entering = Array.from(expandedTargets).filter((id) => !previousHighlighted.has(id));
+    const needRefresh = new Set<string>(entering);
+
+    if (context.state.locateFocusUuid && expandedTargets.has(context.state.locateFocusUuid)) {
+        needRefresh.add(context.state.locateFocusUuid);
+    }
+    if (focusKey && expandedTargets.has(focusKey)) {
+        needRefresh.add(focusKey);
+    }
+    if (highlightColors) {
+        Object.keys(highlightColors).forEach((uuid) => {
+            if (expandedTargets.has(uuid)) needRefresh.add(uuid);
+        });
+    }
+
+    restoreHighlightedInstanceColors(context, exiting);
+
+    const touched = new Set<THREE.BatchedMesh>();
+    needRefresh.forEach((uuid) => {
+        const mappings = context.optimizedMapping.get(uuid);
+        if (!mappings) return;
+        const color = getColorForUuid(uuid, context.settings, highlightColors);
+        mappings.forEach((mapping) => {
+            mapping.mesh.setColorAt(mapping.instanceId, color);
+            touched.add(mapping.mesh);
+        });
+    });
+    markInstanceColorNeedsUpdate(touched);
 
     context.state.locateResultSet = expandedTargets;
-    context.state.locateFocusUuid = focusUuid && expandedTargets.has(focusUuid) ? focusUuid : expandedList[0];
-    const focusKey = context.state.locateFocusUuid;
+    context.state.locateFocusUuid = focusKey;
+    context.state.highlightedUuids = expandedTargets;
+    context.state.lastSelectedUuid = focusKey;
+    updateSelectionHelpers(context, expandedTargets);
 
-    const nextTargetBatchedMeshIds = collectTargetBatchedMeshIds(context, expandedTargets);
-
-    if (shouldUseLightweightLocate(context, expandedTargets)) {
-        return applyLightweightLocateState(context, expandedTargets, focusKey, highlightColors);
-    }
-
-    if (previousTargets.size === 0) {
-        assignLocateMaterialsForTraverse(context, expandedTargets, nextTargetBatchedMeshIds, accentColor);
-        expandedTargets.forEach((uuid) => {
-            assignLocateMaterialForObject(
-                context,
-                uuid,
-                "target",
-                getColorForUuid(uuid, context.settings, highlightColors)
-            );
-        });
-        applyInitialLocateInstanceState(context, expandedTargets, focusKey, accentColor, highlightColors);
-    } else {
-        const entering = getSetDifference(expandedTargets, previousTargets);
-        const exiting = getSetDifference(previousTargets, expandedTargets);
-        const persistent = getSetIntersection(previousTargets, expandedTargets);
-
-        exiting.forEach((uuid) => assignLocateMaterialForObject(context, uuid, "dim", accentColor));
-        entering.forEach((uuid) => assignLocateMaterialForObject(
-            context,
-            uuid,
-            "target",
-            getColorForUuid(uuid, context.settings, highlightColors)
-        ));
-        persistent.forEach((uuid) => assignLocateMaterialForObject(
-            context,
-            uuid,
-            "target",
-            getColorForUuid(uuid, context.settings, highlightColors)
-        ));
-
-        const prevTargetBatchedMeshIds = collectTargetBatchedMeshIds(context, previousTargets);
-        const batchedEntering = getSetDifference(nextTargetBatchedMeshIds, prevTargetBatchedMeshIds);
-        const batchedExiting = getSetDifference(prevTargetBatchedMeshIds, nextTargetBatchedMeshIds);
-
-        batchedEntering.forEach((meshUuid) => assignLocateMaterialForBatchedMesh(context, meshUuid, "batchedTarget", accentColor));
-        batchedExiting.forEach((meshUuid) => assignLocateMaterialForBatchedMesh(context, meshUuid, "dim", accentColor));
-
-        applyLocateInstanceStateDiff(
-            context,
-            entering,
-            exiting,
-            previousFocusUuid,
-            focusKey,
-            accentColor,
-            highlightColors
-        );
-    }
-
-    return applyHighlightObjects(context, focusKey ? [focusKey] : []);
+    return { needsRender: true };
 }

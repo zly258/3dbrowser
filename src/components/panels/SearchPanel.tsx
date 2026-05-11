@@ -242,23 +242,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           </div>
         ))}
 
-        <div className="ui-toolpanel-row-between ui-toolpanel-caption">
+        <div className="ui-toolpanel-row-between ui-toolpanel-caption ui-search-results-summary">
           <span>
             {t("search_results") || "搜索结果"}: {results.length}
           </span>
-          <div className="ui-toolpanel-row">
-            <span>{t("search_page_size") || "每页"}</span>
-            <Select
-              value={String(pageSize)}
-              onChange={(value) => setPageSize(Number(value) || 50)}
-              options={[
-                { value: "20", label: "20" },
-                { value: "50", label: "50" },
-                { value: "100", label: "100" },
-              ]}
-              className="ui-input-compact ui-search-page-size"
-            />
-          </div>
         </div>
 
         <div className="ui-toolpanel-results-box ui-search-results-box">
@@ -292,8 +279,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           )}
         </div>
 
-        {results.length > 0 && (
-          <div className="ui-search-pagination">
+        <div className="ui-search-pagination">
           <PaginationControls
             prevTitle={t("search_page_prev") || "上一页"}
             nextTitle={t("search_page_next") || "下一页"}
@@ -302,13 +288,28 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
             onNext={() => setPage((prev) => Math.min(totalPages, prev + 1))}
             rightContent={
-              <Button className="ui-properties-action" onClick={onClearResult}>
-                {t("search_clear") || "清除结果"}
-              </Button>
+              <div className="ui-search-page-actions">
+                <Select
+                  value={String(pageSize)}
+                  onChange={(value) => setPageSize(Number(value) || 50)}
+                  options={[
+                    { value: "20", label: "20" },
+                    { value: "50", label: "50" },
+                    { value: "100", label: "100" },
+                  ]}
+                  className="ui-input-compact ui-search-page-size"
+                />
+                <Button
+                  className="ui-properties-action"
+                  onClick={onClearResult}
+                  disabled={results.length === 0}
+                >
+                  {t("search_clear") || "清除结果"}
+                </Button>
+              </div>
             }
           />
-          </div>
-        )}
+        </div>
 
         {searching && (
           <div className="ui-toolpanel-overlay">

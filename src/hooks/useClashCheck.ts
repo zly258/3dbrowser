@@ -143,7 +143,7 @@ export function useClashCheck({
   const [clashClearanceDistance, setClashClearanceDistance] = useState(0.05);
   const [clashUseNarrowPhase, setClashUseNarrowPhase] = useState(true);
   const [clashUseTrianglePhase, setClashUseTrianglePhase] = useState(false);
-  const [clashIncludeSameModel, setClashIncludeSameModel] = useState(false);
+  const [clashIncludeSameModel, setClashIncludeSameModel] = useState(true);
   const [clashPairsScanned, setClashPairsScanned] = useState(0);
   const [clashResultFilter, setClashResultFilter] = useState<ClashFilter>("ALL");
   const [clashTypeFilter, setClashTypeFilter] = useState<ClashTypeFilter>("ALL");
@@ -187,18 +187,10 @@ export function useClashCheck({
     const cached = clashCandidateCacheRef.current;
     cached.clear();
 
-    // 先收集有几何体的 mesh uuid，用于排除无外形纯容器
-    const meshUuids = new Set<string>();
-    sceneMgr.contentGroup.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (mesh.isMesh && mesh.geometry && !mesh.userData?.isIfcGridHelper) {
-        meshUuids.add(mesh.uuid);
-      }
-    });
-
     sceneMgr.collectRenderableTargets().forEach((target) => {
-      // 过滤无几何外形的纯容器节点
-      if (!meshUuids.has(target.uuid)) return;
+      // collectRenderableTargets 已经只返回可渲染目标。
+      // 不能再用 mesh.uuid 过滤 target.uuid：NBIM/合批/结构映射时 target.uuid 可能是语义节点 id，
+      // 不是实际 Mesh 的 uuid，否则会把全部候选过滤掉，导致碰撞检查显示“候选 0”。
       if (target.box.isEmpty()) return;
 
       const nodes = sceneMgr.getStructureNodes(target.uuid) || [];

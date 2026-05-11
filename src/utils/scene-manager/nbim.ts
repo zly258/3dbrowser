@@ -452,6 +452,44 @@ export async function collectNbimBimProperties(options: {
     };
 }
 
+
+export function collectIfcObjectBasicPropertyIndex(object: THREE.Object3D) {
+    const owner = String(object.uuid);
+    const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
+    const seen = new Set<string>();
+
+    object.traverse((child) => {
+        const expressID = child.userData?.expressID;
+        if (expressID === undefined || expressID === null || expressID === "") return;
+        const key = `${owner}::${expressID}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const rows: NbimPropertyRow[] = [];
+        appendPropertyRow(rows, "基本信息", "UUID", child.uuid, "ifc-basic");
+        appendPropertyRow(rows, "基本信息", "名称", child.name, "ifc-basic");
+        appendPropertyRow(rows, "基本信息", "类型", child.type, "ifc-basic");
+        appendPropertyRow(rows, "基本信息", "模型ID", owner, "ifc-basic");
+        appendPropertyRow(rows, "基本信息", "BIM_ID", expressID, "ifc-basic");
+        appendPropertyRow(rows, "基本信息", "ExpressID", expressID, "ifc-basic");
+        const ifcType = child.userData?.ifcType || child.userData?.ifcMetadata?.typeName || child.userData?.ifcMetadata?.category;
+        appendPropertyRow(rows, "IFC 标识", "类型", ifcType, "ifc-basic");
+
+        bimPropertyDocs[key] = {
+            owner,
+            bimId: String(expressID),
+            uuid: child.uuid,
+            name: String(child.name || expressID),
+            rows
+        };
+    });
+
+    return {
+        bimPropertyDocs,
+        propertyNameIndex: buildPropertyNameIndex(bimPropertyDocs)
+    };
+}
+
 export async function collectIfcObjectPropertyIndex(options: {
     object: THREE.Object3D;
     ifcApiByModel: Map<string, IfcApiRef>;

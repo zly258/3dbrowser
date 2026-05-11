@@ -55,12 +55,41 @@ function buildBox(geometry: THREE.BufferGeometry, matrixWorld: THREE.Matrix4) {
     return box.isEmpty() ? null : box;
 }
 
+function getCachedMeshWorldBox(mesh: THREE.Mesh) {
+    const userData = mesh.userData || (mesh.userData = {});
+    const elements = mesh.matrixWorld.elements;
+    const matrixKey = `${elements[12]},${elements[13]},${elements[14]},${elements[0]},${elements[5]},${elements[10]}`;
+    const cached = userData.__rtWorldBoxCache as { key: string; box: THREE.Box3 } | undefined;
+    if (cached && cached.key === matrixKey) return cached.box.clone();
+    const box = buildBox(mesh.geometry, mesh.matrixWorld);
+    if (box) {
+        userData.__rtWorldBoxCache = { key: matrixKey, box: box.clone() };
+    }
+    return box;
+}
+
+function getCachedInstanceWorldBox(
+    uuid: string,
+    mapping: OptimizedMappingEntry,
+    geometry: THREE.BufferGeometry,
+    matrixWorld: THREE.Matrix4
+) {
+    const meshUserData = mapping.mesh.userData || (mapping.mesh.userData = {});
+    const cache = (meshUserData.__rtInstanceBoxCache ||= new Map<string, THREE.Box3>()) as Map<string, THREE.Box3>;
+    const key = `${uuid}:${mapping.instanceId}`;
+    const cached = cache.get(key);
+    if (cached) return cached.clone();
+    const box = buildBox(geometry, matrixWorld);
+    if (box) cache.set(key, box.clone());
+    return box;
+}
+
 function addMeshTarget(context: RenderTargetContext, mesh: THREE.Mesh, targets: Map<string, RenderTarget>) {
     if (!isWorldVisible(mesh) || !mesh.geometry || mesh.userData?.isIfcGridHelper) return;
     if ((mesh as any).isBatchedMesh || mesh.userData?.isOptimized) return;
 
     mesh.updateMatrixWorld(true);
-    const box = buildBox(mesh.geometry, mesh.matrixWorld);
+    const box = getCachedMeshWorldBox(mesh);
     if (!box) return;
 
     const key = `mesh:${mesh.uuid}`;
@@ -89,7 +118,7 @@ function addInstanceTarget(
     const instanceMatrix = new THREE.Matrix4();
     mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
     instanceMatrix.premultiply(mapping.mesh.matrixWorld);
-    const box = buildBox(geometry, instanceMatrix);
+    const box = getCachedInstanceWorldBox(uuid, mapping, geometry, instanceMatrix);
     if (!box) return;
 
     const key = `instance:${mapping.mesh.uuid}:${mapping.instanceId}`;

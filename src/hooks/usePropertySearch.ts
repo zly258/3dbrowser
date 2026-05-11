@@ -323,29 +323,36 @@ export function usePropertySearch({
     }
 
     const nbimDocs = (sceneMgr as any).getAllNbimPropertySearchDocuments?.() || [];
+    const docVisited = new Set<string>();
     nbimDocs.forEach((doc: any) => {
-      if (!doc?.uuid) return;
+      if (!doc?.rows || !Array.isArray(doc.rows)) return;
 
-      const docUuid = String(doc.uuid || "");
+      const rawUuid = String(doc.uuid || "");
       const docBimId = String(doc.bimId || "");
       const docExpressId = String(readRowValue(doc, ["IFC 标识.ExpressID", "IFC.ExpressID", "ExpressID"]) || "");
+      const resolvedByBimId = docBimId ? (sceneMgr as any).resolveNodeUuidByBimId?.(docBimId) : null;
+      const resolvedUuid = String(resolvedByBimId || rawUuid || docBimId || docExpressId || "");
+      if (!resolvedUuid) return;
 
-      // 不能在这里逐条调用 sceneMgr.hasRenderableTarget(doc.uuid)，大模型下会变成 O(n²) 并导致点击搜索卡死。
-      // 只用本次遍历得到的 meshUuids / renderableSemanticKeys 做 O(1) 判断。
-      const hasRenderable = meshUuids.has(docUuid)
+      // NBIM 分块可能尚未加载真实 Mesh；只用 meshUuids 过滤会导致“属性名有、搜索结果为空”。
+      // 这里以结构树映射为准：只要能映射到结构节点，就允许进入搜索候选；真正定位时再按需加载/聚焦。
+      const hasStructureNode = Boolean((sceneMgr as any).getStructureNodes?.(resolvedUuid)?.length)
+        || Boolean(docBimId && (sceneMgr as any).resolveNodeUuidByBimId?.(docBimId));
+      const hasLoadedRenderable = meshUuids.has(resolvedUuid)
         || (!!docBimId && renderableSemanticKeys.has(docBimId))
         || (!!docExpressId && renderableSemanticKeys.has(docExpressId));
-      if (!hasRenderable) return;
+      if (!hasStructureNode && !hasLoadedRenderable) return;
 
-      const semanticKey = String(doc.bimId || doc.uuid);
-      if (semanticVisited.has(semanticKey)) return;
-      semanticVisited.add(semanticKey);
-      const displayName = getFriendlyObjectName(sceneMgr, docUuid, null, String(doc.name || doc.bimId || doc.uuid));
+      const docKey = String(doc.owner || "") + "::" + String(doc.bimId || resolvedUuid);
+      if (docVisited.has(docKey)) return;
+      docVisited.add(docKey);
+
+      const displayName = getFriendlyObjectName(sceneMgr, resolvedUuid, null, String(doc.name || doc.bimId || doc.uuid));
       candidates.push({
-        uuid: docUuid,
+        uuid: resolvedUuid,
         name: displayName,
         type: "PropertyIndex",
-        modelId: String(doc.owner || doc.uuid),
+        modelId: String(doc.owner || resolvedUuid),
         sourceLabel: "property-index",
         source: {
           name: displayName,
@@ -409,14 +416,103 @@ export function usePropertySearch({
       // 先让 React 渲染“搜索中”遮罩，再进入候选收集，避免用户感觉点击后无响应。
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 
-      const candidates = collectSearchCandidates();
-      const total = candidates.length;
-      const batchSize = 120;
+      const manager = sceneMgrRef.current as any;
+      const indexedDocs = manager?.getAllNbimPropertySearchDocuments?.() || [];
       const nextResults: PropertySearchResultItem[] = [];
       const resultUuidSet = new Set<string>();
       let lastProgressAt = performance.now();
       let lastYieldAt = performance.now();
       let cancelled = false;
+
+      // NBIM/IFC 属性索引已经是一行一条 PropertyRow，搜索时直接查 rows。
+      // 不再先遍历全场景收集候选，也不再为每个候选重新 createPropertyEntries，避免打开 NBIM 后首次搜索卡顿。
+      if (indexedDocs.length > 0) {
+        const total = indexedDocs.length;
+
+        for (let i = 0; i < indexedDocs.length; i++) {
+          if (searchRunTokenRef.current !== runToken) {
+            cancelled = true;
+            setSearchStatus(t("search_cancelled"));
+            break;
+          }
+
+          const doc = indexedDocs[i];
+          const rows = Array.isArray(doc?.rows) ? doc.rows : [];
+          if (rows.length === 0) continue;
+
+          let result: boolean | null = null;
+          const matchedBy = new Set<string>();
+
+          normalizedConditions.forEach((condition, index) => {
+            const matchedRows = rows.filter((row: any) => {
+              const key = normalizePropertyToken(row?.key || "");
+              const path = normalizePropertyToken(row?.path || "");
+              const rawKey = normalizePropertyToken(row?.rawKey || "");
+              const query = condition.normalizedPropertyName;
+              return key === query || path === query || rawKey === query || path.endsWith(`.${query}`);
+            });
+
+            const matched = matchedRows.some((row: any) => {
+              const value = normalizePropertyToken(row?.value);
+              return evaluateCondition(value, condition.operator, condition.normalizedValue);
+            });
+
+            if (matched) {
+              matchedRows.forEach((row: any) => {
+                const value = normalizePropertyToken(row?.value);
+                if (evaluateCondition(value, condition.operator, condition.normalizedValue)) {
+                  matchedBy.add(String(row?.path || row?.key || ""));
+                }
+              });
+            }
+
+            if (index === 0 || result === null) result = matched;
+            else if ((condition.connector || "AND") === "AND") result = Boolean(result) && matched;
+            else result = Boolean(result) || matched;
+          });
+
+          if (result) {
+            const docBimId = String(doc?.bimId || "");
+            const resolvedByBimId = docBimId ? manager?.resolveNodeUuidByBimId?.(docBimId) : null;
+            const uuid = String(resolvedByBimId || doc?.uuid || docBimId || "");
+            if (uuid && !resultUuidSet.has(uuid)) {
+              resultUuidSet.add(uuid);
+              nextResults.push({
+                uuid,
+                name: getFriendlyObjectName(sceneMgrRef.current!, uuid, null, String(doc?.name || docBimId || uuid)),
+                type: String(doc?.type || "PropertyIndex"),
+                modelId: String(doc?.owner || uuid),
+                source: "property-index",
+                matchedBy: Array.from(matchedBy).filter(Boolean)
+              });
+            }
+          }
+
+          if ((i + 1) % 250 === 0 || i === indexedDocs.length - 1) {
+            const now = performance.now();
+            const progress = total > 0 ? ((i + 1) / total) * 100 : 100;
+            if (now - lastProgressAt > 80 || i === indexedDocs.length - 1) {
+              setSearchProgress(progress);
+              lastProgressAt = now;
+            }
+            if (now - lastYieldAt > 16 || i === indexedDocs.length - 1) {
+              lastYieldAt = now;
+              await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setSearchResults(nextResults);
+          setSearchProgress(100);
+          setSearchStatus(`${t("search_results")}: ${nextResults.length}`);
+        }
+        return;
+      }
+
+      const candidates = collectSearchCandidates();
+      const total = candidates.length;
+      const batchSize = 120;
 
       for (let i = 0; i < candidates.length; i++) {
         if (searchRunTokenRef.current !== runToken) {

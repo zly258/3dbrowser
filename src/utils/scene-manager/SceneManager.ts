@@ -66,7 +66,9 @@ import { disposeSceneManagerResources } from "./lifecycle";
 import { getObjectGeometryDataFromScene } from "./geometry";
 import {
     buildExportStructureTree,
+    buildPropertyNameIndex,
     collectIfcModelReferences,
+    collectIfcObjectBasicPropertyIndex,
     collectIfcObjectPropertyIndex,
     collectNbimBimProperties,
     countStructureRenderableNodes,
@@ -209,6 +211,8 @@ export class SceneManager {
     private locateMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private locateDimmedInstances = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number; originalVisible: boolean }>();
+    private locateIsolationRestoreChanges: SceneVisibilityChange[] = [];
+    private locateIsolationActive = false;
     private clashPairObjectMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
     private clashPairInstanceColorCache = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
     private clashPairUuids = new Set<string>();
@@ -2431,7 +2435,7 @@ export class SceneManager {
         });
         this.finalizeModelStage(previewGhost, onProgress);
         this.scheduleDeferredStructureReplacement(object, shouldDeferStructure, deferredPlaceholderId);
-        await this.rebuildSearchPropertyIndexForObject(object, onProgress);
+        this.scheduleSearchPropertyIndexRebuild(object, onProgress);
         this.markSceneDirty({
             invalidateInteractables: true,
             needsBoundsUpdate: true,
@@ -2740,6 +2744,8 @@ export class SceneManager {
             }
             this.nbimPropertyDocsByOriginalUuid.get(owner)![key] = normalizedDoc;
             this.nbimSearchDocsByUuid.set(normalizedDoc.uuid, normalizedDoc);
+            if (normalizedDoc.bimId) this.nbimSearchDocsByUuid.set(normalizedDoc.bimId, normalizedDoc);
+            this.nbimSearchDocsByUuid.set(key, normalizedDoc);
             changed = true;
         });
 
@@ -2758,6 +2764,15 @@ export class SceneManager {
 
     private async rebuildSearchPropertyIndexForObject(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
         if (!object?.userData?.isIFC) return;
+
+        const quickIndex = collectIfcObjectBasicPropertyIndex(object);
+        if (Object.keys(quickIndex.bimPropertyDocs).length > 0) {
+            this.registerPropertyDocuments({
+                docs: quickIndex.bimPropertyDocs,
+                propertyNameIndex: quickIndex.propertyNameIndex,
+                rootId: object.uuid
+            });
+        }
 
         const metadataReady = object.userData?.ifcMetadataReady;
         if (metadataReady && typeof metadataReady.then === "function") {
@@ -2788,6 +2803,45 @@ export class SceneManager {
         });
     }
 
+
+    private scheduleSearchPropertyIndexRebuild(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
+        if (!object?.userData?.isIFC) return;
+        const generation = this.loadGeneration;
+        window.setTimeout(() => {
+            void this.rebuildSearchPropertyIndexForObject(object, undefined).then(() => {
+                if (generation !== this.loadGeneration) return;
+                this.markSceneDirty({ invalidateInteractables: false, needsBoundsUpdate: false, needsCulling: false });
+            }).catch((error) => {
+                console.warn("IFC 属性索引后台构建失败:", error);
+            });
+        }, 0);
+        if (onProgress) onProgress(100, "模型已加载，属性索引将在后台构建...");
+    }
+
+    private buildExportPropertyDocsFromCache() {
+        const docs: Record<string, NbimPropertyDocument> = {};
+        this.nbimSearchDocsByUuid.forEach((doc) => {
+            if (!doc || !Array.isArray(doc.rows)) return;
+            const owner = String(doc.owner || "");
+            const bimId = String(doc.bimId || "");
+            if (!owner || !bimId) return;
+            const key = `${owner}::${bimId}`;
+            if (docs[key]) return;
+            docs[key] = {
+                ...doc,
+                owner,
+                bimId,
+                uuid: String(doc.uuid || bimId),
+                name: String(doc.name || ""),
+                rows: doc.rows
+            };
+        });
+        return {
+            bimPropertyDocs: docs,
+            propertyNameIndex: buildPropertyNameIndex(docs)
+        };
+    }
+
     async exportNbim(fileName?: string) {
         if (this.chunks.length === 0) throw new Error("无模型数据可导出");
 
@@ -2806,12 +2860,17 @@ export class SceneManager {
         };
         traverseBimIds(this.structureRoot);
 
-        const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
-        const { bimPropertyDocs, propertyNameIndex } = await collectNbimBimProperties({
-            structureRoot: this.structureRoot,
-            ifcApiByModel,
-            ifcManagerByModel
-        });
+        let { bimPropertyDocs, propertyNameIndex } = this.buildExportPropertyDocsFromCache();
+        if (Object.keys(bimPropertyDocs).length === 0) {
+            const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
+            const collected = await collectNbimBimProperties({
+                structureRoot: this.structureRoot,
+                ifcApiByModel,
+                ifcManagerByModel
+            });
+            bimPropertyDocs = collected.bimPropertyDocs;
+            propertyNameIndex = collected.propertyNameIndex;
+        }
         const { chunkBlobs, exportChunks, currentOffset } = await prepareNbimExportChunks({
             chunks: this.chunks,
             nbimFiles: this.nbimFiles,
@@ -2911,8 +2970,14 @@ export class SceneManager {
             ? manifest.bimProperties as Record<string, any>
             : {};
 
-        // 从属性键中提取实际 owner（格式 "<owner>::<bimId>"）
-        const { defaultOwner, grouped } = groupNbimPropertiesByOwner(manifestBimProperties, rootId);
+        // 新版 NBIM 不再包含旧 bimProperties。defaultOwner 优先从 bimPropertyDocs 键中提取，确保属性文档能映射到结构节点。
+        const docOwners = new Set<string>();
+        Object.keys(manifestDocs).forEach((key) => {
+            const separatorIndex = key.indexOf("::");
+            if (separatorIndex > 0) docOwners.add(key.slice(0, separatorIndex));
+        });
+        const { defaultOwner: legacyDefaultOwner, grouped } = groupNbimPropertiesByOwner(manifestBimProperties, rootId);
+        const defaultOwner = docOwners.size === 1 ? Array.from(docOwners)[0] : legacyDefaultOwner;
         grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
         const quickStats = buildNbimQuickStats({
             manifestStats: manifest.stats,
@@ -3013,6 +3078,8 @@ export class SceneManager {
         this.cancelDeferredStructureBuild();
         this.resetExplode();
         this.clearLocateFocus();
+        this.locateIsolationRestoreChanges = [];
+        this.locateIsolationActive = false;
 
         try {
             // 1. 深度清理 contentGroup
@@ -3154,7 +3221,19 @@ export class SceneManager {
     }
 
     getNbimPropertySearchDocument(uuid: string): NbimPropertyDocument | null {
-        return this.nbimSearchDocsByUuid.get(uuid) || null;
+        if (!uuid) return null;
+        const direct = this.nbimSearchDocsByUuid.get(uuid);
+        if (direct) return direct;
+        const resolved = this.resolveSelectionUuid(uuid);
+        if (resolved && resolved !== uuid) {
+            const byResolved = this.nbimSearchDocsByUuid.get(resolved);
+            if (byResolved) return byResolved;
+        }
+        const bimId = this.getBimIdByUuid(uuid);
+        if (bimId) {
+            return this.nbimSearchDocsByUuid.get(bimId) || null;
+        }
+        return null;
     }
 
     getAllNbimPropertySearchDocuments(): NbimPropertyDocument[] {
@@ -3308,6 +3387,8 @@ export class SceneManager {
     }
 
     setAllVisibility(visible: boolean) {
+        this.locateIsolationRestoreChanges = [];
+        this.locateIsolationActive = false;
         const result = applySetAllVisibility(this.getVisibilityContext(), visible);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
         if (result.needsExplodeRefresh) this.refreshExplodeState();
@@ -3354,6 +3435,7 @@ export class SceneManager {
     }
 
     isolateObjects(uuids: string[]) {
+        this.restoreLocateIsolation({ clearFocus: false, invalidate: false });
         const result = applyIsolateObjects(
             this.getVisibilityContext(),
             uuids,
@@ -3374,6 +3456,75 @@ export class SceneManager {
         if (result.needsBoundsUpdate) this.updateSceneBounds();
         if (result.needsExplodeRefresh) this.refreshExplodeState();
         if (result.needsRender) this.markSceneDirty();
+    }
+
+    isolateObjectsForLocate(uuids: string[]) {
+        const normalized = Array.from(new Set((uuids || []).map((uuid) => String(uuid || "").trim()).filter(Boolean)));
+        if (normalized.length === 0) return;
+
+        this.restoreLocateIsolation({ clearFocus: false, invalidate: false });
+
+        const targetIds = new Set<string>(normalized);
+        this.collectRenderableTargets(normalized).forEach((target) => {
+            targetIds.add(target.uuid);
+            if (target.ownerUuid) targetIds.add(target.ownerUuid);
+        });
+
+        const hiddenIds = new Set<string>();
+        this.collectRenderableTargets().forEach((target) => {
+            const id = target.ownerUuid || target.uuid;
+            if (!id || targetIds.has(id) || targetIds.has(target.uuid)) return;
+            hiddenIds.add(id);
+        });
+
+        if (hiddenIds.size === 0) {
+            this.locateIsolationRestoreChanges = [];
+            this.locateIsolationActive = false;
+            return;
+        }
+
+        const hideChanges: SceneVisibilityChange[] = Array.from(hiddenIds).map((uuid) => ({
+            uuid,
+            visible: false,
+            showParents: false
+        }));
+
+        this.locateIsolationRestoreChanges = Array.from(hiddenIds).map((uuid) => ({
+            uuid,
+            visible: true,
+            showParents: true
+        }));
+        this.locateIsolationActive = true;
+
+        this.applyVisibilityBatch(hideChanges, {
+            recomputeBounds: false,
+            refreshExplode: false,
+            invalidateInteractables: true
+        });
+    }
+
+    restoreLocateIsolation(options: { clearFocus?: boolean; invalidate?: boolean } = {}) {
+        if (!this.locateIsolationActive || this.locateIsolationRestoreChanges.length === 0) {
+            this.locateIsolationActive = false;
+            this.locateIsolationRestoreChanges = [];
+            return false;
+        }
+
+        const restoreChanges = this.locateIsolationRestoreChanges;
+        this.locateIsolationRestoreChanges = [];
+        this.locateIsolationActive = false;
+
+        this.applyVisibilityBatch(restoreChanges, {
+            recomputeBounds: false,
+            refreshExplode: false,
+            invalidateInteractables: options.invalidate ?? true
+        });
+
+        if (options.clearFocus ?? true) {
+            this.clearLocateFocus();
+        }
+
+        return true;
     }
 
     setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
@@ -3810,7 +3961,7 @@ export class SceneManager {
 
     /**
      * 通用多构件聚焦高亮入口：
-     * - 高亮 uuids 中的所有物体（橙色），其余设为半透明灰色
+     * - 高亮 uuids 中的所有物体
      * - 可选 fitView 将镜头飞到这批物体
      * - 可选 highlightColors 支持按 UUID 指定不同颜色（碰撞场景 A/B 色对）
      * - 传空数组等同于 clearLocateFocus()
@@ -4022,7 +4173,7 @@ export class SceneManager {
             box = new THREE.Box3();
             this.unionNodeBounds(uuid, box, new Set<string>(), true);
         }
-        if (!box.isEmpty()) this.fitBox(box, false, 1.14);
+        if (!box.isEmpty()) this.fitBox(box, false, 1.14, false);
     }
 
     getBoundsForObject(uuid: string) {
@@ -4047,10 +4198,10 @@ export class SceneManager {
 
     fitViewToObjects(uuids: string[]) {
         const box = this.collectBoundsForUuids(uuids);
-        if (!box.isEmpty()) this.fitBox(box, false, 1.14);
+        if (!box.isEmpty()) this.fitBox(box, false, 1.14, false);
     }
 
-    fitBox(box: THREE.Box3, updateCameraPosition: boolean = true, paddingOverride?: number) {
+    fitBox(box: THREE.Box3, updateCameraPosition: boolean = true, paddingOverride?: number, needsCullingOnCameraMove: boolean = true) {
         this.cancelCameraFlight();
 
         if (box.isEmpty()) {
@@ -4060,7 +4211,7 @@ export class SceneManager {
             this.controls.target.set(0, 0, 0);
             this.camera.updateProjectionMatrix();
             this.controls.update();
-            this.markSceneDirty({ needsCulling: true });
+            this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
             return;
         }
 
@@ -4111,7 +4262,7 @@ export class SceneManager {
                 this.camera.lookAt(this.controls.target);
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
-                this.markSceneDirty({ needsCulling: true });
+                this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
                 return;
             }
 
@@ -4136,13 +4287,13 @@ export class SceneManager {
                 this.camera.bottom = startBottom + (targetBottom - startBottom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
-                this.markSceneDirty({ needsCulling: true });
+                this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
 
                 if (progress < 1) {
                     this.cameraFlightFrameId = requestAnimationFrame(animate);
                 } else {
                     this.cameraFlightFrameId = null;
-                    this.markSceneDirty({ needsCulling: true });
+                    this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
                 }
             };
             animate();
@@ -4199,7 +4350,7 @@ export class SceneManager {
                 this.camera.zoom = targetZoom;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
-                this.markSceneDirty({ needsCulling: true });
+                this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
                 return;
             }
 
@@ -4217,13 +4368,13 @@ export class SceneManager {
                 this.camera.zoom = startZoom + (targetZoom - startZoom) * eased;
                 this.camera.updateProjectionMatrix();
                 this.controls.update();
-                this.markSceneDirty({ needsCulling: true });
+                this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
 
                 if (progress < 1) {
                     this.cameraFlightFrameId = requestAnimationFrame(animate);
                 } else {
                     this.cameraFlightFrameId = null;
-                    this.markSceneDirty({ needsCulling: true });
+                    this.markSceneDirty({ needsCulling: needsCullingOnCameraMove });
                 }
             };
             animate();

@@ -39,11 +39,10 @@ export function useFocusInView({
     const targetFocus = focusUuid && normalized.includes(focusUuid) ? focusUuid : normalized[0];
 
     if (isolateLocate) {
-      sceneManager.isolateObjects(normalized);
+      sceneManager.isolateObjectsForLocate(normalized);
       onIsolateLocate?.(normalized);
     }
 
-    // 统一高亮入口：高亮目标 + 背景灰化 + 飞到目标
     sceneManager.focusHighlightObjects(normalized, {
       fitView: true,
       focusUuid: targetFocus,

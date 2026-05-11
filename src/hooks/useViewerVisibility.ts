@@ -109,6 +109,17 @@ export function useViewerVisibility({
         const sceneManager = sceneMgrRef.current;
         if (!sceneManager) return;
 
+        const restoredLocateIsolation = sceneManager.restoreLocateIsolation();
+
+        if (restoredLocateIsolation) {
+            setHiddenUuids(new Set());
+            setIsolatedUuids(new Set());
+            resetLocateState();
+            sceneManager.clearLocateFocus();
+            closeContextMenu();
+            return;
+        }
+
         if (hiddenUuids.size > 0 || isolatedUuids.size > 0) {
             sceneManager.setAllVisibility(true);
             setHiddenUuids(new Set());
