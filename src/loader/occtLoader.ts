@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyIndustrialMaterialStyle, toIndustrialDisplayColor } from "../utils/scene-manager/renderStyle";
 import { TFunc } from "../theme/locales";
 
 type OcctFaceColor = {
@@ -105,19 +106,21 @@ function getColorFromArray(color?: [number, number, number] | null) {
     if (!Array.isArray(color) || color.length < 3) {
         return DEFAULT_COLOR.clone();
     }
-    return new THREE.Color(color[0], color[1], color[2]);
+    return toIndustrialDisplayColor(new THREE.Color(color[0], color[1], color[2]));
 }
 
 function createMaterial(color: THREE.Color) {
-    return new THREE.MeshPhongMaterial({
+    const material = new THREE.MeshPhongMaterial({
         color,
         side: THREE.DoubleSide,
         flatShading: false,
-        shininess: 30,
+        shininess: 18,
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1
     });
+    applyIndustrialMaterialStyle(material);
+    return material;
 }
 
 function getOrCreateMaterial(materialCache: Map<number, THREE.MeshPhongMaterial>, color: THREE.Color) {

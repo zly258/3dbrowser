@@ -230,13 +230,14 @@ export const ThreeViewer = ({
 
     const [sceneSettings, setSceneSettings] = usePersistentState<SceneSettings>('3dbrowser_sceneSettings', () => {
         const baseSettings: SceneSettings = {
-            ambientInt: 2.0,
-            dirInt: 1.0,
-            bgColor: theme.canvasBg,
+            ambientInt: 0.78,
+            dirInt: 1.48,
+            hemiInt: 0.58,
+            bgColor: '#eef2f5',
             viewCubeSize: 120,
             colorSpace: 'srgb',
             toneMapping: 'aces',
-            exposure: 1,
+            exposure: 0.92,
             shadowQuality: 'medium',
             adaptiveQuality: true,
             minPixelRatio: 0.8,
@@ -244,7 +245,7 @@ export const ThreeViewer = ({
             targetFps: 50,
             performanceMode: 'balanced',
             locateIsolateMode: false,
-            backLightInt: 0.5,
+            backLightInt: 0.62,
             highlightColor: "#0c62a2",
             highlightShowBox: false,
             clip: {
@@ -253,7 +254,7 @@ export const ThreeViewer = ({
             },
         };
         const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
-        return merged.bgColor === undefined ? { ...merged, bgColor: theme.canvasBg } : merged;
+        return merged.bgColor === undefined ? { ...merged, bgColor: '#eef2f5' } : merged;
     });
 
     useEffect(() => {
@@ -1413,7 +1414,9 @@ export const ThreeViewer = ({
                     )}
                     <div className="ui-tips">
                         <span>{t("tips_rotate")}</span>
+                        <span className="ui-tips-separator">|</span>
                         <span>{t("tips_pan")}</span>
+                        <span className="ui-tips-separator">|</span>
                         <span>{t("tips_zoom")}</span>
                     </div>
                     {showStats && (

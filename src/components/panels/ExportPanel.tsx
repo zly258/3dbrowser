@@ -19,8 +19,8 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
     }, [format, getDefaultFileName]);
 
     return (
-        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close") || "关闭"} onClose={onClose} width={360} height={520} resizable={true} theme={theme} storageId="tool_export">
-            <div className="ui-toolpanel-body">
+        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close") || "关闭"} onClose={onClose} width={400} height={430} resizable={false} theme={theme} storageId="tool_export">
+            <div className="ui-toolpanel-body ui-export-panel-body">
                 <div className="ui-toolpanel-caption">{t("export_format")}:</div>
 
                 {[

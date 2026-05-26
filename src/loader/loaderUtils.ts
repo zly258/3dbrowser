@@ -3,6 +3,7 @@ import { TFunc, ProgressCallback } from "../theme/locales";
 import { SceneSettings } from "../utils/scene-manager/SceneManager";
 import { createResourceResolver } from "./resourceResolver";
 import type { LoadProfile } from "../utils/scene-core/types";
+import { applyIndustrialMaterialStyle } from "../utils/scene-manager/renderStyle";
 
 export interface LoadedItem {
     name: string;
@@ -326,6 +327,7 @@ function normalizeLoadedObject(object: THREE.Object3D, settings: SceneSettings, 
                 if ("wireframe" in material) {
                     material.wireframe = false;
                 }
+                applyIndustrialMaterialStyle(material);
             });
         }
     });

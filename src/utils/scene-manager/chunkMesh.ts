@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyIndustrialMaterialStyle, toIndustrialDisplayColor } from "./renderStyle";
 
 export function reconstructBatchedMeshFromWorkerData(options: {
     data: any;
@@ -36,6 +37,7 @@ export function reconstructBatchedMeshFromWorkerData(options: {
         }
     });
 
+    applyIndustrialMaterialStyle(material);
     const batchedMesh = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
     batchedMesh.frustumCulled = false;
     (batchedMesh as any).perInstanceFrustumCulling = false;
@@ -49,7 +51,7 @@ export function reconstructBatchedMeshFromWorkerData(options: {
     const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
 
     instData.forEach((instance: any) => {
-        color.setHex(instance.color);
+        color.copy(toIndustrialDisplayColor(instance.color));
         matrix.fromArray(instance.matrix);
 
         const instanceId = batchedMesh.addInstance(geometryIds[instance.geoIdx]);
@@ -67,7 +69,8 @@ export function reconstructBatchedMeshFromWorkerData(options: {
         const bimId = instance.bimId;
         batchIdToUuid.set(instanceId, resolveUuidByBimId(originalUuid, bimId));
         batchIdToBimId.set(instanceId, bimId);
-        batchIdToColor.set(instanceId, instance.color);
+        batchIdToColor.set(instanceId, color.getHex());
+        (batchedMesh.userData.batchIdToRawColor ??= new Map<number, number>()).set(instanceId, instance.color);
         batchIdToGeometry.set(instanceId, geometry);
     });
 
