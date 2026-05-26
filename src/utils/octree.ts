@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyIndustrialMaterialStyle, toIndustrialDisplayColor } from "./scene-manager/renderStyle";
 
 // 八叉树项接口
 interface OctreeItem {
@@ -423,6 +424,7 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
     }
   }
 
+  applyIndustrialMaterialStyle(material);
   const batchedMesh = new THREE.BatchedMesh(sanitizedItems.length, vertexCount, indexCount, material);
   
   // 禁用自身的视锥剔除，由 SceneManager 的分块加载逻辑来控制。
@@ -454,15 +456,17 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
         (batchedMesh as any).setBoundingBoxAt(instanceId, item.geometry.boundingBox);
       }
       
-      const color = new THREE.Color(item.color);
-      batchedMesh.setColorAt(instanceId, color);
+      const displayColor = toIndustrialDisplayColor(item.color);
+      const displayHex = displayColor.getHex();
+      batchedMesh.setColorAt(instanceId, displayColor);
 
       if (item.expressID !== undefined) {
         batchIdToExpressId.set(instanceId, item.expressID);
       }
       
       batchIdToUuid.set(instanceId, item.uuid);
-      batchIdToColor.set(instanceId, item.color);
+      batchIdToColor.set(instanceId, displayHex);
+      (batchedMesh.userData.batchIdToRawColor ??= new Map<number, number>()).set(instanceId, item.color);
       batchIdToGeometry.set(instanceId, item.geometry);
     }
   }
@@ -517,6 +521,7 @@ async function createBatchedMeshFromItemsAsync(
     }
   }
 
+  applyIndustrialMaterialStyle(material);
   const batchedMesh = new THREE.BatchedMesh(sanitizedItems.length, vertexCount, indexCount, material);
   batchedMesh.frustumCulled = false;
   (batchedMesh as any).perInstanceFrustumCulling = false;
@@ -544,15 +549,17 @@ async function createBatchedMeshFromItemsAsync(
         (batchedMesh as any).setBoundingBoxAt(instanceId, item.geometry.boundingBox);
       }
 
-      const color = new THREE.Color(item.color);
-      batchedMesh.setColorAt(instanceId, color);
+      const displayColor = toIndustrialDisplayColor(item.color);
+      const displayHex = displayColor.getHex();
+      batchedMesh.setColorAt(instanceId, displayColor);
 
       if (item.expressID !== undefined) {
         batchIdToExpressId.set(instanceId, item.expressID);
       }
 
       batchIdToUuid.set(instanceId, item.uuid);
-      batchIdToColor.set(instanceId, item.color);
+      batchIdToColor.set(instanceId, displayHex);
+      (batchedMesh.userData.batchIdToRawColor ??= new Map<number, number>()).set(instanceId, item.color);
       batchIdToGeometry.set(instanceId, item.geometry);
     }
 

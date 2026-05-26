@@ -13,6 +13,7 @@ export interface MeasurementRecord {
 export interface SceneSettings {
     ambientInt: number;
     dirInt: number;
+    hemiInt?: number;
     backLightInt?: number;
     bgColor: string;
     highlightColor?: string;

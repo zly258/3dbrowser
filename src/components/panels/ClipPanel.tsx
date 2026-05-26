@@ -83,9 +83,9 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
       title={t("clip_title")}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={340}
+      width={410}
       height={420}
-      resizable={true}
+      resizable={false}
       storageId="tool_clip"
     >
       <div className="ui-toolpanel-body ui-clip-panel-body">

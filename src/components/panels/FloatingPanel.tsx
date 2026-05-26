@@ -36,16 +36,33 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     closeLabel = "Close"
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
-    const minWidth = storageId === 'tool_measure'
-        ? 320
-        : storageId === 'tool_search'
-            ? 560
-            : 220;
-    const minHeight = storageId === 'tool_measure'
-        ? 400
-        : storageId === 'tool_search'
-            ? 480
-            : 120;
+    const panelMinSizeByStorage: Record<string, { w: number; h: number }> = {
+        tool_measure: { w: 320, h: 400 },
+        tool_search: { w: 620, h: 500 },
+        tool_export: { w: 400, h: 430 },
+        tool_screenshot: { w: 380, h: 300 },
+        tool_clip: { w: 410, h: 420 },
+        tool_settings: { w: 380, h: 520 },
+        tool_viewpoint: { w: 380, h: 460 },
+        tool_explode: { w: 340, h: 360 },
+        tool_clash: { w: 520, h: 560 }
+    };
+    const panelMinSize = storageId ? panelMinSizeByStorage[storageId] : undefined;
+    const minWidth = panelMinSize?.w ?? 220;
+    const minHeight = panelMinSize?.h ?? 120;
+    const getViewportSizeLimit = () => ({
+        w: Math.max(220, window.innerWidth - 32),
+        h: Math.max(160, window.innerHeight - 64)
+    });
+    const clampSize = (w: number, h: number) => {
+        const limit = getViewportSizeLimit();
+        const effectiveMinWidth = Math.min(minWidth, limit.w);
+        const effectiveMinHeight = Math.min(minHeight, limit.h);
+        return {
+            w: Math.max(effectiveMinWidth, Math.min(w, limit.w)),
+            h: Math.max(effectiveMinHeight, Math.min(h, limit.h))
+        };
+    };
     const getInitialPos = () => {
         if (modal) {
             return {
@@ -83,15 +100,12 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     if (parsed.size && typeof parsed.size.w === 'number' && typeof parsed.size.h === 'number') {
-                        return {
-                            w: Math.max(minWidth, parsed.size.w),
-                            h: Math.max(minHeight, parsed.size.h)
-                        };
+                        return clampSize(parsed.size.w, parsed.size.h);
                     }
                 }
             } catch { }
         }
-        return { w: width, h: height ?? minHeight };
+        return clampSize(width, height ?? minHeight);
     };
     const posRef = useRef(getInitialPos());
     const sizeRef = useRef(getInitialSize());
@@ -262,7 +276,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             )}
             <div
                 ref={panelRef}
-                className={`ui-panel${modal ? ' ui-panel-modal' : ''}`}
+                className={`ui-panel${modal ? ' ui-panel-modal' : ''}${storageId ? ` ui-panel-${storageId}` : ''}`}
                 style={{
                     position: modal ? 'fixed' : 'absolute',
                     left: 0,

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyIndustrialMaterialStyle, toIndustrialDisplayColor } from "../utils/scene-manager/renderStyle";
 import { Loader, FileLoader, LoadingManager } from "three";
 
 // --- 工具函数 --
@@ -222,12 +223,13 @@ export class LMBLoader extends Loader {
     const materials = colors.map((color) => {
       // Phong 材质对 CAD 颜色表现更稳定
       const material = new THREE.MeshPhongMaterial({
-        color: new THREE.Color(parseColor(color)),
+        color: toIndustrialDisplayColor(parseColor(color)),
         side: THREE.DoubleSide,
         flatShading: false,
         shininess: 30
       });
       setMaterialProperties(material);
+      applyIndustrialMaterialStyle(material);
       return material;
     });
 
@@ -262,12 +264,12 @@ export class LMBLoader extends Loader {
         
         const nodeMatrix = composeMatrixByMatrix3(node.matrix, node.position);
         instancedMesh.setMatrixAt(0, nodeMatrix);
-        instancedMesh.setColorAt(0, new THREE.Color(parseColor(colors[node.colorIndex])));
+        instancedMesh.setColorAt(0, toIndustrialDisplayColor(parseColor(colors[node.colorIndex])));
 
         node.instances.forEach((instance: any, index: number) => {
           const instanceMatrix = composeMatrixByMatrix3(instance.matrix, instance.position);
           instancedMesh.setMatrixAt(index + 1, instanceMatrix);
-          instancedMesh.setColorAt(index + 1, new THREE.Color(parseColor(colors[instance.colorIndex])));
+          instancedMesh.setColorAt(index + 1, toIndustrialDisplayColor(parseColor(colors[instance.colorIndex])));
         });
         
         root.add(instancedMesh);

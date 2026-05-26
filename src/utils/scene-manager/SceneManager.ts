@@ -33,6 +33,7 @@ import {
 } from "./chunkExecution";
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
 import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
+import { applyIndustrialMaterials, applyIndustrialRendererSettings, createIndustrialSharedMaterial } from "./renderStyle";
 import { processChunkPrefetchQueue } from "./chunkPrefetch";
 import {
     acquireGhostLineResource,
@@ -194,6 +195,7 @@ export class SceneManager {
 
     // 灯光
     ambientLight: THREE.AmbientLight;
+    hemiLight: THREE.HemisphereLight;
     dirLight: THREE.DirectionalLight;
     backLight: THREE.DirectionalLight;
 
@@ -259,13 +261,14 @@ export class SceneManager {
 
     // 设置
     settings: SceneSettings = {
-        ambientInt: 2.0,
-        dirInt: 1.0,
-        bgColor: "#edf0f3",
+        ambientInt: 0.78,
+        dirInt: 1.48,
+        hemiInt: 0.58,
+        bgColor: "#eef2f5",
         viewCubeSize: 100,
         colorSpace: 'srgb',
         toneMapping: 'aces',
-        exposure: 1,
+        exposure: 0.92,
         shadowQuality: 'medium',
         adaptiveQuality: true,
         minPixelRatio: 0.8,
@@ -274,7 +277,7 @@ export class SceneManager {
         performanceMode: 'balanced',
         highlightColor: "#ff9f1c",
         highlightShowBox: false,
-        backLightInt: 0.5,
+        backLightInt: 0.62,
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
     };
 
@@ -304,12 +307,7 @@ export class SceneManager {
     private nbimSearchDocsByUuid: Map<string, NbimPropertyDocument> = new Map();
     private nbimPropertyNameIndex: Map<string, NbimPropertyNameIndexItem> = new Map();
     private nbimPropertyNameIndexVersion = 0;
-    private sharedMaterial = new THREE.MeshStandardMaterial({
-        color: 0xd9dce1,
-        roughness: 0.82,
-        metalness: 0.03,
-        side: THREE.DoubleSide
-    });
+    private sharedMaterial = createIndustrialSharedMaterial();
 
     // 拾取优化
     private interactableList: THREE.Object3D[] = [];
@@ -520,7 +518,7 @@ export class SceneManager {
         this.renderer = new THREE.WebGLRenderer({
             canvas,
             antialias: true,
-            alpha: true,
+            alpha: false,
             logarithmicDepthBuffer: false, // 正交相机不建议开启对数深度缓冲区，会导致 negative near 裁剪问题
             precision: "highp",
             powerPreference: "high-performance"
@@ -528,15 +526,13 @@ export class SceneManager {
         // 重要：设置初始大小
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制最大像素比为2，平衡性能与清晰度
         this.renderer.setSize(width, height, false);
-        this.renderer.setClearColor(this.settings.bgColor);
+        applyIndustrialRendererSettings(this.renderer, this.settings.bgColor, this.settings.exposure);
         this.renderer.localClippingEnabled = true;
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.04;
         this.activePixelRatio = this.renderer.getPixelRatio();
 
         // 场景
         this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(this.settings.bgColor);
 
         // 组
         this.contentGroup = new THREE.Group();
@@ -634,14 +630,16 @@ export class SceneManager {
             this.markSceneDirty({ needsCulling: true });
         });
 
-        // 灯光
+        // 灯光：工业模型浏览以柔和天光、主光和背光为主，避免颜色过曝和阴影过黑。
+        this.hemiLight = new THREE.HemisphereLight(0xf8fbff, 0xd9e1e8, this.settings.hemiInt ?? 0.58);
+        this.scene.add(this.hemiLight);
         this.ambientLight = new THREE.AmbientLight(0xf7f8fb, this.settings.ambientInt);
         this.scene.add(this.ambientLight);
         this.dirLight = new THREE.DirectionalLight(0xfffcf6, this.settings.dirInt);
-        this.dirLight.position.set(60, 45, 110);
+        this.dirLight.position.set(120, -90, 180);
         this.scene.add(this.dirLight);
-        this.backLight = new THREE.DirectionalLight(0xe9eef6, this.settings.backLightInt ?? 0.5);
-        this.backLight.position.set(-40, -35, 30);
+        this.backLight = new THREE.DirectionalLight(0xe7edf5, this.settings.backLightInt ?? 0.62);
+        this.backLight.position.set(-90, 60, 85);
         this.scene.add(this.backLight);
 
         // 选择辅助器
@@ -754,8 +752,9 @@ export class SceneManager {
 
         // 应用光照
         this.ambientLight.intensity = this.settings.ambientInt;
+        if (this.hemiLight) this.hemiLight.intensity = this.settings.hemiInt ?? 0.58;
         this.dirLight.intensity = this.settings.dirInt;
-        this.backLight.intensity = this.settings.backLightInt ?? 0.5;
+        this.backLight.intensity = this.settings.backLightInt ?? 0.62;
 
         // 应用渲染色彩链路
         this.renderer.outputColorSpace = this.settings.colorSpace === 'linear'
@@ -766,10 +765,11 @@ export class SceneManager {
             : this.settings.toneMapping === 'neutral'
                 ? THREE.NeutralToneMapping
                 : THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = this.settings.exposure ?? 1;
+        this.renderer.toneMappingExposure = this.settings.exposure ?? 0.92;
 
         // 应用背景
-        this.renderer.setClearColor(this.settings.bgColor);
+        this.renderer.setClearColor(this.settings.bgColor, 1);
+        this.scene.background = new THREE.Color(this.settings.bgColor);
 
         // 应用视锥体剔除
         if (newSettings.frustumCulling !== undefined) {

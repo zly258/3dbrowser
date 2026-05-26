@@ -145,6 +145,8 @@ export function attachLoadedChunkMesh(options: {
     }
 
     mesh.name = chunk.id;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.userData.chunkId = chunk.id;
     mesh.userData.originalUuid = chunk.originalUuid;
 

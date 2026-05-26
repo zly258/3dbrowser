@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyIndustrialMaterialStyle, toIndustrialDisplayColor } from "../utils/scene-manager/renderStyle";
 import { ProgressCallback, TFunc } from "../theme/locales";
 import type { PropertyListItemInput } from "../viewer/propertyIndex";
 
@@ -1416,14 +1417,18 @@ export const loadIFC = async (
     // 材料缓存
     const materials: Record<string, THREE.MeshStandardMaterial> = {};
     const getMaterial = (color: number, opacity: number = 1) => {
-        const key = `${color}-${opacity}`;
+        const displayColor = toIndustrialDisplayColor(color);
+        const key = `${displayColor.getHex()}-${opacity}`;
         if(!materials[key]) {
             materials[key] = new THREE.MeshStandardMaterial({
-                color: color,
+                color: displayColor,
                 transparent: opacity < 1,
                 opacity: opacity,
+                roughness: 0.76,
+                metalness: 0.05,
                 side: THREE.DoubleSide
             });
+            applyIndustrialMaterialStyle(materials[key]);
         }
         return materials[key];
     };
@@ -1531,7 +1536,7 @@ export const loadIFC = async (
                 typeEntity: typeEntity?.is_a || "",
                 render: color
                     ? {
-                          color: `#${new THREE.Color(color.x, color.y, color.z).getHexString().toUpperCase()}`,
+                          color: `#${toIndustrialDisplayColor(new THREE.Color(color.x, color.y, color.z)).getHexString().toUpperCase()}`,
                           opacity: Number(color.w ?? 1)
                       }
                     : undefined
