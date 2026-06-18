@@ -9,6 +9,7 @@ import {
     Slider,
     ColorPicker
 } from "../common";
+import { THEME_PRESETS, ThemeType } from "../../theme/themeManager";
 
 type SettingsTab = "general" | "lighting" | "viewport" | "highlight";
 
@@ -18,9 +19,7 @@ const Row: React.FC<{
   labelWidth?: string;
   stretch?: boolean;
 }> = ({ label, children, labelWidth = '80px', stretch = false }) => (
-  <div
-    className="ui-form-row ui-form-row-tight"
-  >
+  <div className="ui-form-row ui-form-row-tight">
     <span
       className="ui-form-label ui-form-label-dynamic"
       style={{ ["--label-width" as any]: labelWidth }}
@@ -55,13 +54,18 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
     { value: "highlight", label: t("st_highlight") || "高亮" }
   ];
 
+  const currentThemeType = settings.themeType || "indigo";
+  const currentCustomColor = settings.themeCustomColor || "#4f46e5";
+
+  const isZh = currentLang === "zh";
+
   return (
     <FloatingPanel
       title={t("settings")}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={400}
-      height={400}
+      width={420}
+      height={440}
       modal={true}
       movable={false}
       theme={theme}
@@ -77,7 +81,33 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {activeTab === "general" && (
           <div className="ui-panel-stack">
-            {/* 主题选择已经移除 */}
+
+            {/* 主题色 */}
+            <Row label={t("st_theme") || "主题色"} labelWidth="70px" stretch={true}>
+              <div className="ui-theme-picker">
+                {THEME_PRESETS.map((preset) => (
+                  <button
+                    key={preset.key}
+                    title={isZh ? preset.labelZh : preset.labelEn}
+                    className={`ui-theme-swatch${currentThemeType === preset.key ? " active" : ""}`}
+                    style={{ background: preset.swatch }}
+                    onClick={() => onUpdate({ themeType: preset.key, themeCustomColor: undefined })}
+                  />
+                ))}
+                {/* 自定义色 */}
+                <div
+                  className={`ui-theme-swatch ui-theme-swatch-custom${currentThemeType === "custom" ? " active" : ""}`}
+                  title={isZh ? "自定义颜色" : "Custom color"}
+                >
+                  <input
+                    type="color"
+                    value={currentThemeType === "custom" ? currentCustomColor : "#4f46e5"}
+                    onChange={(e) => onUpdate({ themeType: "custom", themeCustomColor: e.target.value })}
+                    title={isZh ? "自定义颜色" : "Custom color"}
+                  />
+                </div>
+              </div>
+            </Row>
 
             {/* 语言选择 */}
             <Row label={t("st_lang")} labelWidth="70px" stretch={true}>

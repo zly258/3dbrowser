@@ -35,6 +35,8 @@ export interface SceneSettings {
     targetFps?: number;
     performanceMode?: "balanced" | "smooth" | "quality";
     locateIsolateMode?: boolean;
+    themeType?: "indigo" | "sky" | "emerald" | "violet" | "rose" | "amber" | "custom";
+    themeCustomColor?: string;
 }
 
 export interface StructureTreeNode {
