@@ -1,4 +1,3 @@
-
 export interface ThemeColors {
     bg: string;
     panelBg: string;
@@ -19,25 +18,25 @@ export interface ThemeColors {
 
 export const themes: { light: ThemeColors } = {
     light: {
-        bg: "#F8FAFF",
-        panelBg: "#FFFFFF",
-        headerBg: "#E0E2EC",
-        border: "#d2d2d2",
-        text: "#1C1B1F",
-        textLight: "#000000",
-        textMuted: "#49454F",
-        accent: "#0c62a2",
-        highlight: "#E0E2EC",
-        itemHover: "rgba(12, 98, 162, 0.08)",
-        success: "#217346",
-        warning: "#CA8A04",
-        danger: "#B3261E",
-        canvasBg: "#FFFFFF",
-        shadow: "rgba(0, 0, 0, 0.15)"
+        bg: "#f8fafc",
+        panelBg: "#ffffff",
+        headerBg: "#f1f5f9",
+        border: "#e2e8f0",
+        text: "#0f172a",
+        textLight: "#0f172a",
+        textMuted: "#64748b",
+        accent: "#4f46e5",
+        highlight: "rgba(79, 70, 229, 0.08)",
+        itemHover: "rgba(79, 70, 229, 0.05)",
+        success: "#10b981",
+        warning: "#f59e0b",
+        danger: "#ef4444",
+        canvasBg: "#ffffff",
+        shadow: "rgba(15, 23, 42, 0.08)"
     }
 };
 
-export const DEFAULT_FONT = "'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif";
+export const DEFAULT_FONT = "'Plus Jakarta Sans', 'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif";
 
 export const colors = themes.light;
 

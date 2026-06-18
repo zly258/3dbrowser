@@ -5,6 +5,7 @@ import "./styles/index.css";
 import { SceneManager, SceneSettings, PerformancePreset, SceneChunkOptions } from "./utils/scene-manager/SceneManager";
 import { themes, ThemeColors } from "./theme/styles";
 import { getTranslation, Lang } from "./theme/locales";
+import { applyTheme } from "./theme/themeManager";
 
 // 组件
 import { Toolbar } from "./components/menu";
@@ -260,6 +261,14 @@ export const ThreeViewer = ({
     useEffect(() => {
         if (propShowStats !== undefined) setShowStats(propShowStats);
     }, [propShowStats, setShowStats]);
+
+    // 主题色变化时应用到 CSS 变量
+    useEffect(() => {
+        applyTheme(
+            (sceneSettings.themeType as any) || "indigo",
+            sceneSettings.themeCustomColor
+        );
+    }, [sceneSettings.themeType, sceneSettings.themeCustomColor]);
 
     // Confirmation Modal State
     const [confirmState, setConfirmState] = useState<ViewerConfirmState>({ isOpen: false, title: "", message: "", action: () => {} });
