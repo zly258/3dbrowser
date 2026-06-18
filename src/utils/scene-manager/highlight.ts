@@ -101,7 +101,7 @@ function getSetIntersection(left: Set<string>, right: Set<string>) {
 
 function markInstanceColorNeedsUpdate(meshes: Iterable<THREE.BatchedMesh>) {
     for (const mesh of meshes) {
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        if ((mesh as any).instanceColor) (mesh as any).instanceColor.needsUpdate = true;
     }
 }
 

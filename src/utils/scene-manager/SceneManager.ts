@@ -3748,7 +3748,7 @@ export class SceneManager {
             translation.addScaledVector(state.directionLocal, magnitude * state.weight);
             matrixWork.compose(translation, quaternion, scale);
             state.mesh.setMatrixAt(state.instanceId, matrixWork);
-            if (state.mesh.instanceMatrix) state.mesh.instanceMatrix.needsUpdate = true;
+            if ((state.mesh as any).instanceMatrix) (state.mesh as any).instanceMatrix.needsUpdate = true;
         });
 
         this.interactableListValid = false;
@@ -3767,7 +3767,7 @@ export class SceneManager {
         });
         this.explodeInstanceStates.forEach((state) => {
             state.mesh.setMatrixAt(state.instanceId, state.baseMatrix);
-            if (state.mesh.instanceMatrix) state.mesh.instanceMatrix.needsUpdate = true;
+            if ((state.mesh as any).instanceMatrix) (state.mesh as any).instanceMatrix.needsUpdate = true;
         });
         this.interactableListValid = false;
         this.updateSceneBounds();
@@ -3839,7 +3839,7 @@ export class SceneManager {
         this.clashPairObjectMaterialCache.clear();
         this.clashPairInstanceColorCache.forEach(({ mesh, instanceId, originalColor }) => {
             mesh.setColorAt(instanceId, new THREE.Color(originalColor));
-            if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            if ((mesh as any).instanceColor) (mesh as any).instanceColor.needsUpdate = true;
         });
         this.clashPairInstanceColorCache.clear();
         this.clashPairUuids.clear();
@@ -3942,7 +3942,7 @@ export class SceneManager {
                 batched.setColorAt(instanceId, new THREE.Color(origin).lerp(tintColor, 0.88));
                 touched = true;
             });
-            if (touched && batched.instanceColor) batched.instanceColor.needsUpdate = true;
+            if (touched && (batched as any).instanceColor) (batched as any).instanceColor.needsUpdate = true;
         });
 
         this.clashPairUuids = new Set([normalizedA, normalizedB]);
@@ -4540,9 +4540,9 @@ export class SceneManager {
         record.group.traverse((obj) => {
             if ((obj as any).isMesh || (obj as any).isLine || (obj as any).isSprite) {
                 obj.updateMatrixWorld();
-                if (obj.geometry) {
-                    if (!obj.geometry.boundingBox) obj.geometry.computeBoundingBox();
-                    const b = obj.geometry.boundingBox!.clone();
+                if ((obj as any).geometry) {
+                    if (!(obj as any).geometry.boundingBox) (obj as any).geometry.computeBoundingBox();
+                    const b = (obj as any).geometry.boundingBox!.clone();
                     b.applyMatrix4(obj.matrixWorld);
                     box.union(b);
                 }

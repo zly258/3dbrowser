@@ -9,7 +9,7 @@ type OptimizedGeometryMapping = {
 
 function resolveWorldMatrix(mesh: THREE.Mesh, instanceId?: number) {
     const matrix = new THREE.Matrix4();
-    if (instanceId !== undefined && mesh.isInstancedMesh) {
+    if (instanceId !== undefined && (mesh as any).isInstancedMesh) {
         (mesh as THREE.InstancedMesh).getMatrixAt(instanceId, matrix);
         return matrix;
     }
