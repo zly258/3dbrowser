@@ -308,7 +308,7 @@ export function usePropertySearch({
                 name: node.name,
                 type: node.type,
                 userData: node.userData || {}
-              } as THREE.Object3D
+              } as unknown as THREE.Object3D
             });
           }
         }
@@ -358,7 +358,7 @@ export function usePropertySearch({
           name: displayName,
           type: "PropertyIndex",
           userData: { nbimSearchDocument: doc, originalUuid: doc.owner, bimId: doc.bimId }
-        } as THREE.Object3D
+        } as unknown as THREE.Object3D
       });
     });
 
