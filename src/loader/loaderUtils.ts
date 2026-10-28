@@ -12,11 +12,33 @@ export interface LoadedItem {
     object?: THREE.Object3D;
 }
 
+export interface LoadedFileFailure {
+    fileName: string;
+    message: string;
+}
+
+const SUPPORTED_LOAD_EXTENSIONS = new Set([
+    "lmb",
+    "glb",
+    "gltf",
+    "fbx",
+    "ifc",
+    "obj",
+    "stl",
+    "ply",
+    "3mf",
+    "stp",
+    "step",
+    "igs",
+    "iges"
+]);
+
 export interface LoaderRuntimeHints {
     loadProfile?: LoadProfile;
     deferIfcProperties?: boolean;
     fastGeometrySanitize?: boolean;
     isStale?: () => boolean;
+    onFileFailure?: (failure: LoadedFileFailure) => void;
 }
 
 type LoadStage = "fetch" | "parse" | "normalize" | "optimize" | "addToScene";
@@ -367,10 +389,23 @@ export const loadModelFiles = async (
         const fileWeight = 100 / totalFiles;
         const reportStage = createStageProgressReporter(onProgress, t, fileName, fileBaseProgress, fileWeight);
 
+        const reportFailure = (message: string) => {
+            const failure: LoadedFileFailure = { fileName: fileName || `#${i + 1}`, message };
+            console.error(`加载 ${failure.fileName} 失败`, message);
+            runtimeHints.onFileFailure?.(failure);
+        };
+
         try {
+            if (!SUPPORTED_LOAD_EXTENSIONS.has(ext)) {
+                reportFailure(`${t("unsupported_format")} (.${ext || "?"})`);
+                continue;
+            }
             reportStage("fetch", 5);
             const object = await loadObjectByExtension(fileOrUrl, url, ext, files, reportStage, t, settings, libPath, runtimeHints);
-            if (!object) continue;
+            if (!object) {
+                reportFailure(`${t("load_parse_failed")} (.${ext})`);
+                continue;
+            }
 
             object.name = fileName;
             reportStage("normalize", 30, `${t("processing")} ${fileName}`);
@@ -386,7 +421,7 @@ export const loadModelFiles = async (
             reportStage("addToScene", 100, `${t("success")} ${fileName}`);
             loadedObjects.push(object);
         } catch (error) {
-            console.error(`加载 ${fileName} 失败`, error);
+            reportFailure((error as Error)?.message || String(error));
         } finally {
             if (!isUrl) URL.revokeObjectURL(url);
         }

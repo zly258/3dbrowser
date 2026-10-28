@@ -4,13 +4,15 @@ import type { ChangeEvent, DragEvent } from "react";
 import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { PropertyGroups } from "../viewer/propertyIndex";
 import type { ViewerToast } from "../viewer/types";
+import type { LoadedFileFailure } from "../loader/loaderUtils";
+import { formatFailures } from "../viewer/fileLoading";
 import type { ViewerTool } from "./useViewerTools";
 
 interface UseViewerFileActionsOptions {
     sceneMgrRef: RefObject<SceneManager | null>;
     t: (key: string) => string;
     processFiles: (items: (File | string)[]) => Promise<void>;
-    loadItemsIntoScene: (items: (File | string)[]) => Promise<void>;
+    loadItemsIntoScene: (items: (File | string)[]) => Promise<LoadedFileFailure[]>;
     setLoading: Dispatch<SetStateAction<boolean>>;
     setStatus: Dispatch<SetStateAction<string>>;
     setProgress: Dispatch<SetStateAction<number>>;
@@ -90,8 +92,15 @@ export function useViewerFileActions({
             resetMeasurementState();
             updateTree();
 
-            await loadItemsIntoScene(files);
+            const failures = await loadItemsIntoScene(files);
             updateTree();
+            if (failures.length > 0) {
+                setToast({
+                    message: formatFailures(failures, t("failed")),
+                    type: "error"
+                });
+                return;
+            }
 
             setStatus(`${t("processing")}...`);
             await manager.exportNbim();
