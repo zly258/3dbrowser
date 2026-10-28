@@ -2,7 +2,14 @@ import { useCallback } from "react";
 import type { RefObject } from "react";
 import type { SceneManager, SceneSettings } from "../utils/scene-manager/SceneManager";
 import type { TFunc } from "../theme/locales";
-import { cleanLoadingStatus, createFileSetId, loadSceneItems } from "../viewer/fileLoading";
+import type { LoadedFileFailure } from "../loader/loaderUtils";
+import {
+    cleanLoadingStatus,
+    createFileSetId,
+    formatFailureList,
+    formatFailures,
+    loadSceneItems
+} from "../viewer/fileLoading";
 
 interface FileLoadingFlowOptions {
     managerRef: RefObject<SceneManager | null>;
@@ -30,10 +37,11 @@ export function useFileLoadingFlow({
     updateTree
 }: FileLoadingFlowOptions) {
     const loadItemsIntoScene = useCallback(async (items: (File | string)[]) => {
-        if (!items.length || !managerRef.current) return;
+        if (!items.length || !managerRef.current) return [] as LoadedFileFailure[];
         const manager = managerRef.current;
         const generation = manager.beginLoadGeneration?.() ?? 0;
         const runtimeHints = (manager as any).getChunkOptions?.() || {};
+        const failures: LoadedFileFailure[] = [];
         await loadSceneItems({
             items,
             manager,
@@ -46,13 +54,24 @@ export function useFileLoadingFlow({
                 manager.invalidateRender?.();
             },
             runtimeHints,
-            isStale: () => !(managerRef.current?.isLoadGenerationCurrent?.(generation))
+            isStale: () => !(managerRef.current?.isLoadGenerationCurrent?.(generation)),
+            onFileFailure: (failure) => {
+                failures.push(failure);
+            }
         });
         manager.invalidateRender?.({
             invalidateInteractables: true,
             needsBoundsUpdate: true,
             needsCulling: true
         });
+        if (
+            failures.length > 0 &&
+            failures.length >= items.length &&
+            managerRef.current?.isLoadGenerationCurrent?.(generation) !== false
+        ) {
+            throw new Error(formatFailureList(failures));
+        }
+        return failures;
     }, [libPath, managerRef, sceneSettings, setProgress, setStatus, t]);
 
     const processFiles = useCallback(async (items: (File | string)[]) => {
@@ -67,7 +86,7 @@ export function useFileLoadingFlow({
         setProgress(0);
 
         try {
-            await loadItemsIntoScene(items);
+            const failures = await loadItemsIntoScene(items);
             updateTree();
             managerRef.current?.invalidateRender?.({
                 invalidateInteractables: true,
@@ -81,7 +100,7 @@ export function useFileLoadingFlow({
             if (hasNbim) {
                 const stats = managerRef.current.getStats?.();
                 if (stats && stats.meshes <= 0) {
-                    throw new Error("NBIM 加载完成但没有可渲染外形，请检查文件格式或分块数据");
+                    throw new Error(`${items.map((item) => typeof item === "string" ? item : item.name).join(", ")}: ${t("load_no_renderable_mesh")}`);
                 }
             } else {
                 managerRef.current?.fitView(false);
@@ -91,7 +110,12 @@ export function useFileLoadingFlow({
                 needsBoundsUpdate: true,
                 needsCulling: true
             });
-            setStatus(t("success"));
+            if (failures.length > 0) {
+                setStatus(t("failed"));
+                setToast({ message: formatFailures(failures, t("failed")), type: "error" });
+            } else {
+                setStatus(t("success"));
+            }
         } catch (err) {
             setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(err as Error).message}`, type: "error" });

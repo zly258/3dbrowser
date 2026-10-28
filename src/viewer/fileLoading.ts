@@ -1,7 +1,23 @@
 import { loadModelFiles } from "../loader/loaderUtils";
-import { SceneSettings, SceneManager } from "../utils/scene-manager/SceneManager";
+import type { LoadedFileFailure } from "../loader/loaderUtils";
+import type { SceneSettings, SceneManager } from "../utils/scene-manager/SceneManager";
 import { TFunc } from "../theme/locales";
 import type { LoaderRuntimeHints } from "../loader/loaderUtils";
+
+export type { LoadedFileFailure };
+
+export function formatFailureList(failures: LoadedFileFailure[], maxShown = 3) {
+    if (!failures.length) return "";
+    const shown = failures.slice(0, maxShown)
+        .map((failure) => `${failure.fileName}: ${failure.message}`)
+        .join("; ");
+    const rest = failures.length - maxShown;
+    return rest > 0 ? `${shown} (+${rest})` : shown;
+}
+
+export function formatFailures(failures: LoadedFileFailure[], failedLabel: string) {
+    return `${failedLabel} (${failures.length}): ${formatFailureList(failures)}`;
+}
 
 export function cleanLoadingStatus(message: string) {
     if (!message) return "";
@@ -26,6 +42,7 @@ interface LoadSceneItemsArgs {
     onProgress: (progress: number, message?: string) => void;
     runtimeHints?: LoaderRuntimeHints;
     isStale?: () => boolean;
+    onFileFailure?: (failure: LoadedFileFailure) => void;
 }
 
 export async function loadSceneItems({
@@ -36,7 +53,8 @@ export async function loadSceneItems({
     t,
     onProgress,
     runtimeHints = {},
-    isStale
+    isStale,
+    onFileFailure
 }: LoadSceneItemsArgs) {
     if (!items.length) return;
 
@@ -54,19 +72,32 @@ export async function loadSceneItems({
 
     for (const item of nbimItems) {
         if (isStale?.()) return;
-        if (typeof item === "string") {
-            const response = await fetch(item);
-            if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
-            const blob = await response.blob();
-            const fileName = item.split("?")[0].split("#")[0].split("/").pop() || "model.nbim";
-            const file = new File([blob], fileName);
-            await (manager as any).loadNbim(file, (p: number, msg: string) => {
-                onProgress(p, msg);
-            });
-        } else {
-            await (manager as any).loadNbim(item, (p: number, msg: string) => {
-                onProgress(p, msg);
-            });
+        const displayName = typeof item === "string"
+            ? (item.split("?")[0].split("#")[0].split("/").pop() || item)
+            : item.name;
+        try {
+            if (typeof item === "string") {
+                const response = await fetch(item);
+                if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
+                const blob = await response.blob();
+                const fileName = displayName;
+                const file = new File([blob], fileName);
+                await (manager as any).loadNbim(file, (p: number, msg: string) => {
+                    onProgress(p, msg);
+                });
+            } else {
+                await (manager as any).loadNbim(item, (p: number, msg: string) => {
+                    onProgress(p, msg);
+                });
+            }
+        } catch (error) {
+            const message = (error as Error)?.message || String(error);
+            console.error(`加载 ${displayName} 失败`, error);
+            if (onFileFailure) {
+                onFileFailure({ fileName: displayName, message });
+            } else {
+                throw error;
+            }
         }
     }
 
@@ -80,7 +111,8 @@ export async function loadSceneItems({
         libPath,
         {
             ...runtimeHints,
-            isStale
+            isStale,
+            onFileFailure
         }
     );
 
@@ -95,7 +127,7 @@ export async function loadSceneItems({
                 if (child?.isMesh && child.geometry) meshCount++;
             });
             if (meshCount <= 0) {
-                throw new Error(`${obj.name || "Model"} has no renderable mesh`);
+                throw new Error(`${obj.name || "Model"}: ${t("load_no_renderable_mesh")}`);
             }
 
             await manager.addModel(obj, (p: number, msg: string) => {
