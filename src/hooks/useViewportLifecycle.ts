@@ -39,9 +39,10 @@ export function useViewportLifecycle({
             const { width, height } = entry.contentRect;
             if (width === 0 || height === 0) return;
 
-            requestAnimationFrame(() => {
-                mgrInstance.resize(width, height);
-            });
+            // ResizeObserver 回调本身就运行在布局之后、绘制之前，
+            // 直接在这里同步调整绘图缓冲，避免多包一层 rAF 导致缓冲区晚一帧更新，
+            // 浏览器先呈现空白/拉伸的画布（闪烁）。
+            mgrInstance.resize(width, height);
         });
 
         observer.observe(viewportRef.current);
