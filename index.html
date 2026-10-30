@@ -6,12 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3DBrowser</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { overflow: hidden; background: #1e1e1e; color: #d4d4d4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            overflow: hidden;
+            background: #fafafa;
+            color: rgba(0, 0, 0, 0.87);
+            font-family: 'Roboto', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+        }
         #root { width: 100vw; height: 100vh; }
         button:focus { outline: none; }
         
@@ -26,15 +28,15 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: #f8fafc;
+            background: #fafafa;
             z-index: 9999;
         }
         .spinner {
-            width: 44px;
-            height: 44px;
-            border: 3px solid #e2e8f0;
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 0, 0, 0.12);
             border-radius: 50%;
-            border-top-color: #4f46e5;
+            border-top-color: #1976d2;
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin {
@@ -50,10 +52,10 @@
         }
         .loading-text {
             margin-top: 16px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
-            color: #64748b;
-            letter-spacing: 0.05em;
+            color: rgba(0, 0, 0, 0.6);
+            letter-spacing: 0.03em;
         }
     </style>
 </head>

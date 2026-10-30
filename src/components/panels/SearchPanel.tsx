@@ -293,11 +293,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   value={String(pageSize)}
                   onChange={(value) => setPageSize(Number(value) || 10)}
                   options={[
-                    { value: "10", label: "10" },
-                    { value: "20", label: "20" },
-                    { value: "50", label: "50" },
+                    { value: "10", label: "10 / 页" },
+                    { value: "20", label: "20 / 页" },
+                    { value: "50", label: "50 / 页" },
                   ]}
                   className="ui-input-compact ui-search-page-size"
+                  style={{ width: 96 }}
                 />
                 <Button
                   className="ui-properties-action"

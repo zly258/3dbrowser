@@ -1,0 +1,104 @@
+.ui-segmented { display: inline-flex; align-items: center; gap: 3px; padding: 3px; background: var(--bg-header); border: 1px solid var(--border-light); border-radius: var(--radius-md); }
+
+.ui-segmented-item { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 0 10px; color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); font-size: var(--font-size-secondary); font-weight: 400; white-space: nowrap; }
+
+.ui-segmented-item:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+.ui-segmented-item.active { color: var(--accent); background: var(--surface-bright); border-color: var(--border-color); font-weight: 500; box-shadow: var(--shadow-xs); }
+
+.ui-segmented-item:disabled { opacity: .5; cursor: not-allowed; }
+
+.ui-measure-types .ui-segmented { width: 100%; }
+
+.ui-measure-types .ui-segmented-item { flex: 1; min-width: 0; padding: 0 7px; }
+
+.ui-settings-panel-body .ui-segmented {
+  min-height: 36px;
+  width: 100%;
+  padding: 3px;
+  gap: 3px;
+  background: var(--bg-header);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+
+.ui-settings-panel-body .ui-segmented-item {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500 !important;
+}
+
+.ui-settings-panel-body .ui-segmented-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+}
+
+.ui-settings-panel-body .ui-segmented-item.active {
+  color: var(--accent);
+  background: var(--bg-panel);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-xs);
+  font-weight: 500 !important;
+}
+
+.ui-settings-panel-body .ui-form-value > .ui-select-custom,
+.ui-settings-panel-body .ui-form-value > .ui-segmented,
+.ui-settings-panel-body .ui-form-value > .ui-color-picker,
+.ui-settings-panel-body .ui-form-value > .ui-slider-field {
+  width: 100% !important;
+}
+
+.ui-form-value > .ui-select-custom,
+.ui-form-value > .ui-segmented,
+.ui-form-value > .ui-slider-field,
+.ui-form-value > .ui-input,
+.ui-form-value > .ui-input-number,
+.ui-form-value > .ui-color-picker {
+  width: 100% !important;
+}
+
+.ui-measure-types.ui-segmented,
+.ui-measure-types .ui-segmented {
+  width: auto !important;
+}
+
+.ui-measure-types .ui-segmented-item,
+.ui-measure-types.ui-segmented .ui-segmented-item {
+  flex: 0 0 54px !important;
+  min-width: 54px !important;
+  padding: 0 8px !important;
+}
+
+/* Segmented Control */
+.ui-segmented {
+  background: var(--surface-dim) !important;
+  border: 1px solid var(--border-light) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 2px !important;
+}
+
+.ui-segmented-item {
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.ui-segmented-item:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-hover) !important;
+}
+
+.ui-segmented-item.active {
+  color: var(--accent) !important;
+  background: var(--surface-bright) !important;
+  border-color: rgba(79, 70, 229, 0.15) !important;
+  box-shadow: var(--shadow-xs) !important;
+  font-weight: 600 !important;
+}

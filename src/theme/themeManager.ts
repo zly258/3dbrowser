@@ -4,6 +4,7 @@
  */
 
 export type ThemeType = "indigo" | "sky" | "emerald" | "violet" | "rose" | "amber" | "custom";
+export type ThemeMode = "light" | "dark";
 
 export interface ThemePreset {
   key: ThemeType;
@@ -24,93 +25,93 @@ export interface ThemePreset {
 export const THEME_PRESETS: ThemePreset[] = [
   {
     key: "indigo",
-    labelZh: "靛蓝",
-    labelEn: "Indigo",
-    primary: "#4f46e5",
-    primaryHover: "#4338ca",
-    primaryActive: "#3730a3",
-    primaryContainer: "#ede9fe",
-    surfaceHover: "rgba(79, 70, 229, 0.05)",
-    surfaceActive: "rgba(79, 70, 229, 0.10)",
-    surfaceSelected: "rgba(79, 70, 229, 0.08)",
-    surfaceSoft: "#f5f3ff",
-    surfaceSoftStrong: "#ede9fe",
-    swatch: "#4f46e5",
+    labelZh: "经典蓝",
+    labelEn: "Blue",
+    primary: "#1976d2",
+    primaryHover: "#1565c0",
+    primaryActive: "#0d47a1",
+    primaryContainer: "rgba(25, 118, 210, 0.12)",
+    surfaceHover: "rgba(25, 118, 210, 0.04)",
+    surfaceActive: "rgba(25, 118, 210, 0.12)",
+    surfaceSelected: "rgba(25, 118, 210, 0.12)",
+    surfaceSoft: "rgba(25, 118, 210, 0.08)",
+    surfaceSoftStrong: "rgba(25, 118, 210, 0.14)",
+    swatch: "#1976d2",
   },
   {
     key: "sky",
     labelZh: "天蓝",
     labelEn: "Sky",
-    primary: "#0284c7",
-    primaryHover: "#0369a1",
-    primaryActive: "#075985",
-    primaryContainer: "#e0f2fe",
-    surfaceHover: "rgba(2, 132, 199, 0.05)",
-    surfaceActive: "rgba(2, 132, 199, 0.10)",
-    surfaceSelected: "rgba(2, 132, 199, 0.08)",
-    surfaceSoft: "#f0f9ff",
-    surfaceSoftStrong: "#e0f2fe",
-    swatch: "#0284c7",
+    primary: "#0288d1",
+    primaryHover: "#0277bd",
+    primaryActive: "#01579b",
+    primaryContainer: "rgba(2, 136, 209, 0.12)",
+    surfaceHover: "rgba(2, 136, 209, 0.04)",
+    surfaceActive: "rgba(2, 136, 209, 0.12)",
+    surfaceSelected: "rgba(2, 136, 209, 0.12)",
+    surfaceSoft: "rgba(2, 136, 209, 0.08)",
+    surfaceSoftStrong: "rgba(2, 136, 209, 0.14)",
+    swatch: "#0288d1",
   },
   {
     key: "emerald",
-    labelZh: "翠绿",
-    labelEn: "Emerald",
-    primary: "#059669",
-    primaryHover: "#047857",
-    primaryActive: "#065f46",
-    primaryContainer: "#d1fae5",
-    surfaceHover: "rgba(5, 150, 105, 0.05)",
-    surfaceActive: "rgba(5, 150, 105, 0.10)",
-    surfaceSelected: "rgba(5, 150, 105, 0.08)",
-    surfaceSoft: "#ecfdf5",
-    surfaceSoftStrong: "#d1fae5",
-    swatch: "#059669",
+    labelZh: "墨绿",
+    labelEn: "Green",
+    primary: "#2e7d32",
+    primaryHover: "#1b5e20",
+    primaryActive: "#0d4013",
+    primaryContainer: "rgba(46, 125, 50, 0.12)",
+    surfaceHover: "rgba(46, 125, 50, 0.04)",
+    surfaceActive: "rgba(46, 125, 50, 0.12)",
+    surfaceSelected: "rgba(46, 125, 50, 0.12)",
+    surfaceSoft: "rgba(46, 125, 50, 0.08)",
+    surfaceSoftStrong: "rgba(46, 125, 50, 0.14)",
+    swatch: "#2e7d32",
   },
   {
     key: "violet",
     labelZh: "紫罗兰",
     labelEn: "Violet",
-    primary: "#7c3aed",
-    primaryHover: "#6d28d9",
-    primaryActive: "#5b21b6",
-    primaryContainer: "#ede9fe",
-    surfaceHover: "rgba(124, 58, 237, 0.05)",
-    surfaceActive: "rgba(124, 58, 237, 0.10)",
-    surfaceSelected: "rgba(124, 58, 237, 0.08)",
-    surfaceSoft: "#f5f3ff",
-    surfaceSoftStrong: "#ede9fe",
-    swatch: "#7c3aed",
+    primary: "#512da8",
+    primaryHover: "#4527a0",
+    primaryActive: "#311b92",
+    primaryContainer: "rgba(81, 45, 168, 0.12)",
+    surfaceHover: "rgba(81, 45, 168, 0.04)",
+    surfaceActive: "rgba(81, 45, 168, 0.12)",
+    surfaceSelected: "rgba(81, 45, 168, 0.12)",
+    surfaceSoft: "rgba(81, 45, 168, 0.08)",
+    surfaceSoftStrong: "rgba(81, 45, 168, 0.14)",
+    swatch: "#512da8",
   },
   {
     key: "rose",
-    labelZh: "玫红",
+    labelZh: "桃红",
     labelEn: "Rose",
-    primary: "#e11d48",
-    primaryHover: "#be123c",
-    primaryActive: "#9f1239",
-    primaryContainer: "#ffe4e6",
-    surfaceHover: "rgba(225, 29, 72, 0.05)",
-    surfaceActive: "rgba(225, 29, 72, 0.10)",
-    surfaceSelected: "rgba(225, 29, 72, 0.08)",
-    surfaceSoft: "#fff1f2",
-    surfaceSoftStrong: "#ffe4e6",
-    swatch: "#e11d48",
+    primary: "#c2185b",
+    primaryHover: "#ad1457",
+    primaryActive: "#880e4f",
+    primaryContainer: "rgba(194, 24, 91, 0.12)",
+    surfaceHover: "rgba(194, 24, 91, 0.04)",
+    surfaceActive: "rgba(194, 24, 91, 0.12)",
+    surfaceSelected: "rgba(194, 24, 91, 0.12)",
+    surfaceSoft: "rgba(194, 24, 91, 0.08)",
+    surfaceSoftStrong: "rgba(194, 24, 91, 0.14)",
+    swatch: "#c2185b",
   },
   {
     key: "amber",
-    labelZh: "琥珀",
+    labelZh: "暖橙",
     labelEn: "Amber",
-    primary: "#d97706",
-    primaryHover: "#b45309",
-    primaryActive: "#92400e",
-    primaryContainer: "#fef3c7",
-    surfaceHover: "rgba(217, 119, 6, 0.05)",
-    surfaceActive: "rgba(217, 119, 6, 0.10)",
-    surfaceSelected: "rgba(217, 119, 6, 0.08)",
-    surfaceSoft: "#fffbeb",
-    surfaceSoftStrong: "#fef3c7",
-    swatch: "#d97706",
+    primary: "#f57c00",
+    primaryHover: "#ef6c00",
+    primaryActive: "#e65100",
+    primaryContainer: "rgba(245, 124, 0, 0.12)",
+    surfaceHover: "rgba(245, 124, 0, 0.04)",
+    surfaceActive: "rgba(245, 124, 0, 0.12)",
+    surfaceSelected: "rgba(245, 124, 0, 0.12)",
+    surfaceSoft: "rgba(245, 124, 0, 0.08)",
+    surfaceSoftStrong: "rgba(245, 124, 0, 0.14)",
+    swatch: "#f57c00",
   },
 ];
 
@@ -169,9 +170,26 @@ function buildCustomPreset(hex: string): ThemePreset {
 }
 
 /**
+ * 将主题模式（明亮/暗黑）应用到 html 根节点
+ */
+export function applyThemeMode(mode: ThemeMode): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const isDark = mode === "dark";
+  root.classList.toggle("theme-dark", isDark);
+  root.setAttribute("data-theme", mode);
+  root.style.colorScheme = mode;
+}
+
+/**
  * 将主题应用到 :root CSS 变量
  */
-export function applyTheme(type: ThemeType, customColor?: string): void {
+export function applyTheme(type: ThemeType, customColor?: string, mode?: ThemeMode): void {
+  if (typeof document === "undefined") return;
+  if (mode) {
+    applyThemeMode(mode);
+  }
+
   let preset: ThemePreset | undefined;
 
   if (type === "custom" && customColor) {
@@ -195,12 +213,22 @@ export function applyTheme(type: ThemeType, customColor?: string): void {
   root.style.setProperty("--surface-soft", preset.surfaceSoft);
   root.style.setProperty("--surface-soft-strong", preset.surfaceSoftStrong);
 
+  // 同步历史/兼容变量 --accent 体系与 --accent-blue
+  root.style.setProperty("--accent", preset.primary);
+  root.style.setProperty("--accent-hover", preset.primaryHover);
+  root.style.setProperty("--accent-active", preset.primaryActive);
+  root.style.setProperty("--accent-subtle", preset.primaryContainer);
+  if (preset.key === "indigo") {
+    root.style.setProperty("--accent-blue", preset.primary);
+    root.style.setProperty("--accent-blue-hover", preset.primaryHover);
+    root.style.setProperty("--accent-blue-soft", preset.primaryContainer);
+  }
+
   // focus ring
   const rgb = hexToRgb(preset.primary);
   if (rgb) {
-    root.style.setProperty(
-      "--primary-focus",
-      `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18)`
-    );
+    const focusVal = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18)`;
+    root.style.setProperty("--primary-focus", focusVal);
+    root.style.setProperty("--accent-focus", focusVal);
   }
 }

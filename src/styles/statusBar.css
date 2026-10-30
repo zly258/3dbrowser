@@ -1,0 +1,39 @@
+.ui-statusbar-item,
+.ui-statusbar-meta,
+.ui-statusbar-coords,
+.ui-statusbar-metric,
+.ui-stats-group,
+.ui-stats-item,
+.ui-mode-tray,
+.ui-mode-pill,
+.ui-chunk-progress,
+.ui-tips {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  min-height: 0 !important;
+  height: 22px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.ui-stats-group {
+  gap: 8px !important;
+  padding-left: 8px !important;
+  border-left: 1px solid var(--divider) !important;
+}
+
+.ui-stats-item {
+  gap: 4px !important;
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+}
+
+.ui-stats-item svg,
+.ui-statusbar svg,
+.ui-chunk-progress svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 14px !important;
+}
