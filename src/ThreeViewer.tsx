@@ -82,8 +82,6 @@ export const ThreeViewer = ({
      performancePreset = 'quality',
      chunkOptions
  }: ThreeViewerProps) => {
-    const theme = themes.light;
-
     const effectiveChunkOptions = useMemo<SceneChunkOptions>(() => ({
         chunkReadCacheSize: chunkOptions?.chunkReadCacheSize ?? 128,
         chunkPrefetchWindow: chunkOptions?.chunkPrefetchWindow ?? 0,
@@ -234,7 +232,8 @@ export const ThreeViewer = ({
             ambientInt: 0.78,
             dirInt: 1.48,
             hemiInt: 0.58,
-            bgColor: '#eef2f5',
+            bgColor: '#fafafa',
+            themeMode: 'light',
             viewCubeSize: 120,
             colorSpace: 'srgb',
             toneMapping: 'aces',
@@ -247,7 +246,7 @@ export const ThreeViewer = ({
             performanceMode: 'balanced',
             locateIsolateMode: false,
             backLightInt: 0.62,
-            highlightColor: "#0c62a2",
+            highlightColor: "#1976d2",
             highlightShowBox: false,
             clip: {
                 helperVisible: initialSettings?.clip?.helperVisible ?? false,
@@ -255,20 +254,24 @@ export const ThreeViewer = ({
             },
         };
         const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
-        return merged.bgColor === undefined ? { ...merged, bgColor: '#eef2f5' } : merged;
+        return merged.bgColor === undefined ? { ...merged, bgColor: merged.themeMode === 'dark' ? '#121212' : '#fafafa' } : merged;
     });
+
+    const isDark = sceneSettings?.themeMode === "dark";
+    const theme = isDark ? themes.dark : themes.light;
 
     useEffect(() => {
         if (propShowStats !== undefined) setShowStats(propShowStats);
     }, [propShowStats, setShowStats]);
 
-    // 主题色变化时应用到 CSS 变量
+    // 主题色和主题模式变化时应用到 CSS 变量与 DOM 根节点
     useEffect(() => {
         applyTheme(
             (sceneSettings.themeType as any) || "indigo",
-            sceneSettings.themeCustomColor
+            sceneSettings.themeCustomColor,
+            sceneSettings.themeMode || "light"
         );
-    }, [sceneSettings.themeType, sceneSettings.themeCustomColor]);
+    }, [sceneSettings.themeType, sceneSettings.themeCustomColor, sceneSettings.themeMode]);
 
     // Confirmation Modal State
     const [confirmState, setConfirmState] = useState<ViewerConfirmState>({ isOpen: false, title: "", message: "", action: () => {} });

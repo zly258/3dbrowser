@@ -264,7 +264,7 @@ export class SceneManager {
         ambientInt: 0.78,
         dirInt: 1.48,
         hemiInt: 0.58,
-        bgColor: "#eef2f5",
+        bgColor: "#fafafa",
         viewCubeSize: 100,
         colorSpace: 'srgb',
         toneMapping: 'aces',
@@ -275,7 +275,7 @@ export class SceneManager {
         maxPixelRatio: 2,
         targetFps: 50,
         performanceMode: 'balanced',
-        highlightColor: "#ff9f1c",
+        highlightColor: "#1976d2",
         highlightShowBox: false,
         backLightInt: 0.62,
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)

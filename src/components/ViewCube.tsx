@@ -26,7 +26,11 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
 
     const cubeSize = sceneMgr?.settings?.viewCubeSize || 132;
     const t = (key: string) => getTranslation(lang as Lang, key);
-    void theme;
+    const isDark = typeof document !== "undefined" && (
+        document.documentElement.classList.contains("theme-dark") ||
+        document.documentElement.getAttribute("data-theme") === "dark" ||
+        theme?.bg === "#121212"
+    );
 
     useEffect(() => {
         if (!canvasRef.current || !containerRef.current) return;
@@ -86,12 +90,12 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             return value || fallback;
         };
 
-        const accentCss = readCssVar("--accent", "#0C62A2");
-        const faceColor = new THREE.Color("#F3F6FA");
-        const sideColor = new THREE.Color("#E6ECF3");
-        const edgeColor = new THREE.Color("#C9D3DF");
-        const cornerColor = new THREE.Color("#D5DEE9");
-        const lineColor = new THREE.Color("#8F9DAE");
+        const accentCss = readCssVar("--accent", isDark ? "#90caf9" : "#1976d2");
+        const faceColor = isDark ? new THREE.Color("#262626") : new THREE.Color("#F3F6FA");
+        const sideColor = isDark ? new THREE.Color("#2c2c2c") : new THREE.Color("#E6ECF3");
+        const edgeColor = isDark ? new THREE.Color("#383838") : new THREE.Color("#C9D3DF");
+        const cornerColor = isDark ? new THREE.Color("#424242") : new THREE.Color("#D5DEE9");
+        const lineColor = isDark ? new THREE.Color("#616161") : new THREE.Color("#8F9DAE");
         const hoverColor = new THREE.Color(accentCss);
 
         const createRoundedRectPath = (
@@ -127,14 +131,14 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             if (context) {
                 context.clearRect(0, 0, size, size);
 
-                context.fillStyle = "#F3F6FA";
+                context.fillStyle = isDark ? "#262626" : "#F3F6FA";
                 context.fillRect(0, 0, size, size);
 
-                context.fillStyle = "#EAF0F6";
+                context.fillStyle = isDark ? "#1e1e1e" : "#EAF0F6";
                 createRoundedRectPath(context, 24, 24, 208, 208, 12);
                 context.fill();
 
-                context.strokeStyle = "rgba(143,157,174,0.75)";
+                context.strokeStyle = isDark ? "rgba(255,255,255,0.18)" : "rgba(143,157,174,0.75)";
                 context.lineWidth = 3;
                 createRoundedRectPath(context, 28, 28, 200, 200, 10);
                 context.stroke();
@@ -146,7 +150,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
                     context.rotate((rotation * Math.PI) / 180);
                 }
 
-                context.fillStyle = "#1F2933";
+                context.fillStyle = isDark ? "#E0E0E0" : "#1F2933";
                 context.font = lang === "zh"
                     ? '700 82px "Microsoft YaHei", "PingFang SC", sans-serif'
                     : '700 48px "Segoe UI", Arial, sans-serif';
@@ -296,7 +300,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
                 }
             });
         };
-    }, [sceneMgr, cubeSize, lang]);
+    }, [sceneMgr, cubeSize, lang, isDark]);
 
     const resetPartState = (mesh: ViewCubeMesh | null) => {
         if (!mesh) return;
@@ -311,10 +315,10 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
         const mat = mesh.material;
 
         if (mesh.userData.isFace) {
-            mat.color.set(0xffffff);
+            mat.color.set(isDark ? 0x383838 : 0xffffff);
             mat.opacity = 1;
         } else {
-            mat.color.set(0xb9d8ff);
+            mat.color.set(isDark ? 0x1976d2 : 0xb9d8ff);
             mat.opacity = 1;
         }
 

@@ -1,0 +1,15 @@
+.ui-viewport-canvas { width: 100%; height: 100%; display: block; outline: none; }
+
+.ui-context-menu-item { width: 100%; min-height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 9px; color: var(--text-primary); background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); font-size: var(--font-size-secondary); font-weight: 400; white-space: nowrap; }
+
+.ui-context-menu-item:hover { background: var(--bg-hover); border-color: var(--border-light); }
+
+.ui-context-menu-item.disabled, .ui-context-menu-item:disabled { color: var(--text-muted); opacity: .5; cursor: not-allowed; }
+
+.ui-context-menu-divider { height: 1px; margin: 4px 2px; background: var(--border-light); }
+
+.ui-context-menu-slider { flex-direction: column; align-items: stretch; height: auto; padding: 8px 9px; }
+
+.ui-context-menu-slider-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+
+.ui-context-menu-slider-input { width: 100%; accent-color: var(--accent); }

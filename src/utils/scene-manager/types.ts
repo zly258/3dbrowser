@@ -37,6 +37,7 @@ export interface SceneSettings {
     locateIsolateMode?: boolean;
     themeType?: "indigo" | "sky" | "emerald" | "violet" | "rose" | "amber" | "custom";
     themeCustomColor?: string;
+    themeMode?: "light" | "dark";
 }
 
 export interface StructureTreeNode {

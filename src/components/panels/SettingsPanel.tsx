@@ -55,7 +55,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   ];
 
   const currentThemeType = settings.themeType || "indigo";
-  const currentCustomColor = settings.themeCustomColor || "#4f46e5";
+  const currentCustomColor = settings.themeCustomColor || "#1976d2";
 
   const isZh = currentLang === "zh";
 
@@ -64,8 +64,8 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       title={t("settings")}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={420}
-      height={440}
+      width={440}
+      autoHeight={true}
       modal={true}
       movable={false}
       theme={theme}
@@ -82,8 +82,26 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
         {activeTab === "general" && (
           <div className="ui-panel-stack">
 
+            {/* 外观模式（深色/浅色） */}
+            <Row label={t("st_theme_mode") || "外观模式"} labelWidth="70px" stretch={true}>
+              <SegmentedControl
+                options={[
+                  { value: "light", label: t("st_theme_mode_light") || "浅色" },
+                  { value: "dark", label: t("st_theme_mode_dark") || "深色" }
+                ]}
+                value={settings.themeMode || "light"}
+                onChange={(mode) => {
+                  const isDark = mode === "dark";
+                  const nextBg = isDark
+                    ? (settings.bgColor === "#fafafa" || settings.bgColor === "#f8fafc" || settings.bgColor === "#eef2f5" ? "#121212" : settings.bgColor)
+                    : (settings.bgColor === "#121212" ? "#fafafa" : settings.bgColor);
+                  onUpdate({ themeMode: mode as "light" | "dark", bgColor: nextBg });
+                }}
+              />
+            </Row>
+
             {/* 主题色 */}
-            <Row label={t("st_theme") || "主题色"} labelWidth="70px" stretch={true}>
+            <Row label={t("st_theme") || "主题配色"} labelWidth="70px" stretch={true}>
               <div className="ui-theme-picker">
                 {THEME_PRESETS.map((preset) => (
                   <button
@@ -101,7 +119,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 >
                   <input
                     type="color"
-                    value={currentThemeType === "custom" ? currentCustomColor : "#4f46e5"}
+                    value={currentThemeType === "custom" ? currentCustomColor : "#1976d2"}
                     onChange={(e) => onUpdate({ themeType: "custom", themeCustomColor: e.target.value })}
                     title={isZh ? "自定义颜色" : "Custom color"}
                   />
@@ -204,6 +222,12 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {activeTab === "viewport" && (
           <div className="ui-panel-stack">
+          <Row label={t("st_bg") || "背景颜色"} labelWidth="90px" stretch={true}>
+            <ColorPicker
+              value={settings.bgColor || (settings.themeMode === 'dark' ? "#121212" : "#fafafa")}
+              onChange={(value) => onUpdate({ bgColor: value })}
+            />
+          </Row>
           <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
             <div className="ui-slider-field">
               <div className="ui-inline-actions-stretch">

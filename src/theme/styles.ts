@@ -16,27 +16,44 @@ export interface ThemeColors {
     shadow: string;
 }
 
-export const themes: { light: ThemeColors } = {
+export const themes: { light: ThemeColors; dark: ThemeColors } = {
     light: {
-        bg: "#f8fafc",
+        bg: "#fafafa",
         panelBg: "#ffffff",
-        headerBg: "#f1f5f9",
-        border: "#e2e8f0",
-        text: "#0f172a",
-        textLight: "#0f172a",
-        textMuted: "#64748b",
-        accent: "#4f46e5",
-        highlight: "rgba(79, 70, 229, 0.08)",
-        itemHover: "rgba(79, 70, 229, 0.05)",
-        success: "#10b981",
-        warning: "#f59e0b",
-        danger: "#ef4444",
-        canvasBg: "#ffffff",
-        shadow: "rgba(15, 23, 42, 0.08)"
+        headerBg: "#f5f5f5",
+        border: "rgba(0, 0, 0, 0.12)",
+        text: "rgba(0, 0, 0, 0.87)",
+        textLight: "#000000",
+        textMuted: "rgba(0, 0, 0, 0.38)",
+        accent: "#1976d2",
+        highlight: "rgba(25, 118, 210, 0.12)",
+        itemHover: "rgba(0, 0, 0, 0.04)",
+        success: "#2e7d32",
+        warning: "#f9a825",
+        danger: "#d32f2f",
+        canvasBg: "#fafafa",
+        shadow: "0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24)"
+    },
+    dark: {
+        bg: "#121212",
+        panelBg: "#1e1e1e",
+        headerBg: "#262626",
+        border: "rgba(255, 255, 255, 0.12)",
+        text: "rgba(255, 255, 255, 0.87)",
+        textLight: "#ffffff",
+        textMuted: "rgba(255, 255, 255, 0.38)",
+        accent: "#90caf9",
+        highlight: "rgba(144, 202, 249, 0.16)",
+        itemHover: "rgba(255, 255, 255, 0.04)",
+        success: "#81c784",
+        warning: "#fff176",
+        danger: "#ef9a9a",
+        canvasBg: "#121212",
+        shadow: "0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6)"
     }
 };
 
-export const DEFAULT_FONT = "'Plus Jakarta Sans', 'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif";
+export const DEFAULT_FONT = "'Roboto', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif";
 
 export const colors = themes.light;
 
@@ -47,14 +64,18 @@ function readCssVar(name: string) {
 }
 
 export function resolveThemeColors(): ThemeColors {
-    const fallback = themes.light;
+    const isDark = typeof document !== "undefined" && (
+        document.documentElement.classList.contains("theme-dark") ||
+        document.documentElement.getAttribute("data-theme") === "dark"
+    );
+    const fallback = isDark ? themes.dark : themes.light;
     const vars = {
         bg: readCssVar("--bg-primary"),
         panelBg: readCssVar("--bg-panel"),
         headerBg: readCssVar("--bg-header"),
         border: readCssVar("--border-color"),
         text: readCssVar("--text-primary"),
-        textLight: "#000000",
+        textLight: isDark ? "#ffffff" : "#000000",
         textMuted: readCssVar("--text-muted"),
         accent: readCssVar("--accent"),
         highlight: readCssVar("--bg-selected"),
