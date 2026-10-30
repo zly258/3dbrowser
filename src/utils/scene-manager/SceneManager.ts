@@ -351,6 +351,11 @@ export class SceneManager {
     private readonly resolvedChunkOptions: ReturnType<typeof resolveSceneChunkOptions>;
     private isCameraMoving = false;
     private activePixelRatio = 1;
+    /** 已应用到渲染器的像素比（setPixelRatio 会重新分配绘图缓冲，必须去重） */
+    private appliedPixelRatio = 0;
+    /** 已应用到渲染器的绘图缓冲尺寸（setSize 会清空画布，必须去重） */
+    private appliedBufferWidth = -1;
+    private appliedBufferHeight = -1;
     private chunkLoadResumeAt = 0;
     private cullingDirty = true;
     private deferredStructureThreshold = 20000;
@@ -529,6 +534,9 @@ export class SceneManager {
         applyIndustrialRendererSettings(this.renderer, this.settings.bgColor, this.settings.exposure);
         this.renderer.localClippingEnabled = true;
         this.activePixelRatio = this.renderer.getPixelRatio();
+        this.appliedPixelRatio = this.activePixelRatio;
+        this.appliedBufferWidth = Math.floor(width * this.appliedPixelRatio);
+        this.appliedBufferHeight = Math.floor(height * this.appliedPixelRatio);
 
         // 场景
         this.scene = new THREE.Scene();
@@ -894,7 +902,25 @@ export class SceneManager {
     private updateAdaptiveQuality() {
         if (!this.settings.adaptiveQuality) return;
 
+        const desiredRatio = this.computeDesiredPixelRatio();
+        if (Math.abs(desiredRatio - this.activePixelRatio) < 0.05) return;
+
+        this.applyPixelRatio(desiredRatio);
+        const rect = this.canvas.getBoundingClientRect();
+        this.applyCanvasSize(Math.max(1, rect.width), Math.max(1, rect.height));
+    }
+
+    /**
+     * 统一的像素比决策：自适应质量开启时按场景规模与相机移动状态降采样。
+     * resize() 与 updateAdaptiveQuality() 共用本方法，避免两者互相覆盖像素比
+     * 造成缓冲区反复重建（拖拽面板时的闪烁来源之一）。
+     */
+    private computeDesiredPixelRatio(): number {
         const deviceRatio = window.devicePixelRatio || 1;
+        if (!this.settings.adaptiveQuality) {
+            return Math.min(deviceRatio, 2);
+        }
+
         const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
         const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
         const chunkCount = this.chunks.length;
@@ -923,13 +949,33 @@ export class SceneManager {
             desiredRatio = Math.max(minRatio, maxRatio * movingScale);
         }
 
-        desiredRatio = Math.max(minRatio, Math.min(maxRatio, desiredRatio));
-        if (Math.abs(desiredRatio - this.activePixelRatio) < 0.05) return;
+        return Math.max(minRatio, Math.min(maxRatio, desiredRatio));
+    }
 
-        this.activePixelRatio = desiredRatio;
-        this.renderer.setPixelRatio(desiredRatio);
-        const rect = this.canvas.getBoundingClientRect();
-        this.renderer.setSize(Math.max(1, rect.width), Math.max(1, rect.height), false);
+    /** 仅在像素比真正变化时调用 setPixelRatio（它会重建绘图缓冲并清空画布） */
+    private applyPixelRatio(ratio: number): boolean {
+        if (Math.abs(ratio - this.appliedPixelRatio) < 0.001) return false;
+        this.appliedPixelRatio = ratio;
+        this.activePixelRatio = ratio;
+        // setPixelRatio 内部会用旧的 CSS 尺寸重建一次缓冲，这里作废缓存，
+        // 保证随后的 applyCanvasSize 一定会按新尺寸重新设置。
+        this.appliedBufferWidth = -1;
+        this.appliedBufferHeight = -1;
+        this.renderer.setPixelRatio(ratio);
+        return true;
+    }
+
+    /** 仅在绘图缓冲尺寸真正变化时调用 setSize（它会清空画布） */
+    private applyCanvasSize(w: number, h: number): boolean {
+        const bufferWidth = Math.floor(w * this.appliedPixelRatio);
+        const bufferHeight = Math.floor(h * this.appliedPixelRatio);
+        if (bufferWidth === this.appliedBufferWidth && bufferHeight === this.appliedBufferHeight) {
+            return false;
+        }
+        this.appliedBufferWidth = bufferWidth;
+        this.appliedBufferHeight = bufferHeight;
+        this.renderer.setSize(w, h, false);
+        return true;
     }
 
     private updateInteractionPerformance(now: number) {
@@ -1493,7 +1539,7 @@ export class SceneManager {
     }
 
     resize(width?: number, height?: number) {
-        if (!this.canvas) return;
+        if (!this.canvas || this.disposed) return;
 
         let w = width;
         let h = height;
@@ -1518,26 +1564,36 @@ export class SceneManager {
         const halfHeight = currentHeight / 2;
         const halfWidth = halfHeight * aspect;
 
-        cam.left = -halfWidth;
-        cam.right = halfWidth;
-        cam.top = halfHeight;
-        cam.bottom = -halfHeight;
+        // 仅在宽高比真正变化时更新投影矩阵
+        let cameraChanged = false;
+        if (Math.abs(cam.right - halfWidth) > 1e-4 || Math.abs(cam.top - halfHeight) > 1e-4) {
+            cam.left = -halfWidth;
+            cam.right = halfWidth;
+            cam.top = halfHeight;
+            cam.bottom = -halfHeight;
+            cam.updateProjectionMatrix();
+            cameraChanged = true;
+        }
 
-        cam.updateProjectionMatrix();
-
-        const maxRatio = this.settings.adaptiveQuality
-            ? Math.min(window.devicePixelRatio, this.settings.maxPixelRatio ?? 2)
-            : Math.min(window.devicePixelRatio, 2);
-        this.activePixelRatio = maxRatio;
-        this.renderer.setPixelRatio(maxRatio);
-        this.renderer.setSize(w, h, false);
+        // 像素比与画布尺寸的变化都会重建 WebGL 绘图缓冲（并清空画布），
+        // 这里统一做去重，避免同一次布局变化触发多次缓冲区重建。
+        const ratioChanged = this.applyPixelRatio(this.computeDesiredPixelRatio());
+        const sizeChanged = this.applyCanvasSize(w, h);
 
         // 如果使用了 OrbitControls，需要更新它
         if (this.controls) {
             this.controls.update();
         }
 
-        this.markSceneDirty({ needsCulling: true });
+        this.markSceneDirty({ needsCulling: cameraChanged });
+
+        // 关键：绘图缓冲被重建后画布内容是空的。若等到下一帧的 animate 才渲染，
+        // 浏览器会先呈现一张空白画布——这正是拖动面板宽度时剧烈闪烁的根因。
+        // 因此在当前帧立即补渲染一次，保证任何时刻呈现的都是完整画面。
+        if (ratioChanged || sizeChanged) {
+            this.updateCameraClipping();
+            this.renderer.render(this.scene, this.camera);
+        }
     }
 
     private reportChunkProgress() {

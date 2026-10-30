@@ -544,6 +544,9 @@ export const ThreeViewer = ({
     });
 
     // 3. 当布局状态变化时强制触发一次 resize
+    // 注意: 面板宽度/折叠等布局变化由 ResizeObserver 负责（见 useViewportLifecycle），
+    // 这里只在场景管理器创建时兜底一次，避免同一次拖拽触发两条 resize 路径、
+    // 重复重建 WebGL 缓冲造成闪烁。
     useEffect(() => {
         if (mgrInstance) {
             // Use requestAnimationFrame to ensure the DOM reflow has completed
@@ -551,7 +554,7 @@ export const ThreeViewer = ({
                 mgrInstance.resize();
             });
         }
-    }, [mgrInstance, showOutline, showProps, leftWidth, rightWidth]);
+    }, [mgrInstance]);
 
     // 树结构更新
     useEffect(() => {
@@ -1121,7 +1124,10 @@ export const ThreeViewer = ({
                         {/* Resize handle */}
                         <div
                             className="ui-sidebar-resize ui-sidebar-resize-left"
-                            onMouseDown={() => resizingLeft.current = true}
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                resizingLeft.current = true;
+                            }}
                         />
                     </div>
                 )}
@@ -1372,7 +1378,10 @@ export const ThreeViewer = ({
                         </div>
                         {/* Resize handle */}
                         <div
-                            onMouseDown={() => resizingRight.current = true}
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                resizingRight.current = true;
+                            }}
                             className="ui-sidebar-resize ui-sidebar-resize-right"
                         />
                     </div>
