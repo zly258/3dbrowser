@@ -12,9 +12,10 @@ const packageJson = JSON.parse(
 ) as { version?: string };
 const appVersion = packageJson.version ?? '0.0.0';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+    const isPages = mode === 'pages';
     return {
-      base: './',
+      base: isPages ? (process.env.VITE_BASE_PATH || '/3dbrowser/') : './',
       server: {
         port: 5173,
         host: '0.0.0.0'
@@ -26,7 +27,12 @@ export default defineConfig(() => {
       optimizeDeps: {
         exclude: ['web-ifc', 'occt-import-js']
       },
-      build: {
+      build: isPages ? {
+        target: 'esnext',
+        outDir: 'dist-pages',
+        emptyOutDir: true,
+        chunkSizeWarningLimit: 2000,
+      } : {
         target: 'esnext',
         minify: 'esbuild' as const,
         chunkSizeWarningLimit: 1200,
