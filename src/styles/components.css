@@ -285,7 +285,7 @@ select.ui-input {
 
 .ui-prop-row:hover { background: var(--bg-hover); }
 
-.ui-prop-key { padding: 6px 8px; color: var(--text-secondary); background: #fafcff; border-right: 1px solid var(--border-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-prop-key { padding: 6px 8px; color: var(--text-secondary); background: var(--bg-hover); border-right: 1px solid var(--border-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ui-prop-value { padding: 6px 8px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -295,7 +295,7 @@ select.ui-input {
 
 .ui-result-item-secondary-value-wide { min-width: 52px; }
 
-.ui-selection-box { min-width: 0; display: flex; flex-direction: column; background: #fbfcfe; border: 1px solid var(--border-light); border-radius: var(--radius-md); }
+.ui-selection-box { min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: var(--radius-md); }
 
 .ui-selection-box-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 0 8px; border-bottom: 1px solid var(--border-light); }
 
@@ -786,10 +786,10 @@ select.ui-input {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border: 1px solid #d4dfec !important;
-  border-radius: 5px !important;
-  background: #ffffff !important;
-  color: #334155 !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
   font-size: 12px !important;
   font-weight: 400 !important;
   line-height: 1 !important;
@@ -797,9 +797,9 @@ select.ui-input {
 }
 
 .ui-statusbar-tag:hover {
-  background: #eef6ff !important;
-  border-color: #b8d7fb !important;
-  color: #0f172a !important;
+  background: var(--bg-hover) !important;
+  border-color: var(--border-hover) !important;
+  color: var(--text-primary) !important;
 }
 
 .ui-statusbar-tag-compact {
