@@ -120,6 +120,47 @@ function lighten(hex: string, amount: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
+/** 把 a 与 b 按 t（0~1）混合，t=0 返回 a */
+function mix(a: string, b: string, t: number): string {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  if (!ca || !cb) return a;
+  const ch = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, "0");
+  return `#${ch(ca.r, cb.r)}${ch(ca.g, cb.g)}${ch(ca.b, cb.b)}`;
+}
+
+/** 相对亮度（sRGB 线性化） */
+function relativeLuminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const channel = (value: number) => {
+    const v = value / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+}
+
+/** 白字对比度 */
+function contrastWithWhite(hex: string): number {
+  return 1.05 / (relativeLuminance(hex) + 0.05);
+}
+
+/** 保证实底强调色承载白字时对比度 ≥ 4.6:1 */
+function ensureWhiteText(hex: string): string {
+  let color = hex;
+  let guard = 0;
+  while (contrastWithWhite(color) < 4.6 && guard < 16) {
+    color = darken(color, 0.08);
+    guard++;
+  }
+  return color;
+}
+
+function rgbaOf(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex);
+  return rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})` : hex;
+}
+
 function buildCustomPreset(hex: string): ThemePreset {
   return {
     key: "custom",
@@ -153,6 +194,9 @@ const THEME_VARS = [
   "accent-soft",
   "accent-line",
   "accent-focus",
+  "accent-solid",
+  "accent-solid-hover",
+  "accent-solid-active",
   "accent-subtle",
   "accent-blue",
   "accent-blue-hover",
@@ -172,6 +216,8 @@ const THEME_VARS = [
 /**
  * 将主题应用到 :root CSS 变量。
  * 默认主题不写内联变量，直接使用 variables.css 中的令牌真值。
+ * 主题色需要覆盖全部强调相关令牌（含实底强调 accent-solid*），保证
+ * 工具栏开启态、主按钮、开关、复选框等与文本强调色同色，不出现“蓝色按钮 + 主题色文字”。
  */
 export function applyTheme(type: ThemeType, customColor?: string, mode?: ThemeMode): void {
   if (typeof document === "undefined") return;
@@ -195,29 +241,47 @@ export function applyTheme(type: ThemeType, customColor?: string, mode?: ThemeMo
     return;
   }
 
-  const rgb = hexToRgb(preset.primary);
-  const focus = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.22)` : preset.primaryContainer;
+  const isDark = (mode ?? "light") === "dark";
 
-  root.style.setProperty("--accent", preset.primary);
-  root.style.setProperty("--accent-hover", preset.primaryHover);
-  root.style.setProperty("--accent-active", preset.primaryActive);
-  root.style.setProperty("--accent-soft", preset.primaryContainer);
-  root.style.setProperty("--accent-line", preset.primaryLine);
-  root.style.setProperty("--accent-focus", focus);
-  root.style.setProperty("--accent-subtle", preset.primaryContainer);
-  root.style.setProperty("--accent-blue", preset.primary);
-  root.style.setProperty("--accent-blue-hover", preset.primaryHover);
-  root.style.setProperty("--accent-blue-soft", preset.primaryContainer);
+  // 深色主题下：文本强调色需要提亮，浅色容器需要压暗渐变；
+  // 实底强调色必须保持足够深以承载白字。
+  const accent = isDark ? lighten(preset.primary, 0.45) : preset.primary;
+  const accentHover = isDark ? lighten(preset.primary, 0.58) : preset.primaryHover;
+  const accentActive = isDark ? lighten(preset.primary, 0.32) : preset.primaryActive;
+  const accentSoft = isDark ? mix(preset.primary, "#1e242b", 0.2) : preset.primaryContainer;
+  const accentLine = isDark ? lighten(preset.primary, 0.28) : preset.primaryLine;
+  const accentFocus = isDark ? rgbaOf(accent, 0.4) : rgbaOf(preset.primary, 0.22);
 
-  root.style.setProperty("--primary", preset.primary);
-  root.style.setProperty("--primary-hover", preset.primaryHover);
-  root.style.setProperty("--primary-active", preset.primaryActive);
-  root.style.setProperty("--primary-container", preset.primaryContainer);
-  root.style.setProperty("--primary-focus", focus);
+  const accentSolid = ensureWhiteText(preset.primary);
+  const accentSolidHover = isDark
+    ? ensureWhiteText(lighten(accentSolid, 0.12))
+    : ensureWhiteText(preset.primaryHover);
+  const accentSolidActive = isDark ? darken(accentSolid, 0.12) : ensureWhiteText(preset.primaryActive);
 
-  root.style.setProperty("--surface-hover", preset.primaryContainer);
-  root.style.setProperty("--surface-active", preset.primaryContainer);
-  root.style.setProperty("--surface-selected", preset.primaryContainer);
-  root.style.setProperty("--surface-soft", preset.primaryContainer);
-  root.style.setProperty("--surface-soft-strong", preset.primaryContainer);
+  root.style.setProperty("--accent", accent);
+  root.style.setProperty("--accent-hover", accentHover);
+  root.style.setProperty("--accent-active", accentActive);
+  root.style.setProperty("--accent-soft", accentSoft);
+  root.style.setProperty("--accent-line", accentLine);
+  root.style.setProperty("--accent-focus", accentFocus);
+  root.style.setProperty("--accent-solid", accentSolid);
+  root.style.setProperty("--accent-solid-hover", accentSolidHover);
+  root.style.setProperty("--accent-solid-active", accentSolidActive);
+  root.style.setProperty("--accent-subtle", accentSoft);
+  root.style.setProperty("--accent-blue", accent);
+  root.style.setProperty("--accent-blue-hover", accentHover);
+  root.style.setProperty("--accent-blue-soft", accentSoft);
+
+  root.style.setProperty("--primary", accent);
+  root.style.setProperty("--primary-hover", accentHover);
+  root.style.setProperty("--primary-active", accentActive);
+  root.style.setProperty("--primary-container", accentSoft);
+  root.style.setProperty("--primary-focus", accentFocus);
+
+  // hover 保持中性灰（不随主题染色），避免深色下出现浅色悬停块
+  root.style.removeProperty("--surface-hover");
+  root.style.removeProperty("--surface-active");
+  root.style.setProperty("--surface-selected", accentSoft);
+  root.style.setProperty("--surface-soft", accentSoft);
+  root.style.setProperty("--surface-soft-strong", accentSoft);
 }
