@@ -159,6 +159,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             </Button>
             <Button
               className="ui-properties-action"
+              variant="primary"
               onClick={onSearch}
               disabled={searching}
             >
@@ -249,7 +250,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </div>
 
         <div className="ui-toolpanel-results-box ui-search-results-box">
-          <div className="ui-search-hint-strip">
+          <div className="ui-search-hint-strip" title={`${t("search_fields_total") || "可搜索属性"}: ${propertyFieldOptions.length}`}>
             {t("search_fields_total") || "可搜索属性"}: {propertyFieldOptions.length}
           </div>
           {results.length === 0 ? (
@@ -298,7 +299,6 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                     { value: "50", label: "50 / 页" },
                   ]}
                   className="ui-input-compact ui-search-page-size"
-                  style={{ width: 96 }}
                 />
                 <Button
                   className="ui-properties-action"

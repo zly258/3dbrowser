@@ -3,6 +3,7 @@ import React, { Component, useState, useRef, useEffect, useCallback, useMemo } f
 import * as THREE from "three";
 import "./styles/index.css";
 import { SceneManager, SceneSettings, PerformancePreset, SceneChunkOptions } from "./utils/scene-manager/SceneManager";
+import { normalizeDisplayMode, type DisplayMode } from "./utils/scene-manager/displayMode";
 import { themes, ThemeColors } from "./theme/styles";
 import { getTranslation, Lang } from "./theme/locales";
 import { applyTheme } from "./theme/themeManager";
@@ -52,6 +53,8 @@ export interface ThreeViewerProps {
     hiddenMenus?: string[];
     libPath?: string;
     defaultLang?: Lang;
+    /** 默认外观模式（无本地偏好时生效） */
+    defaultTheme?: "light" | "dark";
     showStats?: boolean;
     showOutline?: boolean;
     showProperties?: boolean;
@@ -71,6 +74,7 @@ export const ThreeViewer = ({
     hiddenMenus = [],
     libPath = './libs',
      defaultLang,
+    defaultTheme,
     showStats: propShowStats,
     showOutline: propShowOutline,
     showProperties: propShowProperties,
@@ -170,8 +174,10 @@ export const ThreeViewer = ({
     
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
-    // 显示模式：solid-着色, transparent-透明
-    const [displayMode, setDisplayMode] = useState<'solid' | 'transparent'>('solid');
+    // 显示样式：realistic-真实（着色+边线）, shaded-着色, wireframe-线框
+    const [displayMode, setDisplayMode] = usePersistentState<DisplayMode>('3dbrowser_displayMode', 'shaded', {
+        parser: (raw) => normalizeDisplayMode(JSON.parse(raw))
+    });
     
     // Viewpoint State
     const [currentFileSetId, setCurrentFileSetId] = useState<string>("");
@@ -228,12 +234,16 @@ export const ThreeViewer = ({
     });
 
     const [sceneSettings, setSceneSettings] = usePersistentState<SceneSettings>('3dbrowser_sceneSettings', () => {
+        // 外观模式优先级：initialSettings.themeMode > defaultTheme > light
+        const initialThemeMode: 'light' | 'dark' =
+            (initialSettings?.themeMode as 'light' | 'dark' | undefined) ?? defaultTheme ?? 'light';
         const baseSettings: SceneSettings = {
             ambientInt: 0.78,
             dirInt: 1.48,
             hemiInt: 0.58,
-            bgColor: '#fafafa',
-            themeMode: 'light',
+            // 暗色模式的视口底色跟随主题，避免“切了暗色但视口还是亮白”
+            bgColor: initialThemeMode === 'dark' ? '#12171c' : '#eef1f5',
+            themeMode: initialThemeMode,
             viewCubeSize: 120,
             colorSpace: 'srgb',
             toneMapping: 'aces',
@@ -246,7 +256,7 @@ export const ThreeViewer = ({
             performanceMode: 'balanced',
             locateIsolateMode: false,
             backLightInt: 0.62,
-            highlightColor: "#1976d2",
+            highlightColor: "#0b5fa5",
             highlightShowBox: false,
             clip: {
                 helperVisible: initialSettings?.clip?.helperVisible ?? false,
@@ -254,7 +264,30 @@ export const ThreeViewer = ({
             },
         };
         const merged = initialSettings ? { ...baseSettings, ...initialSettings } : baseSettings;
-        return merged.bgColor === undefined ? { ...merged, bgColor: merged.themeMode === 'dark' ? '#121212' : '#fafafa' } : merged;
+        if (merged.bgColor === undefined) {
+            merged.bgColor = merged.themeMode === 'dark' ? '#12171c' : '#eef1f5';
+        }
+        return merged;
+    }, {
+        // 兼容旧版浅灰/深灰底色，统一到当前视口令牌
+        parser: (raw) => {
+            const parsed = JSON.parse(raw) as SceneSettings;
+            if (parsed && typeof parsed === 'object') {
+                const bg = String(parsed.bgColor || '').toLowerCase();
+                const isLightBg = bg === '#fafafa' || bg === '#f8fafc' || bg === '#eef2f5' || bg === '#ffffff' || bg === '#eef1f5';
+                const isOldDarkBg = bg === '#0b0e11' || bg === '#101317';
+                if (isLightBg) {
+                    // 暗色模式下的默认视口底色必须跟着变深，否则“暗色模式不明显”
+                    parsed.bgColor = parsed.themeMode === 'dark' ? '#12171c' : '#eef1f5';
+                } else if (isOldDarkBg && parsed.themeMode === 'dark') {
+                    parsed.bgColor = '#12171c';
+                }
+                if (String(parsed.highlightColor || '').toLowerCase() === '#1976d2') {
+                    parsed.highlightColor = '#0b5fa5';
+                }
+            }
+            return parsed;
+        }
     });
 
     const isDark = sceneSettings?.themeMode === "dark";
@@ -560,11 +593,12 @@ export const ThreeViewer = ({
     }, [mgrInstance]);
 
     // 树结构更新
+    // 短提示：默认 2.4s 自动消失
     useEffect(() => {
         if (toast) {
             const timer = setTimeout(() => {
                 setToast(null);
-            }, 3000);
+            }, 2400);
             return () => clearTimeout(timer);
         }
     }, [toast]);
@@ -1027,27 +1061,16 @@ export const ThreeViewer = ({
 
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
 
-    const handleDisplayModeChange = (mode: 'solid' | 'transparent') => {
-        if (!sceneMgr.current) return;
+    const handleDisplayModeChange = (mode: DisplayMode) => {
         setDisplayMode(mode);
-        sceneMgr.current.contentGroup.traverse((child: any) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach((m: any) => {
-                    if (mode === 'transparent') {
-                        m.wireframe = false;
-                        m.transparent = true;
-                        m.opacity = 0.5;
-                    } else {
-                        m.wireframe = false;
-                        m.transparent = false;
-                        m.opacity = 1;
-                    }
-                });
-            }
-        });
-        sceneMgr.current.requestRender();
+        sceneMgr.current?.setDisplayMode(mode);
     };
+
+    // 模型加载完成/切换样式后，把当前样式重新套用到全部内容（含分块加载的网格）
+    useEffect(() => {
+        if (!mgrInstance) return;
+        mgrInstance.setDisplayMode(displayMode);
+    }, [mgrInstance, displayMode, loading]);
 
     return (
         <ErrorBoundary t={t} theme={theme}>
@@ -1093,12 +1116,14 @@ export const ThreeViewer = ({
                 {showOutline && (
                     <div className="ui-sidebar ui-sidebar-left" style={{ width: `${leftWidth}px` }}>
                         <div className="ui-sidebar-header">
-                            <span>{t("interface_outline")}</span>
+                            <span title={t("interface_outline")}>{t("interface_outline")}</span>
                             <button 
                                 className="ui-sidebar-close"
                                 onClick={() => setShowOutline(false)} 
+                                title={t("panel_close") || "关闭"}
+                                aria-label={t("panel_close") || "关闭"}
                             >
-                                <IconClose width={16} height={16} />
+                                <IconClose width={13} height={13} />
                             </button>
                         </div>
                         <div className="ui-sidebar-content">
@@ -1176,12 +1201,13 @@ export const ThreeViewer = ({
 
                     {/* Toast Notification */}
                     {toast && (
-                        <div className="ui-toast">
-                            <div className={`ui-toast-dot ${toast.type === 'error' ? 'ui-toast-dot-error' : toast.type === 'success' ? 'ui-toast-dot-success' : 'ui-toast-dot-info'}`} />
+                        <div className={`ui-toast ui-toast-${toast.type || 'info'}`} role="status" aria-live="polite">
                             <span className="ui-toast-message">{toast.message}</span>
                             <button
                                 className="ui-toast-close"
                                 onClick={() => setToast(null)}
+                                title={t("panel_close") || "关闭"}
+                                aria-label={t("panel_close") || "关闭"}
                             >
                                 <IconClose size={12} />
                             </button>
@@ -1368,12 +1394,14 @@ export const ThreeViewer = ({
                 {showProps && (
                     <div className="ui-sidebar ui-sidebar-right" style={{ width: `${rightWidth}px` }}>
                         <div className="ui-sidebar-header">
-                            <span>{t("interface_props")}</span>
+                            <span title={t("interface_props")}>{t("interface_props")}</span>
                             <button
                                 className="ui-sidebar-close"
                                 onClick={() => setShowProps(false)} 
+                                title={t("panel_close") || "关闭"}
+                                aria-label={t("panel_close") || "关闭"}
                             >
-                                <IconClose width={16} height={16} />
+                                <IconClose width={13} height={13} />
                             </button>
                         </div>
                         <div className="ui-sidebar-content">
@@ -1394,7 +1422,7 @@ export const ThreeViewer = ({
              {/* Bottom Status Bar */}
              <div className="ui-statusbar">
                 <div className="ui-statusbar-left">
-                    <span>{status}</span>
+                    <span title={status}>{status}</span>
                     {loading && <span>{progress}%</span>}
                     {selectedUuid && selectedUuids.length > 1 && (
                         <span className="ui-statusbar-meta">
@@ -1468,6 +1496,8 @@ export const ThreeViewer = ({
                     <button
                         className="ui-statusbar-tag ui-statusbar-tag-compact"
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                        title={lang === 'zh' ? 'Switch to English' : '切换到中文'}
+                        aria-label={lang === 'zh' ? 'Switch to English' : '切换到中文'}
                     >
                         {lang === 'zh' ? 'EN' : '中文'}
                     </button>
@@ -1494,15 +1524,18 @@ export const ThreeViewer = ({
              {/* Error Modal */}
              {errorState.isOpen && (
                 <div className="ui-error-overlay">
-                    <div className="ui-error-content ui-error-content-wide">
+                    <div className="ui-error-content ui-error-content-wide" role="dialog" aria-modal="true" aria-label={errorState.title}>
                         <div className="ui-error-header ui-error-header-danger">
                             <span>{errorState.title}</span>
-                            <div 
+                            <button
+                                type="button"
                                 onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))} 
                                 className="ui-error-close"
+                                title={t("panel_close") || "关闭"}
+                                aria-label={t("panel_close") || "关闭"}
                             >
-                                <IconClose width={18} height={18} />
-                            </div>
+                                <IconClose width={14} height={14} />
+                            </button>
                         </div>
                         <div className="ui-error-body">
                             <div className="ui-error-message">{errorState.message}</div>
@@ -1524,3 +1557,7 @@ export const ThreeViewer = ({
 };
 
 export default ThreeViewer;
+
+
+
+

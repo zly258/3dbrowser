@@ -1,16 +1,14 @@
-.ui-container,
-.ui-app-shell,
-.ui-panel,
-.ui-modal,
-.ui-toolbar,
-.ui-btn,
-.ui-input,
-.ui-segmented-item,
-.ui-list-item,
-.ui-data-panel { font-size: var(--font-size-base); }
+/*
+ * 页面骨架：顶栏 42px + 三栏工作区 + 底栏 30px，页面本身永不滚动。
+ * 三栏尺寸：左 clamp(250px,22vw,320px) / 视口 flex:1 min-width:0 / 右 clamp(320px,27vw,440px)
+ */
 
-.ui-app-shell.font-medium,
-.font-medium { font-weight: 400; }
+.ui-app-shell,
+.ui-container {
+  font-size: var(--font-size-base);
+  font-family: var(--font-sans);
+  font-weight: 400;
+}
 
 .ui-app-shell {
   display: flex;
@@ -20,281 +18,271 @@
   height: 100%;
   overflow: hidden;
   user-select: none;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-family-ui);
-  font-weight: 400;
+  background: var(--bg-app);
+  color: var(--text-main);
 }
 
-.ui-main-layout { flex: 1; display: flex; position: relative; min-height: 0; overflow: hidden; }
+/* ---------- 主工作区 ---------- */
+.ui-main-layout {
+  flex: 1 1 auto;
+  display: flex;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg-app);
+}
 
-.ui-viewport-shell { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg-canvas); }
+/* ---------- 视口：自适应，禁止固定宽高 ---------- */
+.ui-viewport-shell {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-viewport);
+}
 
+/* ---------- 侧栏 ---------- */
 .ui-sidebar {
   position: relative;
-  z-index: 10;
   display: flex;
   flex-direction: column;
-  min-width: 220px;
+  min-width: 0;
+  min-height: 0;
   background: var(--bg-panel);
-  border-color: var(--border-light);
   box-shadow: none;
 }
 
-.ui-sidebar-left { border-right: 1px solid var(--border-light); }
+.ui-sidebar-left {
+  width: var(--sidebar-left-w);
+  min-width: var(--sidebar-left-min);
+  max-width: var(--sidebar-left-max);
+  border-right: 1px solid var(--border-main);
+}
 
-.ui-sidebar-right { border-left: 1px solid var(--border-light); }
+.ui-sidebar-right {
+  width: var(--sidebar-right-w);
+  min-width: var(--sidebar-right-min);
+  max-width: var(--sidebar-right-max);
+  border-left: 1px solid var(--border-main);
+}
 
+/* 侧栏头：26px 紧凑条，--bg-band 底 */
 .ui-sidebar-header {
-  min-height: 40px;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  height: var(--toolbar-h);
+  min-height: var(--toolbar-h);
+  padding: 0 4px 0 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: var(--text-primary);
-  background: var(--bg-header);
-  border-bottom: 1px solid var(--border-light);
-  font-size: var(--font-size-base);
-  font-weight: 500;
+  color: var(--text-main);
+  background: var(--bg-band);
+  border-bottom: 1px solid var(--border-main);
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
-.ui-sidebar-content { flex: 1; min-height: 0; overflow: hidden; }
+.ui-sidebar-header > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.ui-sidebar-close {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--text-secondary);
+/* 侧栏内容：唯一滚动容器由内部面板负责 */
+.ui-sidebar-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+}
+
+/* ---------- 侧栏关闭按钮（与面板/弹窗关闭按钮统一样式，见文件末尾） ---------- */
+
+/* ---------- 侧栏拖拽分隔条 ---------- */
+.ui-sidebar-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  z-index: 20;
+  cursor: col-resize;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease;
 }
-
-.ui-sidebar-close:hover { background: var(--bg-hover); border-color: var(--border-light); color: var(--text-primary); }
-
-.ui-sidebar-resize { position: absolute; top: 0; bottom: 0; width: 5px; z-index: 30; cursor: col-resize; background: transparent; }
 
 .ui-sidebar-resize-left { right: -3px; }
 
 .ui-sidebar-resize-right { left: -3px; }
 
-.ui-app-shell *,
-.ui-panel *,
-.ui-toolbar *,
-.ui-sidebar * { font-weight: inherit; }
+.ui-sidebar-resize:hover { background: var(--accent-line); }
 
-.ui-panel-title,
-.ui-sidebar-header,
-.ui-prop-group,
-.ui-group-title,
-.ui-toolpanel-caption-strong,
-.ui-choice-card-title,
-.ui-loading-title,
-.ui-clash-result-title,
-.ui-about-app-name,
-.ui-modal-title,
-.ui-error-title { font-weight: 500; }
-
-.ui-panel-title,
-.ui-sidebar-header,
-.ui-group-title,
-.ui-toolpanel-caption-strong,
-.ui-prop-group,
-.ui-modal-title {
-  font-weight: 500 !important;
-}
-
+/* ---------- 图标按钮统一尺寸（全站） ---------- */
 .ui-btn.ui-btn-icon,
 .ui-btn-icon,
 .ui-icon-btn,
 .ui-search-clear,
-.ui-modal-close,
-.ui-panel-close,
-.ui-sidebar-close,
 .ui-viewpoint-delete,
 .ui-measure-item-delete {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex: 0 0 auto !important;
-  width: var(--icon-btn-size) !important;
-  height: var(--icon-btn-size) !important;
-  min-width: var(--icon-btn-size) !important;
-  min-height: var(--icon-btn-size) !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: 1px solid var(--icon-btn-border) !important;
-  border-radius: var(--icon-btn-radius) !important;
-  background: var(--icon-btn-bg) !important;
-  color: var(--text-secondary) !important;
-  box-shadow: none !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
-  opacity: 1 !important;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 80ms ease !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
+  min-width: var(--icon-btn-size);
+  min-height: var(--icon-btn-size);
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius);
+  background: var(--bg-chrome);
+  color: var(--text-sec);
+  box-shadow: none;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .ui-btn.ui-btn-icon svg,
 .ui-btn-icon svg,
 .ui-icon-btn svg,
 .ui-search-clear svg,
-.ui-modal-close svg,
-.ui-panel-close svg,
-.ui-sidebar-close svg,
 .ui-viewpoint-delete svg,
 .ui-measure-item-delete svg {
-  display: block !important;
-  width: 15px !important;
-  height: 15px !important;
-  flex: 0 0 auto !important;
-  pointer-events: none !important;
-  stroke-width: 1.8 !important;
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: 0 0 auto;
+  pointer-events: none;
+  stroke-width: 1.8;
 }
 
 .ui-btn.ui-btn-icon:hover:not(:disabled),
 .ui-btn-icon:hover:not(:disabled),
 .ui-icon-btn:hover:not(:disabled),
-.ui-search-clear:hover:not(:disabled),
-.ui-modal-close:hover:not(:disabled),
-.ui-panel-close:hover:not(:disabled),
-.ui-sidebar-close:hover:not(:disabled) {
-  background: var(--icon-btn-hover-bg) !important;
-  border-color: var(--icon-btn-hover-border) !important;
-  color: var(--accent) !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+.ui-search-clear:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  color: var(--text-main);
 }
 
 .ui-btn.ui-btn-icon:active:not(:disabled),
 .ui-btn-icon:active:not(:disabled),
 .ui-icon-btn:active:not(:disabled),
-.ui-search-clear:active:not(:disabled),
-.ui-modal-close:active:not(:disabled),
-.ui-panel-close:active:not(:disabled),
-.ui-sidebar-close:active:not(:disabled),
-.ui-viewpoint-delete:active:not(:disabled),
-.ui-measure-item-delete:active:not(:disabled) {
-  background: var(--icon-btn-active-bg) !important;
-  transform: translateY(1px) !important;
+.ui-search-clear:active:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 
-.ui-panel-close,
-.ui-modal-close,
-.ui-sidebar-close {
-  width: 28px !important;
-  height: 28px !important;
-  min-width: 28px !important;
-  min-height: 28px !important;
+.ui-btn.ui-btn-icon:disabled,
+.ui-btn-icon:disabled,
+.ui-icon-btn:disabled,
+.ui-search-clear:disabled {
+  background: var(--bg-band);
+  border-color: var(--border-sub);
+  color: var(--text-muted);
+  cursor: default;
 }
 
-.ui-panel-close:hover,
-.ui-modal-close:hover,
-.ui-sidebar-close:hover {
-  color: var(--icon-btn-danger) !important;
-  background: var(--icon-btn-danger-bg) !important;
-  border-color: var(--icon-btn-danger-hover-border) !important;
-}
-
+/* 面板/弹窗/侧栏/Toast 关闭按钮：24×24、透明底、hover 转危险色（统一口径） */
 .ui-panel-close,
 .ui-modal-close,
 .ui-sidebar-close,
 .ui-toast-close {
-  width: 28px !important;
-  height: 28px !important;
-  min-width: 28px !important;
-  min-height: 28px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-  color: var(--text-secondary) !important;
-  border-radius: var(--radius-sm) !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
-  opacity: 1 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .ui-panel-close:hover,
 .ui-modal-close:hover,
 .ui-sidebar-close:hover,
 .ui-toast-close:hover {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: var(--bg-hover) !important;
-  color: var(--text-primary) !important;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .ui-panel-close:active,
 .ui-modal-close:active,
 .ui-sidebar-close:active,
 .ui-toast-close:active {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  background: var(--bg-active) !important;
-  color: var(--text-primary) !important;
-  transform: none !important;
+  background: var(--danger-soft);
+  color: var(--danger-hover);
 }
 
-.ui-panel-close:focus,
 .ui-panel-close:focus-visible,
-.ui-modal-close:focus,
 .ui-modal-close:focus-visible,
-.ui-sidebar-close:focus,
 .ui-sidebar-close:focus-visible,
-.ui-toast-close:focus,
 .ui-toast-close:focus-visible {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .ui-panel-close svg,
 .ui-modal-close svg,
 .ui-sidebar-close svg,
 .ui-toast-close svg {
-  width: 14px !important;
-  height: 14px !important;
-  stroke-width: 1.7 !important;
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.8;
+  pointer-events: none;
 }
 
-.ui-sidebar-header .ui-sidebar-close,
-.ui-panel-header .ui-panel-close {
-  flex: 0 0 28px !important;
+/* Toast 更紧凑，关闭按钮 20px 以适配 30px 高度 */
+.ui-toast-close {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
 }
 
-/* Typography & Visual Hierarchy Improvements */
-body, .ui-app-shell {
-  font-family: var(--font-family-ui) !important;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+.ui-toast-close svg {
+  width: 11px;
+  height: 11px;
 }
 
-/* Sidebar Styling Refinement */
-.ui-sidebar {
-  background: var(--bg-panel) !important;
-  border-color: var(--border-light) !important;
-  box-shadow: none !important;
+/* ---------- 顶栏内嵌（工具栏作为应用顶栏） ---------- */
+.ui-toolbar {
+  flex: 0 0 auto;
+  min-height: var(--header-h);
+  height: var(--header-h);
 }
 
-.ui-sidebar-header {
-  background: var(--surface) !important;
-  border-bottom: 1px solid var(--border-light) !important;
-  color: var(--text-primary) !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.01em !important;
-  font-size: 13.5px !important;
+/* ---------- 隐藏辅助 ---------- */
+.ui-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.ui-sidebar-content {
-  background: var(--bg-panel) !important;
-}
+.hidden { display: none !important; }

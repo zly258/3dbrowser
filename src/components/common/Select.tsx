@@ -85,6 +85,7 @@ export function Select<T extends string = string>({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        title={selectedOption ? String(selectedOption.label ?? selectedOption.value) : undefined}
       >
         <span className="ui-select-selection-item">
           {selectedOption?.label ?? placeholder ?? ""}

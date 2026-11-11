@@ -19,11 +19,11 @@ const Row: React.FC<{
   labelWidth?: string;
   stretch?: boolean;
 }> = ({ label, children, labelWidth = '80px', stretch = false }) => (
-  <div className="ui-form-row ui-form-row-tight">
-    <span
-      className="ui-form-label ui-form-label-dynamic"
-      style={{ ["--label-width" as any]: labelWidth }}
-    >
+  <div
+    className="ui-form-row ui-form-row-tight"
+    style={{ ["--label-width" as any]: labelWidth }}
+  >
+    <span className="ui-form-label ui-form-label-dynamic" title={label}>
       {label}
     </span>
     <div
@@ -55,7 +55,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   ];
 
   const currentThemeType = settings.themeType || "indigo";
-  const currentCustomColor = settings.themeCustomColor || "#1976d2";
+  const currentCustomColor = settings.themeCustomColor || "#0b5fa5";
 
   const isZh = currentLang === "zh";
 
@@ -65,7 +65,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={440}
-      autoHeight={true}
+      height={300}
       modal={true}
       movable={false}
       theme={theme}
@@ -93,8 +93,8 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 onChange={(mode) => {
                   const isDark = mode === "dark";
                   const nextBg = isDark
-                    ? (settings.bgColor === "#fafafa" || settings.bgColor === "#f8fafc" || settings.bgColor === "#eef2f5" ? "#121212" : settings.bgColor)
-                    : (settings.bgColor === "#121212" ? "#fafafa" : settings.bgColor);
+                    ? (settings.bgColor === "#eef1f5" || settings.bgColor === "#fafafa" || settings.bgColor === "#f8fafc" || settings.bgColor === "#eef2f5" || settings.bgColor === "#ffffff" ? "#12171c" : settings.bgColor)
+                    : (settings.bgColor === "#12171c" || settings.bgColor === "#0b0e11" || settings.bgColor === "#101317" || settings.bgColor === "#121212" ? "#eef1f5" : settings.bgColor);
                   onUpdate({ themeMode: mode as "light" | "dark", bgColor: nextBg });
                 }}
               />
@@ -224,7 +224,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
           <div className="ui-panel-stack">
           <Row label={t("st_bg") || "背景颜色"} labelWidth="90px" stretch={true}>
             <ColorPicker
-              value={settings.bgColor || (settings.themeMode === 'dark' ? "#121212" : "#fafafa")}
+              value={settings.bgColor || (settings.themeMode === 'dark' ? "#12171c" : "#eef1f5")}
               onChange={(value) => onUpdate({ bgColor: value })}
             />
           </Row>
@@ -270,7 +270,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
           <div className="ui-panel-stack">
           <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="90px" stretch={true}>
             <ColorPicker
-              value={settings.highlightColor || "#ff9f1c"}
+              value={settings.highlightColor || "#0b5fa5"}
               onChange={(value) => onUpdate({ highlightColor: value })}
             />
           </Row>
@@ -301,3 +301,5 @@ interface SettingsModalProps {
   setShowStats: (v: boolean) => void;
   theme?: any;
 }
+
+

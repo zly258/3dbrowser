@@ -18,42 +18,42 @@ export interface ThemeColors {
 
 export const themes: { light: ThemeColors; dark: ThemeColors } = {
     light: {
-        bg: "#fafafa",
+        bg: "#e8ebef",
         panelBg: "#ffffff",
-        headerBg: "#f5f5f5",
-        border: "rgba(0, 0, 0, 0.12)",
-        text: "rgba(0, 0, 0, 0.87)",
-        textLight: "#000000",
-        textMuted: "rgba(0, 0, 0, 0.38)",
-        accent: "#1976d2",
-        highlight: "rgba(25, 118, 210, 0.12)",
-        itemHover: "rgba(0, 0, 0, 0.04)",
-        success: "#2e7d32",
-        warning: "#f9a825",
-        danger: "#d32f2f",
-        canvasBg: "#fafafa",
-        shadow: "0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24)"
+        headerBg: "#f0f2f5",
+        border: "#cdd3da",
+        text: "#14181d",
+        textLight: "#14181d",
+        textMuted: "#5c636c",
+        accent: "#0b5fa5",
+        highlight: "#e3eef9",
+        itemHover: "#e3e8ee",
+        success: "#0b6b3a",
+        warning: "#8a5b00",
+        danger: "#b3261e",
+        canvasBg: "#eef1f5",
+        shadow: "0 1px 2px rgba(0, 0, 0, 0.08)"
     },
     dark: {
-        bg: "#121212",
-        panelBg: "#1e1e1e",
-        headerBg: "#262626",
-        border: "rgba(255, 255, 255, 0.12)",
-        text: "rgba(255, 255, 255, 0.87)",
+        bg: "#0e1114",
+        panelBg: "#181d23",
+        headerBg: "#21272f",
+        border: "#39434e",
+        text: "#f1f4f7",
         textLight: "#ffffff",
-        textMuted: "rgba(255, 255, 255, 0.38)",
-        accent: "#90caf9",
-        highlight: "rgba(144, 202, 249, 0.16)",
-        itemHover: "rgba(255, 255, 255, 0.04)",
-        success: "#81c784",
-        warning: "#fff176",
-        danger: "#ef9a9a",
-        canvasBg: "#121212",
-        shadow: "0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6)"
+        textMuted: "#98a3af",
+        accent: "#6fb3e6",
+        highlight: "#17364e",
+        itemHover: "#2b333c",
+        success: "#58b97d",
+        warning: "#e0b45c",
+        danger: "#ef6a60",
+        canvasBg: "#12171c",
+        shadow: "0 1px 2px rgba(0, 0, 0, 0.6)"
     }
 };
 
-export const DEFAULT_FONT = "'Roboto', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif";
+export const DEFAULT_FONT = '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif';
 
 export const colors = themes.light;
 
@@ -105,3 +105,4 @@ export function resolveThemeColors(): ThemeColors {
         shadow: vars.shadow || fallback.shadow
     };
 }
+

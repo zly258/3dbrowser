@@ -29,7 +29,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
     const isDark = typeof document !== "undefined" && (
         document.documentElement.classList.contains("theme-dark") ||
         document.documentElement.getAttribute("data-theme") === "dark" ||
-        theme?.bg === "#121212"
+        theme?.bg === "#0E1114"
     );
 
     useEffect(() => {
@@ -68,7 +68,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
         sceneRef.current = scene;
 
         const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-        camera.position.set(0, 0, 3.8);
+        camera.position.set(0, 0, 3.2);
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
@@ -90,12 +90,13 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             return value || fallback;
         };
 
-        const accentCss = readCssVar("--accent", isDark ? "#90caf9" : "#1976d2");
-        const faceColor = isDark ? new THREE.Color("#262626") : new THREE.Color("#F3F6FA");
-        const sideColor = isDark ? new THREE.Color("#2c2c2c") : new THREE.Color("#E6ECF3");
-        const edgeColor = isDark ? new THREE.Color("#383838") : new THREE.Color("#C9D3DF");
-        const cornerColor = isDark ? new THREE.Color("#424242") : new THREE.Color("#D5DEE9");
-        const lineColor = isDark ? new THREE.Color("#616161") : new THREE.Color("#8F9DAE");
+        const accentCss = readCssVar("--accent", isDark ? "#6FB3E6" : "#0B5FA5");
+        // AutoCAD 风格：整体接近白色，靠细灰棱线勾出棱与角，悬停浅蓝高亮
+        const faceColor = isDark ? new THREE.Color("#2B333D") : new THREE.Color("#FFFFFF");
+        const sideColor = isDark ? new THREE.Color("#262D36") : new THREE.Color("#FBFCFD");
+        const edgeColor = isDark ? new THREE.Color("#303945") : new THREE.Color("#FFFFFF");
+        const cornerColor = isDark ? new THREE.Color("#353F4B") : new THREE.Color("#FFFFFF");
+        const lineColor = isDark ? new THREE.Color("#7D8896") : new THREE.Color("#A6ADB5");
         const hoverColor = new THREE.Color(accentCss);
 
         const createRoundedRectPath = (
@@ -131,16 +132,26 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             if (context) {
                 context.clearRect(0, 0, size, size);
 
-                context.fillStyle = isDark ? "#262626" : "#F3F6FA";
+                context.fillStyle = isDark ? "#2B333D" : "#FFFFFF";
                 context.fillRect(0, 0, size, size);
 
-                context.fillStyle = isDark ? "#1e1e1e" : "#EAF0F6";
-                createRoundedRectPath(context, 24, 24, 208, 208, 12);
+                // 面内浅色板：上亮下暗的极轻渐变，模拟 AutoCAD 立方体的柔和明暗
+                const plate = context.createLinearGradient(0, 24, 0, 232);
+                if (isDark) {
+                    plate.addColorStop(0, "#363F4A");
+                    plate.addColorStop(1, "#29313A");
+                } else {
+                    plate.addColorStop(0, "#FFFFFF");
+                    plate.addColorStop(1, "#F0F2F5");
+                }
+                context.fillStyle = plate;
+                createRoundedRectPath(context, 22, 22, 212, 212, 14);
                 context.fill();
 
-                context.strokeStyle = isDark ? "rgba(255,255,255,0.18)" : "rgba(143,157,174,0.75)";
-                context.lineWidth = 3;
-                createRoundedRectPath(context, 28, 28, 200, 200, 10);
+                // 细内框线：AutoCAD 面片的细分隔线
+                context.strokeStyle = isDark ? "rgba(255,255,255,0.22)" : "rgba(154,161,169,0.9)";
+                context.lineWidth = 2;
+                createRoundedRectPath(context, 26, 26, 204, 204, 12);
                 context.stroke();
 
                 context.save();
@@ -150,13 +161,16 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
                     context.rotate((rotation * Math.PI) / 180);
                 }
 
-                context.fillStyle = isDark ? "#E0E0E0" : "#1F2933";
-                context.font = lang === "zh"
-                    ? '700 82px "Microsoft YaHei", "PingFang SC", sans-serif'
-                    : '700 48px "Segoe UI", Arial, sans-serif';
+                const isCjk = /[\u4e00-\u9fa5]/.test(text);
+                const label = isCjk ? text : text.toUpperCase();
+
+                context.fillStyle = isDark ? "#E8EBEF" : "#3C4043";
+                context.font = isCjk
+                    ? '600 82px "Microsoft YaHei", "PingFang SC", sans-serif'
+                    : '600 46px "Segoe UI", Arial, sans-serif';
                 context.textAlign = "center";
                 context.textBaseline = "middle";
-                context.fillText(text, 0, 2);
+                context.fillText(label, 0, 2);
                 context.restore();
             }
 
@@ -172,7 +186,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             const lineMaterial = new THREE.LineBasicMaterial({
                 color: lineColor,
                 transparent: true,
-                opacity: 0.72
+                opacity: 0.9
             });
             const line = new THREE.LineSegments(edgesGeometry, lineMaterial);
             line.userData.isViewCubeFrame = true;
@@ -211,10 +225,10 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             return mesh;
         };
 
-        const faceSize = 0.84;
-        const edgeSize = 0.12;
-        const cornerSize = 0.14;
-        const faceThickness = 0.055;
+        const faceSize = 0.86;
+        const edgeSize = 0.09;
+        const cornerSize = 0.1;
+        const faceThickness = 0.05;
         const offset = 0.5;
 
         createPart(new THREE.Vector3(faceSize, faceThickness, faceSize), new THREE.Vector3(0, -offset, 0), "front", faceColor, t("cube_front"));
@@ -314,13 +328,9 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
     const setHoverState = (mesh: ViewCubeMesh) => {
         const mat = mesh.material;
 
-        if (mesh.userData.isFace) {
-            mat.color.set(isDark ? 0x383838 : 0xffffff);
-            mat.opacity = 1;
-        } else {
-            mat.color.set(isDark ? 0x1976d2 : 0xb9d8ff);
-            mat.opacity = 1;
-        }
+        // AutoCAD 风格：面与棱/角统一用浅蓝高亮（深色主题用更亮的强调蓝）
+        mat.color.set(isDark ? 0x2A78AD : 0xCFE4F7);
+        mat.opacity = 1;
 
         mesh.scale.set(1.02, 1.02, 1.02);
     };
@@ -424,7 +434,12 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
         >
-            <canvas ref={canvasRef} className="ui-viewcube-canvas" />
+            <canvas
+                ref={canvasRef}
+                className="ui-viewcube-canvas"
+                style={{ width: `${cubeSize}px`, height: `${cubeSize}px` }}
+            />
         </div>
     );
 };
+

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ImageButton } from "../common/ImageButton";
 import { ToolbarProps } from "./types";
-import { isMenuHidden } from "./utils";
+import { cx, isMenuHidden } from "./utils";
 import {
     IconFile,
     IconMaximize,
@@ -31,7 +31,8 @@ import {
     IconViewNE,
     IconViewNW,
     IconSolid,
-    IconTransparent,
+    IconRealistic,
+    IconWireframe,
     IconOpenFile,
     IconExportScene,
     IconClear
@@ -90,10 +91,11 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
         );
     };
 
-    const menuItem = (icon: React.ReactNode, label: string, onClick: () => void) => (
+    const menuItem = (icon: React.ReactNode, label: string, onClick: () => void, checked?: boolean) => (
         <div
             className="ui-toolbar-menu-item"
-            role="menuitem"
+            role={checked === undefined ? "menuitem" : "menuitemradio"}
+            aria-checked={checked === undefined ? undefined : checked}
             tabIndex={0}
             onClick={onClick}
             onKeyDown={(event) => {
@@ -104,7 +106,16 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
             }}
         >
             <span className="ui-toolbar-menu-icon">{icon}</span>
-            <span>{label}</span>
+            <span className="ui-toolbar-menu-label">{label}</span>
+            {checked !== undefined && (
+                <span className={cx("ui-menu-check", "ui-toolbar-menu-check", checked && "checked")} aria-hidden="true">
+                    {checked && (
+                        <svg className="ui-menu-check-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 13l4 4L19 7" />
+                        </svg>
+                    )}
+                </span>
+            )}
         </div>
     );
 
@@ -247,15 +258,20 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
 
                             {renderDropdown("displayMode", (
                                 <>
-                                    {menuItem(<IconSolid />, t("dm_solid") || "着色", () => {
-                                        props.handleDisplayModeChange?.("solid");
+                                    {menuItem(<IconRealistic />, t("dm_realistic") || "真实", () => {
+                                        props.handleDisplayModeChange?.("realistic");
                                         closeMenu();
-                                    })}
+                                    }, props.displayMode === "realistic")}
 
-                                    {menuItem(<IconTransparent />, t("dm_transparent") || "透明", () => {
-                                        props.handleDisplayModeChange?.("transparent");
+                                    {menuItem(<IconSolid />, t("dm_solid") || "着色", () => {
+                                        props.handleDisplayModeChange?.("shaded");
                                         closeMenu();
-                                    })}
+                                    }, props.displayMode === "shaded")}
+
+                                    {menuItem(<IconWireframe />, t("dm_wireframe") || "线框", () => {
+                                        props.handleDisplayModeChange?.("wireframe");
+                                        closeMenu();
+                                    }, props.displayMode === "wireframe")}
                                 </>
                             ))}
                         </div>
@@ -328,7 +344,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                     {!hidden("viewpoint") && (
                         <ImageButton
                             icon={<IconCamera />}
-                            label={t("tb_view") || "视点"}
+                            label={t("viewpoint_default_name") || "视点"}
                             active={props.activeTool === "viewpoint"}
                             onClick={() => setToggleTool("viewpoint")}
                             theme={theme}

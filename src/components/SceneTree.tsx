@@ -61,6 +61,8 @@ export const buildTree = (object: any, depth = 0): TreeNode => {
     if (object.children && object.children.length > 0) {
         const children = object.children.filter((c: any) => {
             if (c.name === "Helpers" || c.name === "Measure") return false;
+            // 显示样式生成的边线不是构件，不进树
+            if (c.userData && c.userData.isDisplayEdges) return false;
             if (c.userData && c.userData.isOptimizedGroup) return false;
             return true;
         });
@@ -216,7 +218,7 @@ const TreeRowItem = React.memo(({
                 style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
             />
 
-            <div className="ui-tree-label">
+            <div className={`ui-tree-label${node.visible === false ? " is-off" : ""}`} title={node.name}>
                 {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
                     <span>
                         {node.name.split(new RegExp(`(${searchQuery})`, "gi")).map((part: string, index: number) =>
@@ -233,20 +235,7 @@ const TreeRowItem = React.memo(({
                     node.name
                 )}
                 {clashBadge && (
-                    <span
-                        style={{
-                            marginLeft: 6,
-                            padding: "0 6px",
-                            borderRadius: "var(--radius-xl)",
-                            border: `1px solid ${clashBadge.color}`,
-                            color: clashBadge.color,
-                            fontSize: "var(--font-size-label)",
-                            lineHeight: "16px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            verticalAlign: "middle"
-                        }}
-                    >
+                    <span className={`ui-tree-badge ui-tree-badge-${clashBadge.tone}`}>
                         {clashBadge.label}
                     </span>
                 )}
@@ -431,7 +420,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         return results;
     }, [searchQuery, treeRoot]);
 
-    const rowHeight = 24;
+    const rowHeight = 26;
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
     const visibleCount = Math.ceil(containerHeight / rowHeight);
@@ -496,18 +485,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         if (summary.worstStatus === "new") {
             return {
                 label: `${t("clash_group_new")} ${summary.newCount}`,
-                color: "var(--error)"
+                tone: "danger" as const
             };
         }
         if (summary.worstStatus === "confirmed") {
             return {
                 label: `${t("clash_group_confirmed")} ${summary.confirmedCount}`,
-                color: "var(--warning, #f59e0b)"
+                tone: "warn" as const
             };
         }
         return {
             label: `${t("clash_group_resolved")} ${summary.resolvedCount}`,
-            color: "var(--success)"
+            tone: "success" as const
         };
     };
 

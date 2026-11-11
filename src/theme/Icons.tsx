@@ -429,6 +429,35 @@ export const IconTransparent = (props: any) => createIcon(
   props
 );
 
+// 真实：着色 + 构件边线
+export const IconRealistic = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="currentColor" fillOpacity="0.32" />
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" strokeWidth="1.7" />
+    <line x1="12" y1="13" x2="12" y2="21" strokeWidth="1.7" />
+    <line x1="12" y1="3" x2="12" y2="13" strokeWidth="1.7" />
+    <line x1="3" y1="8" x2="12" y2="13" strokeWidth="1.7" />
+    <line x1="21" y1="8" x2="12" y2="13" strokeWidth="1.7" />
+  </>,
+  props
+);
+
+// 线框：仅边线
+export const IconWireframe = (props: any) => createIcon(
+  <>
+    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="none" />
+    <line x1="12" y1="13" x2="12" y2="21" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="12" y2="13" />
+    <line x1="21" y1="8" x2="12" y2="13" />
+    <line x1="3" y1="8" x2="3" y2="16" strokeDasharray="2 2" />
+    <line x1="21" y1="8" x2="21" y2="16" strokeDasharray="2 2" />
+    <line x1="3" y1="16" x2="12" y2="21" strokeDasharray="2 2" />
+    <line x1="21" y1="16" x2="12" y2="21" strokeDasharray="2 2" />
+  </>,
+  props
+);
+
 // File operation icons
 export const IconOpenFile = (props: any) => createIcon(
   <>

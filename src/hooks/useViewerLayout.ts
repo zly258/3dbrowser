@@ -7,6 +7,21 @@ interface UseViewerLayoutOptions {
     setShowProps: (value: boolean) => void;
 }
 
+/* 三栏尺寸：左 clamp(250px,22vw,320px)，右 clamp(320px,27vw,440px) */
+const LEFT_MIN = 250;
+const LEFT_MAX = 340;
+const RIGHT_MIN = 320;
+const RIGHT_MAX = 460;
+
+function clampWidth(value: number, min: number, max: number) {
+    return Math.round(Math.max(min, Math.min(max, value)));
+}
+
+function initialWidth(ratio: number, min: number, max: number, fallback: number) {
+    if (typeof window === "undefined") return fallback;
+    return clampWidth(window.innerWidth * ratio, min, max);
+}
+
 export function useViewerLayout(options: UseViewerLayoutOptions) {
     const {
         propShowOutline,
@@ -15,8 +30,8 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
         setShowProps
     } = options;
 
-    const [leftWidth, setLeftWidth] = useState(260);
-    const [rightWidth, setRightWidth] = useState(300);
+    const [leftWidth, setLeftWidth] = useState(() => initialWidth(0.22, LEFT_MIN, 320, 268));
+    const [rightWidth, setRightWidth] = useState(() => initialWidth(0.27, RIGHT_MIN, 440, 344));
     const resizingLeft = useRef(false);
     const resizingRight = useRef(false);
 
@@ -58,11 +73,11 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
             event.preventDefault();
 
             if (resizingLeft.current) {
-                pendingLeftWidth.current = Math.max(150, Math.min(500, event.clientX));
+                pendingLeftWidth.current = clampWidth(event.clientX, LEFT_MIN, LEFT_MAX);
             }
             if (resizingRight.current) {
                 const nextWidth = window.innerWidth - event.clientX;
-                pendingRightWidth.current = Math.max(200, Math.min(600, nextWidth));
+                pendingRightWidth.current = clampWidth(nextWidth, RIGHT_MIN, RIGHT_MAX);
             }
 
             if (rafId.current === null) {

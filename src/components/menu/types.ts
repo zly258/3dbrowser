@@ -1,5 +1,6 @@
 import React from "react";
 import { ThemeColors } from "../../theme/styles";
+import type { DisplayMode } from "../../utils/scene-manager/displayMode";
 
 export type ThemeType = "light";
 
@@ -17,7 +18,7 @@ export type MenuTool =
     | "clash"
     | "sun";
 
-export type DisplayMode = "solid" | "transparent";
+export type { DisplayMode };
 
 export interface BaseMenuProps {
     t: (key: string) => string;

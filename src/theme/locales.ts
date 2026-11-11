@@ -130,6 +130,7 @@ const resources: Record<Lang, Record<string, string>> = {
     measure_title: "Measurement Tool",
     measure_type: "Type",
     measure_none: "None",
+    esc_exit: "[ESC] Exit",
     measure_dist: "Distance",
     measure_angle: "Angle",
     measure_coord: "Coordinate",
@@ -147,6 +148,7 @@ const resources: Record<Lang, Record<string, string>> = {
     op_screenshot: "Screenshot",
     // 渲染样式
     display_mode: "DisplayMode",
+    dm_realistic: "Realistic",
     dm_solid: "Solid",
     dm_transparent: "Transparent",
     dm_wireframe: "Wireframe",
@@ -549,6 +551,7 @@ const resources: Record<Lang, Record<string, string>> = {
     measure_title: "测量面板",
     measure_type: "测量类型",
     measure_none: "无",
+    esc_exit: "[ESC] 退出",
     measure_dist: "长度",
     measure_angle: "角度",
     measure_coord: "坐标",
@@ -565,6 +568,7 @@ const resources: Record<Lang, Record<string, string>> = {
     op_screenshot: "场景截图",
     // 渲染样式
     display_mode: "样式",
+    dm_realistic: "真实",
     dm_solid: "着色",
     dm_transparent: "透明",
     dm_wireframe: "线框",
@@ -846,3 +850,5 @@ const resources: Record<Lang, Record<string, string>> = {
 export const getTranslation = (lang: Lang, key: string): string => {
   return resources[lang][key] || key;
 };
+
+

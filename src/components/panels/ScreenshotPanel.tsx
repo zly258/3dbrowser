@@ -31,8 +31,8 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
             closeLabel={t("panel_close") || "关闭"}
             onClose={onClose}
             width={380}
-            height={300}
             resizable={false}
+            autoHeight={true}
             theme={theme}
             storageId="tool_screenshot"
         >
@@ -59,6 +59,7 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
 
                 <Button
                     theme={theme}
+                    variant="primary"
                     onClick={() => onCapture(mode)}
                     className="ui-toolpanel-submit"
                 >

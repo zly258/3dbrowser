@@ -27,7 +27,11 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   };
 
   return (
-    <label className={cx("ui-checkbox", disabled && "ui-checkbox-disabled", className)} style={style}>
+    <label
+      className={cx("ui-checkbox", checked && "ui-checkbox-checked", disabled && "ui-checkbox-disabled", className)}
+      style={style}
+      title={typeof label === "string" ? label : undefined}
+    >
       <input
         type="checkbox"
         name={name}
@@ -36,14 +40,12 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         disabled={disabled}
         onChange={handleChange}
         className="ui-checkbox-native"
-        aria-hidden="true"
-        tabIndex={-1}
-        style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
+        aria-label={typeof label === "string" ? label : undefined}
       />
       <span className={cx("ui-checkbox-box", checked && "ui-checkbox-box-checked")} aria-hidden="true">
         {checked && (
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="ui-checkbox-icon">
-            <polyline points="20 6 9 17 4 12" />
+          <svg viewBox="0 0 24 24" className="ui-checkbox-icon">
+            <polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </span>

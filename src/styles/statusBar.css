@@ -1,3 +1,56 @@
+/*
+ * 底栏 30px：状态 / 进度 / 坐标 / 统计 / 语言。
+ * 页面本身不滚动，底栏 flex:0 0 auto。
+ */
+
+.ui-statusbar {
+  flex: 0 0 var(--footer-h);
+  height: var(--footer-h);
+  min-height: var(--footer-h);
+  max-height: var(--footer-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  background: var(--bg-band);
+  border-top: 1px solid var(--border-main);
+  font-size: var(--font-size-label);
+  line-height: 1;
+}
+
+.ui-statusbar-left,
+.ui-statusbar-right {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ui-statusbar-left {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.ui-statusbar-right {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+/* 状态文字：可收缩但不截断关键信息，长文本换省略号时带 title（由组件保证） */
+.ui-statusbar-left > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-sec);
+}
+
 .ui-statusbar-item,
 .ui-statusbar-meta,
 .ui-statusbar-coords,
@@ -8,32 +61,235 @@
 .ui-mode-pill,
 .ui-chunk-progress,
 .ui-tips {
-  display: inline-flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  min-height: 0 !important;
-  height: 22px !important;
-  line-height: 1 !important;
-  white-space: nowrap !important;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 0;
+  height: 22px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
+.ui-statusbar-meta {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-sub);
+  color: var(--text-muted);
+}
+
+.ui-statusbar-coords,
+.ui-statusbar-metric {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-statusbar-value {
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+/* ---------- 统计组 ---------- */
 .ui-stats-group {
-  gap: 8px !important;
-  padding-left: 8px !important;
-  border-left: 1px solid var(--divider) !important;
+  gap: var(--space-3);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-sub);
 }
 
 .ui-stats-item {
-  gap: 4px !important;
-  color: var(--text-secondary) !important;
-  font-size: 12px !important;
-  font-weight: 400 !important;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-size-label);
+  font-variant-numeric: tabular-nums;
 }
 
 .ui-stats-item svg,
 .ui-statusbar svg,
 .ui-chunk-progress svg {
-  width: 14px !important;
-  height: 14px !important;
-  flex: 0 0 14px !important;
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+  flex: 0 0 var(--icon-size-sm);
+  stroke-width: 1.8;
+}
+
+/* ---------- 提示 ---------- */
+.ui-tips {
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: var(--font-size-label);
+  font-weight: 400;
+}
+
+.ui-tips-separator {
+  color: var(--border-strong);
+  font-size: var(--font-size-label);
+  line-height: 1;
+  user-select: none;
+}
+
+/* ---------- 分隔线 ---------- */
+.ui-divider-vertical,
+.ui-divider-vertical-compact,
+.ui-divider-vertical-short {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+  background: var(--border-sub);
+}
+
+/* ---------- 底栏按钮 ---------- */
+.ui-statusbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 6px;
+  color: var(--text-sec);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.ui-statusbar-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-hover);
+  border-color: var(--border-sub);
+}
+
+.ui-statusbar-btn-compact { padding: 0 4px; }
+
+.ui-statusbar-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 7px;
+  color: var(--text-sec);
+  background: var(--bg-chrome);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius);
+  font-size: var(--font-size-label);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ui-statusbar-tag:hover {
+  color: var(--text-main);
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.ui-statusbar-tag:active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.ui-statusbar-tag.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.ui-statusbar-tag-compact {
+  min-width: 26px;
+  padding: 0 6px;
+}
+
+.ui-statusbar-brand {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  cursor: default;
+}
+
+.ui-statusbar-brand:hover,
+.ui-statusbar-brand:active {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.ui-statusbar-brand-label {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  color: currentColor;
+  font-size: var(--font-size-label);
+  font-weight: 400;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- 模式徽章 ---------- */
+.ui-mode-tray {
+  gap: 5px;
+  margin-left: 2px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-sub);
+}
+
+.ui-mode-pill {
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  color: var(--text-sec);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-label);
+  font-weight: 400;
+}
+
+.ui-mode-pill button {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ui-mode-pill button:hover { color: var(--accent-hover); }
+
+/* ---------- 分块加载进度 ---------- */
+.ui-chunk-progress {
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-size-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-progress-bar {
+  height: var(--slider-track-height);
+  overflow: hidden;
+  background: var(--border-sub);
+  border-radius: var(--radius-pill);
+}
+
+.ui-progress-bar-compact { width: 68px; }
+
+.ui-progress-bar-full { width: 100%; }
+
+.ui-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transition: width 150ms linear;
 }

@@ -85,13 +85,13 @@ const SectionToggle: React.FC<{
       <span className={`ui-clash-section-arrow${expanded ? " expanded" : ""}`}>›</span>
       <span className="ui-clash-section-title">{title}</span>
     </span>
-    {summary && <span className="ui-clash-section-summary">{summary}</span>}
+    {summary && <span className="ui-clash-section-summary" title={summary}>{summary}</span>}
   </button>
 );
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <label className="ui-clash-field">
-    <span className="ui-clash-field-label">{label}</span>
+    <span className="ui-clash-field-label" title={label}>{label}</span>
     <span className="ui-clash-field-control">{children}</span>
   </label>
 );
@@ -180,7 +180,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   const safeProgress = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
   const readyText = status || (running ? tr("clash_running", "正在执行碰撞检查...") : tr("clash_ready", "准备就绪"));
   const scopeSummary = `${tr("clash_set_a", "模型集 A")} ${setA.length} · ${tr("clash_set_b", "模型集 B")} ${setB.length}`;
-  const resultsSummary = `${filteredResults.length} ${tr("clash_results", "碰撞结果")}`;
+  const resultsSummary = `${filteredResults.length}`;
   const paramsSummary = `${tr("clash_tolerance", "容差")} ${tolerance} · ${tr("clash_clearance_distance", "净空")} ${clearanceDistance}`;
 
   const toggleFromSet = (source: string[], id: string, onChange: (next: string[]) => void) => {
@@ -376,7 +376,6 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                       { value: "CLEARANCE", label: tr("clash_type_clearance", "净空碰撞") }
                     ]}
                     className="ui-input-compact ui-clash-filter-select"
-                    style={{ width: 136 }}
                   />
                   <Select
                     value={String(pageSize)}
@@ -387,7 +386,6 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                       { value: "50", label: "50 / 页" }
                     ]}
                     className="ui-input-compact ui-clash-page-size"
-                    style={{ width: 96 }}
                   />
                   <Button size="sm" className="ui-properties-action" onClick={onRestoreVisibility}>
                     {tr("show_all", "恢复显示")}

@@ -28,15 +28,15 @@ interface MeasurePanelProps {
   onHighlight?: (id: string) => void;
 }
 
-const ClearButton: React.FC<{ onClick: () => void; disabled: boolean }> = ({ onClick, disabled }) => {
+const ClearButton: React.FC<{ onClick: () => void; disabled: boolean; title: string }> = ({ onClick, disabled, title }) => {
   return (
     <Button
       onClick={onClick}
       disabled={disabled}
       variant="ghost"
-      size="sm"
       className="ui-btn-icon"
-      title="Clear All"
+      title={title}
+      aria-label={title}
     >
       <Icons.Trash />
     </Button>
@@ -167,12 +167,16 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
               <span>{t("measure_coord") || 'Coord'}</span>
             </button>
           </div>
-          <ClearButton onClick={onClear} disabled={measureHistory.length === 0} />
+          <ClearButton
+            onClick={onClear}
+            disabled={measureHistory.length === 0}
+            title={t("search_clear") || "清空"}
+          />
         </div>
 
         <div className="ui-toolpanel-row-between ui-toolpanel-caption">
           <span>{getInstructionText()}</span>
-          {measureType !== 'none' && <span className="ui-toolpanel-caption-muted">[ESC] Exit</span>}
+          {measureType !== 'none' && <span className="ui-toolpanel-caption-muted">{t("esc_exit") || "[ESC] 退出"}</span>}
         </div>
 
         <DataPanel empty={measureHistory.length === 0} emptyText={t("no_measurements") || 'No measurements'}>

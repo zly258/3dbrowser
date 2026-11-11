@@ -1,7 +1,7 @@
 {
   "name": "@zhangly1403/3dbrowser",
   "private": false,
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "A high-performance 3D model browser based on Three.js, supporting IFC, GLB, and more.",
   "keywords": [
     "threejs",
@@ -33,6 +33,9 @@
     "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && node scripts/post-build.js",
     "build:pages": "vite build --mode pages",
     "preview": "vite preview",
+    "ui:audit": "node scripts/ui-audit.mjs",
+    "ui:audit:strict": "node scripts/ui-audit.mjs --strict",
+    "ui:coverage": "node scripts/class-coverage.cjs",
     "prepare": "husky",
     "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose"
   },
