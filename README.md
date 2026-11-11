@@ -87,6 +87,33 @@ const handleLoad = (manager: SceneManager) => {
 };
 ```
 
+## Publishing To npm
+
+Releases are published by GitHub Actions using **npm Trusted Publishing (OIDC)** — no `NPM_TOKEN`
+secret is stored anywhere.
+
+One-time setup on npmjs.com (`@zhangly1403/3dbrowser` → Settings → Trusted Publisher → GitHub Actions):
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `zly258` |
+| Repository | `3dbrowser` |
+| Workflow filename | `publish-npm.yml` |
+| Environment name | `npm` |
+| Allowed actions | tick **npm publish** (by default only staged publish is allowed) |
+
+Then release by publishing a GitHub Release whose tag matches `package.json`
+(`v1.7.2` → `"version": "1.7.2"`), or run the **Publish To npm** workflow manually from the Actions
+tab. The workflow builds the library and runs `npm publish --provenance --access public`; it skips
+the run when that version already exists on npm.
+
+Notes:
+
+- Trusted Publishing requires npm CLI ≥ 11.5.1 and Node ≥ 22.14 (the workflow uses Node 24).
+- The package must already exist on npm: the very first publish of a brand-new package still needs
+  `npm publish` from a local machine or with a token; afterwards the trusted publisher takes over.
+- Provenance is attached automatically — `repository` in `package.json` points at this GitHub repo.
+
 ## UI Style System
 
 The whole interface follows one light Fluent / industrial-CAD console language. All tokens live in
@@ -193,6 +220,30 @@ function App() {
 | `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
 | `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
 | `hideDeleteModel` | `boolean` | `false` | 隐藏删除模型按钮 |
+
+## 发布到 npm
+
+发版由 GitHub Actions 通过 **npm Trusted Publisher（OIDC）** 完成，**不需要任何 NPM_TOKEN 密钥**。
+
+一次性配置（npmjs.com：`@zhangly1403/3dbrowser` → Settings → Trusted Publisher → GitHub Actions）：
+
+| 字段 | 取值 |
+| --- | --- |
+| Organization or user | `zly258` |
+| Repository | `3dbrowser` |
+| Workflow filename | `publish-npm.yml` |
+| Environment name | `npm` |
+| Allowed actions | 勾选 **npm publish**（默认只允许 stage publish，不勾无法直接发布） |
+
+之后发布：创建一个 tag 与 `package.json` 版本一致的 GitHub Release（`v1.7.2` 对应 `"version": "1.7.2"`），
+或在 Actions 里手动运行 **Publish To npm** 工作流。工作流会构建库并执行
+`npm publish --provenance --access public`；若该版本已存在于 npm 则自动跳过。
+
+说明：
+
+- Trusted Publishing 要求 npm CLI ≥ 11.5.1、Node ≥ 22.14（工作流使用 Node 24）。
+- 包必须已存在于 npm：全新包的**第一次**发布仍需本地执行 `npm publish`（或使用令牌），之后交由可信发布。
+- 会自动附带 provenance 溯源信息，`package.json` 的 `repository` 已指向本仓库。
 
 ## 界面样式规范
 
