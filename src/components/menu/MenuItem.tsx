@@ -112,8 +112,12 @@ export const ClassicSubItem: React.FC<SubItemProps> = ({
         >
             <div className="ui-menu-subitem-main">
                 {checked !== undefined && (
-                    <span className={cx("ui-menu-check", checked && "checked")}>
-                        {checked && <span className="ui-menu-check-mark">✓</span>}
+                    <span className={cx("ui-menu-check", checked && "checked")} aria-hidden="true">
+                        {checked && (
+                            <svg className="ui-menu-check-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 13l4 4L19 7" />
+                            </svg>
+                        )}
                     </span>
                 )}
 

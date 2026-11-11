@@ -19,7 +19,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
     }, [format, getDefaultFileName]);
 
     return (
-        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close") || "关闭"} onClose={onClose} width={400} height={430} resizable={false} theme={theme} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close") || "关闭"} onClose={onClose} width={400} autoHeight={true} resizable={false} theme={theme} storageId="tool_export">
             <div className="ui-toolpanel-body ui-export-panel-body">
                 <div className="ui-toolpanel-caption">{t("export_format")}:</div>
 
@@ -59,6 +59,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
 
                 <Button
                     theme={theme}
+                    variant="primary"
                     onClick={() => onExport(format, fileName)}
                     className="ui-toolpanel-submit"
                 >

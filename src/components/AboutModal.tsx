@@ -13,8 +13,7 @@ interface AboutModalProps {
 declare const __APP_VERSION__: string;
 
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, theme }) => {
-    if (!isOpen) return null;
-
+    // Hook 必须在提前 return 之前调用，否则弹窗开关会破坏 Hook 顺序
     const [showLicenseDetails, setShowLicenseDetails] = useState(false);
 
     if (!isOpen) return null;

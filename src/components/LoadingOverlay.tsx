@@ -23,40 +23,20 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
     const percentText = `${Math.round(safeProgress)}%`;
 
     return (
-        <div className="ui-loading-overlay">
-            <div className="ui-loading-box">
-                <div className="ui-loading-header">
-                    <div className="ui-loading-title">{status}</div>
-                    <div className="ui-loading-percent">{percentText}</div>
+        <div className="ui-loading-overlay" role="status" aria-live="polite" aria-label={status}>
+            <div className="cad-loading-card">
+                <div className="cad-loading-head">
+                    <span className="cad-spinner cad-spinner-sm" aria-hidden="true" />
+                    <span className="cad-loading-title" title={status}>{status}</span>
+                    <span className="cad-loading-pct">{percentText}</span>
                 </div>
 
-                <div className="ui-progress-bar ui-loading-progress">
-                    <div
-                        className="ui-progress-fill"
-                        style={{ width: percentText }}
-                    />
+                <div className="cad-loading-track">
+                    <i style={{ width: percentText }} />
                 </div>
 
-                <div className="ui-loading-meta">
-                    <svg className="ui-loading-spinner" viewBox="0 0 24 24">
-                        <circle
-                            className="ui-loading-spinner-track"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="none"
-                        />
-                        <path
-                            className="ui-loading-spinner-head"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                    </svg>
-                    <span>
-                        {safeProgress >= 100 ? t("processing") : t("loading_resources")}
-                    </span>
+                <div className="cad-loading-note">
+                    {safeProgress >= 100 ? t("processing") : t("loading_resources")}
                 </div>
             </div>
         </div>

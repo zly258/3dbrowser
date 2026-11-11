@@ -34,6 +34,8 @@ import {
 import { planChunkLoads, selectChunksToUnload } from "./chunkLifecycle";
 import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
 import { applyIndustrialMaterials, applyIndustrialRendererSettings, createIndustrialSharedMaterial } from "./renderStyle";
+import { applyDisplayMode, normalizeDisplayMode, type DisplayMode } from "./displayMode";
+import { DisplayEdgeBuilder } from "./displayEdges";
 import { processChunkPrefetchQueue } from "./chunkPrefetch";
 import {
     acquireGhostLineResource,
@@ -206,6 +208,8 @@ export class SceneManager {
 
     selectionBox: THREE.Box3Helper;
     highlightMesh: THREE.Mesh;
+    /** 当前显示样式：真实（着色+边线）/ 着色 / 线框 */
+    displayMode: DisplayMode = "shaded";
     private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
     private highlightedUuids: Set<string> = new Set();
     private locateFocusUuid: string | null = null;
@@ -264,7 +268,7 @@ export class SceneManager {
         ambientInt: 0.78,
         dirInt: 1.48,
         hemiInt: 0.58,
-        bgColor: "#fafafa",
+        bgColor: "#eef1f5",
         viewCubeSize: 100,
         colorSpace: 'srgb',
         toneMapping: 'aces',
@@ -275,7 +279,7 @@ export class SceneManager {
         maxPixelRatio: 2,
         targetFps: 50,
         performanceMode: 'balanced',
-        highlightColor: "#1976d2",
+        highlightColor: "#0b5fa5",
         highlightShowBox: false,
         backLightInt: 0.62,
         maxRenderDistance: 1000000, // 增加默认渲染距离到 1km (针对 mm 单位)
@@ -541,6 +545,7 @@ export class SceneManager {
         // 场景
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(this.settings.bgColor);
+        this.displayEdges.setBackground(this.settings.bgColor);
 
         // 组
         this.contentGroup = new THREE.Group();
@@ -712,6 +717,59 @@ export class SceneManager {
         this.animationFrameId = requestAnimationFrame(this.animate);
     }
 
+    /**
+    /**
+     * 设置显示样式：
+     *  - realistic 真实：着色 + 构件棱边
+     *  - shaded    着色：仅着色
+     *  - wireframe 线框：仅棱边
+     */
+    setDisplayMode(mode: DisplayMode) {
+        this.displayMode = normalizeDisplayMode(mode);
+        applyDisplayMode(this.contentGroup, this.displayMode);
+
+        if (this.displayMode === "shaded") {
+            this.displayEdges.setVisible(false);
+        } else {
+            if (!this.displayEdgesBuilt) {
+                this.displayEdges.buildFor(this.contentGroup);
+                this.displayEdgesBuilt = true;
+            }
+            this.displayEdges.setVisible(true);
+        }
+        this.requestRender();
+    }
+
+    getDisplayMode(): DisplayMode {
+        return this.displayMode;
+    }
+
+    /** 显示样式棱边生成器 */
+    private displayEdges = new DisplayEdgeBuilder();
+    private displayEdgesBuilt = false;
+
+    /** 内容变化后需要重建棱边 */
+    invalidateDisplayModeCache() {
+        this.displayEdges.clear();
+        this.displayEdgesBuilt = false;
+    }
+
+    /** 内容新增后为新增部分生成棱边（真实/线框模式） */
+    private buildDisplayEdgesFor(object: THREE.Object3D) {
+        if (this.displayMode === "shaded") return;
+        if (this.displayEdgesBuilt) {
+            this.displayEdges.buildFor(object, true);
+        } else {
+            this.displayEdges.buildFor(this.contentGroup);
+            this.displayEdgesBuilt = true;
+        }
+        this.displayEdges.setVisible(true);
+    }
+
+    private renderFrame() {
+        this.renderer.render(this.scene, this.camera);
+    }
+
     private markSceneDirty(options: {
         needsRender?: boolean;
         needsBoundsUpdate?: boolean;
@@ -778,6 +836,8 @@ export class SceneManager {
         // 应用背景
         this.renderer.setClearColor(this.settings.bgColor, 1);
         this.scene.background = new THREE.Color(this.settings.bgColor);
+        // 边线颜色跟随底色，避免深色视口下棱边看不清
+        this.displayEdges.setBackground(this.settings.bgColor);
 
         // 应用视锥体剔除
         if (newSettings.frustumCulling !== undefined) {
@@ -882,7 +942,7 @@ export class SceneManager {
             selectionLineMat.color.set(this.settings.highlightColor || "#ff9f1c");
         }
 
-        this.renderer.render(this.scene, this.camera);
+        this.renderFrame();
 
         const chunksIncomplete = this.chunkLoadingEnabled && this.chunks.length > 0 && this.chunkLoadedCount < this.chunks.length;
         const locatingPulse = !!(this.locateFocusUuid && (this.highlightMesh.visible || this.selectionBox.visible));
@@ -1100,6 +1160,8 @@ export class SceneManager {
     }
 
     private disposeChunkMesh(mesh: THREE.BatchedMesh) {
+        // 边线是批量网格的子节点，回收前先移除，避免残留与重复
+        this.displayEdges.releaseFor(mesh);
         disposeChunkMeshResource({
             mesh,
             sharedMaterial: this.sharedMaterial
@@ -1592,7 +1654,7 @@ export class SceneManager {
         // 因此在当前帧立即补渲染一次，保证任何时刻呈现的都是完整画面。
         if (ratioChanged || sizeChanged) {
             this.updateCameraClipping();
-            this.renderer.render(this.scene, this.camera);
+            this.renderFrame();
         }
     }
 
@@ -1987,6 +2049,8 @@ export class SceneManager {
                     invalidateInteractables = true;
                     needsBoundsUpdate = true;
                     needsRender = true;
+                    // 分块网格是后挂上来的，需要单独补棱边
+                    this.buildDisplayEdgesFor(bm);
                 }
             }
 
@@ -2323,6 +2387,9 @@ export class SceneManager {
 
         object.visible = keepVisible;
         this.contentGroup.add(fileGroup);
+        // 新载入的模型立即套用当前显示样式（真实/着色/线框）
+        applyDisplayMode(fileGroup, this.displayMode);
+        this.buildDisplayEdgesFor(fileGroup);
         this.markSceneDirty({
             invalidateInteractables: true,
             needsRender: false
@@ -3067,6 +3134,9 @@ export class SceneManager {
             rootId
         });
         this.contentGroup.add(fileGroup);
+        // 新载入的模型立即套用当前显示样式（真实/着色/线框）
+        applyDisplayMode(fileGroup, this.displayMode);
+        this.buildDisplayEdgesFor(fileGroup);
         this.interactableListValid = false;
         this.markSceneDirty({
             invalidateInteractables: true,
@@ -3181,6 +3251,8 @@ export class SceneManager {
             while (this.contentGroup.children.length > 0) {
                 this.contentGroup.remove(this.contentGroup.children[0]);
             }
+            this.displayEdges.dispose();
+            this.displayEdgesBuilt = false;
 
             // 2. 清理辅助组
             while (this.ghostGroup.children.length > 0) {
@@ -3809,6 +3881,8 @@ export class SceneManager {
 
         this.interactableListValid = false;
         this.updateSceneBounds();
+        // 爆炸后批量网格实例矩阵变化，合并边线不再准确，暂时隐藏
+        this.displayEdges.setBatchedVisible(magnitude === 0);
         this.markSceneDirty({
             needsBoundsUpdate: true,
             needsCulling: true,
@@ -3827,6 +3901,7 @@ export class SceneManager {
         });
         this.interactableListValid = false;
         this.updateSceneBounds();
+        this.displayEdges.setBatchedVisible(true);
         this.markSceneDirty({
             needsBoundsUpdate: true,
             needsCulling: true,
@@ -4874,5 +4949,6 @@ export class SceneManager {
 
 export type { PerformancePreset, SceneChunkOptions, SceneManagerOptions };
 export type { MeasurementRecord, MeasureType, SceneManagerStats, SceneSettings, StructureTreeNode };
+
 
 

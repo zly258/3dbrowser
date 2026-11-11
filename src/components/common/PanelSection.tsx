@@ -15,14 +15,14 @@ export const PanelSection: React.FC<PanelSectionProps> = ({
   style,
   className = ""
 }) => {
+  void theme;
+
   return (
     <section className={`ui-section-block ${className}`} style={style}>
       {title && (
         <div className="ui-section-header">
-          <span className="ui-section-title" style={{ color: theme?.textMuted || "var(--text-muted)" }}>
-            {title}
-          </span>
-          <div className="ui-section-divider" style={{ background: theme?.border || "var(--border-color)" }} />
+          <span className="ui-section-title">{title}</span>
+          <div className="ui-section-divider" />
         </div>
       )}
       {children}

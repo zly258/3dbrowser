@@ -7,32 +7,38 @@ export interface ImageButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
         theme?: any;
 }
 
-export const ImageButton: React.FC<ImageButtonProps> = ({ 
-    icon, 
-    label, 
-    active, 
-    theme, 
-    style, 
+export const ImageButton: React.FC<ImageButtonProps> = ({
+    icon,
+    label,
+    active,
+    theme,
+    style,
     className = '',
     disabled,
-    ...props 
+    title,
+    ...props
 }) => {
+    void theme;
+
     return (
-        <button 
-            style={{ opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer', ...style }} 
+        <button
+            type="button"
+            style={style}
             className={`ui-toolbar-btn ${active ? 'active' : ''} ${className}`}
             disabled={disabled}
+            aria-pressed={active}
+            title={title ?? label}
+            aria-label={label}
             {...props}
         >
-            <div className="ui-toolbar-btn-icon">
+            <span className="ui-toolbar-btn-icon" aria-hidden="true">
                 {icon}
-            </div>
+            </span>
             {label && (
-                <div className="ui-toolbar-btn-label">
+                <span className="ui-toolbar-btn-label">
                     {label}
-                </div>
+                </span>
             )}
         </button>
     );
 };
-

@@ -1,15 +1,55 @@
-.ui-viewport-canvas { width: 100%; height: 100%; display: block; outline: none; }
+/*
+ * 视口：canvas 100%×100%，浮层绝对定位不占布局高度。
+ */
 
-.ui-context-menu-item { width: 100%; min-height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 9px; color: var(--text-primary); background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); font-size: var(--font-size-secondary); font-weight: 400; white-space: nowrap; }
+.ui-viewport-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
 
-.ui-context-menu-item:hover { background: var(--bg-hover); border-color: var(--border-light); }
+/* ============================================================
+ * 视图立方（AutoCAD 风格：白面 + 深灰标注 + 细棱线 + 浅蓝悬停）
+ * 仅立方体本身，不带罗盘/主视图按钮。
+ * ============================================================ */
+.ui-viewcube {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 20;
+  display: block;
+  overflow: visible;
+  user-select: none;
+}
 
-.ui-context-menu-item.disabled, .ui-context-menu-item:disabled { color: var(--text-muted); opacity: .5; cursor: not-allowed; }
+.ui-viewcube-canvas {
+  display: block;
+  background: transparent;
+  border-radius: 0;
+}
 
-.ui-context-menu-divider { height: 1px; margin: 4px 2px; background: var(--border-light); }
+.ui-viewcube-clean {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
 
-.ui-context-menu-slider { flex-direction: column; align-items: stretch; height: auto; padding: 8px 9px; }
-
-.ui-context-menu-slider-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-
-.ui-context-menu-slider-input { width: 100%; accent-color: var(--accent); }
+/* ---------- 视口内轻量提示条 ---------- */
+.ui-viewport-hint {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  color: var(--text-sec);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius);
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  pointer-events: none;
+}

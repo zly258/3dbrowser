@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { IconChevronRight, IconChevronDown } from "../theme/Icons";
+import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
 import { ContextMenu } from "./ContextMenu";
 import {
     filterPropertyGroups,
@@ -349,8 +349,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 className="ui-search-clear"
                                 onClick={clearSearch}
                                 title={t("search_clear") || "清空"}
+                                aria-label={t("search_clear") || "清空"}
                             >
-                                ×
+                                <IconClose width={12} height={12} />
                             </button>
                         )}
                     </div>
@@ -381,17 +382,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                             return (
                                 <div
                                     key={group.name}
-                                    className="ui-prop-group-block"
-                                    style={{
-                                        margin: isCollapsed ? "4px 0" : "0"
-                                    }}
+                                    className={`ui-prop-group-block${isCollapsed ? " is-collapsed" : ""}`}
                                 >
                                     <div
                                         className={`ui-prop-group${isCollapsed ? " collapsed" : ""}`}
                                         onClick={() => toggleGroup(group.name)}
                                         onContextMenu={(event) => openGroupContextMenu(event, group)}
                                     >
-                                        <span className="truncate">
+                                        <span className="truncate" title={group.name}>
                                             {group.name}
                                         </span>
 

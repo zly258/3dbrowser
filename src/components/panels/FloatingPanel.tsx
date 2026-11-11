@@ -118,14 +118,16 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
     const applyStyle = useCallback(() => {
         const panel = panelRef.current;
         if (!panel) return;
-        const pos = posRef.current;
         const size = sizeRef.current;
-        panel.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
         panel.style.width = `${size.w}px`;
         if (!autoHeight) {
             panel.style.height = `${size.h}px`;
         }
-    }, [autoHeight]);
+        // 模态面板由 CSS（left/top 50% + translate(-50%,-50%)）居中，不参与坐标计算
+        if (modal) return;
+        const pos = posRef.current;
+        panel.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+    }, [autoHeight, modal]);
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (!isDragging.current && !isResizing.current) return;
@@ -211,21 +213,47 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             document.removeEventListener('mouseup', handleMouseUp);
         };
     }, [handleMouseMove, handleMouseUp]);
+    // 模态面板由 CSS 居中（translate(-50%,-50%)），无需 JS 计算位置，
+    // 这样内容高度变化（切换页签/展开详情）也不会发生位移跳动。
+
+    // 非模态面板：保证面板完整落在视口容器内，避免窄窗口下被裁掉
     useEffect(() => {
-        if (!modal) return;
-        const centerPanel = () => {
+        if (modal) return;
+
+        const clampIntoContainer = () => {
+            const panel = panelRef.current;
+            if (!panel) return;
+            const parent = panel.parentElement;
+            const limitW = parent?.clientWidth ?? window.innerWidth;
+            const limitH = parent?.clientHeight ?? window.innerHeight;
+            const maxW = Math.max(220, limitW - 16);
+            const maxH = Math.max(160, limitH - 16);
+
+            // 先收尺寸，再收位置
+            const nextW = Math.min(sizeRef.current.w, maxW);
+            const nextH = Math.min(sizeRef.current.h, maxH);
+            if (nextW !== sizeRef.current.w || nextH !== sizeRef.current.h) {
+                sizeRef.current = { w: nextW, h: nextH };
+            }
+
             const measuredHeight = autoHeight
-                ? Math.min(window.innerHeight - 64, panelRef.current?.offsetHeight || sizeRef.current.h)
+                ? (panel.offsetHeight || sizeRef.current.h)
                 : sizeRef.current.h;
-            posRef.current = {
-                x: Math.max(0, (window.innerWidth - sizeRef.current.w) / 2),
-                y: Math.max(0, (window.innerHeight - measuredHeight) / 2)
-            };
+            const maxX = Math.max(0, limitW - sizeRef.current.w);
+            const maxY = Math.max(0, limitH - measuredHeight);
+            const nextX = Math.max(0, Math.min(posRef.current.x, maxX));
+            const nextY = Math.max(0, Math.min(posRef.current.y, maxY));
+
+            if (nextX !== posRef.current.x || nextY !== posRef.current.y) {
+                posRef.current = { x: nextX, y: nextY };
+            }
+
             applyStyle();
         };
-        window.addEventListener('resize', centerPanel);
-        centerPanel();
-        return () => window.removeEventListener('resize', centerPanel);
+
+        clampIntoContainer();
+        window.addEventListener('resize', clampIntoContainer);
+        return () => window.removeEventListener('resize', clampIntoContainer);
     }, [autoHeight, modal, applyStyle]);
 
     const onHeaderDown = (e: React.MouseEvent) => {
@@ -277,15 +305,20 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             <div
                 ref={panelRef}
                 className={`ui-panel${modal ? ' ui-panel-modal' : ''}${storageId ? ` ui-panel-${storageId}` : ''}`}
-                style={{
-                    position: modal ? 'fixed' : 'absolute',
+                style={modal ? {
+                    position: 'fixed',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: size.w,
+                    height: autoHeight ? 'auto' : viewportLimitedHeight,
+                } : {
+                    position: 'absolute',
                     left: 0,
                     top: 0,
                     transform: `translate(${pos.x}px, ${pos.y}px)`,
                     width: size.w,
                     height: autoHeight ? 'auto' : viewportLimitedHeight,
-                    maxHeight: 'calc(100vh - 64px)',
-                    zIndex: modal ? 2000 : 200,
                     willChange: isDragging.current || isResizing.current ? 'transform, width, height' : 'auto',
                 }}
             >
@@ -293,14 +326,15 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
                     className={`ui-panel-header ${(!movable || modal) ? 'ui-panel-header-static' : ''}`}
                     onMouseDown={onHeaderDown}
                 >
-                    <span className="ui-panel-title">{title}</span>
+                    <span className="ui-panel-title" title={title}>{title}</span>
                     {onClose && (
                         <button
                             className="ui-panel-close"
                             onClick={onCloseClick}
                             title={closeLabel}
+                            aria-label={closeLabel}
                         >
-                            <IconClose width={14} height={14} />
+                            <IconClose width={13} height={13} />
                         </button>
                     )}
                 </div>

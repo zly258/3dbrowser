@@ -1,197 +1,367 @@
+/*
+ * 顶栏（应用标题栏 + 工具条）
+ * 高 42px，按钮 26px，纯文本 + 内联 SVG，无渐变无阴影堆叠。
+ * z-index 50（顶栏层）。
+ */
+
 .ui-toolbar {
   position: relative;
-  z-index: 1200;
+  z-index: 50;
   display: flex;
   align-items: center;
-  min-height: 52px;
-  padding: 4px 10px;
-  gap: 6px;
-  overflow: visible;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.ui-toolbar input[type="file"] { display: none !important; }
-
-.ui-toolbar-group { display: flex; align-items: center; gap: 4px; min-height: 100%; padding: 0; background: transparent; border: 0; }
-
-.ui-toolbar-group + .ui-toolbar-group { margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--border-light); }
-
-.ui-toolbar-btn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 40px;
-  padding: 4px 6px;
+  flex: 0 0 auto;
+  height: var(--header-h);
+  min-height: var(--header-h);
+  padding: 0 8px;
   gap: 2px;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-label);
-  font-weight: 400;
-  line-height: 1.05;
-  text-align: center;
+  overflow: visible;
   white-space: nowrap;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border-strong);
+  box-shadow: none;
 }
 
-.ui-toolbar-btn:hover:not(.active) { background: var(--bg-hover); border-color: var(--border-light); color: var(--text-primary); }
+.ui-toolbar input[type="file"] { display: none; }
 
-.ui-toolbar-btn:active { background: var(--bg-active); }
-
-.ui-toolbar-btn.active { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); font-weight: 500; }
-
-.ui-toolbar-btn svg { width: 17px; height: 17px; color: currentColor; }
-
-.ui-toolbar-btn-icon { width: 17px; height: 17px; display: flex; align-items: center; justify-content: center; }
-
-.ui-toolbar-btn-label { display: block; max-width: 64px; min-height: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-label); font-weight: 400; line-height: 1.1; }
-
-.ui-toolbar-menu-anchor { position: relative; overflow: visible; }
-
-.ui-toolbar-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 3000;
-  min-width: 180px;
-  max-width: min(280px, calc(100vw - 24px));
-  width: max-content;
-  height: auto;
-  max-height: var(--toolbar-menu-max-height);
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 6px;
-  background: var(--surface-bright);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.ui-toolbar-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 30px;
-  padding: 5px 8px;
-  color: var(--text-primary);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-secondary);
-  font-weight: 400;
-  text-align: left;
-  line-height: 1.2;
-}
-
-.ui-toolbar-menu-item:hover { background: var(--bg-hover); border-color: var(--border-light); }
-
-.ui-toolbar-menu-icon { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); opacity: 0.9; }
-
-.ui-toolbar-menu-icon svg { width: 16px; height: 16px; }
-
-.ui-toolbar-menu-divider { height: 1px; margin: 4px 2px; background: var(--border-light); }
-
-.ui-dropdown-menu, .ui-context-menu { position: fixed; z-index: 10000; min-width: 180px; max-height: 320px; overflow-y: auto; padding: 4px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-menu); }
-
-.ui-dropdown-menu { position: absolute; }
-
-.ui-toolbar-btn,
-.ui-toolbar-btn-label,
-.ui-btn,
-.ui-input,
-.ui-select-selector,
-.ui-select-item,
-.ui-context-menu-item,
-.ui-tree-label,
-.ui-list-item,
-.ui-data-row,
-.ui-statusbar,
-.ui-statusbar-tag { font-weight: 400 !important; }
-
-.ui-toolbar-menu { max-height: var(--toolbar-menu-max-height) !important; height: auto !important; padding: 6px !important; }
-
-.ui-toolbar-menu-item { min-height: 30px !important; padding: 5px 8px !important; }
-
-.ui-toolbar-menu-icon,
-.ui-toolbar-menu-icon svg { width: 16px !important; height: 16px !important; }
-
-.ui-btn,
-.ui-btn *,
-.ui-toolbar-btn,
-.ui-toolbar-btn *,
-.ui-segmented-item,
-.ui-statusbar-tag,
-.ui-select-item,
-.ui-context-menu-item {
-  font-weight: 400 !important;
-}
-
-/* Toolbar Refinement (Glassmorphism & Crispness) */
-.ui-toolbar {
-  background: var(--bg-panel) !important;
-  border-bottom: 1px solid var(--border-color) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
-}
-
+/* ---------- 分组 ---------- */
 .ui-toolbar-group {
-  gap: 6px !important;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
 .ui-toolbar-group + .ui-toolbar-group {
-  border-left: 1px solid var(--border-light) !important;
-  padding-left: 10px !important;
-  margin-left: 8px !important;
+  margin-left: 5px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border-sub);
 }
 
+/* ---------- 工具按钮：26px，图标 + 文本 ---------- */
 .ui-toolbar-btn {
-  border-radius: var(--radius-md) !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  font-weight: 500 !important;
-  color: var(--text-secondary) !important;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  min-width: 0;
+  padding: 0 9px;
+  color: var(--text-main);
+  background: var(--bg-chrome);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
-.ui-toolbar-btn:hover:not(.active) {
-  background: var(--bg-hover) !important;
-  color: var(--text-primary) !important;
-  transform: translateY(-1px) !important;
+.ui-toolbar-btn svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: currentColor;
+  stroke-width: 1.8;
 }
 
-.ui-toolbar-btn:active {
-  background: var(--bg-active) !important;
-  transform: translateY(0.5px) !important;
+.ui-toolbar-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: 0 0 auto;
+  color: currentColor;
 }
 
+.ui-toolbar-btn-label {
+  display: inline-block;
+  max-width: none;
+  min-height: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  line-height: 1;
+  color: currentColor;
+}
+
+/* hover：浅灰底 + 深色字 */
+.ui-toolbar-btn:hover:not(:disabled):not(.active) {
+  background: var(--bg-hover);
+  border-color: var(--border-main);
+  color: var(--text-main);
+}
+
+.ui-toolbar-btn:active:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-main);
+}
+
+/* 开关型开启态：实底强调色 + 白字（深底白字，符合状态契约） */
 .ui-toolbar-btn.active {
-  background: var(--accent-subtle) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
-  font-weight: 500 !important;
-  box-shadow: var(--shadow-xs) !important;
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: var(--accent-contrast);
+  font-weight: 400;
 }
 
-/* Dropdowns & Context Menus */
-.ui-toolbar-menu, .ui-dropdown-menu, .ui-context-menu {
-  background: var(--bg-panel) !important;
-  border: 1px solid var(--border-color) !important;
-  border-radius: var(--radius-sm) !important;
-  box-shadow: var(--shadow-menu) !important;
-  padding: 4px !important;
+.ui-toolbar-btn.active:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+  border-color: var(--accent-solid-hover);
+  color: var(--accent-contrast);
 }
 
-.ui-toolbar-menu-item, .ui-context-menu-item {
-  border-radius: var(--radius-sm) !important;
-  color: var(--text-primary) !important;
-  font-weight: 500 !important;
-  transition: all 0.15s ease !important;
+.ui-toolbar-btn.active svg { color: currentColor; }
+
+.ui-toolbar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-.ui-toolbar-menu-item:hover, .ui-context-menu-item:hover {
-  background: var(--bg-hover) !important;
-  color: var(--accent) !important;
+.ui-toolbar-btn:disabled {
+  background: var(--bg-band);
+  border-color: var(--border-sub);
+  color: var(--text-muted);
+  cursor: default;
 }
+
+/* 菜单锚点 */
+.ui-toolbar-menu-anchor {
+  position: relative;
+  display: inline-flex;
+  overflow: visible;
+}
+
+/* ---------- 下拉菜单：4px 圆角 + overlay 阴影 ---------- */
+.ui-toolbar-menu,
+.ui-dropdown-menu,
+.ui-context-menu {
+  position: absolute;
+  z-index: 200;
+  min-width: 158px;
+  max-width: min(280px, calc(100vw - 24px));
+  width: max-content;
+  max-height: var(--toolbar-menu-max-height);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  animation: dropdownIn 100ms ease-out;
+}
+
+.ui-toolbar-menu {
+  top: calc(100% + 4px);
+  left: 0;
+}
+
+.ui-dropdown-menu,
+.ui-context-menu { position: fixed; }
+
+.ui-dropdown-menu { position: absolute; }
+
+.ui-toolbar-menu-item,
+.ui-context-menu-item,
+.ui-menu-subitem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 8px;
+  color: var(--text-main);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.ui-toolbar-menu-item:hover,
+.ui-context-menu-item:hover,
+.ui-menu-subitem:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.ui-toolbar-menu-item:focus-visible,
+.ui-context-menu-item:focus-visible,
+.ui-menu-subitem:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ui-context-menu-item.disabled,
+.ui-context-menu-item:disabled,
+.ui-menu-subitem.disabled {
+  color: var(--text-muted);
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.ui-toolbar-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: 0 0 auto;
+  color: var(--text-sec);
+}
+
+/* 菜单项文字：占满剩余宽度，勾选标记贴右 */
+.ui-toolbar-menu-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-toolbar-menu-check {
+  margin-left: auto;
+  flex: 0 0 13px;
+}
+
+.ui-toolbar-menu-icon svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  stroke-width: 1.8;
+}
+
+.ui-toolbar-menu-item:hover .ui-toolbar-menu-icon,
+.ui-context-menu-item:hover .ui-toolbar-menu-icon { color: var(--accent); }
+
+.ui-toolbar-menu-divider,
+.ui-context-menu-divider {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--border-sub);
+}
+
+/* 窄屏：收起按钮文字，只保留图标，避免顶栏内容溢出 */
+@media (max-width: 1180px) {
+  .ui-toolbar-btn-label { display: none; }
+  .ui-toolbar-btn { padding: 0 7px; }
+}
+
+/* ---------- 经典菜单栏（MenuBar）---------- */
+.ui-menubar {
+  gap: 1px;
+  padding: 0 6px;
+}
+
+.ui-menubar-item {
+  position: relative;
+  display: inline-flex;
+}
+
+.ui-menubar-btn {
+  padding: 0 8px;
+  height: var(--control-h);
+  min-height: var(--control-h);
+}
+
+.ui-menubar-btn .ui-toolbar-btn-label { font-size: var(--font-size-base); }
+
+.ui-menubar-dropdown {
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+}
+
+/* ---------- 菜单子项：勾选与图标 ---------- */
+.ui-menu-subitem-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ui-menu-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  color: var(--accent);
+}
+
+.ui-menu-check-mark {
+  display: block;
+  width: 11px;
+  height: 11px;
+  color: var(--accent);
+}
+
+.ui-menu-subitem-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: 0 0 auto;
+  color: var(--text-sec);
+}
+
+.ui-menu-subitem-icon svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  stroke-width: 1.8;
+}
+
+.ui-menu-subitem-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: currentColor;
+}
+
+/* ---------- 右键菜单中的滑块行 ---------- */
+.ui-context-menu-slider {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  height: auto;
+  min-height: 0;
+  padding: 7px 8px;
+  cursor: default;
+}
+
+.ui-context-menu-slider:hover { background: transparent; }
+
+.ui-context-menu-slider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-sec);
+  font-size: var(--font-size-secondary);
+}
+
+.ui-context-menu-slider-input { width: 100%; }
+
