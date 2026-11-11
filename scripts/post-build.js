@@ -27,6 +27,11 @@ const distPkg = {
   keywords: pkg.keywords,
   license: pkg.license,
   author: pkg.author,
+  // npm 溯源（provenance）与包页面依赖这两个字段
+  repository: pkg.repository,
+  homepage: pkg.homepage,
+  bugs: pkg.bugs,
+  publishConfig: pkg.publishConfig,
   type: pkg.type,
   main: './3dbrowser.js',
   module: './3dbrowser.js',

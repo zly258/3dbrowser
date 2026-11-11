@@ -1,0 +1,96 @@
+name: Publish To npm
+
+# 方案 A：npm Trusted Publisher（OIDC），发布不需要任何 NPM_TOKEN。
+#
+# 一次性配置（在 npmjs.com 包设置里，见 README「发布到 npm」）：
+#   Trusted Publisher -> GitHub Actions
+#   Organization or user : zly258
+#   Repository           : 3dbrowser
+#   Workflow filename    : publish-npm.yml
+#   Environment name     : npm
+#   Allowed actions      : 勾选 npm publish（默认只允许 stage publish）
+#
+# 触发方式：发布一个 GitHub Release（推荐），或在 Actions 里手动运行本工作流。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # Trusted Publishing（OIDC）必需
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Trusted Publishing 需要 Node >= 22.14.0 且 npm >= 11.5.1（Node 24 自带 npm 11）
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Show toolchain
+        run: |
+          node -v
+          npm -v
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build library
+        run: npm run build
+
+      - name: Read package metadata
+        id: pkg
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            const fs = require('fs');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'name=' + pkg.name + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + pkg.version + '\n');
+          "
+
+      # Release 触发的 tag 与 package.json 版本不一致时直接失败，避免发错版本
+      - name: Verify release tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ "v${{ steps.pkg.outputs.version }}" != "$TAG" ] && [ "${{ steps.pkg.outputs.version }}" != "$TAG" ]; then
+            echo "::error::Release tag $TAG 与 package.json 版本 ${{ steps.pkg.outputs.version }} 不一致"
+            exit 1
+          fi
+          echo "版本一致：$TAG"
+
+      - name: Check if version already published
+        id: check
+        run: |
+          if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }} 已存在于 npm，跳过发布"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 不设置 NODE_AUTH_TOKEN：npm 会自动使用 GitHub Actions 的 OIDC 身份。
+      # 备用方案（未配置 Trusted Publisher 时）：在仓库 Secrets 增加 NPM_TOKEN，
+      # 并给这一步加上  env: { NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}  }
+      - name: Publish to npm (with provenance)
+        if: steps.check.outputs.exists == 'false'
+        run: npm publish --provenance --access public
+
+      - name: Publish summary
+        run: |
+          echo "### Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "- package: \`${{ steps.pkg.outputs.name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- version: \`${{ steps.pkg.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- skipped: \`${{ steps.check.outputs.exists }}\`" >> "$GITHUB_STEP_SUMMARY"
