@@ -119,7 +119,11 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                 >
                   <input
                     type="color"
-                    value={currentThemeType === "custom" ? currentCustomColor : "#1976d2"}
+                    value={
+                      currentThemeType === "custom"
+                        ? currentCustomColor
+                        : (THEME_PRESETS.find((p) => p.key === currentThemeType)?.primary ?? "#0b5fa5")
+                    }
                     onChange={(e) => onUpdate({ themeType: "custom", themeCustomColor: e.target.value })}
                     title={isZh ? "自定义颜色" : "Custom color"}
                   />
