@@ -111,6 +111,12 @@ const resources: Record<Lang, Record<string, string>> = {
     btn_confirm: "Confirm",
     btn_cancel: "Cancel",
     panel_close: "Close",
+    // 工作状态下刷新页面的拦截提示
+    reload_guard_title: "Operation in progress",
+    reload_guard_message: "Current task: {status}. Reloading the page will interrupt it immediately and the progress will be lost. Reload anyway?",
+    reload_guard_confirm: "Reload anyway",
+    reload_guard_cancel: "Keep waiting",
+    reload_guard_hint: "Reloading now will interrupt this operation",
     // 属性
     pg_basic: "Basic Information",
     pg_geo: "Geometry",
@@ -533,6 +539,12 @@ const resources: Record<Lang, Record<string, string>> = {
     btn_confirm: "确定",
     btn_cancel: "取消",
     panel_close: "关闭",
+    // 工作状态下刷新页面的拦截提示
+    reload_guard_title: "操作进行中",
+    reload_guard_message: "当前任务：{status}。刷新页面会立即中断这次操作，进度不会保留。确定要刷新吗？",
+    reload_guard_confirm: "仍然刷新",
+    reload_guard_cancel: "继续等待",
+    reload_guard_hint: "此时刷新会中断当前操作",
     // 属性
     pg_basic: "基本信息",
     pg_geo: "几何信息",

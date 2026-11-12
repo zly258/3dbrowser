@@ -11,6 +11,9 @@ interface ConfirmModalProps {
     onCancel: () => void;
     t: TFunc;
     theme: any;
+    /** 可选：自定义按钮文案，不传则用「确定 / 取消」 */
+    confirmLabel?: string;
+    cancelLabel?: string;
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -20,7 +23,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     onConfirm,
     onCancel,
     t,
-    theme
+    theme,
+    confirmLabel,
+    cancelLabel
 }) => {
     if (!isOpen) return null;
 
@@ -45,14 +50,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                         className="ui-modal-action-btn"
                         onClick={onCancel}
                     >
-                        {t("btn_cancel")}
+                        {cancelLabel || t("btn_cancel")}
                     </Button>
                     <Button
                         variant="danger"
                         className="ui-modal-action-btn"
                         onClick={onConfirm}
                     >
-                        {t("btn_confirm")}
+                        {confirmLabel || t("btn_confirm")}
                     </Button>
                 </div>
             </div>
