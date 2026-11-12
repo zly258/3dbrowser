@@ -38,6 +38,9 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
                 <div className="cad-loading-note">
                     {safeProgress >= 100 ? t("processing") : t("loading_resources")}
                 </div>
+
+                {/* 先讲清楚：此时刷新会中断当前操作 */}
+                <div className="cad-loading-hint">{t("reload_guard_hint")}</div>
             </div>
         </div>
     );

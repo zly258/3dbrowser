@@ -34,6 +34,7 @@ import { useViewerTools } from "./hooks/useViewerTools";
 import { useViewerVisibility } from "./hooks/useViewerVisibility";
 import { useViewpoints } from "./hooks/useViewpoints";
 import { useViewportLifecycle } from "./hooks/useViewportLifecycle";
+import { useUnloadGuard } from "./hooks/useUnloadGuard";
 import type { PropertyGroupInput, PropertyGroups } from "./viewer/propertyIndex";
 import type { ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerErrorState, ViewerToast } from "./viewer/types";
 import { usePropertySearch } from "./hooks/usePropertySearch";
@@ -158,6 +159,12 @@ export const ThreeViewer = ({
     const [status, setStatus] = useState(getTranslation(lang, 'ready'));
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
+
+    // 载入 / 打开 / 导出等操作进行中时，刷新页面前先说清楚正在做什么
+    const reloadGuard = useUnloadGuard({
+        busy: loading,
+        getMessage: () => t("reload_guard_message").replace("{status}", status || t("processing"))
+    });
     const [stats, setStats] = useState({
         meshes: 0,
         faces: 0,
@@ -1520,6 +1527,18 @@ export const ThreeViewer = ({
                 isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message}
                 onConfirm={() => { confirmState.action(); setConfirmState({...confirmState, isOpen: false}); }}
                 onCancel={() => setConfirmState({...confirmState, isOpen: false})}
+                t={t} theme={theme}
+             />
+
+             {/* 工作状态下按 F5 / Ctrl+R：先说清正在做什么，再问是否真的刷新 */}
+             <ConfirmModal
+                isOpen={reloadGuard.promptOpen}
+                title={t("reload_guard_title")}
+                message={reloadGuard.message}
+                confirmLabel={t("reload_guard_confirm")}
+                cancelLabel={t("reload_guard_cancel")}
+                onConfirm={reloadGuard.confirmReload}
+                onCancel={reloadGuard.cancel}
                 t={t} theme={theme}
              />
 
