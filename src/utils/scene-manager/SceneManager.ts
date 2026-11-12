@@ -74,12 +74,14 @@ import {
     collectIfcObjectBasicPropertyIndex,
     collectIfcObjectPropertyIndex,
     collectNbimBimProperties,
+    collectNbimPropertyOwners,
     countStructureRenderableNodes,
     createNbimContainerGroup,
     deriveDefaultNbimStem,
     encodeNbimManifest,
     groupNbimPropertiesByOwner,
     prepareNbimExportChunks,
+    resolveNbimPropertyDocuments,
     sanitizeDisplayLabel
 } from "./nbim";
 import {
@@ -92,8 +94,11 @@ import {
 } from "./nbimLoad";
 import {
     applyClearLocateFocus,
+    applyHighlightGlow,
     applyHighlightObjects,
-    applySetLocateResultSet
+    applyRefreshHighlightColors,
+    applySetLocateResultSet,
+    type HighlightInstanceRef
 } from "./highlight";
 import {
     collectAllRenderableTargets,
@@ -212,6 +217,11 @@ export class SceneManager {
     displayMode: DisplayMode = "shaded";
     private lastSelectedUuid: string | null = null; // 优化高亮，记录上次选中的 UUID
     private highlightedUuids: Set<string> = new Set();
+    private highlightedInstance: HighlightInstanceRef | null = null;
+    private highlightGlowUntil = 0;
+    private lastHighlightGlowAt = 0;
+    private highlightGlowSettled = true;
+    private highlightGlowMesh: THREE.Mesh | null = null;
     private locateFocusUuid: string | null = null;
     private locateResultSet = new Set<string>();
     private locateMaterialCache = new Map<string, THREE.Material | THREE.Material[]>();
@@ -265,9 +275,11 @@ export class SceneManager {
 
     // 设置
     settings: SceneSettings = {
-        ambientInt: 0.78,
-        dirInt: 1.48,
-        hemiInt: 0.58,
+        // 环境光偏高会让“着色（无边线）”模式显得发白发浅、体积感弱；
+        // 这里压低环境光、略提主光，靠明暗关系而不是纯亮度来区分构件。
+        ambientInt: 0.62,
+        dirInt: 1.55,
+        hemiInt: 0.46,
         bgColor: "#eef1f5",
         viewCubeSize: 100,
         colorSpace: 'srgb',
@@ -307,8 +319,15 @@ export class SceneManager {
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
     private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
     private nbimPropsByOriginalUuid: Map<string, Record<string, any>> = new Map();
-    private nbimPropertyDocsByOriginalUuid: Map<string, Record<string, NbimPropertyDocument>> = new Map();
     private nbimSearchDocsByUuid: Map<string, NbimPropertyDocument> = new Map();
+    private nbimSearchDocsByBimId: Map<string, NbimPropertyDocument> = new Map();
+    /** 全部属性文档（按 uuid 去重），供搜索一次遍历；避免从多键 Map 重复展开 3 倍。 */
+    private nbimAllSearchDocs: NbimPropertyDocument[] = [];
+    private nbimDocIndexByUuid: Map<string, number> = new Map();
+    /** 超大模型的属性文档先按原始键挂起，选中/搜索时再按需索引，避免加载时卡住主线程。 */
+    private nbimPendingDocs: Record<string, NbimPropertyDocument> | null = null;
+    private nbimPendingDocsList: NbimPropertyDocument[] | null = null;
+    private nbimPendingRootId = "";
     private nbimPropertyNameIndex: Map<string, NbimPropertyNameIndexItem> = new Map();
     private nbimPropertyNameIndexVersion = 0;
     private sharedMaterial = createIndustrialSharedMaterial();
@@ -331,6 +350,8 @@ export class SceneManager {
     private maxChunkLoadsPerFrame = 64;   // 提高并发
     private maxLoadedChunks = 512;        // 最大已加载分块数，超过则卸载最远的
     private maxCachedChunks = 48;
+    /** 已加载分块解码后的内存预算（MB），为 0 时只按数量限制。 */
+    private chunkResidentBudgetMB = 0;
     private chunkLoadingEnabled = true;
     private maxRenderDistance = 1000000; // 最大渲染距离
     private _lastCullingTime: number = 0;
@@ -354,6 +375,9 @@ export class SceneManager {
     private readonly options: SceneManagerOptions;
     private readonly resolvedChunkOptions: ReturnType<typeof resolveSceneChunkOptions>;
     private isCameraMoving = false;
+    private wasCameraMoving = false;
+    private cameraMoveSettleTimer: number | null = null;
+    private lastDisplayEdgeOpacityAt = 0;
     private activePixelRatio = 1;
     /** 已应用到渲染器的像素比（setPixelRatio 会重新分配绘图缓冲，必须去重） */
     private appliedPixelRatio = 0;
@@ -594,6 +618,10 @@ export class SceneManager {
         };
         this.controls.addEventListener('start', () => {
             const profile = this.getChunkRuntimeProfile();
+            if (this.cameraMoveSettleTimer !== null) {
+                window.clearTimeout(this.cameraMoveSettleTimer);
+                this.cameraMoveSettleTimer = null;
+            }
             this.isCameraMoving = true;
             this.prefetchPaused = true;
             this.chunkLoadResumeAt = performance.now() + profile.resumeAfterMoveMs;
@@ -611,11 +639,29 @@ export class SceneManager {
             this.postMoveRecoveryUntil = 0;
             this.interactionShadowRestoreAt = 0;
             this.markSceneDirty({ needsCulling: true });
+
+            // 滚轮缩放等操作不一定触发 end 事件；用 200ms 静止兜底恢复满分辨率。
+            if (this.cameraMoveSettleTimer !== null) window.clearTimeout(this.cameraMoveSettleTimer);
+            this.cameraMoveSettleTimer = window.setTimeout(() => {
+                this.cameraMoveSettleTimer = null;
+                if (!this.isCameraMoving) return;
+                this.isCameraMoving = false;
+                this.wasCameraMoving = false;
+                this.restoreFullRenderQuality();
+                this.markSceneDirty({ needsCulling: true });
+            }, 200);
         });
         this.controls.addEventListener('end', () => {
             const now = performance.now();
             const profile = this.getChunkRuntimeProfile();
+            if (this.cameraMoveSettleTimer !== null) {
+                window.clearTimeout(this.cameraMoveSettleTimer);
+                this.cameraMoveSettleTimer = null;
+            }
             this.isCameraMoving = false;
+            this.wasCameraMoving = false;
+            // 交互结束时立刻恢复满分辨率，避免静止画面停留在拖动分辨率。
+            this.restoreFullRenderQuality();
             this.prefetchPaused = false;
             this.chunkLoadResumeAt = now + Math.max(24, Math.floor(profile.resumeAfterMoveMs * 0.75));
             this.postMoveRecoveryUntil = now + profile.postMoveRecoveryMs;
@@ -727,6 +773,8 @@ export class SceneManager {
     setDisplayMode(mode: DisplayMode) {
         this.displayMode = normalizeDisplayMode(mode);
         applyDisplayMode(this.contentGroup, this.displayMode);
+        // 真实模式边线适当减弱；线框模式保持清晰。
+        this.displayEdges.setBaseOpacity(this.displayMode === "wireframe" ? 0.9 : 0.48);
 
         if (this.displayMode === "shaded") {
             this.displayEdges.setVisible(false);
@@ -807,8 +855,18 @@ export class SceneManager {
     }
 
     updateSettings(newSettings: Partial<SceneSettings>) {
+        const highlightColorChanged = newSettings.highlightColor !== undefined
+            && newSettings.highlightColor !== this.settings.highlightColor;
         this.settings = { ...this.settings, ...newSettings };
         this.applyHighlightSettings();
+
+        // 高亮颜色变化后立即重绘当前高亮的实例，否则要重新点选才生效。
+        if (highlightColorChanged && this.highlightedUuids.size > 0) {
+            const context = this.getHighlightContext();
+            const result = applyRefreshHighlightColors(context);
+            this.syncHighlightState(context.state);
+            if (result.needsRender) this.markSceneDirty();
+        }
         if (newSettings.clip) {
             this.setClipHelperOptions({
                 visible: newSettings.clip.helperVisible,
@@ -893,6 +951,7 @@ export class SceneManager {
 
         this.updateInteractionPerformance(frameNow);
         this.updateAdaptiveQuality();
+        this.updateDisplayEdgeAppearance(frameNow);
 
         // 如果需要更新边界 (例如分块加载/卸载后)
         if (this._needsBoundsUpdate) {
@@ -920,6 +979,8 @@ export class SceneManager {
             this.cullingDirty = false;
         }
 
+        this.updateHighlightGlow(now);
+
         const highlightMaterial = this.highlightMesh.material as THREE.MeshBasicMaterial;
         if (highlightMaterial) {
             if (this.locateFocusUuid && this.highlightMesh.visible) {
@@ -946,12 +1007,14 @@ export class SceneManager {
 
         const chunksIncomplete = this.chunkLoadingEnabled && this.chunks.length > 0 && this.chunkLoadedCount < this.chunks.length;
         const locatingPulse = !!(this.locateFocusUuid && (this.highlightMesh.visible || this.selectionBox.visible));
+        const highlightGlowing = !!this.highlightedInstance && now < this.highlightGlowUntil;
         const keepLoop =
             this.isCameraMoving ||
             this.isInPostMoveRecovery(now) ||
             this.processingChunks.size > 0 ||
             this.chunkWarmupActive ||
             chunksIncomplete ||
+            highlightGlowing ||
             locatingPulse;
 
         if (keepLoop) {
@@ -959,8 +1022,54 @@ export class SceneManager {
         }
     }
 
-    private updateAdaptiveQuality() {
+    /**
+     * 交互结束/静止时强制回到满分辨率。
+     * 渲染是按需循环的，若只在 animate 里恢复，鼠标松开后可能不再调度帧，
+     * 画面会一直停留在拖动时的 0.8 像素比上（表现为“越转越糊”）。
+     */
+    private restoreFullRenderQuality() {
         if (!this.settings.adaptiveQuality) return;
+        const deviceRatio = window.devicePixelRatio || 1;
+        const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
+        if (this.applyPixelRatio(maxRatio)) {
+            const rect = this.canvas.getBoundingClientRect();
+            this.applyCanvasSize(Math.max(1, rect.width), Math.max(1, rect.height));
+        }
+        this.requestRender();
+    }
+
+    /**
+     * 相机离模型越远，边线越淡：避免大模型缩小看全局时大量棱边重叠成一团，显得“粗/黑”。
+     */
+    private updateDisplayEdgeAppearance(now: number) {
+        if (this.displayMode === "shaded" || !this.displayEdgesBuilt) return;
+        if (now - this.lastDisplayEdgeOpacityAt < 250) return;
+        this.lastDisplayEdgeOpacityAt = now;
+        if (this.sceneBounds.isEmpty()) return;
+
+        const sphere = new THREE.Sphere();
+        this.sceneBounds.getBoundingSphere(sphere);
+        if (!(sphere.radius > 0)) return;
+
+        const distance = this.camera.position.distanceTo(sphere.center);
+        const ratio = distance / sphere.radius;
+        // 相机离模型越远，边线越淡：全局视角下大量棱边重叠会糊成一团“粗黑线”。
+        // ratio≈1.6 开始衰减，ratio≥4 时降到 0.18，近看仍保持清晰轮廓。
+        const far = THREE.MathUtils.clamp((ratio - 1.6) / 2.4, 0, 1);
+        this.displayEdges.setOpacityFactor(1 - 0.82 * far);
+    }
+
+    private updateAdaptiveQuality() {
+        if (!this.settings.adaptiveQuality) {
+            this.wasCameraMoving = this.isCameraMoving;
+            return;
+        }
+
+        // 相机由运动转为静止：立即恢复满分辨率，确保静止画面/截图/测量都是全清晰度。
+        if (this.wasCameraMoving && !this.isCameraMoving) {
+            this.restoreFullRenderQuality();
+        }
+        this.wasCameraMoving = this.isCameraMoving;
 
         const desiredRatio = this.computeDesiredPixelRatio();
         if (Math.abs(desiredRatio - this.activePixelRatio) < 0.05) return;
@@ -983,29 +1092,17 @@ export class SceneManager {
 
         const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
         const maxRatio = Math.min(deviceRatio, this.settings.maxPixelRatio ?? 2);
-        const chunkCount = this.chunks.length;
-        const meshCount = this.originalStats.meshes;
         const mode = this.settings.performanceMode ?? 'balanced';
 
         let desiredRatio = maxRatio;
         if (this.isCameraMoving) {
+            // A 档：交互过程中只做温和降采样（相对原生分辨率 0.75~0.85），
+            // 静止后由 restoreFullRenderQuality() 立即恢复满分辨率。
             const movingScale = mode === 'quality'
-                ? (chunkCount > 3500 || meshCount > 250000
-                    ? 0.68
-                    : chunkCount > 1600 || meshCount > 120000
-                        ? 0.76
-                        : 0.84)
+                ? 0.85
                 : mode === 'smooth'
-                    ? (chunkCount > 3500 || meshCount > 250000
-                        ? 0.44
-                        : chunkCount > 1600 || meshCount > 120000
-                            ? 0.52
-                            : 0.6)
-                    : (chunkCount > 3500 || meshCount > 250000
-                        ? 0.48
-                        : chunkCount > 1600 || meshCount > 120000
-                            ? 0.56
-                            : 0.65);
+                    ? 0.75
+                    : 0.8;
             desiredRatio = Math.max(minRatio, maxRatio * movingScale);
         }
 
@@ -1788,6 +1885,9 @@ export class SceneManager {
 
         const toLoad: any[] = [];
         const loadedChunks: any[] = [];
+        const chunkCostMB = (chunk: any) => typeof chunk?.estimatedDecodedMB === "number"
+            ? chunk.estimatedDecodedMB
+            : Math.max(1.5, ((Number(chunk?.byteLength) || 0) / 1048576) * 5.5);
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
         let sceneMutated = false;
 
@@ -1896,6 +1996,8 @@ export class SceneManager {
             isCameraMoving: this.isCameraMoving,
             loadedChunks,
             maxLoadedChunks: this.maxLoadedChunks,
+            maxResidentMB: this.chunkResidentBudgetMB,
+            chunkCostMB,
             cameraPos,
             now,
             chunkResidencyMs: this.chunkResidencyMs
@@ -1907,12 +2009,24 @@ export class SceneManager {
             sceneMutated = true;
         }
 
+        const loadedEstimatedMB = loadedChunks.reduce((sum, chunk) => sum + chunkCostMB(chunk), 0);
+        let processingEstimatedMB = 0;
+        this.processingChunks.forEach((id) => {
+            const chunk = this.chunkById.get(id);
+            if (chunk) processingEstimatedMB += chunkCostMB(chunk);
+        });
+
         const loadPlan = planChunkLoads({
             toLoad,
             now: performance.now(),
             chunkLoadResumeAt: this.chunkLoadResumeAt,
             maxConcurrentChunkLoads: this.maxConcurrentChunkLoads,
             processingChunkCount: this.processingChunks.size,
+            maxResidentChunks: this.maxLoadedChunks,
+            residentChunkCount: loadedChunks.length,
+            maxResidentMB: this.chunkResidentBudgetMB,
+            residentUsedMB: loadedEstimatedMB + processingEstimatedMB,
+            chunkCostMB,
             chunkWarmupActive: this.chunkWarmupActive,
             chunkLoadedCount: this.chunkLoadedCount,
             initialChunkLoadTarget: this.initialChunkLoadTarget,
@@ -2105,13 +2219,15 @@ export class SceneManager {
         this.markSceneDirty({ needsCulling: enabled });
     }
 
-    private applyNbimScaleTuning(chunkCount: number) {
+    private applyNbimScaleTuning(chunkEntries: any[]) {
+        const chunks = Array.isArray(chunkEntries) ? chunkEntries : [];
+        const chunkCount = chunks.length;
         const userChunkOptions = this.options.chunkOptions || {};
-        const autoTuned = chunkCount >= 2000
-            ? { chunkPrefetchWindow: 0, chunkReadCacheSize: 128, targetMinFps: 20 }
-            : chunkCount <= 1000
-                ? { chunkPrefetchWindow: 0, chunkReadCacheSize: 128, targetMinFps: 20 }
-                : { chunkPrefetchWindow: 0, chunkReadCacheSize: 128, targetMinFps: 20 };
+        const autoTuned = {
+            chunkPrefetchWindow: 0,
+            chunkReadCacheSize: chunkCount >= 800 ? 96 : 128,
+            targetMinFps: 20
+        };
 
         this.setChunkOptions({
             chunkPrefetchWindow: userChunkOptions.chunkPrefetchWindow ?? autoTuned.chunkPrefetchWindow,
@@ -2122,6 +2238,41 @@ export class SceneManager {
             deferIfcProperties: userChunkOptions.deferIfcProperties ?? this.resolvedChunkOptions.deferIfcProperties,
             preferWorkerOctree: userChunkOptions.preferWorkerOctree ?? this.resolvedChunkOptions.preferWorkerOctree,
             fastGeometrySanitize: userChunkOptions.fastGeometrySanitize ?? this.resolvedChunkOptions.fastGeometrySanitize
+        });
+
+        // 按“单个分块解码后的内存占用 × JS 堆上限”推导驻留预算：
+        // 超大模型如果按 FOV 可见性加载全部分块，会很快突破堆上限直接崩溃。
+        const totalBytes = chunks.reduce((sum, chunk) => sum + (Number(chunk?.byteLength) || 0), 0);
+        const avgRawMB = chunkCount > 0 ? totalBytes / chunkCount / 1048576 : 0;
+        // 实测解码后的几何 + 实例数据约为原始分块的 5~6 倍。
+        const perChunkMB = Math.max(1.5, avgRawMB * 5.5);
+        const perfMemory = (performance as any)?.memory;
+        const heapLimitMB = perfMemory?.jsHeapSizeLimit
+            ? perfMemory.jsHeapSizeLimit / 1048576
+            : Math.max(1536, ((navigator as any)?.deviceMemory || 8) * 512);
+        // 超大模型约一半堆留给几何，其余留给属性索引、结构树、材质等。
+        const geometryBudgetMB = Math.min(2560, heapLimitMB * (chunkCount >= 800 ? 0.35 : 0.55));
+        const deviceMemoryGb = (navigator as any)?.deviceMemory || 8;
+        const deviceCap = deviceMemoryGb <= 4 ? 160 : deviceMemoryGb <= 8 ? 320 : 640;
+        const derivedLoadedCap = Math.floor(geometryBudgetMB / perChunkMB);
+        this.maxLoadedChunks = Math.max(32, Math.min(deviceCap, derivedLoadedCap || deviceCap));
+        this.maxCachedChunks = Math.max(8, Math.min(96, Math.floor(this.maxLoadedChunks / 4)));
+        this.chunkResidentBudgetMB = geometryBudgetMB;
+
+        // 并行解码的在途内存峰值同样受分块大小约束（预留约 768MB 缓冲）。
+        if (this.forceMaxChunkLoadSpeed) {
+            const derivedConcurrent = Math.floor(768 / perChunkMB);
+            this.maxConcurrentChunkLoads = Math.max(8, Math.min(this.maxConcurrentChunkLoads, derivedConcurrent));
+            this.maxChunkLoadsPerFrame = Math.max(4, Math.min(this.maxChunkLoadsPerFrame, Math.ceil(derivedConcurrent / 2)));
+        }
+
+        debugLog("SceneManager/NBIM", "分块预算", {
+            chunkCount,
+            avgRawMB: Number(avgRawMB.toFixed(2)),
+            perChunkMB: Number(perChunkMB.toFixed(1)),
+            maxLoadedChunks: this.maxLoadedChunks,
+            maxCachedChunks: this.maxCachedChunks,
+            maxConcurrentChunkLoads: this.maxConcurrentChunkLoads
         });
     }
 
@@ -2856,41 +3007,59 @@ export class SceneManager {
         rootId?: string;
         preferNodeMapping?: boolean;
     }) {
-        const { docs, propertyNameIndex, rootId, preferNodeMapping = false } = options;
-        let changed = false;
+        const docs = options.docs;
+        const changedDocs = this.applyPropertyDocumentEntries(Object.keys(docs || {}), docs, options);
+        const changedIndex = this.applyPropertyNameIndex(options.propertyNameIndex);
+        if (changedDocs || changedIndex) this.nbimPropertyNameIndexVersion++;
+    }
 
-        Object.entries(docs || {}).forEach(([key, doc]) => {
-            if (!doc || !Array.isArray(doc.rows)) return;
+    private applyPropertyDocumentEntries(
+        keys: string[],
+        docs: Record<string, NbimPropertyDocument>,
+        options: { rootId?: string; preferNodeMapping?: boolean }
+    ) {
+        const { rootId, preferNodeMapping = false } = options;
+
+        for (const key of keys) {
+            const doc = docs[key];
+            if (!doc || !Array.isArray(doc.rows)) continue;
             const separatorIndex = key.indexOf("::");
             const owner = doc.owner || (separatorIndex > 0 ? key.slice(0, separatorIndex) : rootId || "");
             const bimId = doc.bimId || (separatorIndex > 0 ? key.slice(separatorIndex + 2) : "");
-            let uuid = doc.uuid || bimId;
-
-            if (preferNodeMapping && owner && bimId) {
+            // NBIM 导出的文档 uuid 本身就是结构节点 id；只有缺失时才查一次 bimId → 节点映射，
+            // 避免对 20 万+ 文档逐个拼接并查找 `${owner}::${bimId}`。
+            let uuid = doc.uuid || "";
+            if (!uuid && preferNodeMapping && owner && bimId) {
                 const nodeIds = this.bimIdToNodeIds.get(`${owner}::${bimId}`) || [];
                 if (nodeIds.length > 0) uuid = nodeIds[0];
             }
 
-            const normalizedDoc: NbimPropertyDocument = {
-                ...doc,
-                owner,
-                bimId: String(bimId || ""),
-                uuid: String(uuid || doc.uuid || bimId || key),
-                name: String(doc.name || ""),
-                rows: doc.rows
-            };
+            // 直接就地规范化，避免为每个文档再复制一份对象（大模型可达 20 万+ 文档）。
+            doc.owner = owner;
+            doc.bimId = String(bimId || "");
+            doc.uuid = String(uuid || bimId || key);
+            doc.name = String(doc.name || "");
 
-            if (!this.nbimPropertyDocsByOriginalUuid.has(owner)) {
-                this.nbimPropertyDocsByOriginalUuid.set(owner, {});
+            // 只保留 uuid 与 bimId 两种查找键，且每个文档只进入 all 数组一次。
+            const existingIndex = this.nbimDocIndexByUuid.get(doc.uuid);
+            if (existingIndex === undefined) {
+                this.nbimDocIndexByUuid.set(doc.uuid, this.nbimAllSearchDocs.length);
+                this.nbimAllSearchDocs.push(doc);
+            } else {
+                this.nbimAllSearchDocs[existingIndex] = doc;
             }
-            this.nbimPropertyDocsByOriginalUuid.get(owner)![key] = normalizedDoc;
-            this.nbimSearchDocsByUuid.set(normalizedDoc.uuid, normalizedDoc);
-            if (normalizedDoc.bimId) this.nbimSearchDocsByUuid.set(normalizedDoc.bimId, normalizedDoc);
-            this.nbimSearchDocsByUuid.set(key, normalizedDoc);
-            changed = true;
-        });
+            this.nbimSearchDocsByUuid.set(doc.uuid, doc);
+            if (doc.bimId && doc.bimId !== doc.uuid) {
+                this.nbimSearchDocsByBimId.set(doc.bimId, doc);
+            }
+        }
 
-        (propertyNameIndex || []).forEach((item) => {
+        return keys.length > 0;
+    }
+
+    private applyPropertyNameIndex(items?: NbimPropertyNameIndexItem[]) {
+        let changed = false;
+        (items || []).forEach((item) => {
             if (!item?.path) return;
             const old = this.nbimPropertyNameIndex.get(item.path);
             this.nbimPropertyNameIndex.set(item.path, {
@@ -2899,8 +3068,16 @@ export class SceneManager {
             });
             changed = true;
         });
+        return changed;
+    }
 
-        if (changed) this.nbimPropertyNameIndexVersion++;
+    /** 真正需要全量属性（搜索第一页/导出）时，取挂起文档的数组视图，不建立额外索引。 */
+    private getPendingPropertyDocuments(): NbimPropertyDocument[] {
+        if (!this.nbimPendingDocs) return this.nbimAllSearchDocs;
+        if (!this.nbimPendingDocsList) {
+            this.nbimPendingDocsList = Object.values(this.nbimPendingDocs);
+        }
+        return this.nbimPendingDocsList;
     }
 
     private async rebuildSearchPropertyIndexForObject(object: THREE.Object3D, onProgress?: (p: number, msg: string) => void) {
@@ -2961,22 +3138,18 @@ export class SceneManager {
 
     private buildExportPropertyDocsFromCache() {
         const docs: Record<string, NbimPropertyDocument> = {};
-        this.nbimSearchDocsByUuid.forEach((doc) => {
-            if (!doc || !Array.isArray(doc.rows)) return;
+        const sourceDocs = this.nbimPendingDocs
+            ? this.getPendingPropertyDocuments()
+            : this.nbimAllSearchDocs;
+        for (const doc of sourceDocs) {
+            if (!doc || !Array.isArray(doc.rows)) continue;
             const owner = String(doc.owner || "");
             const bimId = String(doc.bimId || "");
-            if (!owner || !bimId) return;
+            if (!owner || !bimId) continue;
             const key = `${owner}::${bimId}`;
-            if (docs[key]) return;
-            docs[key] = {
-                ...doc,
-                owner,
-                bimId,
-                uuid: String(doc.uuid || bimId),
-                name: String(doc.name || ""),
-                rows: doc.rows
-            };
-        });
+            if (docs[key]) continue;
+            docs[key] = doc;
+        }
         return {
             bimPropertyDocs: docs,
             propertyNameIndex: buildPropertyNameIndex(docs)
@@ -3080,10 +3253,6 @@ export class SceneManager {
             ? manifest.propertyNameIndex as NbimPropertyNameIndexItem[]
             : null;
 
-        if (!manifestDocs || !manifestPropertyNameIndex) {
-            throw new Error("不支持旧版 NBIM：缺少 bimPropertyDocs 或 propertyNameIndex。请使用当前版本重新导出 NBIM。");
-        }
-
         this.nbimFiles.set(fileId, file);
         this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
 
@@ -3111,15 +3280,27 @@ export class SceneManager {
             ? manifest.bimProperties as Record<string, any>
             : {};
 
-        // 新版 NBIM 不再包含旧 bimProperties。defaultOwner 优先从 bimPropertyDocs 键中提取，确保属性文档能映射到结构节点。
-        const docOwners = new Set<string>();
-        Object.keys(manifestDocs).forEach((key) => {
-            const separatorIndex = key.indexOf("::");
-            if (separatorIndex > 0) docOwners.add(key.slice(0, separatorIndex));
-        });
+        // 新版 NBIM 只带 bimPropertyDocs，旧版只带 bimProperties。defaultOwner 优先从属性键中提取，
+        // 确保属性文档能映射到结构节点；两者都缺失时再回退到结构树基础信息。
+        const docOwners = collectNbimPropertyOwners(manifestDocs, manifestBimProperties);
         const { defaultOwner: legacyDefaultOwner, grouped } = groupNbimPropertiesByOwner(manifestBimProperties, rootId);
         const defaultOwner = docOwners.size === 1 ? Array.from(docOwners)[0] : legacyDefaultOwner;
         grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
+
+        const {
+            docs: propertyDocs,
+            propertyNameIndex,
+            source: propertySource
+        } = resolveNbimPropertyDocuments({
+            manifestDocs,
+            manifestPropertyNameIndex,
+            manifestBimProperties,
+            structureTree: modelRoot,
+            fallbackOwner: defaultOwner
+        });
+        if (propertySource !== "manifest") {
+            debugLog("SceneManager/NBIM", `属性结构来源: ${propertySource}（已自动兼容旧版 NBIM）`);
+        }
         const quickStats = buildNbimQuickStats({
             manifestStats: manifest.stats,
             modelRoot,
@@ -3151,18 +3332,31 @@ export class SceneManager {
             bimIdToNodeIds: this.bimIdToNodeIds
         });
 
-        this.registerPropertyDocuments({
-            docs: manifestDocs,
-            propertyNameIndex: manifestPropertyNameIndex,
-            rootId,
-            preferNodeMapping: true
-        });
+        const propertyDocCount = Object.keys(propertyDocs).length;
+        if (propertyDocCount > 20000) {
+            // 超大模型：先把属性文档挂起（只应用轻量的属性名索引），避免加载阶段同步索引 20 万+ 文档。
+            // 选中构件时按 owner::bimId 取单条；第一次属性搜索/导出时再一次性建索引。
+            this.nbimPendingDocs = propertyDocs;
+            this.nbimPendingDocsList = null;
+            this.nbimPendingRootId = rootId;
+            if (this.applyPropertyNameIndex(propertyNameIndex)) {
+                this.nbimPropertyNameIndexVersion++;
+            }
+            debugLog("SceneManager/NBIM", "属性索引延迟建立", { docs: propertyDocCount });
+        } else {
+            this.registerPropertyDocuments({
+                docs: propertyDocs,
+                propertyNameIndex,
+                rootId,
+                preferNodeMapping: true
+            });
+        }
 
         // 注册分块
         if (onProgress) onProgress(30, "正在初始化分块...");
 
         const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
-        this.applyNbimScaleTuning(chunkEntries.length);
+        this.applyNbimScaleTuning(chunkEntries);
         const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
             ? Number.MAX_SAFE_INTEGER
             : GHOST_VISIBLE_FIRST_BATCH;
@@ -3264,6 +3458,9 @@ export class SceneManager {
 
             this.selectionBox.visible = false;
             this.highlightMesh.visible = false;
+            if (this.highlightGlowMesh) this.highlightGlowMesh.visible = false;
+            this.highlightedInstance = null;
+            this.highlightGlowUntil = 0;
 
             // 3. 清理测量记录
             this.clearAllMeasurements();
@@ -3275,8 +3472,13 @@ export class SceneManager {
             this.nbimFiles.clear();
             this.nbimMeta.clear();
             this.nbimPropsByOriginalUuid.clear();
-            this.nbimPropertyDocsByOriginalUuid.clear();
             this.nbimSearchDocsByUuid.clear();
+            this.nbimSearchDocsByBimId.clear();
+            this.nbimAllSearchDocs = [];
+            this.nbimDocIndexByUuid.clear();
+            this.nbimPendingDocs = null;
+            this.nbimPendingDocsList = null;
+            this.nbimPendingRootId = "";
             this.nbimPropertyNameIndex.clear();
             this.nbimPropertyNameIndexVersion++;
             this.structureRoot = { id: 'root', name: 'Root', type: 'Group', children: [] };
@@ -3377,13 +3579,31 @@ export class SceneManager {
         }
         const bimId = this.getBimIdByUuid(uuid);
         if (bimId) {
-            return this.nbimSearchDocsByUuid.get(bimId) || null;
+            const byId = this.nbimSearchDocsByUuid.get(bimId) || this.nbimSearchDocsByBimId.get(bimId);
+            if (byId) return byId;
+        }
+
+        // 大模型属性索引可能尚未建立：按结构节点的 owner::bimId 直接取挂起的文档，只索引当前这一条。
+        if (this.nbimPendingDocs) {
+            const node = this.nodeMap.get(uuid)?.[0] || (bimId ? this.nodeMap.get(String(bimId))?.[0] : undefined);
+            if (node?.bimId) {
+                const owner = node.userData?.originalUuid ? String(node.userData.originalUuid) : this.nbimPendingRootId;
+                const key = `${owner}::${node.bimId}`;
+                const doc = this.nbimPendingDocs[key];
+                if (doc) {
+                    this.applyPropertyDocumentEntries([key], this.nbimPendingDocs, {
+                        rootId: this.nbimPendingRootId,
+                        preferNodeMapping: true
+                    });
+                    return doc;
+                }
+            }
         }
         return null;
     }
 
     getAllNbimPropertySearchDocuments(): NbimPropertyDocument[] {
-        return Array.from(this.nbimSearchDocsByUuid.values());
+        return this.getPendingPropertyDocuments();
     }
 
     hasRenderableTarget(uuid: string): boolean {
@@ -3413,7 +3633,8 @@ export class SceneManager {
                 highlightedUuids: this.highlightedUuids,
                 locateResultSet: this.locateResultSet,
                 locateFocusUuid: this.locateFocusUuid,
-                lastSelectedUuid: this.lastSelectedUuid
+                lastSelectedUuid: this.lastSelectedUuid,
+                highlightedInstance: this.highlightedInstance
             },
             totalMeshCount: this.originalStats.meshes,
             locateMaterialCache: this.locateMaterialCache,
@@ -3455,11 +3676,21 @@ export class SceneManager {
         };
     }
 
-    private syncHighlightState(state: { highlightedUuids: Set<string>; locateResultSet: Set<string>; locateFocusUuid: string | null; lastSelectedUuid: string | null; }) {
+    private syncHighlightState(state: {
+        highlightedUuids: Set<string>;
+        locateResultSet: Set<string>;
+        locateFocusUuid: string | null;
+        lastSelectedUuid: string | null;
+        highlightedInstance?: HighlightInstanceRef | null;
+    }) {
         this.highlightedUuids = state.highlightedUuids;
         this.locateResultSet = state.locateResultSet;
         this.locateFocusUuid = state.locateFocusUuid;
         this.lastSelectedUuid = state.lastSelectedUuid;
+        this.highlightedInstance = state.highlightedInstance ?? null;
+        if (!this.highlightedInstance && this.highlightGlowMesh) {
+            this.highlightGlowMesh.visible = false;
+        }
     }
 
     private syncPickingState(state: { interactableList: THREE.Object3D[]; interactableListValid: boolean; }) {
@@ -4155,11 +4386,127 @@ export class SceneManager {
         this.setLocateResultSet([uuid], uuid);
     }
 
-    highlightObjects(uuids: string[]) {
+    highlightObjects(uuids: string[], instanceRef?: HighlightInstanceRef | null) {
         const context = this.getHighlightContext();
-        const result = applyHighlightObjects(context, uuids);
+        const result = applyHighlightObjects(context, uuids, instanceRef ?? null);
         this.syncHighlightState(context.state);
         if (result.needsRender) this.markSceneDirty();
+
+        // 命中具体实例时播放一段短促的发光脉冲，之后停在“提亮”状态。
+        if (instanceRef && this.highlightedInstance) {
+            this.highlightGlowUntil = performance.now() + 1500;
+            this.lastHighlightGlowAt = 0;
+            this.highlightGlowSettled = false;
+            this.updateHighlightGlowMesh(0.62);
+            this.requestRender();
+        } else {
+            this.highlightGlowUntil = 0;
+            this.highlightGlowSettled = true;
+            if (this.highlightGlowMesh) this.highlightGlowMesh.visible = false;
+        }
+    }
+
+    /** 选中实例的发光脉冲（约 1.5 秒），结束后停在 1.35 倍提亮色上。 */
+    private updateHighlightGlow(now: number) {
+        const focus = this.highlightedInstance;
+        if (!focus || !focus.mesh) {
+            this.updateHighlightGlowMesh(0);
+            return;
+        }
+
+        const maxInstances = (focus.mesh as any).instanceCount ?? 0;
+        if (maxInstances > 20000) {
+            this.updateHighlightGlowMesh(0.5);
+            return; // 超大分块不做逐帧重上传，避免卡顿
+        }
+
+        if (now > this.highlightGlowUntil) {
+            this.updateHighlightGlowMesh(0.62);
+            if (this.highlightGlowSettled) return;
+            this.highlightGlowSettled = true;
+            const context = this.getHighlightContext();
+            const result = applyHighlightGlow(context, 1.35);
+            this.syncHighlightState(context.state);
+            if (result.needsRender) this.markSceneDirty();
+            return;
+        }
+
+        const remaining = Math.max(0, this.highlightGlowUntil - now) / 1500;
+        const wave = 0.5 + 0.5 * Math.sin(now / 90);
+        const pulse = 1.35 + 0.95 * remaining * wave;
+        this.updateHighlightGlowMesh(0.35 + 0.5 * remaining * wave);
+
+        if (now - this.lastHighlightGlowAt < 66) return;
+        this.lastHighlightGlowAt = now;
+
+        const context = this.getHighlightContext();
+        const result = applyHighlightGlow(context, pulse);
+        this.syncHighlightState(context.state);
+        if (result.needsRender) this.markSceneDirty();
+    }
+
+    /**
+     * 单选实例的发光描边：用加法混合 + BackSide 的放大副本勾勒出光晕，
+     * 与实例本体的提亮色叠加后呈现“发光”效果。
+     */
+    private updateHighlightGlowMesh(opacity: number) {
+        const focus = this.highlightedInstance;
+        if (!focus || !focus.mesh || opacity <= 0) {
+            if (this.highlightGlowMesh) this.highlightGlowMesh.visible = false;
+            return;
+        }
+
+        const mapping = this.optimizedMapping
+            .get(focus.uuid)
+            ?.find((item) => item.mesh === focus.mesh && item.instanceId === focus.instanceId);
+        const geometry = mapping?.geometry
+            || (focus.mesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined)?.get(focus.instanceId);
+        if (!geometry) {
+            if (this.highlightGlowMesh) this.highlightGlowMesh.visible = false;
+            return;
+        }
+
+        let mesh = this.highlightGlowMesh;
+        if (!mesh) {
+            const material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(this.settings.highlightColor || "#0b5fa5"),
+                transparent: true,
+                opacity,
+                depthWrite: false,
+                depthTest: true,
+                blending: THREE.AdditiveBlending,
+                side: THREE.BackSide,
+                toneMapped: false
+            });
+            mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+            mesh.name = "__highlightGlow";
+            mesh.matrixAutoUpdate = false;
+            mesh.frustumCulled = false;
+            mesh.renderOrder = 6;
+            mesh.raycast = () => {};
+            this.helpersGroup.add(mesh);
+            this.highlightGlowMesh = mesh;
+        }
+
+        if (mesh.geometry !== geometry) mesh.geometry = geometry;
+
+        const material = mesh.material as THREE.MeshBasicMaterial;
+        material.color.set(this.settings.highlightColor || "#0b5fa5");
+        material.opacity = THREE.MathUtils.clamp(opacity, 0, 1);
+
+        if (!geometry.boundingBox) geometry.computeBoundingBox();
+        const center = geometry.boundingBox
+            ? geometry.boundingBox.getCenter(new THREE.Vector3())
+            : new THREE.Vector3();
+        const localScale = new THREE.Matrix4()
+            .makeTranslation(center.x, center.y, center.z)
+            .multiply(new THREE.Matrix4().makeScale(1.02, 1.02, 1.02))
+            .multiply(new THREE.Matrix4().makeTranslation(-center.x, -center.y, -center.z));
+        const instanceMatrix = new THREE.Matrix4();
+        focus.mesh.getMatrixAt(focus.instanceId, instanceMatrix);
+        mesh.matrix.multiplyMatrices(focus.mesh.matrixWorld, instanceMatrix).multiply(localScale);
+        mesh.matrixWorldNeedsUpdate = true;
+        mesh.visible = true;
     }
 
     /**

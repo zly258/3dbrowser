@@ -42,7 +42,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
                     </div>
                     <div className="ui-about-meta-row">
                         <span className="ui-about-meta-label">{t("about_author")}</span>
-                        <span className="ui-about-meta-value">zhangly1403@163.com</span>
+                        <span className="ui-about-meta-value">zhangly1403@qq.com</span>
                     </div>
                     <div className="ui-about-meta-row">
                         <span className="ui-about-meta-label">{t("project_url")}</span>

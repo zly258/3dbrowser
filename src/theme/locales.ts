@@ -163,6 +163,7 @@ const resources: Record<Lang, Record<string, string>> = {
     clip_helper_visible: "Show Helpers",
     clip_helper_opacity: "Helper Opacity",
     clip_reset: "Reset Range",
+    clip_range_current: "Current Model Range",
     // 导出
     export_title: "Export Scene",
     export_format: "Format",
@@ -340,7 +341,7 @@ const resources: Record<Lang, Record<string, string>> = {
     license_details: "License Details",
     third_party_libs: "Third-party Libraries",
     license_summary:
-      "This software is licensed under CC BY-NC 4.0. Free for non-commercial use with attribution required. For commercial licensing, contact: zhangly1403@163.com",
+      "This software is licensed under CC BY-NC 4.0. Free for non-commercial use with attribution required. For commercial licensing, contact: zhangly1403@qq.com",
     third_party_desc: "This software uses the following open-source libraries:",
     view_package_json: "View full dependency list in package.json",
     full_license: "Full license:",
@@ -583,6 +584,7 @@ const resources: Record<Lang, Record<string, string>> = {
     clip_helper_visible: "显示辅助面",
     clip_helper_opacity: "辅助面透明度",
     clip_reset: "重置范围",
+    clip_range_current: "当前模型范围",
     // 导出
     export_title: "导出场景",
     export_format: "导出格式",
@@ -758,7 +760,7 @@ const resources: Record<Lang, Record<string, string>> = {
     license_details: "授权协议详情",
     third_party_libs: "第三方库",
     license_summary:
-      "本软件采用 CC BY-NC 4.0 国际许可协议，仅限非商业用途免费使用，需保留原作者署名。如需商业授权请联系：zhangly1403@163.com",
+      "本软件采用 CC BY-NC 4.0 国际许可协议，仅限非商业用途免费使用，需保留原作者署名。如需商业授权请联系：zhangly1403@qq.com",
     third_party_desc: "本软件使用了以下开源库：",
     view_package_json: "查看完整依赖列表请参考 package.json",
     full_license: "完整协议:",

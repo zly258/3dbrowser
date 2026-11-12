@@ -50,7 +50,7 @@ export function useViewerSelection({
         setLocateResultUuids([]);
     }, []);
 
-    const handleSelect = useCallback(async (obj: any, _intersect?: THREE.Intersection | null, isMultiSelect = false, skipHighlight = false) => {
+    const handleSelect = useCallback(async (obj: any, intersect?: THREE.Intersection | null, isMultiSelect = false, skipHighlight = false) => {
         const sceneManager = sceneMgrRef.current;
         if (!sceneManager) return;
 
@@ -71,7 +71,14 @@ export function useViewerSelection({
 
         setSelectedUuids(nextUuids);
         if (!skipHighlight) {
-            sceneManager.highlightObjects(nextUuids);
+            // 单选命中实例时，把具体实例（分块 BatchedMesh + instanceId）传给高亮逻辑，
+            // 只高亮命中的那一个实例；多选仍按节点高亮。
+            const hitMesh = (intersect as any)?.batchedMesh as THREE.BatchedMesh | undefined;
+            const hitInstanceId = (intersect as any)?.batchId;
+            const instanceRef = !isMultiSelect && hitMesh && typeof hitInstanceId === "number"
+                ? { uuid, mesh: hitMesh, instanceId: hitInstanceId }
+                : null;
+            sceneManager.highlightObjects(nextUuids, instanceRef);
         }
 
         const focusUuid = nextUuids[nextUuids.length - 1];

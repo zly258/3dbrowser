@@ -564,21 +564,44 @@ export async function collectIfcObjectPropertyIndex(options: {
     };
 }
 
+/**
+ * 解析旧版 NBIM 的属性键（`${owner}::${bimId}`）。
+ * owner 可能为空（早期导出未写入 userData.originalUuid），此时键为 `::${bimId}`。
+ */
+export function parseLegacyNbimPropertyKey(key: string) {
+    const separatorIndex = key.indexOf("::");
+    if (separatorIndex < 0) return { owner: "", bimId: key };
+    return {
+        owner: key.slice(0, separatorIndex),
+        bimId: key.slice(separatorIndex + 2)
+    };
+}
+
+/**
+ * 旧版 NBIM（V8 早期导出）只写 `bimProperties`，没有 `bimPropertyDocs`/`propertyNameIndex`。
+ * 这里把旧结构转换成当前属性文档结构，保证旧文件仍可打开并参与属性搜索。
+ */
 export function convertLegacyBimPropertiesToDocs(
     bimProperties: Record<string, any>
 ) {
     const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
 
     Object.entries(bimProperties || {}).forEach(([key, value]: [string, any]) => {
-        const separatorIndex = key.indexOf("::");
-        const owner = separatorIndex > 0 ? key.slice(0, separatorIndex) : "";
-        const bimId = separatorIndex > 0 ? key.slice(separatorIndex + 2) : key;
+        const { owner, bimId } = parseLegacyNbimPropertyKey(key);
+        if (!bimId) return;
         const rows: NbimPropertyRow[] = [];
 
         appendPropertyRow(rows, "基本信息", "UUID", value?.uuid || bimId, "legacy-nbim");
         appendPropertyRow(rows, "基本信息", "名称", value?.name || "", "legacy-nbim");
         appendPropertyRow(rows, "基本信息", "BIM_ID", bimId, "legacy-nbim");
-        flattenRecordToRows(rows, "NBIM", value, "legacy-nbim");
+
+        // ifcRawGroups / ifcNormalizedGroups 单独展开成 IFC 分组，避免在 "NBIM" 组里重复一层嵌套
+        const flatRecord: Record<string, any> = {};
+        Object.entries(value && typeof value === "object" ? value : {}).forEach(([field, fieldValue]) => {
+            if (field === "ifcRawGroups" || field === "ifcNormalizedGroups") return;
+            flatRecord[field] = fieldValue;
+        });
+        flattenRecordToRows(rows, "NBIM", flatRecord, "legacy-nbim");
 
         if (value?.ifcNormalizedGroups) {
             Object.entries(value.ifcNormalizedGroups).forEach(([groupName, groupValue]) => {
@@ -603,6 +626,197 @@ export function convertLegacyBimPropertiesToDocs(
         bimPropertyDocs,
         propertyNameIndex: buildPropertyNameIndex(bimPropertyDocs)
     };
+}
+
+/** 结构树兜底：为每个带 bimId 的节点补齐基础属性行，任何 NBIM 都不会出现“无属性”。 */
+export function buildNbimPropertyDocsFromStructureTree(options: {
+    structureTree?: StructureTreeNode | null;
+    fallbackOwner?: string;
+}) {
+    const { structureTree, fallbackOwner } = options;
+    const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
+    if (!structureTree) {
+        return { bimPropertyDocs, propertyNameIndex: [] as NbimPropertyNameIndexItem[] };
+    }
+
+    const fallback = String(fallbackOwner || "");
+    const stack: StructureTreeNode[] = [structureTree];
+    while (stack.length > 0) {
+        const node = stack.pop()!;
+        const owner = node.userData?.originalUuid ? String(node.userData.originalUuid) : fallback;
+        const bimId = node.bimId ? String(node.bimId) : "";
+
+        if (bimId) {
+            const key = `${owner}::${bimId}`;
+            if (!bimPropertyDocs[key]) {
+                bimPropertyDocs[key] = {
+                    owner,
+                    bimId,
+                    uuid: String(node.id || bimId),
+                    name: String(node.name || ""),
+                    rows: collectBasicRowsFromNode(node, owner)
+                };
+            }
+        }
+
+        const children = Array.isArray(node.children) ? node.children : [];
+        for (let index = children.length - 1; index >= 0; index--) {
+            stack.push(children[index]);
+        }
+    }
+
+    return {
+        bimPropertyDocs,
+        propertyNameIndex: buildPropertyNameIndex(bimPropertyDocs)
+    };
+}
+
+/** 收集 NBIM 属性所属的模型（owner）；优先使用属性文档，其次回退到旧版 bimProperties。 */
+export function collectNbimPropertyOwners(
+    docs: Record<string, unknown> | null | undefined,
+    bimProperties: Record<string, unknown> | null | undefined
+) {
+    const owners = new Set<string>();
+    const addOwners = (record: Record<string, unknown> | null | undefined) => {
+        Object.keys(record || {}).forEach((key) => {
+            const { owner } = parseLegacyNbimPropertyKey(key);
+            if (owner) owners.add(owner);
+        });
+    };
+
+    addOwners(docs);
+    if (owners.size === 0) addOwners(bimProperties);
+    return owners;
+}
+
+/**
+ * 统一解析 NBIM 属性文档：
+ * 1) 当前版本 manifest 内置的 bimPropertyDocs（propertyNameIndex 缺失时按文档重建）；
+ * 2) 旧版 manifest 的 bimProperties 现场转换；
+ * 3) 结构树基础信息兜底。
+ */
+export function resolveNbimPropertyDocuments(options: {
+    manifestDocs?: Record<string, NbimPropertyDocument> | null;
+    manifestPropertyNameIndex?: NbimPropertyNameIndexItem[] | null;
+    manifestBimProperties?: Record<string, any> | null;
+    structureTree?: StructureTreeNode | null;
+    fallbackOwner?: string;
+}) {
+    const {
+        manifestDocs,
+        manifestPropertyNameIndex,
+        manifestBimProperties,
+        structureTree,
+        fallbackOwner
+    } = options;
+
+    if (manifestDocs && Object.keys(manifestDocs).length > 0) {
+        return {
+            docs: manifestDocs,
+            propertyNameIndex: manifestPropertyNameIndex && manifestPropertyNameIndex.length > 0
+                ? manifestPropertyNameIndex
+                : buildPropertyNameIndex(manifestDocs),
+            source: "manifest" as const
+        };
+    }
+
+    if (manifestBimProperties && Object.keys(manifestBimProperties).length > 0) {
+        const converted = convertLegacyBimPropertiesToDocs(manifestBimProperties);
+        if (Object.keys(converted.bimPropertyDocs).length > 0) {
+            return {
+                docs: converted.bimPropertyDocs,
+                propertyNameIndex: converted.propertyNameIndex,
+                source: "legacy" as const
+            };
+        }
+    }
+
+    const fromTree = buildNbimPropertyDocsFromStructureTree({ structureTree, fallbackOwner });
+    return {
+        docs: fromTree.bimPropertyDocs,
+        propertyNameIndex: fromTree.propertyNameIndex,
+        source: "structure" as const
+    };
+}
+
+export function buildChunkBinaryV8(
+    items: any[],
+    bimIdToIndex: Map<string, number>,
+    resolveBimId?: (item: any) => string | undefined
+): ArrayBuffer {
+    const uniqueGeos: THREE.BufferGeometry[] = [];
+    const geoMap = new Map<THREE.BufferGeometry, number>();
+
+    items.forEach(item => {
+        if (item.geometry && !geoMap.has(item.geometry)) {
+            geoMap.set(item.geometry, uniqueGeos.length);
+            uniqueGeos.push(item.geometry);
+        }
+    });
+
+    let size = 4;
+    for (const geo of uniqueGeos) {
+        const vertCount = geo.attributes.position.count;
+        const index = geo.index;
+        const indexCount = index ? index.count : 0;
+        size += 4 + 4 + (vertCount * 12) + (vertCount * 12);
+        if (indexCount > 0) size += indexCount * 4;
+    }
+
+    size += 4;
+    size += items.length * (4 + 4 + 4 + 64 + 4);
+
+    const buffer = new ArrayBuffer(size);
+    const dv = new DataView(buffer);
+    let offset = 0;
+
+    dv.setUint32(offset, uniqueGeos.length, true); offset += 4;
+    for (const geo of uniqueGeos) {
+        const pos = geo.getAttribute('position');
+        const norm = geo.getAttribute('normal');
+        const count = pos.count;
+        const index = geo.index;
+        const indexCount = index ? index.count : 0;
+
+        dv.setUint32(offset, count, true); offset += 4;
+        dv.setUint32(offset, indexCount, true); offset += 4;
+
+        for (let i = 0; i < count; i++) {
+            dv.setFloat32(offset, pos.getX(i), true); offset += 4;
+            dv.setFloat32(offset, pos.getY(i), true); offset += 4;
+            dv.setFloat32(offset, pos.getZ(i), true); offset += 4;
+        }
+        for (let i = 0; i < count; i++) {
+            dv.setFloat32(offset, norm.getX(i), true); offset += 4;
+            dv.setFloat32(offset, norm.getY(i), true); offset += 4;
+            dv.setFloat32(offset, norm.getZ(i), true); offset += 4;
+        }
+        if (index && indexCount > 0) {
+            for (let i = 0; i < indexCount; i++) {
+                dv.setUint32(offset, index.getX(i), true); offset += 4;
+            }
+        }
+    }
+
+    dv.setUint32(offset, items.length, true); offset += 4;
+    for (const item of items) {
+        const bimId = resolveBimId?.(item) || item.bimId || item.uuid;
+        const bimIdIndex = bimIdToIndex.get(String(bimId)) ?? 0;
+        dv.setUint32(offset, bimIdIndex, true); offset += 4;
+        const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : 0;
+        dv.setUint32(offset, typeIndex, true); offset += 4;
+        dv.setUint32(offset, item.color, true); offset += 4;
+
+        const elements = item.matrix.elements;
+        for (let k = 0; k < 16; k++) {
+            dv.setFloat32(offset, elements[k], true); offset += 4;
+        }
+
+        const geoId = geoMap.get(item.geometry) || 0;
+        dv.setUint32(offset, geoId, true); offset += 4;
+    }
+
+    return buffer;
 }
 
 function decodeChunkBinaryV8(buffer: ArrayBuffer, bimIdTable: string[]) {

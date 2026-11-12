@@ -1,8 +1,8 @@
 import * as THREE from "three";
 
 const INDUSTRIAL_NEUTRAL = new THREE.Color("#7f8c99");
-const INDUSTRIAL_DARK_FLOOR = 0.24;
-const INDUSTRIAL_LIGHT_CEIL = 0.68;
+const INDUSTRIAL_DARK_FLOOR = 0.22;
+const INDUSTRIAL_LIGHT_CEIL = 0.62;
 
 function clamp01(value: number) {
     return THREE.MathUtils.clamp(value, 0, 1);
@@ -29,7 +29,7 @@ export function toIndustrialDisplayColor(input: THREE.ColorRepresentation | THRE
     const nextSaturation = THREE.MathUtils.clamp(sourceSaturation * saturationFactor + 0.025, 0.06, 0.68);
 
     // 降低整体亮度上限，增加对比度，避免模型发白、灰蒙。
-    let nextLightness = sourceLightness * 0.88 + 0.018;
+    let nextLightness = sourceLightness * 0.86 + 0.012;
     nextLightness = THREE.MathUtils.clamp(nextLightness, INDUSTRIAL_DARK_FLOOR, INDUSTRIAL_LIGHT_CEIL);
 
     color.setHSL(hsl.h, nextSaturation, nextLightness);

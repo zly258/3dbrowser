@@ -14,6 +14,15 @@ type SceneManagerHighlightState = {
     locateResultSet: Set<string>;
     locateFocusUuid: string | null;
     lastSelectedUuid: string | null;
+    /** 单选命中的具体实例：同一个节点可能有多个实例，只高亮这一个 */
+    highlightedInstance: HighlightInstanceRef | null;
+};
+
+/** 命中的具体实例引用（分块 BatchedMesh + instanceId） */
+export type HighlightInstanceRef = {
+    uuid: string;
+    mesh: THREE.BatchedMesh;
+    instanceId: number;
 };
 
 interface SceneManagerHighlightContext {
@@ -64,8 +73,10 @@ function expandLocateTargets(contentMap: Map<string, any[]>, ids: string[]) {
     const queue = [...ids];
     const visited = new Set<string>();
 
-    while (queue.length > 0) {
-        const current = queue.shift()!;
+    // 用游标遍历而不是 shift()：框选上万个构件时，shift() 是 O(n²) 的数组搬移，
+    // 会直接表现为“框选后界面卡死”。
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+        const current = queue[cursor];
         if (!current || visited.has(current)) continue;
         visited.add(current);
         expanded.add(current);
@@ -118,21 +129,69 @@ function restoreHighlightedInstanceColors(context: SceneManagerHighlightContext,
     markInstanceColorNeedsUpdate(touched);
 }
 
-function applyHighlightedInstanceColors(context: SceneManagerHighlightContext, uuids: Iterable<string>) {
-    const highlightColor = getHighlightColor(context.settings);
+function applyHighlightedInstanceColors(
+    context: SceneManagerHighlightContext,
+    uuids: Iterable<string>,
+    options?: { focus?: HighlightInstanceRef | null; color?: THREE.Color }
+) {
+    const highlightColor = options?.color || getHighlightColor(context.settings);
+    const focus = options?.focus || null;
     const touched = new Set<THREE.BatchedMesh>();
+    const restoreColor = new THREE.Color();
+
     for (const id of uuids) {
         const mappings = context.optimizedMapping.get(id);
         if (!mappings) continue;
         mappings.forEach((mapping) => {
-            mapping.mesh.setColorAt(mapping.instanceId, highlightColor);
+            if (focus && focus.uuid === id) {
+                // 单选实例：只给命中的实例上高亮色，同一节点的其它实例恢复原色。
+                const isFocused = mapping.mesh === focus.mesh && mapping.instanceId === focus.instanceId;
+                mapping.mesh.setColorAt(
+                    mapping.instanceId,
+                    isFocused ? highlightColor : restoreColor.setHex(mapping.originalColor)
+                );
+            } else {
+                mapping.mesh.setColorAt(mapping.instanceId, highlightColor);
+            }
             touched.add(mapping.mesh);
         });
     }
     markInstanceColorNeedsUpdate(touched);
 }
 
-function updateSelectionHelpers(context: SceneManagerHighlightContext, target: Set<string>) {
+/** 发光脉冲：把当前单选实例的高亮色按倍率提亮（>1 在 ACES 色调映射下呈现过曝发光感） */
+export function applyHighlightGlow(
+    context: SceneManagerHighlightContext,
+    glowScale: number
+): SceneHighlightResult {
+    const focus = context.state.highlightedInstance;
+    if (!focus || !focus.mesh) return { needsRender: false };
+
+    try {
+        const base = getHighlightColor(context.settings);
+        const glowing = base.multiplyScalar(THREE.MathUtils.clamp(glowScale, 1, 2.4));
+        focus.mesh.setColorAt(focus.instanceId, glowing);
+        if ((focus.mesh as any).instanceColor) (focus.mesh as any).instanceColor.needsUpdate = true;
+        return { needsRender: true };
+    } catch {
+        // 分块可能已卸载/释放，忽略本次发光刷新
+        return { needsRender: false };
+    }
+}
+
+/** 高亮颜色设置变化后，立即用新颜色重绘当前高亮（含实例级高亮） */
+export function applyRefreshHighlightColors(context: SceneManagerHighlightContext): SceneHighlightResult {
+    const ids = Array.from(context.state.highlightedUuids);
+    if (ids.length === 0) return { needsRender: false };
+    applyHighlightedInstanceColors(context, ids, { focus: context.state.highlightedInstance });
+    return { needsRender: true };
+}
+
+function updateSelectionHelpers(
+    context: SceneManagerHighlightContext,
+    target: Set<string>,
+    focus?: HighlightInstanceRef | null
+) {
     context.selectionBox.visible = false;
     context.highlightMesh.visible = false;
 
@@ -140,7 +199,11 @@ function updateSelectionHelpers(context: SceneManagerHighlightContext, target: S
         return;
     }
 
-    const union = collectRenderableBoundsForIds(context, Array.from(target));
+    // 单选实例时，选择框只框住命中的那一个实例，而不是整个节点的所有实例。
+    let union = focus ? getFocusedInstanceBounds(context, focus) : null;
+    if (!union) {
+        union = collectRenderableBoundsForIds(context, Array.from(target));
+    }
 
     if (!union.isEmpty()) {
         context.selectionBox.box.copy(union);
@@ -179,6 +242,26 @@ function updateSelectionHelpers(context: SceneManagerHighlightContext, target: S
     context.highlightMesh.quaternion.copy(worldQuaternion);
     context.highlightMesh.scale.copy(worldScale);
     context.highlightMesh.visible = true;
+}
+
+/** 命中实例的世界包围盒 */
+function getFocusedInstanceBounds(
+    context: SceneManagerHighlightContext,
+    focus: HighlightInstanceRef
+): THREE.Box3 | null {
+    const mapping = context.optimizedMapping
+        .get(focus.uuid)
+        ?.find((item) => item.mesh === focus.mesh && item.instanceId === focus.instanceId);
+    const geometry = mapping?.geometry
+        || (focus.mesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined)?.get(focus.instanceId);
+    if (!geometry) return null;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    if (!geometry.boundingBox) return null;
+
+    const matrix = new THREE.Matrix4();
+    focus.mesh.getMatrixAt(focus.instanceId, matrix);
+    matrix.premultiply(focus.mesh.matrixWorld);
+    return geometry.boundingBox.clone().applyMatrix4(matrix);
 }
 
 function materialList(material: THREE.Material | THREE.Material[]) {
@@ -498,21 +581,34 @@ function applyLightweightLocateState(
 
 export function applyHighlightObjects(
     context: SceneManagerHighlightContext,
-    uuids: string[]
+    uuids: string[],
+    instanceRef?: HighlightInstanceRef | null
 ): SceneHighlightResult {
     context.clearClashPairHighlight();
     const normalized = Array.from(new Set(uuids.filter(Boolean)));
     const target = expandLocateTargets(context.nodeMap, normalized);
+    const focus = instanceRef && instanceRef.mesh && target.has(instanceRef.uuid) ? instanceRef : null;
+    const previousFocus = context.state.highlightedInstance;
 
     const preserveLocateTint = context.state.locateResultSet.size > 0;
     if (!preserveLocateTint) {
         restoreHighlightedInstanceColors(context, Array.from(context.state.highlightedUuids).filter((id) => !target.has(id)));
-        applyHighlightedInstanceColors(context, Array.from(target).filter((id) => !context.state.highlightedUuids.has(id)));
+
+        const entering = Array.from(target).filter((id) => !context.state.highlightedUuids.has(id));
+        if (focus && !entering.includes(focus.uuid)) {
+            // 同一个节点的不同实例之间切换时，uuid 已在高亮集合里，需要强制重绘该节点。
+            entering.push(focus.uuid);
+        } else if (!focus && previousFocus && target.has(previousFocus.uuid) && !entering.includes(previousFocus.uuid)) {
+            // 取消实例级高亮（例如框选/程序选中同一节点）时，恢复为整个节点高亮。
+            entering.push(previousFocus.uuid);
+        }
+        applyHighlightedInstanceColors(context, entering, { focus });
     }
 
     context.state.highlightedUuids = target;
+    context.state.highlightedInstance = focus;
     context.state.lastSelectedUuid = uuids.length > 0 ? uuids[uuids.length - 1] : null;
-    updateSelectionHelpers(context, target);
+    updateSelectionHelpers(context, target, focus);
 
     return { needsRender: true };
 }
@@ -537,6 +633,7 @@ export function applyClearLocateFocus(
     context.state.locateResultSet.clear();
     context.state.locateFocusUuid = null;
     context.state.highlightedUuids = new Set();
+    context.state.highlightedInstance = null;
     context.state.lastSelectedUuid = null;
     context.selectionBox.visible = false;
     context.highlightMesh.visible = false;
@@ -611,6 +708,7 @@ export function applySetLocateResultSet(
     context.state.locateResultSet = expandedTargets;
     context.state.locateFocusUuid = focusKey;
     context.state.highlightedUuids = expandedTargets;
+    context.state.highlightedInstance = null;
     context.state.lastSelectedUuid = focusKey;
     updateSelectionHelpers(context, expandedTargets);
 
