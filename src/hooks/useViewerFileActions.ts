@@ -1,15 +1,19 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import type { ChangeEvent, DragEvent } from "react";
-import type { SceneManager } from "../utils/scene-manager/SceneManager";
+import type { SceneManager, SceneSettings } from "../utils/scene-manager/SceneManager";
 import type { PropertyGroups } from "../viewer/propertyIndex";
 import type { ViewerToast } from "../viewer/types";
 import type { LoadedFileFailure } from "../loader/loaderUtils";
-import { formatFailures } from "../viewer/fileLoading";
+import { loadModelFiles } from "../loader/loaderUtils";
+import { cleanLoadingStatus, formatFailures } from "../viewer/fileLoading";
+import { buildNbimBlobFromObjects, downloadNbimBlob } from "../utils/scene-manager/nbimBatchConvert";
 import type { ViewerTool } from "./useViewerTools";
 
 interface UseViewerFileActionsOptions {
     sceneMgrRef: RefObject<SceneManager | null>;
+    sceneSettings: SceneSettings;
+    libPath: string;
     t: (key: string) => string;
     processFiles: (items: (File | string)[]) => Promise<void>;
     loadItemsIntoScene: (items: (File | string)[]) => Promise<LoadedFileFailure[]>;
@@ -44,6 +48,8 @@ const SUPPORTED_DROP_EXTENSIONS = [
 
 export function useViewerFileActions({
     sceneMgrRef,
+    sceneSettings,
+    libPath,
     t,
     processFiles,
     loadItemsIntoScene,
@@ -66,7 +72,7 @@ export function useViewerFileActions({
 
     const handleBatchConvert = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
         const manager = sceneMgrRef.current;
-        if (!event.target.files?.length || !manager) return;
+        if (!event.target.files?.length) return;
 
         const files = Array.from(event.target.files) as File[];
         event.target.value = "";
@@ -77,33 +83,51 @@ export function useViewerFileActions({
             return;
         }
 
-        (manager as any).setChunkLoadingEnabled?.(false);
-        (manager as any).setContentVisible?.(false);
-
         setLoading(true);
         setStatus(`${t("processing")}...`);
         setProgress(0);
         setActiveTool("none");
 
+        let loadedObjects: any[] = [];
         try {
-            await manager.clear();
-            setSelectedUuids([]);
-            setSelectedProps(null);
-            resetMeasurementState();
-            updateTree();
+            const failures: LoadedFileFailure[] = [];
+            const runtimeHints = (manager as any)?.getChunkOptions?.() || {};
+            loadedObjects = await loadModelFiles(
+                files,
+                (p, msg) => {
+                    setProgress(Math.min(60, Math.round(p * 0.6)));
+                    if (msg) setStatus(cleanLoadingStatus(msg));
+                },
+                t,
+                sceneSettings,
+                libPath,
+                {
+                    loadProfile: runtimeHints.loadProfile ?? "max-speed",
+                    deferIfcProperties: runtimeHints.deferIfcProperties ?? true,
+                    fastGeometrySanitize: runtimeHints.fastGeometrySanitize ?? true,
+                    onFileFailure: (failure) => failures.push(failure)
+                }
+            );
 
-            const failures = await loadItemsIntoScene(files);
-            updateTree();
             if (failures.length > 0) {
-                setToast({
-                    message: formatFailures(failures, t("failed")),
-                    type: "error"
-                });
+                setToast({ message: formatFailures(failures, t("failed")), type: "error" });
                 return;
+            }
+            if (loadedObjects.length === 0) {
+                throw new Error(t("load_parse_failed"));
             }
 
             setStatus(`${t("processing")}...`);
-            await manager.exportNbim();
+            const { blob, fileName } = await buildNbimBlobFromObjects({
+                objects: loadedObjects,
+                fileNames: files.map((file) => file.name),
+                onProgress: (p, msg) => {
+                    setProgress(60 + Math.round(p * 0.4));
+                    if (msg) setStatus(msg);
+                }
+            });
+
+            downloadNbimBlob(blob, fileName);
             setStatus(t("success"));
             setToast({ message: t("success"), type: "success" });
         } catch (error) {
@@ -111,27 +135,28 @@ export function useViewerFileActions({
             setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(error as Error).message}`, type: "error" });
         } finally {
-            try {
-                await sceneMgrRef.current?.clear();
-                updateTree();
-            } catch {}
-            (sceneMgrRef.current as any)?.setChunkLoadingEnabled?.(true);
-            (sceneMgrRef.current as any)?.setContentVisible?.(true);
+            // 批量转换是“无头”的：不进入场景、不占 GPU，结束后释放临时几何。
+            for (const object of loadedObjects) {
+                object.traverse((child: any) => {
+                    if (child?.isMesh) {
+                        child.geometry?.dispose?.();
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        materials.forEach((material: any) => material?.dispose?.());
+                    }
+                });
+            }
             setLoading(false);
         }
     }, [
-        loadItemsIntoScene,
-        resetMeasurementState,
+        libPath,
         sceneMgrRef,
+        sceneSettings,
         setActiveTool,
         setLoading,
         setProgress,
-        setSelectedProps,
-        setSelectedUuids,
         setStatus,
         setToast,
-        t,
-        updateTree
+        t
     ]);
 
     const handleOpenUrl = useCallback(async () => {

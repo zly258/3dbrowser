@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { SceneManager, MeasureType, SceneSettings, MeasurementRecord } from "../utils/scene-manager/SceneManager";
 import { usePersistentState } from "./usePersistentState";
@@ -37,6 +37,12 @@ export interface ClipAxisActiveState {
     z: boolean;
 }
 
+/** 当前模型的剖切范围（世界坐标），用于面板显示与实际范围计算 */
+export interface ClipBoundsState {
+    min: [number, number, number];
+    max: [number, number, number];
+}
+
 interface UseViewerToolsOptions {
     initialSettings?: Partial<SceneSettings>;
     mgrInstance: SceneManager | null;
@@ -56,6 +62,8 @@ export function useViewerTools({ initialSettings, mgrInstance }: UseViewerToolsO
     const [clipEnabled, setClipEnabled] = useState(false);
     const [clipValues, setClipValues] = useState<ClipRangeValues>(DEFAULT_CLIP_VALUES);
     const [clipActive, setClipActive] = useState<ClipAxisActiveState>(DEFAULT_CLIP_ACTIVE);
+    const [clipBounds, setClipBounds] = useState<ClipBoundsState | null>(null);
+    const lastClipModelKeyRef = useRef("");
     const [clipHelperVisible, setClipHelperVisible] = usePersistentState<boolean>(
         "3dbrowser_clipHelperVisible",
         initialSettings?.clip?.helperVisible ?? false,
@@ -111,15 +119,51 @@ export function useViewerTools({ initialSettings, mgrInstance }: UseViewerToolsO
         mgrInstance.setClippingEnabled(clipEnabled);
         if (!clipEnabled) return;
 
-        let bounds = mgrInstance.computeTotalBounds(true);
+        // 剖切范围取“当前模型完整范围”（含未加载分块的包围盒），
+        // 不再只按已加载/可见部分计算，避免打开面板时范围偏小。
+        // 这里用缓存范围而不是强制遍历全场景，超大模型上不会卡住主线程。
+        let bounds = mgrInstance.computeTotalBounds(false);
         if (bounds.isEmpty()) {
-            bounds = mgrInstance.computeTotalBounds(false);
+            bounds = mgrInstance.computeTotalBounds(true);
         }
 
         if (!bounds.isEmpty()) {
             mgrInstance.updateClippingPlanes(bounds, clipValues, clipActive);
         }
-    }, [clipActive, clipEnabled, clipValues, mgrInstance]);
+    }, [clipActive, clipEnabled, clipValues, mgrInstance, activeTool]);
+
+    /**
+     * 打开剖切面板时按当前模型重新计算范围：
+     * - 模型没变：保留用户已调的百分比；
+     * - 模型变了：把 X/Y/Z 重置为当前模型的完整范围（0~100%），避免沿用上一个模型的裁剪区间。
+     */
+    useEffect(() => {
+        if (activeTool !== "clip" || !mgrInstance) return;
+
+        let bounds = mgrInstance.computeTotalBounds(false);
+        if (bounds.isEmpty()) {
+            bounds = mgrInstance.computeTotalBounds(true);
+        }
+        if (bounds.isEmpty()) {
+            setClipBounds(null);
+            return;
+        }
+
+        setClipBounds({
+            min: [bounds.min.x, bounds.min.y, bounds.min.z],
+            max: [bounds.max.x, bounds.max.y, bounds.max.z]
+        });
+
+        const modelKey = [
+            bounds.min.x, bounds.min.y, bounds.min.z,
+            bounds.max.x, bounds.max.y, bounds.max.z
+        ].map((v) => Math.round(v * 1000) / 1000).join(",");
+
+        if (lastClipModelKeyRef.current !== modelKey) {
+            lastClipModelKeyRef.current = modelKey;
+            setClipValues({ x: [0, 100], y: [0, 100], z: [0, 100] });
+        }
+    }, [activeTool, mgrInstance]);
 
     useEffect(() => {
         if (!mgrInstance) return;
@@ -181,6 +225,7 @@ export function useViewerTools({ initialSettings, mgrInstance }: UseViewerToolsO
         setClipValues,
         clipActive,
         setClipActive,
+        clipBounds,
         clipHelperVisible,
         setClipHelperVisible,
         clipHelperOpacity: normalizedClipHelperOpacity,

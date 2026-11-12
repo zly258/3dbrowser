@@ -143,8 +143,9 @@ function collectNodeIds(context: RenderTargetContext, ids: string[]) {
     const queue = ids.filter(Boolean);
     const visited = new Set<string>();
 
-    while (queue.length > 0) {
-        const current = queue.shift()!;
+    // 游标遍历替代 shift()：框选上万构件时 shift() 的数组搬移会让主线程卡死。
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+        const current = queue[cursor];
         if (!current || visited.has(current)) continue;
         visited.add(current);
         expanded.add(current);
@@ -173,8 +174,12 @@ export function collectRenderableTargetsForIds(context: RenderTargetContext, ids
     context.contentGroup.updateMatrixWorld(true);
     expandedIds.forEach((uuid) => {
         const mappings = context.optimizedMapping.get(uuid);
-        if (mappings) {
+        if (mappings && mappings.length > 0) {
+            // 分块构件已全部落在 BatchedMesh 实例上，命中映射后不必再做全场景 uuid 搜索。
+            // getObjectByProperty 内部是整棵树遍历，框选上万构件时会变成
+            // O(选中数 × 场景对象数)，这是大模型框选卡死的主要原因。
             mappings.forEach((mapping) => addInstanceTarget(context, uuid, mapping, targets));
+            return;
         }
 
         const object = context.contentGroup.getObjectByProperty("uuid", uuid);
@@ -209,6 +214,31 @@ export function collectAllRenderableTargets(context: RenderTargetContext) {
 }
 
 export function collectRenderableBoundsForIds(context: RenderTargetContext, ids: string[]) {
+    // 大范围框选（上万构件）时避免构造 RenderTarget 对象，直接累加实例包围盒。
+    if (ids.length > 2000) {
+        const box = new THREE.Box3();
+        const matrix = new THREE.Matrix4();
+        const temp = new THREE.Box3();
+        const expandedIds = collectNodeIds(context, Array.from(new Set(ids.filter(Boolean))));
+        context.contentGroup.updateMatrixWorld(true);
+        expandedIds.forEach((uuid) => {
+            const mappings = context.optimizedMapping.get(uuid);
+            if (!mappings || mappings.length === 0) return;
+            for (const mapping of mappings) {
+                if (!isWorldVisible(mapping.mesh) || !nodeVisible(context, uuid)) continue;
+                const geometry = mapping.geometry || mapping.mesh.geometry;
+                if (!geometry) continue;
+                if (!geometry.boundingBox) geometry.computeBoundingBox();
+                if (!geometry.boundingBox) continue;
+                mapping.mesh.getMatrixAt(mapping.instanceId, matrix);
+                matrix.premultiply(mapping.mesh.matrixWorld);
+                temp.copy(geometry.boundingBox).applyMatrix4(matrix);
+                if (!temp.isEmpty()) box.union(temp);
+            }
+        });
+        if (!box.isEmpty()) return box;
+    }
+
     const box = new THREE.Box3();
     collectRenderableTargetsForIds(context, ids).forEach((target) => box.union(target.box));
     return box;

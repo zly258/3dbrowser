@@ -1040,7 +1040,26 @@
   border-bottom: 1px solid var(--border-sub);
 }
 
-.ui-clip-axis-row:last-child { border-bottom: 0; }
+.ui-clip-axis-row:last-of-type { border-bottom: 0; }
+
+/* 剖切：当前模型实际范围提示 */
+.ui-clip-range-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-sub);
+  color: var(--text-sec);
+  font-size: var(--font-size-caption, 11px);
+  line-height: 1.4;
+}
+
+.ui-clip-range-hint-value {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
 
 .ui-clip-axis-checkbox { flex: 0 0 auto; }
 

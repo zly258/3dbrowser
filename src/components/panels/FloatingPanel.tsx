@@ -41,7 +41,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         tool_search: { w: 620, h: 500 },
         tool_export: { w: 400, h: 430 },
         tool_screenshot: { w: 380, h: 300 },
-        tool_clip: { w: 410, h: 420 },
+        tool_clip: { w: 410, h: 260 },
         tool_settings: { w: 380, h: 520 },
         tool_viewpoint: { w: 380, h: 460 },
         tool_explode: { w: 340, h: 360 },

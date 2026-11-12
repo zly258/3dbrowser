@@ -172,6 +172,8 @@ export async function registerNbimChunks(options: {
             loaded: false,
             byteOffset: chunkEntry.byteOffset,
             byteLength: chunkEntry.byteLength,
+            // 解码后的几何/实例数据约为原始分块的 5.5 倍，用于驻留内存预算。
+            estimatedDecodedMB: Math.max(1.5, ((Number(chunkEntry.byteLength) || 0) / 1048576) * 5.5),
             nbimFileId: fileId,
             groupName: `optimized_${rootId}`,
             originalUuid: chunkEntry.originalUuid ? String(chunkEntry.originalUuid) : rootId

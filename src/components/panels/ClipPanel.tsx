@@ -12,6 +12,7 @@ interface ClipPanelProps {
   setClipValues: any;
   clipActive: any;
   setClipActive: any;
+  clipBounds?: { min: [number, number, number]; max: [number, number, number] } | null;
   clipHelperVisible: boolean;
   setClipHelperVisible: (visible: boolean) => void;
   clipHelperOpacity: number;
@@ -23,10 +24,15 @@ const AxisSliderRow: React.FC<{
   label: string;
   active: boolean;
   value: [number, number];
+  range?: [number, number];
   onToggle: (v: boolean) => void;
   onChange: (val: [number, number]) => void;
   disabled?: boolean;
-}> = ({ axis, label, active, value, onToggle, onChange, disabled = false }) => {
+}> = ({ axis, label, active, value, range, onToggle, onChange, disabled = false }) => {
+  const formatRangeValue = (v: number) => (Math.abs(v) >= 1000 ? v.toFixed(0) : v.toFixed(2));
+  const actualRange = range
+    ? `${formatRangeValue(range[0])} ~ ${formatRangeValue(range[1])}`
+    : "";
   return (
     <div
       className={`ui-clip-axis-row${disabled ? " ui-is-disabled" : ""}`}
@@ -53,6 +59,7 @@ const AxisSliderRow: React.FC<{
       </div>
 <span
         className="ui-clip-axis-value"
+        title={actualRange || undefined}
       >
         {String(Math.round(value[0])).padStart(2, "0")}-{String(Math.round(value[1])).padStart(2, "0")}%
       </span>
@@ -69,6 +76,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
   setClipValues,
   clipActive,
   setClipActive,
+  clipBounds,
   clipHelperVisible,
   setClipHelperVisible,
   clipHelperOpacity,
@@ -78,13 +86,18 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
     setClipValues({ x: [0, 100], y: [0, 100], z: [0, 100] });
   };
 
+  const axisRange = (axis: "x" | "y" | "z"): [number, number] | undefined => {
+    if (!clipBounds) return undefined;
+    const index = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+    return [clipBounds.min[index], clipBounds.max[index]];
+  };
+
   return (
     <FloatingPanel
       title={t("clip_title")}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
       width={410}
-      height={420}
       resizable={false}
       storageId="tool_clip"
     >
@@ -134,6 +147,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
             label={t("clip_x")}
             active={clipActive.x}
             value={clipValues.x}
+            range={axisRange("x")}
             onToggle={(v) => setClipActive({ ...clipActive, x: v })}
             onChange={(val) => setClipValues({ ...clipValues, x: val })}
             disabled={!clipEnabled}
@@ -143,6 +157,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
             label={t("clip_y")}
             active={clipActive.y}
             value={clipValues.y}
+            range={axisRange("y")}
             onToggle={(v) => setClipActive({ ...clipActive, y: v })}
             onChange={(val) => setClipValues({ ...clipValues, y: val })}
             disabled={!clipEnabled}
@@ -152,10 +167,21 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
             label={t("clip_z")}
             active={clipActive.z}
             value={clipValues.z}
+            range={axisRange("z")}
             onToggle={(v) => setClipActive({ ...clipActive, z: v })}
             onChange={(val) => setClipValues({ ...clipValues, z: val })}
             disabled={!clipEnabled}
           />
+          {clipBounds && (
+            <div className="ui-clip-range-hint">
+              <span>{t("clip_range_current") || "当前模型范围"}</span>
+              <span className="ui-clip-range-hint-value">
+                X {clipBounds.min[0].toFixed(2)}~{clipBounds.max[0].toFixed(2)}
+                {"  "}Y {clipBounds.min[1].toFixed(2)}~{clipBounds.max[1].toFixed(2)}
+                {"  "}Z {clipBounds.min[2].toFixed(2)}~{clipBounds.max[2].toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="ui-panel-footer ui-clip-panel-footer">

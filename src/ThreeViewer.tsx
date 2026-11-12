@@ -206,6 +206,7 @@ export const ThreeViewer = ({
         setClipValues,
         clipActive,
         setClipActive,
+        clipBounds,
         clipHelperVisible,
         setClipHelperVisible,
         clipHelperOpacity,
@@ -238,9 +239,9 @@ export const ThreeViewer = ({
         const initialThemeMode: 'light' | 'dark' =
             (initialSettings?.themeMode as 'light' | 'dark' | undefined) ?? defaultTheme ?? 'light';
         const baseSettings: SceneSettings = {
-            ambientInt: 0.78,
-            dirInt: 1.48,
-            hemiInt: 0.58,
+            ambientInt: 0.62,
+            dirInt: 1.55,
+            hemiInt: 0.46,
             // 暗色模式的视口底色跟随主题，避免“切了暗色但视口还是亮白”
             bgColor: initialThemeMode === 'dark' ? '#12171c' : '#eef1f5',
             themeMode: initialThemeMode,
@@ -285,6 +286,10 @@ export const ThreeViewer = ({
                 if (String(parsed.highlightColor || '').toLowerCase() === '#1976d2') {
                     parsed.highlightColor = '#0b5fa5';
                 }
+                // 旧默认灯光偏平，模型发白发浅；仅在值仍为旧默认时升级，保留用户自定义。
+                if (parsed.ambientInt === 0.78) parsed.ambientInt = 0.62;
+                if (parsed.hemiInt === 0.58) parsed.hemiInt = 0.46;
+                if (parsed.dirInt === 1.48) parsed.dirInt = 1.55;
             }
             return parsed;
         }
@@ -1025,6 +1030,8 @@ export const ThreeViewer = ({
         handleDrop
     } = useViewerFileActions({
         sceneMgrRef: sceneMgr,
+        sceneSettings,
+        libPath,
         t,
         processFiles,
         loadItemsIntoScene,
@@ -1251,6 +1258,7 @@ export const ThreeViewer = ({
                             clipEnabled={clipEnabled} setClipEnabled={setClipEnabled}
                             clipValues={clipValues} setClipValues={setClipValues}
                             clipActive={clipActive} setClipActive={setClipActive}
+                            clipBounds={clipBounds}
                             clipHelperVisible={clipHelperVisible}
                             setClipHelperVisible={setClipHelperVisible}
                             clipHelperOpacity={clipHelperOpacity}

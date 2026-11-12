@@ -6,6 +6,10 @@ import { createPropertyEntries, normalizePropertyToken, type PropertyEntry, type
 export type SearchOperator = "equals" | "contains" | "notContains" | "startsWith" | "endsWith";
 export type SearchConnector = "AND" | "OR";
 
+// 大模型搜索会做百万级比较，这里用轻量归一化替代 normalizePropertyToken 的 NFKC+正则，
+// 避免 20 万文档 × 6 行 × 3 个字段的重复规范化占满主线程。
+const fastSearchToken = (value: unknown) => String(value ?? "").trim().toLowerCase();
+
 export type PropertySearchCondition = {
   id: string;
   propertyName: string;
@@ -428,6 +432,12 @@ export function usePropertySearch({
       // 不再先遍历全场景收集候选，也不再为每个候选重新 createPropertyEntries，避免打开 NBIM 后首次搜索卡顿。
       if (indexedDocs.length > 0) {
         const total = indexedDocs.length;
+        const conditions = normalizedConditions.map((condition) => ({
+          query: fastSearchToken(condition.normalizedPropertyName),
+          operator: condition.operator,
+          value: fastSearchToken(condition.normalizedValue),
+          connector: condition.connector || "AND"
+        }));
 
         for (let i = 0; i < indexedDocs.length; i++) {
           if (searchRunTokenRef.current !== runToken) {
@@ -440,36 +450,35 @@ export function usePropertySearch({
           const rows = Array.isArray(doc?.rows) ? doc.rows : [];
           if (rows.length === 0) continue;
 
-          let result: boolean | null = null;
+          const matchedFlags = conditions.map(() => false);
           const matchedBy = new Set<string>();
 
-          normalizedConditions.forEach((condition, index) => {
-            const matchedRows = rows.filter((row: any) => {
-              const key = normalizePropertyToken(row?.key || "");
-              const path = normalizePropertyToken(row?.path || "");
-              const rawKey = normalizePropertyToken(row?.rawKey || "");
-              const query = condition.normalizedPropertyName;
-              return key === query || path === query || rawKey === query || path.endsWith(`.${query}`);
-            });
+          // 单次遍历 rows：避免每个文档、每个条件都 rows.filter() 产生大量临时数组。
+          for (const row of rows) {
+            const key = fastSearchToken((row as any)?.key || "");
+            const path = fastSearchToken((row as any)?.path || "");
+            const rawKey = fastSearchToken((row as any)?.rawKey || "");
+            let normalizedValue: string | null = null;
 
-            const matched = matchedRows.some((row: any) => {
-              const value = normalizePropertyToken(row?.value);
-              return evaluateCondition(value, condition.operator, condition.normalizedValue);
-            });
-
-            if (matched) {
-              matchedRows.forEach((row: any) => {
-                const value = normalizePropertyToken(row?.value);
-                if (evaluateCondition(value, condition.operator, condition.normalizedValue)) {
-                  matchedBy.add(String(row?.path || row?.key || ""));
-                }
-              });
+            for (let ci = 0; ci < conditions.length; ci++) {
+              const condition = conditions[ci];
+              const query = condition.query;
+              if (key !== query && path !== query && rawKey !== query && !path.endsWith(`.${query}`)) continue;
+              if (normalizedValue === null) normalizedValue = fastSearchToken((row as any)?.value);
+              if (evaluateCondition(normalizedValue, condition.operator, condition.value)) {
+                matchedFlags[ci] = true;
+                matchedBy.add(String((row as any)?.path || (row as any)?.key || ""));
+              }
             }
+          }
 
-            if (index === 0 || result === null) result = matched;
-            else if ((condition.connector || "AND") === "AND") result = Boolean(result) && matched;
+          let result: boolean | null = null;
+          for (let ci = 0; ci < conditions.length; ci++) {
+            const matched = matchedFlags[ci];
+            if (ci === 0 || result === null) result = matched;
+            else if (conditions[ci].connector === "AND") result = Boolean(result) && matched;
             else result = Boolean(result) || matched;
-          });
+          }
 
           if (result) {
             const docBimId = String(doc?.bimId || "");
@@ -488,14 +497,14 @@ export function usePropertySearch({
             }
           }
 
-          if ((i + 1) % 250 === 0 || i === indexedDocs.length - 1) {
+          if ((i + 1) % 6000 === 0 || i === indexedDocs.length - 1) {
             const now = performance.now();
             const progress = total > 0 ? ((i + 1) / total) * 100 : 100;
-            if (now - lastProgressAt > 80 || i === indexedDocs.length - 1) {
+            if (now - lastProgressAt > 120 || i === indexedDocs.length - 1) {
               setSearchProgress(progress);
               lastProgressAt = now;
             }
-            if (now - lastYieldAt > 16 || i === indexedDocs.length - 1) {
+            if (now - lastYieldAt > 32 || i === indexedDocs.length - 1) {
               lastYieldAt = now;
               await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
             }

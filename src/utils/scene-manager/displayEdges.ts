@@ -24,6 +24,26 @@ export class DisplayEdgeBuilder {
     });
     private objects: THREE.LineSegments[] = [];
     private lineColor = 0x23292f;
+    private baseOpacity = 0.62;
+    private opacityFactor = 1;
+
+    private applyOpacity() {
+        const next = THREE.MathUtils.clamp(this.baseOpacity * this.opacityFactor, 0.08, 1);
+        if (Math.abs(next - this.material.opacity) < 0.001) return;
+        this.material.opacity = next;
+    }
+
+    /** 真实模式边线更淡，线框模式更清晰 */
+    setBaseOpacity(opacity: number) {
+        this.baseOpacity = THREE.MathUtils.clamp(opacity, 0.1, 1);
+        this.applyOpacity();
+    }
+
+    /** 远景衰减系数（0~1），用于避免缩小看全局时边线糊成一片发黑发粗 */
+    setOpacityFactor(factor: number) {
+        this.opacityFactor = THREE.MathUtils.clamp(factor, 0.2, 1);
+        this.applyOpacity();
+    }
 
     /** 根据视口底色自动选择边线颜色：浅底用深线，深底用浅线，保证线框可读 */
     setBackground(color: THREE.ColorRepresentation) {

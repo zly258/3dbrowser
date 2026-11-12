@@ -148,6 +148,12 @@ export function applyGetRayIntersects(
     const originalObject = context.contentGroup.getObjectByProperty("uuid", originalUuid);
     (hit as any).object = originalObject ?? createProxyObjectForBatchedHit(context, batchedMesh, batchId, originalUuid);
 
+    // 记录命中的具体实例（分块 BatchedMesh + instanceId）：
+    // 同一个节点可能对应多个实例（InstancedMesh / NBIM 实例化构件），
+    // 单选时必须只高亮命中的那一个实例，而不是整个节点的所有实例。
+    (hit as any).batchedMesh = batchedMesh;
+    (hit as any).batchId = batchId;
+
     return { intersect: hit, state };
 }
 
@@ -184,8 +190,11 @@ export function selectInteractablesByScreenRect(
     frustum.setFromProjectionMatrix(projViewMatrix);
 
     const selected: string[] = [];
+    const selectedSet = new Set<string>();
     const box = new THREE.Box3();
     const tmpMatrix = new THREE.Matrix4();
+    const meshBox = new THREE.Box3();
+    const instanceBox = new THREE.Box3();
 
     for (const object of context.interactableList) {
         if ((object as any).isBatchedMesh) {
@@ -194,19 +203,30 @@ export function selectInteractablesByScreenRect(
             const batchIdToGeometry = batchedMesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
             if (!batchIdToUuid || !batchIdToGeometry) continue;
 
+            // 先按整个分块包围盒剔除：框选通常只覆盖少数分块，避免逐个实例计算导致卡死。
+            if ((batchedMesh as any).boundingBox) {
+                meshBox.copy((batchedMesh as any).boundingBox).applyMatrix4(batchedMesh.matrixWorld);
+                if (!frustum.intersectsBox(meshBox)) continue;
+            }
+
+            const getVisibleAt = (batchedMesh as any).getVisibleAt as ((id: number) => boolean) | undefined;
+
             for (const [batchId, uuid] of batchIdToUuid) {
                 try {
+                    if (selectedSet.has(uuid)) continue;
+                    if (getVisibleAt && getVisibleAt.call(batchedMesh, batchId) === false) continue;
+
                     const geometry = batchIdToGeometry.get(batchId);
                     if (!geometry) continue;
+                    if (!geometry.boundingBox) geometry.computeBoundingBox();
+                    if (!geometry.boundingBox) continue;
 
                     batchedMesh.getMatrixAt(batchId, tmpMatrix);
                     tmpMatrix.premultiply(batchedMesh.matrixWorld);
 
-                    const geometryBox = new THREE.Box3();
-                    if (!geometry.boundingBox) geometry.computeBoundingBox();
-                    geometryBox.copy(geometry.boundingBox!).applyMatrix4(tmpMatrix);
-
-                    if (frustum.intersectsBox(geometryBox)) {
+                    instanceBox.copy(geometry.boundingBox).applyMatrix4(tmpMatrix);
+                    if (frustum.intersectsBox(instanceBox)) {
+                        selectedSet.add(uuid);
                         selected.push(uuid);
                     }
                 } catch {
@@ -217,7 +237,8 @@ export function selectInteractablesByScreenRect(
         }
 
         box.setFromObject(object);
-        if (frustum.intersectsBox(box)) {
+        if (frustum.intersectsBox(box) && !selectedSet.has(object.uuid)) {
+            selectedSet.add(object.uuid);
             selected.push(object.uuid);
         }
     }
