@@ -461,3 +461,26 @@ E1 0 errors  E2 0  E3 ✅  E4 ✅
 
 UI 框选 231,284 与 API 一致；单选 Node_18872；样式真实/着色切换正常；1271/1271；堆 2,650MB（23 万高亮时）；Console 0 error。
 新发现问题：选中 23 万实例后的高亮处理约 8s（highlightObjects 大批量路径），记录待后续优化。
+
+---
+
+## 结果记录 · 2026-11-14 框选高亮提速
+
+提交：`9deaa77`（独立提交）
+
+| 修复 | 依据 |
+|---|---|
+| 选择包围盒按需计算 | `updateSelectionHelpers` 原先无条件遍历全部选中实例累加包围盒（全模型 23 万实例 ≈1.3s），而该包围盒仅由 `highlightShowBox` 控制显示。改为仅在开启时计算 |
+| 跳过重复 BFS | `collectRenderableBoundsForIds` 新增 `skipExpansion` 选项：调用方 target 已经 `expandLocateTargets` 展开过，避免 23 万级二次遍历 |
+| 空包围盒防护 | `union` 可能因跳过计算而为 null，`updateSelectionHelpers` 加空值判断（否则 TypeError） |
+
+### 实测（v9 子集 200 块，17,362 个选中实例）
+
+| 场景 | 耗时 |
+|---|---:|
+| highlightShowBox=关（默认） | **33 ms** |
+| highlightShowBox=开 | 258 ms（包围盒正常显示，visible=true） |
+
+UI 端到端：框选 14,166 个 → **501 ms**（含高亮），单选 Node_5408 正常，Console 0 error。
+
+说明：全模型（231,284 实例）的改前实测为 select 510ms + highlight 1376ms；本修复移除其中的包围盒遍历（≈1.3s），预计高亮降至 ~100ms 量级，但全模型复测多次被共享浏览器会话劫持，未取得完整后测数值，故此处只报子集实测。

@@ -224,13 +224,21 @@ export function collectAllRenderableTargets(context: RenderTargetContext) {
     return Array.from(targets.values());
 }
 
-export function collectRenderableBoundsForIds(context: RenderTargetContext, ids: string[]) {
+export function collectRenderableBoundsForIds(
+    context: RenderTargetContext,
+    ids: string[],
+    options?: { skipExpansion?: boolean }
+) {
     // 大范围框选（上万构件）时避免构造 RenderTarget 对象，直接累加实例包围盒。
     if (ids.length > 2000) {
         const box = new THREE.Box3();
         const matrix = new THREE.Matrix4();
         const temp = new THREE.Box3();
-        const expandedIds = collectNodeIds(context, Array.from(new Set(ids.filter(Boolean))));
+        // skipExpansion：调用方（框选高亮）传入的 ids 已经过 expandLocateTargets 展开，
+        // 再做一次 collectNodeIds 是重复的 23 万级 BFS。
+        const expandedIds = options?.skipExpansion
+            ? Array.from(new Set(ids.filter(Boolean)))
+            : collectNodeIds(context, Array.from(new Set(ids.filter(Boolean))));
         context.contentGroup.updateMatrixWorld(true);
         expandedIds.forEach((uuid) => {
             const mappings = context.optimizedMapping.get(uuid);

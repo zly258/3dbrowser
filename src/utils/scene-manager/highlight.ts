@@ -203,10 +203,16 @@ function updateSelectionHelpers(
     // 单选实例时，选择框只框住命中的那一个实例，而不是整个节点的所有实例。
     let union = focus ? getFocusedInstanceBounds(context, focus) : null;
     if (!union) {
-        union = collectRenderableBoundsForIds(context, Array.from(target));
+        // 选择包围盒只在可见（highlightShowBox 开启）时才有意义。
+        // 默认关闭时跳过 23 万级逐实例盒遍历（实测占高亮耗时的 ~1.3s）。
+        if (context.settings.highlightShowBox) {
+            // target 已经过 expandLocateTargets 展开，跳过 collectRenderableBoundsForIds
+            // 内部的二次展开（23 万级框选时那是一次重复 BFS）。
+            union = collectRenderableBoundsForIds(context, Array.from(target), { skipExpansion: true });
+        }
     }
 
-    if (!union.isEmpty()) {
+    if (union && !union.isEmpty()) {
         context.selectionBox.box.copy(union);
         const locatingFocus = !!(context.state.locateFocusUuid && target.has(context.state.locateFocusUuid));
         if (locatingFocus) {
