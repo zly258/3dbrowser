@@ -91,6 +91,7 @@
   --modal-head-h: 38px;
   --tree-row-h: 26px;
   --prop-row-h: 22px;
+  --prop-label-width: 96px;
   --icon-size: 13px;
   --icon-size-sm: 11px;
   --icon-btn-size: 26px;
@@ -123,6 +124,21 @@
   --scrollbar-track: #f2f4f7;
   --scrollbar-thumb: #b6bdc7;
   --scrollbar-thumb-hover: #8f97a3;
+
+  /* ---------- 搜索命中高亮 ---------- */
+  --search-hit-bg: #fef08a;
+  --search-hit-text: #14181d;
+
+  /* ---------- 层级阶梯（统一顺序，勿再写裸数字） ---------- */
+  --z-panel: 200;
+  --z-dropdown: 400;
+  --z-loading: 9000;
+  --z-scrim: 10050;
+  --z-modal: 10060;
+  --z-toast: 100000;
+
+  /* 结果区最小高度 */
+  --result-box-min-h: 140px;
 
   /* ============================================================
    * 兼容别名（旧类名仍在使用，映射到标准令牌，勿新增引用）
@@ -286,6 +302,9 @@
   --scrollbar-track: #262d36;
   --scrollbar-thumb: #55606b;
   --scrollbar-thumb-hover: #6b7784;
+
+  --search-hit-bg: #6b5300;
+  --search-hit-text: #fff3c4;
 }
 
 /* ============================================================

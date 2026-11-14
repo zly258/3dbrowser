@@ -29,6 +29,8 @@ export function applyDisplayMode(root: THREE.Object3D, mode: DisplayMode) {
         const mesh = object as THREE.Mesh;
         if (!mesh.isMesh || !mesh.geometry) return;
         if ((object as any).isLine || (object as any).isLineSegments || (object as any).isPoints) return;
+        // 超大分块无法生成棱边时保留实体面，避免线框模式下整块“消失”。
+        if (mesh.userData?.keepSolid) return;
 
         const materialOrMaterials = mesh.material as THREE.Material | THREE.Material[];
         if (!materialOrMaterials) return;

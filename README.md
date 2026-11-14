@@ -54,9 +54,9 @@ Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one doc
 ### Why it holds up
 
 - **Chunked NBIM + `BatchedMesh`.** Geometry is split into octree chunks and drawn as one `BatchedMesh` per chunk, so 231k components cost a few hundred draw calls instead of 231k.
-- **Memory budget instead of "load everything".** `maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` are derived from the JS heap limit plus each chunk's estimated decoded size; when the budget is exceeded, the farthest visible chunks are evicted first.
+- **Budget-aware residency.** `maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` are derived from the JS heap limit, the *actual* decoded geometry from `manifest.stats.memory`, and a measured ~4× BatchedMesh footprint factor. When the whole model fits it is loaded completely; when it does not, chunks are loaded by screen centrality/distance until the memory budget is reached, and far/stale chunks are recycled as the camera moves.
 - **On-demand rendering.** A frame is drawn only when something changed (camera, loading, selection), so an idle viewer costs almost nothing.
-- **Screen-space culling.** Chunks whose projection is under ~4 px are never decoded, and prefetch pauses while the camera moves.
+- **Priority-driven loading.** Oversized models load the most central/near chunks first up to the memory budget; selection and picking work on every loaded chunk.
 - **Instance-aware picking.** `batchId` → uuid/source maps resolve one specific instance per click, and box selection culls whole chunks by bounding box before touching individual instances.
 - **Lazy property index.** Above 20,000 property documents the index stays out of memory and is resolved on selection; search builds it once, in a single pass.
 - **Headless batch conversion.** LMB → NBIM conversion touches only CPU and disk, so it can run on machines without a usable GPU.
@@ -64,7 +64,7 @@ Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one doc
 ### Known limits
 
 - **NBIM is the fast path.** Raw multi-file sources must be merged once (the built-in batch converter downloads a single `.nbim`), otherwise the loader spends its time on conversion instead of streaming.
-- **Very distant chunks are skipped.** A chunk that projects to under ~4 px is never decoded; mixing several far-apart models can leave the far one mostly empty until you zoom in.
+- **Huge models are streamed, not all-resident.** A 2.9 GB / 1,271-chunk NBIM keeps roughly 400 chunks resident in a 4 GB JS heap (measured ~1.9 GB decoded geometry, ~3.4–3.5 GB total heap). Distant/unvisited chunks stay as ghost wireframe until they enter the budget; loading all 1,271 at once would need ~9 GB and risks OOM.
 - **First property search may take a moment** when the model carries more than 20,000 property documents, because the search index is built on first use.
 - **Software-rendered FPS is a floor, not a target.** The numbers above were measured without a GPU; GPU-backed browsers are considerably faster.
 
@@ -217,18 +217,26 @@ This project is intended for learning and research purposes only. **Commercial u
 | 指标 | 实测结果 | 说明 |
 | --- | --- | --- |
 | 首屏可交互（2.9 GB NBIM） | 3.0 – 4.5 s | 渐进式：分块未全部到齐即可操作 |
-| 全景环绕时的 JS 堆 | 2.0 – 3.1 GB，保持稳定 | 优化前为 3.5 → 7.5 GB 并最终 OOM |
+| 全景环绕时的 JS 堆（全量 1,271 块） | **2.4 – 2.6 GB** | 默认全量几何，4 GB 堆可用 |
+| 全模型充满视图绘制 | **1.86 亿面 / 1,271 draw call** | 默认不省略任何构件 |
 | 全景帧率 | ~26 fps | 软件渲染 |
 | 近景帧率 | ~54 fps | 软件渲染 |
 | 全屏框选 33,588 个构件 | ~70 ms | 框选覆盖整个视口 |
 | 拖动时 / 松手后的像素比 | 0.8 → 1.0 | 自适应画质 |
+| NBIM v9 文件体积（同模型） | **589 MB** | 原 v8 为 2.96 GB（−80%） |
+
+> 更完整的测量方法与分步收益见 [docs/benchmark.md](docs/benchmark.md)。
 
 ### 性能来源
 
 - **分块 NBIM + `BatchedMesh`**：几何按八叉树切成块，每块一个 `BatchedMesh`，23 万构件只需数百次 draw call，而不是 23 万次。
-- **内存预算而非“全部加载”**：`maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` 由 JS 堆上限和单块解码预估值动态推导；超出预算时优先卸载最远的可见分块。
+- **NBIM v9 量化压缩**：position int16 + 每块 scale/offset、normal int8、索引 u16/u32，分块 payload gzip；v8 旧文件仍可直接打开。
+- **法线 int8**：合并缓冲里法线从 12B/顶点降到 3B/顶点，由 GPU 归一化属性还原。
+- **逐实例几何视图按需构建**：拾取只用包围盒；边线/碰撞/面积才构建零拷贝视图，用完立即释放。
+- **内存预算而非“无脑全量”**：`maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` 由 JS 堆上限和单块解码预估值动态推导；预算足够时 1,271 块全量驻留，不足时优先卸载最远分块。
+- **默认全量几何，不牺牲显示**：默认不剔除任何小构件；只有显式加 `?coarseLod=1` 才启用按屏幕分辨率的远景 LOD（充满视图 1.86 亿面 → 4,700 万面、堆 2.5GB → 1.1GB）。
+- **可选渲染预算代理**：`chunkOptions.renderBudget = "auto"`（或 URL）时，超出 7000 万面的远景分块用合并线框代理（1 draw call）；默认关闭。
 - **按需渲染**：只有相机、加载、选中状态变化时才绘制一帧，空闲时几乎零开销。
-- **屏幕空间剔除**：投影小于约 4 px 的分块不参与解码；相机移动期间暂停预取。
 - **实例感知拾取**：`batchId` → uuid/来源的映射让单击能定位到具体实例；框选先用整块包围盒剔除，再落到实例级。
 - **属性索引懒加载**：超过 2 万条属性文档时不常驻内存，选中时按需解析；搜索时一次性单遍构建。
 - **无头批量转换**：LMB → NBIM 仅使用 CPU 与磁盘，可在没有可用 GPU 的机器上运行。
@@ -236,7 +244,9 @@ This project is intended for learning and research purposes only. **Commercial u
 ### 已知边界
 
 - **NBIM 才是快路径**：原始多文件格式建议先用内置批量转换合并成单个 `.nbim`，否则加载阶段的时间会花在转换上，而不是流式渲染。
-- **极远分块会被跳过**：投影小于约 4 px 的分块不参与解码；同时打开多个相距很远的模型时，远处那个在放大前可能几乎空白。
+- **预算不足时极远分块会被跳过**：投影小于约 4 px 的分块不参与解码；同时打开多个相距很远的模型时，远处那个在放大前可能几乎空白。
+- **LOD/线框代理默认关闭**：默认全量几何；只有显式配置 `renderStrategy=adaptive` 或 `renderBudget=auto` 时才会省略极小构件或显示线框代理。
+- **驻留策略**：内存允许时全量驻留，放大/平移不会因“离开视口”卸载；只有堆超过高水位或确实装不下时才从最远分块开始卸载。
 - **首次属性搜索可能稍慢**：模型属性文档超过 2 万条时，搜索索引在首次使用时构建。
 - **软件渲染帧率是下限而非目标**：上述帧率均在没有 GPU 的环境测得，真实 GPU 浏览器会明显更快。
 

@@ -436,7 +436,6 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
   const geometryMap = new Map<THREE.BufferGeometry, number>();
   const batchIdToExpressId = new Map<number, number>();
   const batchIdToUuid = new Map<number, string>();
-  const batchIdToColor = new Map<number, number>();
   const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
 
   for (const item of sanitizedItems) {
@@ -457,7 +456,6 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
       }
       
       const displayColor = toIndustrialDisplayColor(item.color);
-      const displayHex = displayColor.getHex();
       batchedMesh.setColorAt(instanceId, displayColor);
 
       if (item.expressID !== undefined) {
@@ -465,15 +463,12 @@ function createBatchedMeshFromItems(items: OctreeItem[], material: THREE.Materia
       }
       
       batchIdToUuid.set(instanceId, item.uuid);
-      batchIdToColor.set(instanceId, displayHex);
-      (batchedMesh.userData.batchIdToRawColor ??= new Map<number, number>()).set(instanceId, item.color);
       batchIdToGeometry.set(instanceId, item.geometry);
     }
   }
 
   batchedMesh.userData.batchIdToExpressId = batchIdToExpressId;
   batchedMesh.userData.batchIdToUuid = batchIdToUuid;
-  batchedMesh.userData.batchIdToColor = batchIdToColor;
   batchedMesh.userData.batchIdToGeometry = batchIdToGeometry;
   batchedMesh.computeBoundingBox();
   batchedMesh.computeBoundingSphere();
@@ -529,7 +524,6 @@ async function createBatchedMeshFromItemsAsync(
   const geometryMap = new Map<THREE.BufferGeometry, number>();
   const batchIdToExpressId = new Map<number, number>();
   const batchIdToUuid = new Map<number, string>();
-  const batchIdToColor = new Map<number, number>();
   const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
 
   for (let i = 0; i < sanitizedItems.length; i++) {
@@ -550,7 +544,6 @@ async function createBatchedMeshFromItemsAsync(
       }
 
       const displayColor = toIndustrialDisplayColor(item.color);
-      const displayHex = displayColor.getHex();
       batchedMesh.setColorAt(instanceId, displayColor);
 
       if (item.expressID !== undefined) {
@@ -558,8 +551,6 @@ async function createBatchedMeshFromItemsAsync(
       }
 
       batchIdToUuid.set(instanceId, item.uuid);
-      batchIdToColor.set(instanceId, displayHex);
-      (batchedMesh.userData.batchIdToRawColor ??= new Map<number, number>()).set(instanceId, item.color);
       batchIdToGeometry.set(instanceId, item.geometry);
     }
 
@@ -570,7 +561,6 @@ async function createBatchedMeshFromItemsAsync(
 
   batchedMesh.userData.batchIdToExpressId = batchIdToExpressId;
   batchedMesh.userData.batchIdToUuid = batchIdToUuid;
-  batchedMesh.userData.batchIdToColor = batchIdToColor;
   batchedMesh.userData.batchIdToGeometry = batchIdToGeometry;
   batchedMesh.computeBoundingBox();
   batchedMesh.computeBoundingSphere();

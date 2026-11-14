@@ -58,6 +58,7 @@ export const ClassicMenuItem: React.FC<MenuItemProps> = ({
                 aria-expanded={isOpen}
                 disabled={!enabled}
                 onClick={toggleMenu}
+                title={label}
             >
                 <span className="ui-toolbar-btn-label">{label}</span>
             </button>

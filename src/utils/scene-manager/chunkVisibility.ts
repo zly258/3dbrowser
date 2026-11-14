@@ -69,6 +69,8 @@ export function evaluateChunkVisibility(options: {
     initialChunkLoadTarget: number;
     chunkLoadResumeAt: number;
     chunkMeshCached: boolean;
+    /** 模型整体能装进内存预算时为 true：忽略 4px 小分块剔除，保证全部分块被加载、可拾取。 */
+    allowFullChunkLoad?: boolean;
 }) {
     const {
         chunk,
@@ -95,7 +97,8 @@ export function evaluateChunkVisibility(options: {
         chunkLoadedCount,
         initialChunkLoadTarget,
         chunkLoadResumeAt,
-        chunkMeshCached
+        chunkMeshCached,
+        allowFullChunkLoad
     } = options;
 
     toChunkDirection.copy(chunk.center).sub(cameraPos);
@@ -128,7 +131,7 @@ export function evaluateChunkVisibility(options: {
         ? Math.max(0, cameraForward.dot(toChunkDirection.divideScalar(dist)))
         : 1;
 
-    const isTooSmall = pixelSize < 4;
+    const isTooSmall = !allowFullChunkLoad && pixelSize < 4;
     const shouldHidePeripheralWhileMoving = phase === "moving"
         && centrality < profile.movingFocusCentralityThreshold
         && pixelSize < profile.movingFocusPixelThreshold;
@@ -159,7 +162,13 @@ export function evaluateChunkVisibility(options: {
         && pixelSize < 96;
 
     let priority: number | null = null;
-    if (!chunk.loaded && shouldBeVisible) {
+    // 刚因预算被卸载的分块，短时间内不要立刻重新加载（中心区域除外），
+    // 否则内存受限时会出现“卸载最远块 → 它仍在视野内 → 下一帧又加载”的持续抖动。
+    const recentlyUnloaded = !chunk.loaded
+        && typeof chunk.lastUnloadedAt === "number"
+        && chunk.lastUnloadedAt > 0
+        && (now - chunk.lastUnloadedAt) < 1200;
+    if (!chunk.loaded && shouldBeVisible && !(recentlyUnloaded && centrality < 0.75)) {
         const viewportBoost = centrality > 0.8 ? 4.5 : centrality > 0.62 ? 2.8 : 1.0;
         const sizeScore = Math.min(8, pixelSize / 120);
         const distanceScore = 1000 / (dist + 1);

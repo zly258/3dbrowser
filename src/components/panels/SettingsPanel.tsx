@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { TFunc, Lang } from "../../theme/locales";
 import { SceneSettings } from "../../utils/scene-manager/SceneManager";
 import { FloatingPanel } from "./FloatingPanel";
 import {
     Switch,
     SegmentedControl,
-    Select,
     Slider,
     ColorPicker
 } from "../common";
@@ -18,7 +17,7 @@ const Row: React.FC<{
   children?: React.ReactNode;
   labelWidth?: string;
   stretch?: boolean;
-}> = ({ label, children, labelWidth = '80px', stretch = false }) => (
+}> = ({ label, children, labelWidth = '112px', stretch = false }) => (
   <div
     className="ui-form-row ui-form-row-tight"
     style={{ ["--label-width" as any]: labelWidth }}
@@ -27,7 +26,7 @@ const Row: React.FC<{
       {label}
     </span>
     <div
-      className={`ui-form-value ${stretch ? "ui-form-value-stretch" : ""} ${stretch ? "" : "ui-form-value-end"}`}
+      className={`ui-form-value ${stretch ? "ui-form-value-stretch" : "ui-form-value-start"}`}
     >
       {children}
     </div>
@@ -43,9 +42,19 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   setLang,
   showStats,
   setShowStats,
-  theme
+  theme,
+  getRuntimeInfo
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [runtime, setRuntime] = useState<any>(null);
+
+  useEffect(() => {
+    if (!getRuntimeInfo) return;
+    const tick = () => setRuntime(getRuntimeInfo());
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [getRuntimeInfo]);
 
   const tabOptions = [
     { value: "general", label: t("setting_general") || "通用" },
@@ -64,26 +73,33 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
       title={t("settings")}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={440}
-      height={300}
+      width={560}
+      height={420}
       modal={true}
       movable={false}
       theme={theme}
     >
       <div className="ui-toolpanel-body ui-settings-panel-body">
-        <div className="ui-toolpanel-sticky-tabs">
-          <SegmentedControl
-            options={tabOptions}
-            value={activeTab}
-            onChange={(value) => setActiveTab(value as SettingsTab)}
-          />
-        </div>
+        <div className="ui-settings-layout">
+          <nav className="ui-settings-nav">
+            {tabOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`ui-settings-nav-item${activeTab === option.value ? " active" : ""}`}
+                onClick={() => setActiveTab(option.value as SettingsTab)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </nav>
+          <div className="ui-settings-content">
 
         {activeTab === "general" && (
           <div className="ui-panel-stack">
 
             {/* 外观模式（深色/浅色） */}
-            <Row label={t("st_theme_mode") || "外观模式"} labelWidth="70px" stretch={true}>
+            <Row label={t("st_theme_mode") || "外观模式"} labelWidth="112px">
               <SegmentedControl
                 options={[
                   { value: "light", label: t("st_theme_mode_light") || "浅色" },
@@ -101,7 +117,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             </Row>
 
             {/* 主题色 */}
-            <Row label={t("st_theme") || "主题配色"} labelWidth="70px" stretch={true}>
+            <Row label={t("st_theme") || "主题配色"} labelWidth="112px">
               <div className="ui-theme-picker">
                 {THEME_PRESETS.map((preset) => (
                   <button
@@ -132,26 +148,26 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
             </Row>
 
             {/* 语言选择 */}
-            <Row label={t("st_lang")} labelWidth="70px" stretch={true}>
-              <Select
-                value={currentLang}
+            <Row label={t("st_lang")} labelWidth="112px">
+              <SegmentedControl
                 options={[
                   { value: 'zh', label: '简体中文' },
                   { value: 'en', label: 'English' }
                 ]}
+                value={currentLang}
                 onChange={(v) => setLang(v as Lang)}
               />
             </Row>
 
             {/* 显示统计 */}
-            <Row label={t("st_monitor")} labelWidth="82px">
+            <Row label={t("st_monitor")} labelWidth="112px">
               <Switch
                 checked={showStats}
                 onChange={(v) => setShowStats(v)}
               />
             </Row>
 
-            <Row label={t("st_locate_mode") || "定位方式"} labelWidth="82px" stretch={true}>
+            <Row label={t("st_locate_mode") || "定位方式"} labelWidth="112px">
               <SegmentedControl
                 options={[
                   { value: "normal", label: t("st_locate_mode_normal") || "普通定位" },
@@ -171,7 +187,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {activeTab === "lighting" && (
           <div className="ui-panel-stack">
-            <Row label={t("st_ambient") || "环境光"} labelWidth="90px" stretch={true}>
+            <Row label={t("st_ambient") || "环境光"} labelWidth="112px" stretch={true}>
               <div className="ui-slider-field">
                 <div className="ui-inline-actions-stretch">
                   <Slider
@@ -188,7 +204,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               </div>
             </Row>
 
-            <Row label={t("st_dir") || "主光"} labelWidth="90px" stretch={true}>
+            <Row label={t("st_dir") || "主光"} labelWidth="112px" stretch={true}>
               <div className="ui-slider-field">
                 <div className="ui-inline-actions-stretch">
                   <Slider
@@ -205,7 +221,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               </div>
             </Row>
 
-            <Row label={t("st_back") || "背光"} labelWidth="90px" stretch={true}>
+            <Row label={t("st_back") || "背光"} labelWidth="112px" stretch={true}>
               <div className="ui-slider-field">
                 <div className="ui-inline-actions-stretch">
                   <Slider
@@ -226,13 +242,13 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
 
         {activeTab === "viewport" && (
           <div className="ui-panel-stack">
-          <Row label={t("st_bg") || "背景颜色"} labelWidth="90px" stretch={true}>
+          <Row label={t("st_bg") || "背景颜色"} labelWidth="112px">
             <ColorPicker
               value={settings.bgColor || (settings.themeMode === 'dark' ? "#12171c" : "#eef1f5")}
               onChange={(value) => onUpdate({ bgColor: value })}
             />
           </Row>
-          <Row label={t("st_viewcube_size")} labelWidth="90px" stretch={true}>
+          <Row label={t("st_viewcube_size")} labelWidth="112px" stretch={true}>
             <div className="ui-slider-field">
               <div className="ui-inline-actions-stretch">
                 <Slider
@@ -248,14 +264,14 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           </Row>
-          <Row label={t("st_adaptive_quality") || "Adaptive"} labelWidth="90px">
+          <Row label={t("st_adaptive_quality") || "Adaptive"} labelWidth="112px">
             <Switch
               checked={settings.adaptiveQuality !== false}
               onChange={(v) => onUpdate({ adaptiveQuality: v })}
             />
           </Row>
-          <Row label={t("st_performance_profile") || "性能策略"} labelWidth="90px">
-            <div className="ui-inline-actions ui-inline-actions-end">
+          <Row label={t("st_performance_profile") || "性能策略"} labelWidth="112px">
+            <div className="ui-inline-actions">
               <SegmentedControl
                 options={[
                   { value: 'smooth', label: t("st_perf_smooth") || '流畅优先' },
@@ -267,18 +283,42 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
               />
             </div>
           </Row>
+          <Row label={isZh ? "视锥剔除" : "Frustum Culling"} labelWidth="112px">
+            <Switch
+              checked={settings.frustumCulling !== false}
+              onChange={(v) => onUpdate({ frustumCulling: v })}
+            />
+          </Row>
+          <Row label={isZh ? "内存自适应驻留" : "Auto Evict"} labelWidth="112px">
+            <Switch
+              checked={settings.autoResident !== false}
+              onChange={(v) => onUpdate({ autoResident: v })}
+            />
+          </Row>
+          <Row label={isZh ? "驻留状态" : "Residency"} labelWidth="112px" stretch>
+            <span className="ui-toolpanel-caption ui-toolpanel-caption-muted">
+              {runtime
+                ? `${runtime.loaded}/${runtime.total} · ${(runtime.estimatedResidentMB / 1024).toFixed(2)}GB / ${(runtime.residentBudgetMB / 1024).toFixed(2)}GB${runtime.memoryPressure ? (isZh ? ' · 内存压力' : ' · Pressure') : ''}`
+                : '—'}
+            </span>
+          </Row>
+          <div className="ui-toolpanel-caption ui-toolpanel-caption-muted ui-settings-hint">
+            {isZh
+              ? "动态像素：拖动时按性能模式降采样，松手恢复满分辨率。视锥剔除：只绘制视野内的分块。内存自适应驻留：内存不足时从最远分块开始卸载；关闭后不自动卸载，内存不足可能导致页面崩溃。"
+              : "Dynamic pixel: downsamples while moving and restores on release. Frustum culling: draws only chunks inside the view. Auto evict: unloads the farthest chunks when memory is tight; turning it off may crash the page when memory runs out."}
+          </div>
           </div>
         )}
 
         {activeTab === "highlight" && (
           <div className="ui-panel-stack">
-          <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="90px" stretch={true}>
+          <Row label={t("st_highlight_color") || "高亮颜色"} labelWidth="112px">
             <ColorPicker
               value={settings.highlightColor || "#0b5fa5"}
               onChange={(value) => onUpdate({ highlightColor: value })}
             />
           </Row>
-          <Row label={t("st_highlight_box") || "高亮/定位包围盒"} labelWidth="110px">
+          <Row label={t("st_highlight_box") || "高亮/定位包围盒"} labelWidth="112px">
             <Switch
               checked={settings.highlightShowBox === true}
               onChange={(value) => onUpdate({ highlightShowBox: value })}
@@ -289,6 +329,8 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
           </div>
           </div>
         )}
+          </div>
+        </div>
       </div>
     </FloatingPanel>
   );
@@ -304,6 +346,14 @@ interface SettingsModalProps {
   showStats: boolean;
   setShowStats: (v: boolean) => void;
   theme?: any;
+  getRuntimeInfo?: () => {
+    loaded: number;
+    total: number;
+    estimatedResidentMB: number;
+    residentBudgetMB: number;
+    fitsAll: boolean;
+    memoryPressure: boolean;
+  };
 }
 
 

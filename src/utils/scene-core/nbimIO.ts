@@ -8,7 +8,8 @@ export interface NbimHeader {
 export interface NbimPropertyRow {
     group: string;
     key: string;
-    path: string;
+    /** 可由 group + key 推导；加载后会释放该字段以省字符串内存 */
+    path?: string;
     value: string;
     source?: string;
     rawKey?: string;

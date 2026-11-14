@@ -3,11 +3,12 @@ import { createBatchedMeshFromItemsAsync } from "../octree";
 
 export function applyUnloadChunk(options: {
     chunk: any;
+    now: number;
     unregisterOptimizedMeshMapping: (mesh: THREE.BatchedMesh) => void;
     cacheChunkMesh: (chunk: any, mesh: THREE.BatchedMesh) => void;
     ensureChunkGhost: (chunk: any) => void;
 }) {
-    const { chunk, unregisterOptimizedMeshMapping, cacheChunkMesh, ensureChunkGhost } = options;
+    const { chunk, now, unregisterOptimizedMeshMapping, cacheChunkMesh, ensureChunkGhost } = options;
     if (!chunk.loaded || !chunk.mesh) {
         return {
             changed: false,
@@ -26,6 +27,8 @@ export function applyUnloadChunk(options: {
 
     chunk.mesh = null;
     chunk.loaded = false;
+    // 记录卸载时间：短时间内不要立刻重新加载同一块，避免“卸一块、补一块”的死循环。
+    chunk.lastUnloadedAt = now;
 
     return {
         changed: true,
@@ -85,15 +88,16 @@ export async function resolveChunkMeshForLoad(options: {
         const buffer = await readChunkBuffer(chunk);
         const meta = nbimMeta.get(chunk.nbimFileId);
         const version = meta?.version ?? 8;
-        if (version !== 8) {
-            throw new Error(`Unsupported NBIM version: ${version}. Only V8 is supported.`);
+        if (version !== 8 && version !== 9) {
+            throw new Error(`Unsupported NBIM version: ${version}. Only V8/V9 are supported.`);
         }
 
         const workerResult = await runWorkerTask({
             buffer,
             version,
             originalUuid: chunk.originalUuid,
-            bimIdTable: meta?.bimIdTable
+            bimIdTable: meta?.bimIdTable,
+            minInstanceWorldSize: Number(chunk._coarseLodMinSize) || 0
         }, [buffer]);
 
         const mesh = reconstructBatchedMesh(workerResult, sharedMaterial);
@@ -112,7 +116,7 @@ export async function resolveChunkMeshForLoad(options: {
             }
         }
 
-        return { mesh, prefetchCandidates };
+        return { mesh, prefetchCandidates, triangles: Number(workerResult?.triangles) || 0, lodStats: workerResult?.lodStats as { minInstanceWorldSize: number; originalVerts: number; keptVerts: number } | undefined };
     }
 
     return { mesh: null, prefetchCandidates: [] as string[] };
@@ -127,6 +131,7 @@ export function attachLoadedChunkMesh(options: {
     globalOffset: THREE.Vector3;
     contentGroup: THREE.Group;
     registerOptimizedMeshMapping: (mesh: THREE.BatchedMesh) => void;
+    frustumCulled?: boolean;
 }) {
     const {
         chunk,
@@ -136,7 +141,8 @@ export function attachLoadedChunkMesh(options: {
         disposeChunkMesh,
         globalOffset,
         contentGroup,
-        registerOptimizedMeshMapping
+        registerOptimizedMeshMapping,
+        frustumCulled = true
     } = options;
 
     if (cancelledChunkIds.has(chunk.id) || !chunkIdSet.has(chunk.id)) {
@@ -161,10 +167,18 @@ export function attachLoadedChunkMesh(options: {
         optimizedGroup.name = chunk.groupName;
         optimizedGroup.userData.isOptimizedGroup = true;
         optimizedGroup.userData.originalUuid = chunk.originalUuid;
+        optimizedGroup.userData.loadId = chunk.nbimFileId || chunk.originalUuid;
         contentGroup.add(optimizedGroup);
     }
 
     optimizedGroup.add(mesh);
+    // 每块自带的包围球 + 原生视锥剔除：
+    // 手动剔除按时间预算扫描上千块时会滞后，滞后的“仍在可见”分块会被绘制，
+    // 造成“视口里没几个东西但很卡”。启用原生剔除后渲染器每帧用包围球直接跳过。
+    mesh.frustumCulled = frustumCulled;
+    if (frustumCulled && typeof (mesh as any).computeBoundingSphere === "function") {
+        (mesh as any).computeBoundingSphere();
+    }
     chunk.mesh = mesh;
     registerOptimizedMeshMapping(mesh);
 

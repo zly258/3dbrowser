@@ -14,7 +14,7 @@ export function reconstructBatchedMeshFromWorkerData(options: {
     const geometries: THREE.BufferGeometry[] = geoData.map((geometryData: any) => {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(geometryData.position, 3));
-        geometry.setAttribute("normal", new THREE.BufferAttribute(geometryData.normal, 3));
+        geometry.setAttribute("normal", new THREE.BufferAttribute(geometryData.normal, 3, true));
         if (geometryData.index && geometryData.index.length > 0) {
             geometry.setIndex(new THREE.BufferAttribute(geometryData.index, 1));
         } else if (hasAnyIndex) {
@@ -24,6 +24,18 @@ export function reconstructBatchedMeshFromWorkerData(options: {
                 index[i] = i;
             }
             geometry.setIndex(new THREE.BufferAttribute(index, 1));
+        }
+        // worker 已算好局部包围盒：写入 BufferGeometry，BatchedMesh 会复制，
+        // 首次框选/高亮/逐实例剔除就不必再扫一遍顶点。
+        if (geometryData.box && geometryData.box.length >= 6) {
+            const box = geometryData.box;
+            geometry.boundingBox = new THREE.Box3(
+                new THREE.Vector3(box[0], box[1], box[2]),
+                new THREE.Vector3(box[3], box[4], box[5])
+            );
+            const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+            const radius = geometry.boundingBox.getSize(new THREE.Vector3()).length() * 0.5;
+            geometry.boundingSphere = new THREE.Sphere(center, radius);
         }
         return geometry;
     });
@@ -39,16 +51,19 @@ export function reconstructBatchedMeshFromWorkerData(options: {
 
     applyIndustrialMaterialStyle(material);
     const batchedMesh = new THREE.BatchedMesh(instData.length, totalVerts, totalIndices, material);
+    // 分块级剔除由 SceneManager + 设置控制；逐实例剔除保持 three 默认开启
+    // （实测开启 470–583ms/帧，关闭反而 822–1014ms）。
     batchedMesh.frustumCulled = false;
-    (batchedMesh as any).perInstanceFrustumCulling = false;
 
     const geometryIds = geometries.map((geometry) => batchedMesh.addGeometry(geometry));
     const matrix = new THREE.Matrix4();
     const color = new THREE.Color();
     const batchIdToUuid = new Map<number, string>();
-    const batchIdToBimId = new Map<number, string>();
-    const batchIdToColor = new Map<number, number>();
-    const batchIdToGeometry = new Map<number, THREE.BufferGeometry>();
+
+    // 旧版 three 没有 getGeometryRangeAt 时无法按需切视图，只能保留源几何引用；
+    // r181 纯属兜底分支，正常不会走到。
+    const canBuildViews = typeof (batchedMesh as any).getGeometryRangeAt === "function";
+    const legacyGeometryById = canBuildViews ? null : new Map<number, THREE.BufferGeometry>();
 
     instData.forEach((instance: any) => {
         color.copy(toIndustrialDisplayColor(instance.color));
@@ -58,28 +73,25 @@ export function reconstructBatchedMeshFromWorkerData(options: {
         batchedMesh.setMatrixAt(instanceId, matrix);
         batchedMesh.setColorAt(instanceId, color);
 
-        const geometry = geometries[instance.geoIdx];
-        if (!geometry.boundingBox) {
-            geometry.computeBoundingBox();
-        }
-        if (geometry.boundingBox && (batchedMesh as any).setBoundingBoxAt) {
-            (batchedMesh as any).setBoundingBoxAt(instanceId, geometry.boundingBox);
-        }
-
-        const bimId = instance.bimId;
-        batchIdToUuid.set(instanceId, resolveUuidByBimId(originalUuid, bimId));
-        batchIdToBimId.set(instanceId, bimId);
-        batchIdToColor.set(instanceId, color.getHex());
-        (batchedMesh.userData.batchIdToRawColor ??= new Map<number, number>()).set(instanceId, instance.color);
-        batchIdToGeometry.set(instanceId, geometry);
+        batchIdToUuid.set(instanceId, resolveUuidByBimId(originalUuid, instance.bimId));
+        if (legacyGeometryById) legacyGeometryById.set(instanceId, geometries[instance.geoIdx]);
     });
 
     batchedMesh.userData.batchIdToUuid = batchIdToUuid;
-    batchedMesh.userData.batchIdToBimId = batchIdToBimId;
-    batchedMesh.userData.batchIdToColor = batchIdToColor;
-    batchedMesh.userData.batchIdToGeometry = batchIdToGeometry;
+    if (legacyGeometryById) {
+        batchedMesh.userData.batchIdToGeometry = legacyGeometryById;
+    }
     batchedMesh.computeBoundingBox();
     batchedMesh.computeBoundingSphere();
+
+    if (canBuildViews) {
+        // 合并缓冲已持有一份几何；逐实例视图由 batchedGeometryView 按需构建，
+        // worker 源数组不再被引用，交给 GC 回收（全模型约 916MB）。
+        geometries.forEach((geometry) => {
+            geometry.dispose();
+        });
+        geometries.length = 0;
+    }
 
     return batchedMesh;
 }

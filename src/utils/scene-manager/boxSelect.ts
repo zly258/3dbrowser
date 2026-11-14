@@ -58,7 +58,9 @@ export function applyStartBoxSelect(
         endY: clientY
     };
     updateRectElement(state);
-    return { state, needsRender: true };
+    // 拖拽框只是 DOM 覆盖层，3D 场景没有变化：不要为此重绘整帧
+    // （全模型一帧可到几百毫秒，会让框选拖拽卡成幻灯片）。
+    return { state, needsRender: false };
 }
 
 export function applyUpdateBoxSelect(
@@ -76,7 +78,7 @@ export function applyUpdateBoxSelect(
         endY: clientY
     };
     updateRectElement(state);
-    return { state, needsRender: true };
+    return { state, needsRender: false };
 }
 
 export function applyCancelBoxSelect(prevState: BoxSelectState): BoxSelectResult {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 interface ChunkProgressValue {
     loaded: number;
     total: number;
+    pending: number;
 }
 
 interface ChunkProgressHookOptions {
@@ -24,14 +25,14 @@ export function useChunkProgress({
 
     const flushChunkProgress = useCallback(() => {
         chunkProgressRafRef.current = null;
-        const pending = pendingChunkProgressRef.current;
-        if (!pending) return;
+        const next = pendingChunkProgressRef.current;
+        if (!next) return;
         pendingChunkProgressRef.current = null;
 
-        const { loaded, total } = pending;
+        const { loaded, total, pending } = next;
         onProgress((prev) => {
-            if (prev.loaded === loaded && prev.total === total) return prev;
-            return { loaded, total };
+            if (prev.loaded === loaded && prev.total === total && prev.pending === pending) return prev;
+            return { loaded, total, pending };
         });
 
         const fileSetId = fileSetIdRef.current;
@@ -43,8 +44,8 @@ export function useChunkProgress({
         }
     }, [completedFileSetsRef, fileSetIdRef, onCompleted, onProgress]);
 
-    const onManagerChunkProgress = useCallback((loaded: number, total: number) => {
-        pendingChunkProgressRef.current = { loaded, total };
+    const onManagerChunkProgress = useCallback((loaded: number, total: number, pending = 0) => {
+        pendingChunkProgressRef.current = { loaded, total, pending };
         if (chunkProgressRafRef.current === null) {
             chunkProgressRafRef.current = requestAnimationFrame(flushChunkProgress);
         }

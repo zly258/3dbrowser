@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getBatchedInstanceWorldBox } from "./batchedGeometryView";
 import type { StructureTreeNode } from "./types";
 
 type PickChunk = {
@@ -33,7 +34,9 @@ function buildInteractableList(context: SceneManagerPickingContext) {
 
     if (context.chunks.length > 0) {
         context.chunks.forEach((chunk) => {
-            if (chunk.loaded && chunk.mesh && chunk.mesh.visible) {
+            // 只要求已加载，不要求当前可见：渲染预算会把远景分块换成线框代理，
+            // 但数据仍然驻留，点选/框选必须覆盖它们，否则选择结果会随预算变化。
+            if (chunk.loaded && chunk.mesh) {
                 interactableList.push(chunk.mesh);
             }
         });
@@ -124,7 +127,19 @@ export function applyGetRayIntersects(
     context.raycaster.setFromCamera(context.mouse, context.camera);
 
     const state = ensureInteractableList(context);
-    const intersects = context.raycaster.intersectObjects(state.interactableList, false);
+    // 先用分块包围盒和射线做粗筛：全量驻留 1200+ 块时，
+    // 直接 raycast 所有 BatchedMesh（每块几百个实例）会点一次卡几百毫秒。
+    const rayBox = new THREE.Box3();
+    const candidates = state.interactableList.filter((object) => {
+        if (!(object as any).isBatchedMesh) return true;
+        const batched = object as THREE.BatchedMesh;
+        const boundingBox = (batched as any).boundingBox as THREE.Box3 | undefined;
+        if (!boundingBox) return true;
+        batched.updateMatrixWorld();
+        rayBox.copy(boundingBox).applyMatrix4(batched.matrixWorld);
+        return context.raycaster.ray.intersectsBox(rayBox);
+    });
+    const intersects = context.raycaster.intersectObjects(candidates, false);
     if (intersects.length === 0) {
         return { intersect: null, state };
     }
@@ -200,8 +215,7 @@ export function selectInteractablesByScreenRect(
         if ((object as any).isBatchedMesh) {
             const batchedMesh = object as THREE.BatchedMesh;
             const batchIdToUuid = batchedMesh.userData.batchIdToUuid as Map<number, string> | undefined;
-            const batchIdToGeometry = batchedMesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
-            if (!batchIdToUuid || !batchIdToGeometry) continue;
+            if (!batchIdToUuid) continue;
 
             // 先按整个分块包围盒剔除：框选通常只覆盖少数分块，避免逐个实例计算导致卡死。
             if ((batchedMesh as any).boundingBox) {
@@ -216,16 +230,9 @@ export function selectInteractablesByScreenRect(
                     if (selectedSet.has(uuid)) continue;
                     if (getVisibleAt && getVisibleAt.call(batchedMesh, batchId) === false) continue;
 
-                    const geometry = batchIdToGeometry.get(batchId);
-                    if (!geometry) continue;
-                    if (!geometry.boundingBox) geometry.computeBoundingBox();
-                    if (!geometry.boundingBox) continue;
-
-                    batchedMesh.getMatrixAt(batchId, tmpMatrix);
-                    tmpMatrix.premultiply(batchedMesh.matrixWorld);
-
-                    instanceBox.copy(geometry.boundingBox).applyMatrix4(tmpMatrix);
-                    if (frustum.intersectsBox(instanceBox)) {
+                    // 直接用合并缓冲上的 per-geometry 包围盒，不创建逐实例几何视图。
+                    const worldBox = getBatchedInstanceWorldBox(batchedMesh, batchId, instanceBox, tmpMatrix);
+                    if (worldBox && frustum.intersectsBox(worldBox)) {
                         selectedSet.add(uuid);
                         selected.push(uuid);
                     }

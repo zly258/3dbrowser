@@ -124,6 +124,15 @@
 
 .ui-sidebar-resize:hover { background: var(--accent-line); }
 
+/* 小窗口下侧栏依次隐藏，保证视口至少可用；需要时可用工具栏重新打开但不会挤压视口 */
+@media (max-width: 900px) {
+  .ui-sidebar-right { display: none; }
+}
+
+@media (max-width: 720px) {
+  .ui-sidebar-left { display: none; }
+}
+
 /* ---------- 图标按钮统一尺寸（全站） ---------- */
 .ui-btn.ui-btn-icon,
 .ui-btn-icon,

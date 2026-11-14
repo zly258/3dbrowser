@@ -95,7 +95,7 @@ function readRowValue(doc: any, keys: string[]) {
   const keySet = new Set(keys.map((key) => normalizePropertyToken(key)));
   const row = doc.rows.find((item: any) => {
     const key = normalizePropertyToken(item?.key || "");
-    const path = normalizePropertyToken(item?.path || "");
+    const path = normalizePropertyToken(item?.path || `${item?.group || ""}.${item?.key || ""}`);
     const rawKey = normalizePropertyToken(item?.rawKey || "");
     return keySet.has(key) || keySet.has(path) || keySet.has(rawKey);
   });
@@ -455,8 +455,9 @@ export function usePropertySearch({
 
           // 单次遍历 rows：避免每个文档、每个条件都 rows.filter() 产生大量临时数组。
           for (const row of rows) {
+            const rowPath = (row as any)?.path || `${(row as any)?.group || ""}.${(row as any)?.key || ""}`;
             const key = fastSearchToken((row as any)?.key || "");
-            const path = fastSearchToken((row as any)?.path || "");
+            const path = fastSearchToken(rowPath);
             const rawKey = fastSearchToken((row as any)?.rawKey || "");
             let normalizedValue: string | null = null;
 
@@ -467,7 +468,7 @@ export function usePropertySearch({
               if (normalizedValue === null) normalizedValue = fastSearchToken((row as any)?.value);
               if (evaluateCondition(normalizedValue, condition.operator, condition.value)) {
                 matchedFlags[ci] = true;
-                matchedBy.add(String((row as any)?.path || (row as any)?.key || ""));
+                matchedBy.add(String(rowPath || (row as any)?.key || ""));
               }
             }
           }

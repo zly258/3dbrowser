@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { collectRenderableBoundsForIds, type OptimizedMappingEntry } from "./renderTargets";
+import { getBatchedInstanceLocalBox } from "./batchedGeometryView";
 import type { StructureTreeNode } from "./types";
 
 type LocateDimmedInstance = {
@@ -252,16 +253,20 @@ function getFocusedInstanceBounds(
     const mapping = context.optimizedMapping
         .get(focus.uuid)
         ?.find((item) => item.mesh === focus.mesh && item.instanceId === focus.instanceId);
-    const geometry = mapping?.geometry
-        || (focus.mesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined)?.get(focus.instanceId);
-    if (!geometry) return null;
-    if (!geometry.boundingBox) geometry.computeBoundingBox();
-    if (!geometry.boundingBox) return null;
+
+    let localBox: THREE.Box3 | null = null;
+    if (mapping?.geometry) {
+        if (!mapping.geometry.boundingBox) mapping.geometry.computeBoundingBox();
+        if (mapping.geometry.boundingBox) localBox = mapping.geometry.boundingBox.clone();
+    } else {
+        localBox = getBatchedInstanceLocalBox(focus.mesh, focus.instanceId, new THREE.Box3());
+    }
+    if (!localBox) return null;
 
     const matrix = new THREE.Matrix4();
     focus.mesh.getMatrixAt(focus.instanceId, matrix);
     matrix.premultiply(focus.mesh.matrixWorld);
-    return geometry.boundingBox.clone().applyMatrix4(matrix);
+    return localBox.applyMatrix4(matrix);
 }
 
 function materialList(material: THREE.Material | THREE.Material[]) {

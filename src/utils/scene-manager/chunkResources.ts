@@ -1,10 +1,12 @@
 import * as THREE from "three";
+import { clearBatchedGeometryViews } from "./batchedGeometryView";
 
 export function disposeChunkMeshResource(options: {
     mesh: THREE.BatchedMesh;
     sharedMaterial: THREE.Material;
 }) {
     const { mesh, sharedMaterial } = options;
+    clearBatchedGeometryViews(mesh);
     if (mesh.geometry) {
         mesh.geometry.dispose();
     }
@@ -123,22 +125,28 @@ export function registerOptimizedMeshResourceMapping(options: {
 }) {
     const { mesh, optimizedMapping } = options;
     const batchIdToUuid = mesh.userData.batchIdToUuid as Map<number, string>;
-    const batchIdToColor = mesh.userData.batchIdToColor as Map<number, number>;
-    const batchIdToGeometry = mesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry>;
+    const legacyGeometries = mesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
+    const getGeometryIdAt = (mesh as any).getGeometryIdAt as ((id: number) => number) | undefined;
 
     if (!batchIdToUuid) return;
 
+    const color = new THREE.Color();
     for (const [batchId, originalUuid] of batchIdToUuid.entries()) {
         if (!optimizedMapping.has(originalUuid)) {
             optimizedMapping.set(originalUuid, []);
         }
-        const originalColor = batchIdToColor?.get(batchId) ?? 0xffffff;
-        const geometry = batchIdToGeometry?.get(batchId);
+        // 颜色直接从 BatchedMesh 的逐实例颜色缓冲读取，不再额外维护
+        // batchIdToColor / batchIdToRawColor 两张 Map（全模型可省 ~85MB）。
+        mesh.getColorAt(batchId, color);
+        const originalColor = color.getHex();
+        const geometry = legacyGeometries?.get(batchId);
+        const geometryId = geometry ? undefined : (getGeometryIdAt ? getGeometryIdAt.call(mesh, batchId) : undefined);
         optimizedMapping.get(originalUuid)!.push({
             mesh,
             instanceId: batchId,
             originalColor,
-            geometry
+            geometry,
+            geometryId
         });
     }
 }
@@ -166,9 +174,6 @@ export function releaseGhostLineResource(options: {
     line.name = "";
     line.scale.set(1, 1, 1);
     line.position.set(0, 0, 0);
-    if (line.material instanceof THREE.LineBasicMaterial) {
-        line.material.opacity = 0.3;
-    }
     ghostMeshPool.push(line);
 }
 

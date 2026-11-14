@@ -21,8 +21,10 @@ import {
 import {
     collectPrefetchCandidates,
     enqueueChunkPrefetch as enqueueChunkPrefetchItems,
+    getChunkReadCacheBytes,
     hasValidChunkBinaryRange as hasValidChunkBinaryRangeValue,
-    readChunkBuffer as readChunkBufferValue
+    readChunkBuffer as readChunkBufferValue,
+    trimChunkReadCache
 } from "./chunkIO";
 import {
     applyUnloadChunk,
@@ -36,6 +38,7 @@ import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
 import { applyIndustrialMaterials, applyIndustrialRendererSettings, createIndustrialSharedMaterial } from "./renderStyle";
 import { applyDisplayMode, normalizeDisplayMode, type DisplayMode } from "./displayMode";
 import { DisplayEdgeBuilder } from "./displayEdges";
+import { ChunkRenderProxy } from "./renderProxy";
 import { processChunkPrefetchQueue } from "./chunkPrefetch";
 import {
     acquireGhostLineResource,
@@ -50,6 +53,7 @@ import {
     touchChunkMeshCacheOrder,
     unregisterOptimizedMeshResourceMapping
 } from "./chunkResources";
+import { getBatchedGeometryId, getBatchedGeometryViewStats, getBatchedInstanceGeometry, getBatchedInstanceLocalBox, getBatchedInstanceWorldBox } from "./batchedGeometryView";
 import { processChunkWorkerQueue, queueChunkWorkerTask, type ChunkWorkerTask } from "./chunkWorkerPool";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
@@ -185,6 +189,17 @@ interface ChunkRuntimeProfile {
     recoveryLoadBudgetRatio: number;
 }
 
+/**
+ * 分块“解码后几何”到“真实堆占用”的经验倍数。
+ * 历史：早期同时保留 worker 源数组 + BatchedMesh 合并缓冲 → 4.2；
+ * S2 改为零拷贝视图 → 2.0。
+ * S5 视图改为按需构建后，实测全模型 1165 块：堆 3034MB、固定开销约 548MB、
+ * 读缓存 88MB → 每块真实足迹 ≈ 2.06MB，而名义几何 1.556MB → 倍数 ≈ 1.32。
+ * 取 1.32：1978MB × 1.32 ≈ 2611MB，小于预算 2699MB，1271 块可全量驻留，
+ * 预计堆 ≈ 3.25GB（78%），仍留出瞬时解码缓冲的余量。
+ */
+const CHUNK_FOOTPRINT_MULTIPLIER = 1.32;
+
 export class SceneManager {
     canvas: HTMLCanvasElement;
     renderer: THREE.WebGLRenderer;
@@ -287,10 +302,11 @@ export class SceneManager {
         exposure: 0.92,
         shadowQuality: 'medium',
         adaptiveQuality: true,
-        minPixelRatio: 0.8,
+        minPixelRatio: 0.6,
         maxPixelRatio: 2,
         targetFps: 50,
         performanceMode: 'balanced',
+        autoResident: true,
         highlightColor: "#0b5fa5",
         highlightShowBox: false,
         backLightInt: 0.62,
@@ -340,18 +356,36 @@ export class SceneManager {
     // 回调
     onStructureUpdate?: () => void;
     onMeasureUpdate?: (records: MeasurementRecord[]) => void;
-    onChunkProgress?: (loaded: number, total: number) => void;
+    onChunkProgress?: (loaded: number, total: number, pending: number) => void;
 
-    private lastReportedProgress = { loaded: -1, total: -1 };
+    private lastReportedProgress = { loaded: -1, total: -1, pending: -1 };
     private lastChunkProgressReportAt = 0;
     private chunkLoadedCount: number = 0;
     private chunkPadding = 0.2;
     private maxConcurrentChunkLoads = 128; // 提高并发
     private maxChunkLoadsPerFrame = 64;   // 提高并发
     private maxLoadedChunks = 512;        // 最大已加载分块数，超过则卸载最远的
+    /** 着色模式下的常驻上限；切到真实/线框时临时下调，切回时恢复 */
+    private shadedMaxLoadedChunks = 0;
+    /** 最近一次预算计算里的固定开销（属性/结构树/JS 基线），用于样式切换时估算 */
+    private lastBaseUsedMB = 650;
+    /** 切到真实/线框时，分帧卸载的定时器 */
+    private edgeTransitionTimer: number | null = null;
+    /** 切真实/线框后逐帧补边线的队列（避免一次性生成上百块边线卡死主线程） */
+    private edgeBuildQueue: THREE.Object3D[] = [];
+    private edgeBuildTimer: number | null = null;
+    private edgeBuildGeneration = 0;
     private maxCachedChunks = 48;
     /** 已加载分块解码后的内存预算（MB），为 0 时只按数量限制。 */
     private chunkResidentBudgetMB = 0;
+    /** NBIM 分块“原始字节 → 解码后几何内存”的实测比例（由 manifest.stats 推导）。 */
+    private nbimDecodedMBPerRawByte = 1;
+    /** 整个模型能装进内存预算时，忽略 4px 小分块剔除，把全部分块加载出来。 */
+    private allowFullChunkLoad = false;
+    /** 当前模型（含已打开的其他模型）能否全部装进内存预算 */
+    private fitsAllChunks = false;
+    /** 上一轮 culling 是否成功排到了待加载分块；用于按需渲染循环是否要继续。 */
+    private chunkLoadPlanPending = false;
     private chunkLoadingEnabled = true;
     private maxRenderDistance = 1000000; // 最大渲染距离
     private _lastCullingTime: number = 0;
@@ -374,6 +408,8 @@ export class SceneManager {
     private maxWorkers = 4; // 限制固定为 4 个，平衡性能与系统开销
     private readonly options: SceneManagerOptions;
     private readonly resolvedChunkOptions: ReturnType<typeof resolveSceneChunkOptions>;
+    /** 远景粗 LOD：按实例世界尺寸剔除小构件 */
+    private coarseLodEnabled = false;
     private isCameraMoving = false;
     private wasCameraMoving = false;
     private cameraMoveSettleTimer: number | null = null;
@@ -501,6 +537,29 @@ export class SceneManager {
     private ghostEdgesGeometry: THREE.EdgesGeometry;
     private ghostMaterial: THREE.LineBasicMaterial;
     private ghostMeshPool: THREE.LineSegments[] = [];
+    /** 渲染预算代理（远景分块用线框盒子代替完整几何，1 个 draw call） */
+    private renderProxy: ChunkRenderProxy | null = null;
+    private renderBudgetMode: "auto" | "full" = "full";
+    private renderBudgetTriangles = 70000000;
+    private renderBudgetChunkMax = 700;
+    private renderBudgetSelected = new Set<string>();
+    /** 连续多次采样到堆高水位后才触发卸载，避免瞬时 GC 抖动误判 */
+    private memoryPressureScore = 0;
+
+    private getChunkCostMB(chunk: any) {
+        const value = Number(chunk?.estimatedDecodedMB);
+        if (Number.isFinite(value) && value > 0) return value;
+        return Math.max(1.5, ((Number(chunk?.byteLength) || 0) / 1048576) * 1.1);
+    }
+
+    /** 当前已加载分块占用的估算内存（MB），用于从“已用堆”里扣除几何占用，避免重复计账。 */
+    private getResidentChunkMB() {
+        let sum = 0;
+        for (const chunk of this.chunks) {
+            if (chunk?.loaded) sum += this.getChunkCostMB(chunk);
+        }
+        return sum;
+    }
 
     private registerChunk(chunk: any) {
         this.chunks.push(chunk);
@@ -533,9 +592,20 @@ export class SceneManager {
         this.canvas = canvas;
         this.options = options;
         this.resolvedChunkOptions = resolveSceneChunkOptions(options.chunkOptions);
+        // 粗 LOD 仅显式开启（chunkOptions.coarseLod / URL ?coarseLod=1）。
+        // 之前按“堆上限 <2.8GB 自动开启”，但放大触发的卸载/重载会造成导航抖动，
+        // 且会悄悄让远景小构件不可选；默认关闭，由用户显式选择。
+        this.coarseLodEnabled = !!this.resolvedChunkOptions.coarseLod;
         if (options.performancePreset) {
             this.settings.performanceMode = options.performancePreset;
         }
+        // 渲染预算代理：默认关闭，只有 URL ?renderBudget=auto 或 chunkOptions 显式开启
+        const renderBudgetParam = typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("renderBudget")
+            : null;
+        this.renderBudgetMode = (renderBudgetParam === "auto" || this.resolvedChunkOptions.renderBudget === "auto")
+            ? "auto"
+            : "full";
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
 
@@ -545,7 +615,7 @@ export class SceneManager {
         this.initHardwareProfile();
 
         this.ghostEdgesGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
-        this.ghostMaterial = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.3 });
+        this.ghostMaterial = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.1 });
 
         // 渲染器
         this.renderer = new THREE.WebGLRenderer({
@@ -587,6 +657,7 @@ export class SceneManager {
         this.ghostGroup = new THREE.Group();
         this.ghostGroup.name = "Ghost";
         this.scene.add(this.ghostGroup);
+        this.renderProxy = new ChunkRenderProxy(this.scene, this.ghostMaterial, 4096);
 
         this.clipHelpersGroup = new THREE.Group();
         this.clipHelpersGroup.name = "ClipHelpers";
@@ -752,6 +823,23 @@ export class SceneManager {
         this.mouse = new THREE.Vector2();
 
         this.animate = this.animate.bind(this);
+
+        // 调试钩子：仅在 URL 带 ?dshDebug=1 时挂到 window，便于自动化测试断言
+        // （分块数、内存分类、拾取、结构树）。生产环境不加全局污染。
+        if (typeof window !== "undefined") {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has("dshDebug")) {
+                    (window as any).__viewer = this;
+                }
+                if (params.has("coarseLod")) {
+                    this.coarseLodEnabled = true;
+                }
+            } catch {
+                // 忽略 URL 解析异常
+            }
+        }
+
         this.markSceneDirty();
     }
 
@@ -772,20 +860,303 @@ export class SceneManager {
      */
     setDisplayMode(mode: DisplayMode) {
         this.displayMode = normalizeDisplayMode(mode);
-        applyDisplayMode(this.contentGroup, this.displayMode);
+        // 线框需要“先有棱边再隐藏实体”：边线是逐帧补的，先按着色显示，
+        // 等边线生成完再真正切到线框，避免切换瞬间模型大面积消失。
+        applyDisplayMode(this.contentGroup, this.displayMode === "wireframe" ? "shaded" : this.displayMode);
         // 真实模式边线适当减弱；线框模式保持清晰。
         this.displayEdges.setBaseOpacity(this.displayMode === "wireframe" ? 0.9 : 0.48);
+        // 未加载分块的 ghost 线框：着色模式压淡，避免整个模型看起来像“被拆成骨架”。
+        this.ghostMaterial.opacity = this.displayMode === "shaded" ? 0.1 : 0.3;
 
         if (this.displayMode === "shaded") {
-            this.displayEdges.setVisible(false);
+            // 切回着色时释放所有边线（全模型边线可达 1GB+），并恢复常驻分块上限。
+            this.cancelEdgeModeTransition();
+            this.cancelProgressiveEdgeBuild();
+            if (this.displayEdges.getStats().count > 0) this.displayEdges.clear();
+            this.displayEdgesBuilt = false;
+            if (this.shadedMaxLoadedChunks > 0) this.maxLoadedChunks = this.shadedMaxLoadedChunks;
+            this.markSceneDirty({ needsCulling: true });
         } else {
-            if (!this.displayEdgesBuilt) {
-                this.displayEdges.buildFor(this.contentGroup);
-                this.displayEdgesBuilt = true;
+            const isWireframe = this.displayMode === "wireframe";
+            // 大模型真实样式只给最近的一小批分块描边：远处棱边本来就看不清，
+            // 少做一批能明显缩短样式切换和后续旋转的开销；小模型保持原范围。
+            const isLargeModel = this.chunks.length > 400;
+            const realisticEdgeLimit = isLargeModel ? 24 : 40;
+            // 真实样式：保留全部实体，只给近处分块补边线；
+            // 线框样式：实体被隐藏，必须把所有可驻留分块都补上边线。
+            this.displayEdges.setByteBudget(isWireframe
+                ? this.computeEdgeModeByteBudgetMB()
+                : Math.max(96, Math.min(isLargeModel ? 160 : 240, this.computeEdgeModeByteBudgetMB() * 0.4)));
+
+            if (isWireframe) {
+                const edgeCap = this.computeEdgeModeChunkCap();
+                if (edgeCap < this.maxLoadedChunks) {
+                    this.maxLoadedChunks = edgeCap;
+                    this.beginEdgeModeTransition(edgeCap);
+                } else {
+                    this.startProgressiveEdgeBuild();
+                }
+            } else {
+                this.cancelEdgeModeTransition();
+                if (this.shadedMaxLoadedChunks > 0) this.maxLoadedChunks = this.shadedMaxLoadedChunks;
+                this.startProgressiveEdgeBuild();
+                this.markSceneDirty({ needsCulling: true });
             }
-            this.displayEdges.setVisible(true);
         }
         this.requestRender();
+    }
+
+    /** 真实/线框模式下，按“几何 + 边线”双份成本估算可常驻分块数 */
+    private computeEdgeModeChunkCap() {
+        const baseCap = this.shadedMaxLoadedChunks || this.maxLoadedChunks || 256;
+        const perfMemory = (performance as any)?.memory;
+        const heapLimitMB = perfMemory?.jsHeapSizeLimit
+            ? perfMemory.jsHeapSizeLimit / 1048576
+            : 4096;
+        // 用预算时记录的固定开销，而不是瞬时 usedHeap（切线框时边线正在分配，
+        // 用瞬时值会把上限越算越小，最终把模型裁到只剩几十块）。
+        const baseUsedMB = Math.max(0, this.lastBaseUsedMB || 650);
+        const cacheMB = getChunkReadCacheBytes(this.chunkReadCache) / 1048576;
+        const budgetMB = Math.max(384, heapLimitMB * 0.78 - baseUsedMB - Math.min(128, cacheMB));
+        // 实测：几何实际 ≈ 估算 × 0.63，边线 ≈ 估算 × 1.0 → 每块总成本 ≈ 估算 × 1.63
+        const perChunkMB = Math.max(1.0, this.getAverageChunkFootprintMB() * 1.63);
+        // 保护性上限：边线生成本身是同步重活，块数过多会先卡死再 OOM。
+        // 大模型线框只保留近处约 200 块细节，其余分块显示框线（后续再做渐进生成）。
+        const EDGE_DETAIL_CAP = 200;
+        return Math.max(48, Math.min(baseCap, EDGE_DETAIL_CAP, Math.floor(budgetMB / perChunkMB)));
+    }
+
+    /** 真实/线框模式可用的边线总字节预算（MB） */
+    private computeEdgeModeByteBudgetMB() {
+        const perfMemory = (performance as any)?.memory;
+        const heapLimitMB = perfMemory?.jsHeapSizeLimit ? perfMemory.jsHeapSizeLimit / 1048576 : 4096;
+        const baseUsedMB = Math.max(0, this.lastBaseUsedMB || 650);
+        const budgetMB = Math.max(384, heapLimitMB * 0.78 - baseUsedMB);
+        return Math.max(128, Math.min(650, budgetMB * 0.45));
+    }
+
+    /**
+     * 渲染预算：数据全量驻留，但一帧只提交预算内的分块几何，
+     * 其余可见分块用合并线框代理表示。避免“充满视图 1.8 亿三角面”拖垮交互。
+     */
+    private applyRenderBudget(candidates: Array<{ chunk: any; pixel: number; dist: number }>) {
+        const proxy = this.renderProxy;
+        if (!proxy) return;
+        const totalChunks = this.chunks.length;
+        const active = this.renderBudgetMode !== "full"
+            && this.displayMode !== "wireframe"
+            && totalChunks > this.renderBudgetChunkMax;
+        if (!active) {
+            proxy.clear();
+            this.renderBudgetSelected.clear();
+            for (const { chunk } of candidates) {
+                if (chunk.mesh && !chunk.mesh.visible) chunk.mesh.visible = true;
+            }
+            return;
+        }
+
+        const triOf = (chunk: any) => Number(chunk?.triCount) || 0;
+        // 正交相机下 pixel 只反映世界尺寸、不反映距离；若只按 pixel 排序，
+        // 会把近处分块换成线框、却在画面上盖住近景。这里统一优先保证近处分块。
+        candidates.sort((a, b) => a.dist - b.dist || b.pixel - a.pixel);
+
+        const selected = new Set<any>();
+        let triangles = 0;
+        // 1) 先保留上次选中的分块（仍可见且未超 1.2 倍预算），减少相机微动时的闪变
+        for (const item of candidates) {
+            const chunk = item.chunk;
+            if (!this.renderBudgetSelected.has(chunk.id)) continue;
+            const tri = triOf(chunk);
+            if (selected.size < this.renderBudgetChunkMax && triangles + tri <= this.renderBudgetTriangles * 1.2) {
+                selected.add(chunk);
+                triangles += tri;
+            }
+        }
+        // 2) 再按屏幕尺寸从大到小补满预算
+        for (const item of candidates) {
+            const chunk = item.chunk;
+            if (selected.has(chunk)) continue;
+            const tri = triOf(chunk);
+            if (selected.size < this.renderBudgetChunkMax && triangles + tri <= this.renderBudgetTriangles) {
+                selected.add(chunk);
+                triangles += tri;
+            }
+        }
+
+        const boxes: Array<{ min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }> = [];
+        for (const item of candidates) {
+            const chunk = item.chunk;
+            const show = selected.has(chunk);
+            if (chunk.mesh && chunk.mesh.visible !== show) chunk.mesh.visible = show;
+            if (!show && chunk.bounds) {
+                boxes.push({ min: chunk.bounds.min, max: chunk.bounds.max });
+            }
+        }
+        this.renderBudgetSelected = new Set(Array.from(selected).map((chunk) => chunk.id));
+        proxy.update(boxes);
+    }
+
+    private getAverageChunkFootprintMB() {
+        let sum = 0;
+        let count = 0;
+        for (const chunk of this.chunks) {
+            const value = Number(chunk?.estimatedDecodedMB);
+            if (Number.isFinite(value) && value > 0) {
+                sum += value;
+                count++;
+            }
+        }
+        return count > 0 ? sum / count : 2.0;
+    }
+
+    /** 远景粗 LOD 的实例尺寸阈值（米）：只有显式选择“自适应分辨率 LOD”时才启用。
+     *  按当前视口“1 像素对应多少世界单位”推导，默认丢弃投影小于约 1.35px 的小构件。 */
+    private getCoarseLodMinSize(chunk: any): number {
+        if (!this.coarseLodEnabled) return 0;
+        const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
+        const canvasHeight = this.renderer.domElement.clientHeight || 1;
+        const onePixelWorld = Math.abs(viewHeight) / canvasHeight;
+        if (!Number.isFinite(onePixelWorld) || onePixelWorld <= 0) return 0;
+        return Math.max(0.015, Math.min(0.6, onePixelWorld * 1.35));
+    }
+
+    /** 同步卸载最远的分块，直到已加载数不超过 cap（切换显示样式前调用） */
+    private trimLoadedChunksForMode(cap: number) {
+        if (!Number.isFinite(cap) || cap <= 0) return;
+        if (this.chunkLoadedCount <= cap) return;
+        const cameraPos = this.camera.position;
+        const centerOf = (chunk: any) => {
+            if (!chunk.center && chunk.bounds) chunk.center = chunk.bounds.getCenter(new THREE.Vector3());
+            return chunk.center || cameraPos;
+        };
+        const loaded = this.chunks.filter((chunk: any) => chunk?.loaded && chunk?.mesh);
+        loaded.sort((a: any, b: any) => centerOf(b).distanceToSquared(cameraPos) - centerOf(a).distanceToSquared(cameraPos));
+        for (const chunk of loaded) {
+            if (this.chunkLoadedCount <= cap) break;
+            this.unloadChunk(chunk);
+        }
+    }
+
+    private cancelEdgeModeTransition() {
+        if (this.edgeTransitionTimer !== null) {
+            window.clearTimeout(this.edgeTransitionTimer);
+            this.edgeTransitionTimer = null;
+        }
+    }
+
+    private cancelProgressiveEdgeBuild() {
+        this.edgeBuildGeneration++;
+        if (this.edgeBuildTimer !== null) {
+            window.clearTimeout(this.edgeBuildTimer);
+            this.edgeBuildTimer = null;
+        }
+        this.edgeBuildQueue = [];
+    }
+
+    /**
+     * 边线全部补完后：
+     *  - 线框模式真正隐藏实体面（超大、无法描边的分块保留实体兜底，避免消失）
+     *  - 真实模式恢复实体面
+     */
+    private finalizeDisplayModeAfterEdges() {
+        for (const chunk of this.chunks) {
+            const mesh = chunk?.mesh as THREE.Mesh | undefined;
+            if (!mesh || !mesh.userData?.__edgeSkipped || mesh.userData.keepSolid) continue;
+            const material = mesh.material as THREE.Material | THREE.Material[];
+            if (Array.isArray(material)) continue;
+            if (material && typeof (material as any).clone === "function") {
+                const clone = material.clone();
+                clone.visible = true;
+                mesh.material = clone;
+            }
+            mesh.userData.keepSolid = true;
+        }
+        applyDisplayMode(this.contentGroup, this.displayMode);
+        this.requestRender();
+    }
+
+    /**
+     * 逐帧补边线：每帧最多 8ms，避免切换真实/线框时一次性对上百个分块做
+     * EdgesGeometry 把主线程卡死（全模型切换曾出现数十秒无响应）。
+     */
+    private startProgressiveEdgeBuild() {
+        this.cancelProgressiveEdgeBuild();
+        const generation = this.edgeBuildGeneration;
+        if (this.displayMode === "shaded") return;
+
+        this.displayEdges.clear();
+        this.displayEdgesBuilt = false;
+
+        const isWireframe = this.displayMode === "wireframe";
+        const realisticEdgeLimit = this.chunks.length > 400 ? 24 : 40;
+        let loaded = this.chunks.filter((chunk: any) => chunk?.loaded && chunk?.mesh);
+        if (!isWireframe) {
+            // 真实样式：只给屏幕占比最大的近处分块补边线，远处保持纯着色。
+            loaded = loaded
+                .filter((chunk: any) => Number(chunk?._lastPixelSize) > 8)
+                .sort((a: any, b: any) => Number(b._lastPixelSize) - Number(a._lastPixelSize))
+                .slice(0, realisticEdgeLimit);
+        }
+        // 排序后 reverse，配合 pop() 从“最值得”的分块开始。
+        this.edgeBuildQueue = loaded.map((chunk: any) => chunk.mesh as THREE.Object3D).reverse();
+
+        const step = () => {
+            this.edgeBuildTimer = null;
+            if (generation !== this.edgeBuildGeneration || this.disposed || this.displayMode === "shaded") return;
+            // 分块加载仍在进行时先让路，避免边线生成和 worker 解码抢主线程造成卡顿。
+            if (this.processingChunks.size > 2) {
+                this.edgeBuildTimer = window.setTimeout(step, 200);
+                return;
+            }
+            const deadline = performance.now() + 8;
+            while (this.edgeBuildQueue.length > 0 && performance.now() < deadline) {
+                const object = this.edgeBuildQueue.pop();
+                if (!object || !object.parent) continue;
+                this.displayEdges.buildFor(object, true);
+            }
+            if (this.edgeBuildQueue.length > 0) {
+                this.edgeBuildTimer = window.setTimeout(step, 16);
+            } else {
+                this.displayEdgesBuilt = true;
+                this.displayEdges.setVisible(true);
+                this.finalizeDisplayModeAfterEdges();
+                this.requestRender();
+            }
+        };
+        this.edgeBuildTimer = window.setTimeout(step, 16);
+    }
+
+    /**
+     * 切到真实/线框：分帧把常驻块数降到 targetCap，再统一生成边线。
+     * 一次性卸载几百块会产生 >1GB 瞬时垃圾，GC 跟不上就会把堆冲到 4.5GB+；
+     * 每帧只卸 48 块，给 GC 留出回收窗口。
+     */
+    private beginEdgeModeTransition(targetCap: number) {
+        this.cancelEdgeModeTransition();
+        const started = performance.now();
+        const step = () => {
+            this.edgeTransitionTimer = null;
+            if (this.disposed || this.displayMode === "shaded") return;
+
+            const loaded = this.chunkLoadedCount;
+            if (loaded > targetCap + 8) {
+                this.maxLoadedChunks = Math.max(targetCap, loaded - 48);
+                this.markSceneDirty({ needsCulling: true });
+                this.checkCullingAndLoad();
+                if (performance.now() - started < 20000) {
+                    this.edgeTransitionTimer = window.setTimeout(step, 160);
+                    return;
+                }
+                // 兜底：超时后同步一次卸干净
+                this.maxLoadedChunks = targetCap;
+                this.trimLoadedChunksForMode(targetCap);
+            }
+
+            this.maxLoadedChunks = targetCap;
+            this.startProgressiveEdgeBuild();
+            this.requestRender();
+        };
+        this.edgeTransitionTimer = window.setTimeout(step, 200);
     }
 
     getDisplayMode(): DisplayMode {
@@ -805,12 +1176,12 @@ export class SceneManager {
     /** 内容新增后为新增部分生成棱边（真实/线框模式） */
     private buildDisplayEdgesFor(object: THREE.Object3D) {
         if (this.displayMode === "shaded") return;
-        if (this.displayEdgesBuilt) {
-            this.displayEdges.buildFor(object, true);
-        } else {
-            this.displayEdges.buildFor(this.contentGroup);
-            this.displayEdgesBuilt = true;
+        if (this.edgeBuildTimer !== null) {
+            this.edgeBuildQueue.push(object);
+            return;
         }
+        this.displayEdges.buildFor(object, true);
+        this.displayEdgesBuilt = true;
         this.displayEdges.setVisible(true);
     }
 
@@ -855,10 +1226,38 @@ export class SceneManager {
     }
 
     updateSettings(newSettings: Partial<SceneSettings>) {
+        const previousAdaptiveQuality = this.settings.adaptiveQuality;
+        const previousMaxPixelRatio = this.settings.maxPixelRatio;
+        const previousMinPixelRatio = this.settings.minPixelRatio;
+        const previousPerformanceMode = this.settings.performanceMode;
         const highlightColorChanged = newSettings.highlightColor !== undefined
             && newSettings.highlightColor !== this.settings.highlightColor;
         this.settings = { ...this.settings, ...newSettings };
         this.applyHighlightSettings();
+
+        // 自适应画质开关/像素比范围变化要立即生效：
+        // 之前只改了 settings，像素比要等下一次相机运动或 resize 才更新，
+        // 表现为“关闭自适应画质没有效果”。
+        const qualityChanged = (newSettings.adaptiveQuality !== undefined && newSettings.adaptiveQuality !== previousAdaptiveQuality)
+            || (newSettings.maxPixelRatio !== undefined && newSettings.maxPixelRatio !== previousMaxPixelRatio)
+            || (newSettings.minPixelRatio !== undefined && newSettings.minPixelRatio !== previousMinPixelRatio);
+        if (qualityChanged) {
+            const desiredRatio = this.settings.adaptiveQuality
+                ? this.computeDesiredPixelRatio()
+                : Math.min(window.devicePixelRatio || 1, this.settings.maxPixelRatio ?? 2);
+            if (this.applyPixelRatio(desiredRatio)) {
+                const rect = this.canvas.getBoundingClientRect();
+                this.applyCanvasSize(Math.max(1, rect.width), Math.max(1, rect.height));
+            }
+            this.markSceneDirty();
+        }
+
+        // 渲染预算/几何策略已收敛：默认全量几何，这里不再提供运行时切换。
+
+        // 性能策略切换立即生效（之前被 performancePreset 覆盖，永久无效）
+        if (newSettings.performanceMode !== undefined && newSettings.performanceMode !== previousPerformanceMode) {
+            this.applyPerformanceMode(newSettings.performanceMode);
+        }
 
         // 高亮颜色变化后立即重绘当前高亮的实例，否则要重新点选才生效。
         if (highlightColorChanged && this.highlightedUuids.size > 0) {
@@ -903,9 +1302,9 @@ export class SceneManager {
                 if ((obj as THREE.Mesh).isMesh) {
                     obj.frustumCulled = newSettings.frustumCulling!;
                 } else if ((obj as any).isBatchedMesh) {
-                    // BatchedMesh 由 SceneManager 的分块逻辑控制可见性，
-                    // 禁用其内部剔除以防止靠近消失的问题
-                    obj.frustumCulled = false;
+                    // 分块自身有正确的包围球，交给渲染器做原生视锥剔除；
+                    // 手动可见性只负责加载/ghost 逻辑。
+                    obj.frustumCulled = newSettings.frustumCulling !== false;
                 }
             });
         }
@@ -1005,15 +1404,14 @@ export class SceneManager {
 
         this.renderFrame();
 
-        const chunksIncomplete = this.chunkLoadingEnabled && this.chunks.length > 0 && this.chunkLoadedCount < this.chunks.length;
+        const chunkWorkActive = this.chunkLoadingEnabled
+            && (this.processingChunks.size > 0 || this.chunkWarmupActive || this.chunkLoadPlanPending);
         const locatingPulse = !!(this.locateFocusUuid && (this.highlightMesh.visible || this.selectionBox.visible));
         const highlightGlowing = !!this.highlightedInstance && now < this.highlightGlowUntil;
         const keepLoop =
             this.isCameraMoving ||
             this.isInPostMoveRecovery(now) ||
-            this.processingChunks.size > 0 ||
-            this.chunkWarmupActive ||
-            chunksIncomplete ||
+            chunkWorkActive ||
             highlightGlowing ||
             locatingPulse;
 
@@ -1059,9 +1457,59 @@ export class SceneManager {
         this.displayEdges.setOpacityFactor(1 - 0.82 * far);
     }
 
+    private applyPerformanceMode(mode: "balanced" | "smooth" | "quality") {
+        this.settings.performanceMode = mode;
+        this.cullingTimeBudgetMovingMs = mode === "smooth" ? 6 : mode === "quality" ? 9 : 7.5;
+        this.cullingTimeBudgetRecoveryMs = mode === "smooth" ? 8 : mode === "quality" ? 12 : 10.5;
+        this.cullingTimeBudgetIdleMs = mode === "smooth" ? 10 : mode === "quality" ? 16 : 14;
+        const desired = this.computeDesiredPixelRatio();
+        if (this.applyPixelRatio(desired)) {
+            const rect = this.canvas.getBoundingClientRect();
+            this.applyCanvasSize(Math.max(1, rect.width), Math.max(1, rect.height));
+        }
+        this.markSceneDirty();
+    }
+
+    setPerformancePreset(mode: "balanced" | "smooth" | "quality") {
+        this.options.performancePreset = mode;
+        this.applyPerformanceMode(mode);
+    }
+
+    /** 设置面板用的只读运行信息（驻留/预算/策略） */
+    getRenderStrategyInfo() {
+        return {
+            loaded: this.chunkLoadedCount,
+            total: this.chunks.length,
+            estimatedResidentMB: Number(this.getResidentChunkMB().toFixed(1)),
+            residentBudgetMB: Number(this.chunkResidentBudgetMB.toFixed(1)),
+            fitsAll: this.fitsAllChunks,
+            memoryPressure: this.memoryPressureScore >= 2
+        };
+    }
+
+    /** 连续两次采样到堆超过 82% 才视为内存压力，低于 68% 自动解除。 */
+    private isMemoryPressureHigh(): boolean {
+        const memory = (performance as any)?.memory;
+        if (!memory?.jsHeapSizeLimit) return false;
+        const usedMB = memory.usedJSHeapSize / 1048576;
+        const limitMB = memory.jsHeapSizeLimit / 1048576;
+        if (usedMB >= limitMB * 0.82) this.memoryPressureScore = Math.min(3, this.memoryPressureScore + 1);
+        else if (usedMB <= limitMB * 0.68) this.memoryPressureScore = 0;
+        return this.memoryPressureScore >= 2;
+    }
+
     private updateAdaptiveQuality() {
         if (!this.settings.adaptiveQuality) {
             this.wasCameraMoving = this.isCameraMoving;
+            // 兜底：关闭自适应画质后必须始终满分辨率。
+            // 否则历史遗留的低 DPR 会在缩放/拖动时一直保留，表现为“越缩放越糊”。
+            const maxRatio = Math.min(window.devicePixelRatio || 1, this.settings.maxPixelRatio ?? 2);
+            if (Math.abs(maxRatio - this.appliedPixelRatio) >= 0.001) {
+                this.applyPixelRatio(maxRatio);
+                const rect = this.canvas.getBoundingClientRect();
+                this.applyCanvasSize(Math.max(1, rect.width), Math.max(1, rect.height));
+                this.markSceneDirty();
+            }
             return;
         }
 
@@ -1101,8 +1549,8 @@ export class SceneManager {
             const movingScale = mode === 'quality'
                 ? 0.85
                 : mode === 'smooth'
-                    ? 0.75
-                    : 0.8;
+                    ? 0.6
+                    : 0.72;
             desiredRatio = Math.max(minRatio, maxRatio * movingScale);
         }
 
@@ -1150,20 +1598,30 @@ export class SceneManager {
 
         if (this.forceMaxChunkLoadSpeed) {
             // 极速模式：按硬件提高并行度，优先可见分片尽快解码与上屏。
-            this.maxWorkers = Math.max(4, Math.min(12, cpuCount - 1));
-            this.maxConcurrentChunkLoads = Math.max(128, Math.min(192, this.maxWorkers * 24));
-            this.maxChunkLoadsPerFrame = Math.max(64, Math.min(128, this.maxWorkers * 14));
+            // 低内存设备降档：并发解码的瞬时内存峰值与 worker 数成正比，
+            // 4GB 设备全开 11-12 workers 会在大模型加载中途 OOM。
+            const lowMemory = memoryGb <= 4;
+            const workerCap = lowMemory ? 4 : 12;
+            this.maxWorkers = Math.max(3, Math.min(workerCap, cpuCount - 1));
+            this.maxConcurrentChunkLoads = lowMemory
+                ? Math.min(64, this.maxWorkers * 12)
+                : Math.max(128, Math.min(192, this.maxWorkers * 24));
+            this.maxChunkLoadsPerFrame = lowMemory
+                ? Math.min(24, this.maxWorkers * 6)
+                : Math.max(64, Math.min(128, this.maxWorkers * 14));
             this.cullingTimeBudgetMovingMs = 7.5;
             this.cullingTimeBudgetRecoveryMs = 10.5;
             this.cullingTimeBudgetIdleMs = 14.0;
             this.chunkRegistrationBatchSize = 28;
             this.chunkGhostBatchSize = 40;
         } else {
-            this.maxWorkers = 4;
-            this.maxConcurrentChunkLoads = runtime.maxConcurrentChunkLoads;
-            this.maxChunkLoadsPerFrame = runtime.maxChunkLoadsPerFrame;
+            // 按 CPU 核数适度提高并行度，加载更快；上限 8，避免抢主线程与内存峰值
+            this.maxWorkers = Math.max(4, Math.min(8, cpuCount - 1));
+            this.maxConcurrentChunkLoads = Math.max(runtime.maxConcurrentChunkLoads, Math.min(128, this.maxWorkers * 20));
+            this.maxChunkLoadsPerFrame = Math.max(runtime.maxChunkLoadsPerFrame, Math.min(96, this.maxWorkers * 10));
         }
         this.maxLoadedChunks = memoryGb <= 4 ? 160 : memoryGb <= 8 ? 320 : 640;
+        this.shadedMaxLoadedChunks = this.maxLoadedChunks;
         this.maxCachedChunks = memoryGb <= 4 ? 24 : memoryGb <= 8 ? 48 : 96;
         this.settings.targetFps = this.resolvedChunkOptions.targetMinFps;
     }
@@ -1309,8 +1767,8 @@ export class SceneManager {
             chunk,
             nbimFiles: this.nbimFiles,
             chunkReadCache: this.chunkReadCache,
-            chunkReadCacheOrder: this.chunkReadCacheOrder,
-            chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize
+            chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
+            chunkReadCacheMB: this.resolvedChunkOptions.chunkReadCacheMB
         });
         this.chunkReadCacheOrder = result.chunkReadCacheOrder;
         return result.buffer;
@@ -1587,6 +2045,18 @@ export class SceneManager {
                 const paddedBounds = chunkBounds.clone();
                 const padSize = chunkBounds.getSize(new THREE.Vector3()).multiplyScalar(this.chunkPadding);
                 paddedBounds.expandByVector(padSize);
+
+                // 按本分块实际几何估算解码内存，供驻留预算/卸载使用；
+                // 旧实现没有该字段，chunkCostMB 一律按 1.5MB，大模型会被严重低估。
+                let chunkMemoryMB = 0;
+                const countedGeometries = new Set<THREE.BufferGeometry>();
+                node.items.forEach((item: any) => {
+                    const geometry = item?.geometry as THREE.BufferGeometry | undefined;
+                    if (!geometry || countedGeometries.has(geometry)) return;
+                    countedGeometries.add(geometry);
+                    chunkMemoryMB += calculateGeometryMemory(geometry);
+                });
+
                 this.registerChunk({
                     id: chunkId,
                     bounds: chunkBounds,
@@ -1595,6 +2065,7 @@ export class SceneManager {
                     center: chunkBounds.getCenter(new THREE.Vector3()),
                     loaded: false,
                     node,
+                    estimatedDecodedMB: Math.max(0.35, chunkMemoryMB * CHUNK_FOOTPRINT_MULTIPLIER),
                     groupName: `optimized_${object.uuid}`,
                     originalUuid: object.uuid
                 });
@@ -1756,17 +2227,19 @@ export class SceneManager {
     }
 
     private reportChunkProgress() {
+        const pending = this.processingChunks.size + (this.chunkLoadPlanPending ? 1 : 0);
         const result = reportChunkProgressIfNeeded({
             now: performance.now(),
             total: this.chunks.length,
             loaded: this.chunkLoadedCount,
+            pending,
             lastReportedProgress: this.lastReportedProgress,
             lastChunkProgressReportAt: this.lastChunkProgressReportAt
         });
         if (this.onChunkProgress && result.shouldNotify) {
             this.lastReportedProgress = result.nextProgress;
             this.lastChunkProgressReportAt = result.nextReportedAt;
-            this.onChunkProgress(result.nextProgress.loaded, result.nextProgress.total);
+            this.onChunkProgress(result.nextProgress.loaded, result.nextProgress.total, result.nextProgress.pending);
         }
     }
 
@@ -1882,9 +2355,15 @@ export class SceneManager {
         const tempCenterNdc = this.chunkCullingTempCenterNdc;
         const viewHeight = (this.camera.top - this.camera.bottom) / this.camera.zoom;
         const canvasHeight = this.renderer.domElement.clientHeight;
+        const isOrthographicCamera = (this.camera as any).isOrthographicCamera === true;
+        // 正交相机按视口高度换算；透视相机再叠加距离项。
+        const perspectiveFocalPx = isOrthographicCamera
+            ? 0
+            : canvasHeight / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov || 45) * 0.5));
 
         const toLoad: any[] = [];
         const loadedChunks: any[] = [];
+        const renderCandidates: Array<{ chunk: any; pixel: number; dist: number }> = [];
         const chunkCostMB = (chunk: any) => typeof chunk?.estimatedDecodedMB === "number"
             ? chunk.estimatedDecodedMB
             : Math.max(1.5, ((Number(chunk?.byteLength) || 0) / 1048576) * 5.5);
@@ -1953,7 +2432,8 @@ export class SceneManager {
                 chunkLoadedCount: this.chunkLoadedCount,
                 initialChunkLoadTarget: this.initialChunkLoadTarget,
                 chunkLoadResumeAt: this.chunkLoadResumeAt,
-                chunkMeshCached: this.chunkMeshCache.has(c.id)
+                chunkMeshCached: this.chunkMeshCache.has(c.id),
+                allowFullChunkLoad: this.allowFullChunkLoad
             });
             if (evaluation.shouldSkipSample) {
                 continue;
@@ -1966,6 +2446,24 @@ export class SceneManager {
                 c.lastFocusAt = now;
             }
             c.lastEffectiveVisible = evaluation.effectiveVisible;
+            const boxDiag = c.bounds.getSize(tempSize).length();
+            c._lastPixelSize = isOrthographicCamera
+                ? (boxDiag / Math.max(1e-6, viewHeight)) * canvasHeight
+                : (boxDiag / Math.max(1e-3, evaluation.dist)) * perspectiveFocalPx;
+
+            // 渲染策略切换后，新的分块按新策略解码；已加载分块保持现状。
+            // 分辨率变化（放大）后，当前粗 LOD 阈值如果明显偏粗，就重新加载更细的几何。
+            // 用“已应用的阈值 vs 当前期望阈值”判断，避免按像素反复卸载/重载抖动。
+            if (c.loaded && c._coarseLodApplied > 0 && !this.processingChunks.has(c.id)) {
+                const desiredMinSize = this.getCoarseLodMinSize(c);
+                if (c._coarseLodApplied > desiredMinSize * 1.25
+                    && now - (c.lastLodUpgradeAt || 0) > 1500) {
+                    c.lastLodUpgradeAt = now;
+                    this.unloadChunk(c);
+                    sceneMutated = true;
+                    continue;
+                }
+            }
 
             if (c.loaded) {
                 loadedChunks.push(c);
@@ -1983,6 +2481,9 @@ export class SceneManager {
                         sceneMutated = true;
                     }
                 }
+                if (evaluation.effectiveVisible && c.mesh) {
+                    renderCandidates.push({ chunk: c, pixel: c._lastPixelSize || 0, dist: evaluation.dist });
+                }
             } else if (!this.processingChunks.has(c.id) && evaluation.shouldBeVisible && evaluation.priority !== null) {
                 c.priority = evaluation.priority;
                 toLoad.push(c);
@@ -1992,15 +2493,28 @@ export class SceneManager {
             this.cullingScanCursor = (startIndex + totalChunks) % Math.max(totalChunks, 1);
         }
 
+        this.applyRenderBudget(renderCandidates);
+
+        const memoryPressure = this.settings.autoResident !== false && this.isMemoryPressureHigh();
         const unloadTargets = selectChunksToUnload({
             isCameraMoving: this.isCameraMoving,
             loadedChunks,
-            maxLoadedChunks: this.maxLoadedChunks,
-            maxResidentMB: this.chunkResidentBudgetMB,
+            // 只有真实内存压力才按数量/预算卸载；否则视口变化（放大/平移）只隐藏不卸载。
+            maxLoadedChunks: memoryPressure
+                ? Math.max(48, loadedChunks.length - 96)
+                : (this.fitsAllChunks ? Number.MAX_SAFE_INTEGER : this.maxLoadedChunks),
+            maxResidentMB: memoryPressure ? this.chunkResidentBudgetMB : 0,
             chunkCostMB,
             cameraPos,
             now,
-            chunkResidencyMs: this.chunkResidencyMs
+            chunkResidencyMs: this.chunkResidencyMs,
+            // 内存吃紧、且有新分块要进来时才主动腾位置；正常浏览不腾。
+            minFreeSlots: (!memoryPressure
+                && !this.fitsAllChunks
+                && loadedChunks.length >= this.maxLoadedChunks
+                && toLoad.length > 0)
+                ? Math.min(24, toLoad.length)
+                : 0
         });
         for (const chunk of unloadTargets) {
             this.unloadChunk(chunk);
@@ -2009,7 +2523,10 @@ export class SceneManager {
             sceneMutated = true;
         }
 
-        const loadedEstimatedMB = loadedChunks.reduce((sum, chunk) => sum + chunkCostMB(chunk), 0);
+        // 重新统计“卸载后仍真实驻留”的分块，否则预算仍按卸载前的满额计算，
+        // 会导致同一帧卸载 N 块却一块也补不进来，下一帧再加载，形成抖动。
+        const residentChunks = loadedChunks.filter((chunk) => chunk.loaded && chunk.mesh);
+        const loadedEstimatedMB = residentChunks.reduce((sum, chunk) => sum + chunkCostMB(chunk), 0);
         let processingEstimatedMB = 0;
         this.processingChunks.forEach((id) => {
             const chunk = this.chunkById.get(id);
@@ -2023,7 +2540,7 @@ export class SceneManager {
             maxConcurrentChunkLoads: this.maxConcurrentChunkLoads,
             processingChunkCount: this.processingChunks.size,
             maxResidentChunks: this.maxLoadedChunks,
-            residentChunkCount: loadedChunks.length,
+            residentChunkCount: residentChunks.length,
             maxResidentMB: this.chunkResidentBudgetMB,
             residentUsedMB: loadedEstimatedMB + processingEstimatedMB,
             chunkCostMB,
@@ -2041,7 +2558,11 @@ export class SceneManager {
         }
         if (loadPlan.length > 0) {
             sceneMutated = true;
+            // 还有一批要加载：保持 culling 脏标记，下一帧继续排，直到加载完或预算用尽。
+            this.cullingDirty = true;
         }
+        this.chunkLoadPlanPending = loadPlan.length > 0;
+        this.reportChunkProgress();
 
         this.schedulePrefetchFromVisibleChunks(loadedChunks);
         if (!this.forceMaxChunkLoadSpeed) {
@@ -2093,8 +2614,16 @@ export class SceneManager {
     private unloadChunk(chunk: any) {
         const result = applyUnloadChunk({
             chunk,
+            now: performance.now(),
             unregisterOptimizedMeshMapping: (mesh) => this.unregisterOptimizedMeshMapping(mesh),
-            cacheChunkMesh: (nextChunk, mesh) => this.cacheChunkMesh(nextChunk, mesh),
+            cacheChunkMesh: (nextChunk, mesh) => {
+                if (nextChunk.lodLevel === 1) {
+                    // 粗 LOD 网格不缓存，避免下次升级时又命中简化版本。
+                    this.disposeChunkMesh(mesh);
+                    return;
+                }
+                this.cacheChunkMesh(nextChunk, mesh);
+            },
             ensureChunkGhost: (nextChunk) => this.ensureChunkGhost(nextChunk)
         });
         if (!result.changed) return;
@@ -2116,7 +2645,10 @@ export class SceneManager {
             let needsBoundsUpdate = false;
             let invalidateInteractables = false;
             let needsCulling = false;
-            const { mesh: bm, prefetchCandidates } = await resolveChunkMeshForLoad({
+            // 远景块按屏幕尺寸选择粗 LOD：只保留世界尺寸较大的实例。
+            chunk._coarseLodMinSize = this.getCoarseLodMinSize(chunk);
+            chunk._coarseLodApplied = chunk._coarseLodMinSize;
+            const { mesh: bm, prefetchCandidates, triangles: chunkTriangles, lodStats } = await resolveChunkMeshForLoad({
                 chunk,
                 sharedMaterial: this.sharedMaterial,
                 takeCachedChunkMesh: (chunkId) => this.takeCachedChunkMesh(chunkId),
@@ -2132,6 +2664,13 @@ export class SceneManager {
                     resolveUuidByBimId: (originalUuid, bimId) => {
                         const key = `${originalUuid}::${bimId}`;
                         const nodeIds = this.bimIdToNodeIds.get(key);
+                        if (nodeIds && nodeIds.length > 0 && chunk.nbimFileId) {
+                            // 同一个 NBIM 可能被打开多次，优先命中本次加载对应的结构节点。
+                            for (const nodeId of nodeIds) {
+                                const node = this.nodeMap.get(nodeId)?.[0];
+                                if (node?.userData?.loadId === chunk.nbimFileId) return nodeId;
+                            }
+                        }
                         return nodeIds?.[0] || bimId || originalUuid;
                     }
                 }),
@@ -2156,15 +2695,38 @@ export class SceneManager {
                     disposeChunkMesh: (mesh) => this.disposeChunkMesh(mesh),
                     globalOffset: this.globalOffset,
                     contentGroup: this.contentGroup,
-                    registerOptimizedMeshMapping: (mesh) => this.registerOptimizedMeshMapping(mesh)
+                    registerOptimizedMeshMapping: (mesh) => this.registerOptimizedMeshMapping(mesh),
+                    frustumCulled: this.settings.frustumCulling !== false
                 });
                 loadedNow = attached.attached;
                 if (loadedNow) {
+                    // 记录本次加载标识，删除模型时用它精确回收 chunkMeshCache，
+                    // 否则同一 NBIM 打开两份时无法区分、缓存会一直持有几何。
+                    bm.userData.loadId = chunk.nbimFileId || chunk.originalUuid;
+                    chunk.triCount = chunkTriangles || 0;
                     invalidateInteractables = true;
                     needsBoundsUpdate = true;
                     needsRender = true;
                     // 分块网格是后挂上来的，需要单独补棱边
                     this.buildDisplayEdgesFor(bm);
+                }
+            }
+
+            if (bm) {
+                if (lodStats && lodStats.originalVerts > 0) {
+                    const ratio = Math.max(0.05, lodStats.keptVerts / lodStats.originalVerts);
+                    chunk.lodRatio = ratio;
+                    chunk.lodLevel = ratio < 0.98 ? 1 : 0;
+                    if (chunk.lodLevel === 1) {
+                        // 粗 LOD 的实际驻留成本按顶点比例折算，低内存机器可以多装一些块。
+                        chunk.estimatedDecodedMB = Math.max(
+                            0.35,
+                            (Number(chunk.estimatedDecodedMB) || 1.5) * ratio
+                        );
+                    }
+                } else {
+                    chunk.lodLevel = 0;
+                    chunk.lodRatio = 1;
                 }
             }
 
@@ -2205,6 +2767,8 @@ export class SceneManager {
             console.error(`加载分块 ${chunk.id} 失败:`, err);
         } finally {
             this.processingChunks.delete(chunk.id);
+            // 让界面及时收到 pending 变化（尤其是最后一个分块结束、pending 归零时）。
+            this.reportChunkProgress();
             this.markSceneDirty();
         }
     }
@@ -2219,7 +2783,10 @@ export class SceneManager {
         this.markSceneDirty({ needsCulling: enabled });
     }
 
-    private applyNbimScaleTuning(chunkEntries: any[]) {
+    private applyNbimScaleTuning(
+        chunkEntries: any[],
+        manifestStats?: { meshes?: number; faces?: number; memory?: number }
+    ) {
         const chunks = Array.isArray(chunkEntries) ? chunkEntries : [];
         const chunkCount = chunks.length;
         const userChunkOptions = this.options.chunkOptions || {};
@@ -2232,6 +2799,8 @@ export class SceneManager {
         this.setChunkOptions({
             chunkPrefetchWindow: userChunkOptions.chunkPrefetchWindow ?? autoTuned.chunkPrefetchWindow,
             chunkReadCacheSize: userChunkOptions.chunkReadCacheSize ?? autoTuned.chunkReadCacheSize,
+            chunkReadCacheMB: userChunkOptions.chunkReadCacheMB,
+            coarseLod: userChunkOptions.coarseLod ?? this.coarseLodEnabled,
             targetMinFps: userChunkOptions.targetMinFps ?? autoTuned.targetMinFps,
             ghostMode: userChunkOptions.ghostMode ?? this.resolvedChunkOptions.ghostMode,
             loadProfile: userChunkOptions.loadProfile ?? this.resolvedChunkOptions.loadProfile,
@@ -2240,36 +2809,83 @@ export class SceneManager {
             fastGeometrySanitize: userChunkOptions.fastGeometrySanitize ?? this.resolvedChunkOptions.fastGeometrySanitize
         });
 
-        // 按“单个分块解码后的内存占用 × JS 堆上限”推导驻留预算：
-        // 超大模型如果按 FOV 可见性加载全部分块，会很快突破堆上限直接崩溃。
-        const totalBytes = chunks.reduce((sum, chunk) => sum + (Number(chunk?.byteLength) || 0), 0);
-        const avgRawMB = chunkCount > 0 ? totalBytes / chunkCount / 1048576 : 0;
-        // 实测解码后的几何 + 实例数据约为原始分块的 5~6 倍。
-        const perChunkMB = Math.max(1.5, avgRawMB * 5.5);
+        // 按“单个分块解码后的内存占用 × JS 堆上限”推导驻留预算。
+        const totalRawBytes = chunks.reduce((sum, chunk) => sum + (Number(chunk?.decodedLength) || Number(chunk?.byteLength) || 0), 0);
+        const totalRawMB = totalRawBytes / 1048576;
+
+        // 关键修正：NBIM 分块二进制里已经是“解码后”的顶点/法线/索引 + 实例矩阵，
+        // 真正进入 JS 堆的几何内存与原始字节数同量级（约 0.6~1.3 倍），
+        // 旧代码按 5.5 倍估算会把一个 2.9GB / 1271 块的模型算成 ~16GB，
+        // 于是把驻留上限压到 90 多块：模型只剩一小块实体、其余全是 ghost 线框，
+        // 只有已加载分块能拾取，看起来就是“加载不动、点选失效、结构残缺”。
+        // 优先用 manifest.stats.memory（导出时按真实几何统计的内存），缺失时才保守估算。
+        const manifestDecodedMB = Number(manifestStats?.memory);
+        const hasManifestMemory = Number.isFinite(manifestDecodedMB) && manifestDecodedMB > 0;
+        const newDecodedMB = hasManifestMemory ? manifestDecodedMB : totalRawMB * 1.1;
+        this.nbimDecodedMBPerRawByte = totalRawBytes > 0
+            ? Math.max(0.2, Math.min(1.5, (newDecodedMB * 1048576) / totalRawBytes))
+            : 1;
+
+        // 支持连续打开多个 NBIM：预算和分块上限要按“已有模型 + 本次模型”累计。
+        // 注意 registerOriginalStats 已经先登记了本次模型的统计，这里要先扣掉，避免重复累加。
+        const existingChunkCount = this.chunks.length;
+        const currentAccountedMB = hasManifestMemory ? manifestDecodedMB : totalRawMB;
+        const existingDecodedMB = Math.max(0, (Number(this.originalStats.memory) || 0) - currentAccountedMB);
+        const totalChunkCount = existingChunkCount + chunkCount;
+        const totalDecodedMB = existingDecodedMB + newDecodedMB;
+        const perChunkGeometryMB = totalChunkCount > 0
+            ? Math.max(0.35, totalDecodedMB / totalChunkCount)
+            : 1.5;
+        const perChunkFootprintMB = perChunkGeometryMB * CHUNK_FOOTPRINT_MULTIPLIER;
+
         const perfMemory = (performance as any)?.memory;
         const heapLimitMB = perfMemory?.jsHeapSizeLimit
             ? perfMemory.jsHeapSizeLimit / 1048576
             : Math.max(1536, ((navigator as any)?.deviceMemory || 8) * 512);
-        // 超大模型约一半堆留给几何，其余留给属性索引、结构树、材质等。
-        const geometryBudgetMB = Math.min(2560, heapLimitMB * (chunkCount >= 800 ? 0.35 : 0.55));
-        const deviceMemoryGb = (navigator as any)?.deviceMemory || 8;
-        const deviceCap = deviceMemoryGb <= 4 ? 160 : deviceMemoryGb <= 8 ? 320 : 640;
-        const derivedLoadedCap = Math.floor(geometryBudgetMB / perChunkMB);
-        this.maxLoadedChunks = Math.max(32, Math.min(deviceCap, derivedLoadedCap || deviceCap));
-        this.maxCachedChunks = Math.max(8, Math.min(96, Math.floor(this.maxLoadedChunks / 4)));
-        this.chunkResidentBudgetMB = geometryBudgetMB;
+        // 用“当前已用堆”倒推还能给几何多少空间：结构树 / 23 万条属性文档 / 材质等
+        // 在这个模型上就要占 1GB 以上，固定按堆比例预留会低估非几何开销。
+        let baseUsedMB = perfMemory?.usedJSHeapSize
+            ? Math.max(0, perfMemory.usedJSHeapSize / 1048576 - this.getResidentChunkMB())
+            : 0;
+        // 上一次重模型遗留的未回收垃圾会把 usedJSHeapSize 抬到几 GB，
+        // 按它算预算会把常驻上限压到只剩几十块；超过 60% 堆上限就视为脏数据。
+        if (baseUsedMB > heapLimitMB * 0.6) baseUsedMB = 650;
+        this.lastBaseUsedMB = baseUsedMB > 0 ? baseUsedMB : 650;
+        const usableBudgetMB = baseUsedMB > 0
+            ? heapLimitMB * 0.80 - baseUsedMB
+            : heapLimitMB * 0.5;
+        const geometryBudgetMB = Math.min(3200, Math.max(384, usableBudgetMB));
+        const fitsAll = totalDecodedMB > 0
+            && totalDecodedMB * CHUNK_FOOTPRINT_MULTIPLIER <= geometryBudgetMB;
+        this.fitsAllChunks = fitsAll;
 
-        // 并行解码的在途内存峰值同样受分块大小约束（预留约 768MB 缓冲）。
+        // 装得下就全量；装不下就按预算限制驻留数。两种情况都放开 4px 剔除，
+        // 让预算内的分块（按中心/距离优先级）尽量铺满，而不是只加载视野正中几块。
+        const derivedLoadedCap = Math.floor(geometryBudgetMB / perChunkFootprintMB);
+        this.maxLoadedChunks = fitsAll
+            ? totalChunkCount
+            : Math.max(48, Math.min(totalChunkCount, derivedLoadedCap));
+        this.shadedMaxLoadedChunks = this.maxLoadedChunks;
+        this.maxCachedChunks = Math.max(8, Math.min(128, Math.floor(this.maxLoadedChunks / 4)));
+        this.chunkResidentBudgetMB = geometryBudgetMB;
+        this.allowFullChunkLoad = true;
+
+        // 并行解码的在途内存峰值同样受单块大小约束（预留约 1GB 缓冲）。
         if (this.forceMaxChunkLoadSpeed) {
-            const derivedConcurrent = Math.floor(768 / perChunkMB);
+            const derivedConcurrent = Math.floor(1024 / perChunkFootprintMB);
             this.maxConcurrentChunkLoads = Math.max(8, Math.min(this.maxConcurrentChunkLoads, derivedConcurrent));
             this.maxChunkLoadsPerFrame = Math.max(4, Math.min(this.maxChunkLoadsPerFrame, Math.ceil(derivedConcurrent / 2)));
         }
 
         debugLog("SceneManager/NBIM", "分块预算", {
             chunkCount,
-            avgRawMB: Number(avgRawMB.toFixed(2)),
-            perChunkMB: Number(perChunkMB.toFixed(1)),
+            totalRawMB: Number(totalRawMB.toFixed(1)),
+            totalDecodedMB: Number(totalDecodedMB.toFixed(1)),
+            perChunkFootprintMB: Number(perChunkFootprintMB.toFixed(2)),
+            baseUsedMB: Number(baseUsedMB.toFixed(0)),
+            heapLimitMB: Number(heapLimitMB.toFixed(0)),
+            geometryBudgetMB: Number(geometryBudgetMB.toFixed(0)),
+            fitsAll,
             maxLoadedChunks: this.maxLoadedChunks,
             maxCachedChunks: this.maxCachedChunks,
             maxConcurrentChunkLoads: this.maxConcurrentChunkLoads
@@ -2279,6 +2895,8 @@ export class SceneManager {
     setChunkOptions(options: SceneChunkOptions = {}) {
         const resolved = resolveSceneChunkOptions(options);
         this.resolvedChunkOptions.chunkReadCacheSize = resolved.chunkReadCacheSize;
+        this.resolvedChunkOptions.chunkReadCacheMB = resolved.chunkReadCacheMB;
+        this.coarseLodEnabled = resolved.coarseLod;
         this.resolvedChunkOptions.chunkPrefetchWindow = resolved.chunkPrefetchWindow;
         this.resolvedChunkOptions.ghostMode = resolved.ghostMode;
         this.resolvedChunkOptions.targetMinFps = resolved.targetMinFps;
@@ -2288,16 +2906,18 @@ export class SceneManager {
         this.resolvedChunkOptions.fastGeometrySanitize = resolved.fastGeometrySanitize;
         this.settings.targetFps = resolved.targetMinFps;
 
-        while (this.chunkReadCacheOrder.length > this.resolvedChunkOptions.chunkReadCacheSize) {
-            const evict = this.chunkReadCacheOrder.shift();
-            if (!evict) continue;
-            this.chunkReadCache.delete(evict);
-        }
+        this.chunkReadCacheOrder = trimChunkReadCache({
+            chunkReadCache: this.chunkReadCache,
+            chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
+            chunkReadCacheMB: this.resolvedChunkOptions.chunkReadCacheMB
+        });
     }
 
     getChunkOptions() {
         return {
             chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
+            chunkReadCacheMB: this.resolvedChunkOptions.chunkReadCacheMB,
+            coarseLod: this.coarseLodEnabled,
             chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
             ghostMode: this.resolvedChunkOptions.ghostMode,
             targetMinFps: this.resolvedChunkOptions.targetMinFps,
@@ -2312,6 +2932,37 @@ export class SceneManager {
         this.contentGroup.visible = visible;
         this.ghostGroup.visible = visible;
         this.markSceneDirty({ needsCulling: true });
+    }
+
+    /**
+     * 深拷贝 NBIM 结构树并保证节点 id 全局唯一。
+     * 同一个 NBIM 被打开两次时，结构树里的根节点 id 都是文件名（如 `xxx.lmb`），
+     * 直接复用会出现 React 重复 key，并且 nodeMap 里 id 冲突——删除其中一个模型
+     * 会把另一个也一起从结构树上过滤掉。
+     */
+    private cloneStructureTreeWithUniqueIds(root: any, loadId: string) {
+        const used = new Set<string>(this.nodeMap.keys());
+        const clone = (node: any): any => {
+            if (!node || typeof node !== "object") return node;
+            const copy: any = {
+                ...node,
+                userData: node.userData ? { ...node.userData, loadId } : { loadId }
+            };
+            const baseId = String(node.id ?? "");
+            let id = baseId;
+            let suffix = 2;
+            while (used.has(id)) {
+                id = `${baseId}#${suffix}`;
+                suffix++;
+            }
+            used.add(id);
+            copy.id = id;
+            if (Array.isArray(node.children)) {
+                copy.children = node.children.map(clone);
+            }
+            return copy;
+        };
+        return clone(root);
     }
 
     private buildSceneGraph(object: THREE.Object3D): StructureTreeNode {
@@ -2421,6 +3072,40 @@ export class SceneManager {
         object.position.sub(this.globalOffset);
         object.updateMatrixWorld(true);
         return new THREE.Box3().setFromObject(object);
+    }
+
+    /**
+     * 非 NBIM（LMB/GLB/IFC 等）模型的分块驻留预算：
+     * 用当前累计的真实几何内存决定“能否全部加载”，装得下就放开全部分块，
+     * 让模型完整显示、处处可点选；装不下才按内存预算流式卸载。
+     */
+    private applyModelChunkBudget() {
+        const perfMemory = (performance as any)?.memory;
+        const heapLimitMB = perfMemory?.jsHeapSizeLimit
+            ? perfMemory.jsHeapSizeLimit / 1048576
+            : Math.max(1536, ((navigator as any)?.deviceMemory || 8) * 512);
+        let baseUsedMB = perfMemory?.usedJSHeapSize
+            ? Math.max(0, perfMemory.usedJSHeapSize / 1048576 - this.getResidentChunkMB())
+            : 0;
+        // 上一次重模型遗留的未回收垃圾会把 usedJSHeapSize 抬到几 GB，
+        // 按它算预算会把常驻上限压到只剩几十块；超过 60% 堆上限就视为脏数据。
+        if (baseUsedMB > heapLimitMB * 0.6) baseUsedMB = 650;
+        this.lastBaseUsedMB = baseUsedMB > 0 ? baseUsedMB : 650;
+        const usableBudgetMB = baseUsedMB > 0 ? heapLimitMB * 0.80 - baseUsedMB : heapLimitMB * 0.5;
+        const geometryBudgetMB = Math.min(3200, Math.max(384, usableBudgetMB));
+        const totalDecodedMB = Math.max(0, Number(this.originalStats.memory) || 0);
+        const fitsAll = totalDecodedMB > 0
+            && totalDecodedMB * CHUNK_FOOTPRINT_MULTIPLIER <= geometryBudgetMB;
+        this.fitsAllChunks = fitsAll;
+
+        this.chunkResidentBudgetMB = geometryBudgetMB;
+        // 分块还没创建，先放开 4px 剔除；具体驻留数量由内存预算（chunkCostMB）约束。
+        this.allowFullChunkLoad = true;
+        if (fitsAll) {
+            this.maxLoadedChunks = Math.max(this.maxLoadedChunks, 8192);
+            this.maxCachedChunks = Math.max(this.maxCachedChunks, 128);
+        }
+        this.shadedMaxLoadedChunks = this.maxLoadedChunks;
     }
 
     private configureModelWarmup(meshCount: number) {
@@ -2707,6 +3392,7 @@ export class SceneManager {
         const meshCount = objectOverview.meshes;
         this.configureModelWarmup(meshCount);
         this.registerOriginalStats(object.uuid, objectOverview);
+        this.applyModelChunkBudget();
 
         const { shouldDeferStructure, deferredPlaceholderId } = this.prepareStructureStage(object, meshCount, onProgress);
         const previewGhost = this.prepareModelBoundsStage(object, modelBox);
@@ -2740,18 +3426,27 @@ export class SceneManager {
         const nodes = this.nodeMap.get(uuid);
         // 尝试获取该节点所属的原始模型 UUID (用于 NBIM 分块匹配)
         const originalUuid = nodes?.[0]?.userData?.originalUuid || uuid;
+        // 同一个 NBIM 可以被打开多次，originalUuid 相同。loadId 区分“这一次加载”。
+        const loadId = nodes?.[0]?.userData?.loadId ? String(nodes[0].userData.loadId) : "";
 
         // 1. 彻底移除相关的优化组 (针对 NBIM / 实例化分块)
         // 注意：可能有多个优化组（对应不同的分块）
         const optimizedGroupsToRemove: THREE.Object3D[] = [];
         this.contentGroup.traverse(child => {
-            // 匹配逻辑：名字匹配，或者 userData 里的原始 UUID 匹配
-            const isMatch = (child.name === `optimized_${uuid}`) ||
-                (child.name === `file_${uuid}`) ||
-                (child.userData.originalUuid === uuid) ||
-                (child.userData.originalUuid === originalUuid) ||
-                (child.name.startsWith('optimized_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid)) ||
-                (child.name.startsWith('file_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid));
+            // 匹配逻辑：名字匹配，或者 userData 里的原始 UUID 匹配。
+            // 同一个 NBIM 可能被打开多次（originalUuid 相同），此时必须按本次加载的
+            // 优化组名（optimized_${唯一 rootId}）精确匹配，否则会把另一份一起删掉。
+            const isMatch = loadId
+                ? (child.userData?.loadId === loadId
+                    && (child.userData?.isOptimizedGroup === true
+                        || child.name.startsWith('optimized_')
+                        || child.name.startsWith('file_')))
+                : (child.name === `optimized_${uuid}`) ||
+                    (child.name === `file_${uuid}`) ||
+                    (child.userData.originalUuid === uuid) ||
+                    (child.userData.originalUuid === originalUuid) ||
+                    (child.name.startsWith('optimized_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid)) ||
+                    (child.name.startsWith('file_') && (child.userData.originalUuid === uuid || child.userData.originalUuid === originalUuid));
 
             if (isMatch) {
                 optimizedGroupsToRemove.push(child);
@@ -2762,6 +3457,9 @@ export class SceneManager {
             group.traverse(child => {
                 if ((child as any).isBatchedMesh) {
                     const bm = child as THREE.BatchedMesh;
+                    // 必须先解除 optimizedMapping 引用，否则删除后这些映射仍持有
+                    // BatchedMesh 及其 batchIdToGeometry（几 MB / 块），堆内存不会下降。
+                    this.unregisterOptimizedMeshMapping(bm);
                     this.disposeChunkMesh(bm);
                 }
             });
@@ -2794,6 +3492,7 @@ export class SceneManager {
                 }
             } else if ((o as any).isBatchedMesh) {
                 const bm = o as any;
+                this.unregisterOptimizedMeshMapping(bm);
                 this.disposeChunkMesh(bm);
             }
 
@@ -2828,22 +3527,71 @@ export class SceneManager {
             invalidateInteractables: true,
             needsRender: false
         });
-        this.unregisterOriginalStats(originalUuid);
+        if (loadId) {
+            this.unregisterOriginalStats(loadId);
+        } else {
+            this.unregisterOriginalStats(originalUuid);
+            this.unregisterOriginalStats(uuid);
+        }
         this.fastPreviewModels.delete(uuid);
         this.fastPreviewModels.delete(originalUuid);
         this.clearChunkCache((chunkId, mesh) => {
+            if (loadId) return mesh.userData.loadId === loadId;
             const owner = (mesh.userData.originalUuid || "") as string;
             return owner === uuid || owner === originalUuid || chunkId.startsWith(uuid) || chunkId.startsWith(originalUuid);
         });
+        if (loadId) {
+            this.nbimFiles.delete(loadId);
+            this.nbimMeta.delete(loadId);
+            // 原始分块二进制读取缓存同样按 loadId 前缀清理，否则大模型删除后
+            // 仍有上百个 ~2MB 的 ArrayBuffer 挂在 chunkReadCache 里。
+            for (const key of [...this.chunkReadCache.keys()]) {
+                if (key.startsWith(`${loadId}:`)) this.chunkReadCache.delete(key);
+            }
+            this.chunkReadCacheOrder = this.chunkReadCacheOrder.filter((id) => this.chunkReadCache.has(id));
+            this.prefetchQueue = this.prefetchQueue.filter((id) => !String(id).startsWith(`${loadId}::`));
+            this.prefetchQueueSet = new Set(this.prefetchQueue);
+
+            // 属性文档同样按 owner（原模型 uuid）回收，避免删除大模型后
+            // 几万条属性行长期占用堆。若同一 uuid 还有别的加载实例在用，则保留。
+            const owner = originalUuid;
+            const ownerStillLoaded = this.chunks.some((c) => c.originalUuid === owner);
+            if (!ownerStillLoaded) {
+                this.nbimPropsByOriginalUuid.delete(owner);
+                if (this.nbimPendingDocs) {
+                    for (const key of Object.keys(this.nbimPendingDocs)) {
+                        if (key.startsWith(`${owner}::`)) delete this.nbimPendingDocs[key];
+                    }
+                    this.nbimPendingDocsList = null;
+                }
+                for (const [key, doc] of this.nbimSearchDocsByUuid) {
+                    if (doc?.owner === owner) this.nbimSearchDocsByUuid.delete(key);
+                }
+                for (const [key, doc] of this.nbimSearchDocsByBimId) {
+                    if (doc?.owner === owner) this.nbimSearchDocsByBimId.delete(key);
+                }
+                if (this.nbimAllSearchDocs.length > 0) {
+                    this.nbimAllSearchDocs = this.nbimAllSearchDocs.filter((doc) => doc?.owner !== owner);
+                    this.nbimDocIndexByUuid.clear();
+                    this.nbimAllSearchDocs.forEach((doc, index) => this.nbimDocIndexByUuid.set(doc.uuid, index));
+                }
+            }
+        }
 
         if (this.currentMeasureModelUuid === uuid || this.currentMeasureModelUuid === originalUuid) {
             this.currentMeasureModelUuid = null;
         }
 
         // 3. 移除关联的分块和鬼影
+        let removedLoadedChunks = 0;
         this.chunks = this.chunks.filter(c => {
-            const isMatch = c.originalUuid === uuid || c.originalUuid === originalUuid || c.id.startsWith(uuid);
+            const isMatch = loadId
+                ? c.nbimFileId === loadId
+                : (c.originalUuid === uuid || c.originalUuid === originalUuid || c.id.startsWith(uuid));
             if (isMatch) {
+                // 已加载的分块被移除时必须同步递减计数，否则状态栏会出现 CH 256/227 这种
+                // “已加载数大于总数”的错误，并且分块进度永远判不到 100%。
+                if (c.loaded) removedLoadedChunks++;
                 this.cancelledChunkIds.add(c.id);
                 this.processingChunks.delete(c.id);
                 const ghost = this.ghostGroup.getObjectByName(`ghost_${c.id}`);
@@ -2856,6 +3604,32 @@ export class SceneManager {
             return true;
         });
         this.rebuildChunkIdSet();
+        if (removedLoadedChunks > 0) {
+            this.chunkLoadedCount = Math.max(0, this.chunkLoadedCount - removedLoadedChunks);
+        }
+        this.reportChunkProgress();
+
+        // 拾取列表里仍然引用着刚被删除的 BatchedMesh；不主动清空的话这些 mesh
+        // （以及它们内部的几何缓冲）会一直被数组引用，堆内存不下降。
+        this.interactableList = [];
+        this.interactableListValid = false;
+        const stillAttached = (mesh: any) => !!mesh && !!mesh.parent;
+        for (const [key, value] of this.locateDimmedInstances) {
+            if (!stillAttached(value.mesh)) this.locateDimmedInstances.delete(key);
+        }
+        for (const [key, value] of this.clashPairInstanceColorCache) {
+            if (!stillAttached(value.mesh)) this.clashPairInstanceColorCache.delete(key);
+        }
+
+        // 清理已删除节点的 bimId → 结构节点索引，否则大模型的 23 万条字符串索引会长期残留。
+        for (const [key, ids] of this.bimIdToNodeIds) {
+            const kept = ids.filter((id) => this.nodeMap.has(id));
+            if (kept.length === 0) {
+                this.bimIdToNodeIds.delete(key);
+            } else if (kept.length !== ids.length) {
+                this.bimIdToNodeIds.set(key, kept);
+            }
+        }
 
         // 4. 从结构树中彻底移除该节点
         if (this.structureRoot) {
@@ -2878,7 +3652,9 @@ export class SceneManager {
         }
 
         // 5. 重新计算包围盒并更新场景
-        this.precomputedBounds = this.computeTotalBounds();
+        // 必须 forceRecompute：computeTotalBounds() 默认返回缓存的 precomputedBounds，
+        // 删除模型后缓存里还包含被删对象的范围，会导致“充满”仍按旧范围取景。
+        this.precomputedBounds = this.computeTotalBounds(false, true);
         if (this.precomputedBounds.isEmpty()) {
             this.contentGroup.traverse(child => {
                 if ((child as any).isMesh && child.visible) {
@@ -2889,6 +3665,9 @@ export class SceneManager {
         }
 
         this.updateSceneBounds();
+        // 模型被删除后内存预算要按剩余分块重算，否则上限仍按删除前的大小限制，
+        // 会导致剩下的模型明明装得下却只加载一部分。
+        this.recomputeChunkBudgetFromResident();
         if (this.onStructureUpdate) this.onStructureUpdate();
         this.markSceneDirty({
             invalidateInteractables: true,
@@ -2916,6 +3695,53 @@ export class SceneManager {
         });
 
         return true;
+    }
+
+    /**
+     * 用当前剩余分块重算驻留预算（删除模型 / 关闭部分模型后调用）。
+     * 与 applyNbimScaleTuning 的区别是：这里不需要 manifest，直接按剩余分块的平均解码内存推算。
+     */
+    private recomputeChunkBudgetFromResident() {
+        const chunkCount = this.chunks.length;
+        if (chunkCount === 0) {
+            this.maxLoadedChunks = 512;
+            this.shadedMaxLoadedChunks = 0;
+            this.maxCachedChunks = 48;
+            this.chunkResidentBudgetMB = 0;
+            this.allowFullChunkLoad = false;
+            this.fitsAllChunks = false;
+            return;
+        }
+
+        const totalDecodedMB = this.chunks.reduce((sum, chunk) => {
+            const value = Number(chunk?.estimatedDecodedMB);
+            return sum + (Number.isFinite(value) && value > 0 ? value : 1.5);
+        }, 0);
+        const perChunkFootprintMB = Math.max(0.35, totalDecodedMB / chunkCount);
+
+        const perfMemory = (performance as any)?.memory;
+        const heapLimitMB = perfMemory?.jsHeapSizeLimit
+            ? perfMemory.jsHeapSizeLimit / 1048576
+            : Math.max(1536, ((navigator as any)?.deviceMemory || 8) * 512);
+        let baseUsedMB = perfMemory?.usedJSHeapSize
+            ? Math.max(0, perfMemory.usedJSHeapSize / 1048576 - this.getResidentChunkMB())
+            : 0;
+        // 上一次重模型遗留的未回收垃圾会把 usedJSHeapSize 抬到几 GB，
+        // 按它算预算会把常驻上限压到只剩几十块；超过 60% 堆上限就视为脏数据。
+        if (baseUsedMB > heapLimitMB * 0.6) baseUsedMB = 650;
+        this.lastBaseUsedMB = baseUsedMB > 0 ? baseUsedMB : 650;
+        const usableBudgetMB = baseUsedMB > 0 ? heapLimitMB * 0.80 - baseUsedMB : heapLimitMB * 0.5;
+        const geometryBudgetMB = Math.min(3200, Math.max(384, usableBudgetMB));
+
+        const fitsAll = totalDecodedMB <= geometryBudgetMB;
+        this.fitsAllChunks = fitsAll;
+        this.maxLoadedChunks = fitsAll
+            ? chunkCount
+            : Math.max(48, Math.min(chunkCount, Math.floor(geometryBudgetMB / perChunkFootprintMB)));
+        this.shadedMaxLoadedChunks = this.maxLoadedChunks;
+        this.maxCachedChunks = Math.max(8, Math.min(128, Math.floor(this.maxLoadedChunks / 4)));
+        this.chunkResidentBudgetMB = geometryBudgetMB;
+        this.allowFullChunkLoad = true;
     }
 
     async removeModel(uuid: string) {
@@ -3239,8 +4065,8 @@ export class SceneManager {
         if (magic !== 0x4D49424E) throw new Error("不是有效的 NBIM 文件");
 
         const version = header.version;
-        if (version !== 8) {
-            throw new Error(`不支持的 NBIM 版本: ${version}，当前仅支持 V8`);
+        if (version !== 8 && version !== 9) {
+            throw new Error(`不支持的 NBIM 版本: ${version}，当前支持 V8 / V9`);
         }
 
         if (onProgress) onProgress(20, "正在读取元数据...");
@@ -3269,7 +4095,7 @@ export class SceneManager {
             debugLog("SceneManager/NBIM", "初始化全局偏移", this.globalOffset);
         }
 
-        const modelRoot = manifest.structureTree;
+        const modelRoot = this.cloneStructureTreeWithUniqueIds(manifest.structureTree, fileId);
         appendNbimStructure({
             structureRoot: this.structureRoot,
             modelRoot
@@ -3306,7 +4132,9 @@ export class SceneManager {
             modelRoot,
             chunks: manifest.chunks
         });
-        this.registerOriginalStats(rootId, quickStats);
+        // 统计按本次加载的 fileId 记账（不再用结构树 rootId）：
+        // 同一个 NBIM 打开两次时 rootId 会不同，但删除时需要按 loadId 精确扣减。
+        this.registerOriginalStats(fileId, quickStats);
 
         // 为 NBIM 创建一个容器组
         const fileGroup = createNbimContainerGroup({
@@ -3314,6 +4142,7 @@ export class SceneManager {
             modelRootName: typeof modelRoot?.name === "string" ? modelRoot.name : "",
             rootId
         });
+        fileGroup.userData.loadId = fileId;
         this.contentGroup.add(fileGroup);
         // 新载入的模型立即套用当前显示样式（真实/着色/线框）
         applyDisplayMode(fileGroup, this.displayMode);
@@ -3356,7 +4185,7 @@ export class SceneManager {
         if (onProgress) onProgress(30, "正在初始化分块...");
 
         const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
-        this.applyNbimScaleTuning(chunkEntries);
+        this.applyNbimScaleTuning(chunkEntries, manifest.stats);
         const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
             ? Number.MAX_SAFE_INTEGER
             : GHOST_VISIBLE_FIRST_BATCH;
@@ -3369,6 +4198,10 @@ export class SceneManager {
             immediateGhostLimit,
             registrationBatchSize: NBIM_CHUNK_REGISTRATION_BATCH,
             onProgress,
+            estimateDecodedMB: (entry: any) => Math.max(
+                0.35,
+                ((Number(entry?.decodedLength) || Number(entry?.byteLength) || 0) / 1048576) * this.nbimDecodedMBPerRawByte * CHUNK_FOOTPRINT_MULTIPLIER
+            ),
             registerChunk: (chunk) => this.registerChunk(chunk),
             createGhostLine: (name, bounds) => this.createGhostLine(name, bounds),
             addGhostLine: (line) => this.ghostGroup.add(line),
@@ -3380,7 +4213,7 @@ export class SceneManager {
 
         this.reportChunkProgress();
 
-        this.fitView(true);
+        this.fitViewToChunks(true);
         this.markSceneDirty({
             invalidateInteractables: true,
             needsBoundsUpdate: true,
@@ -3402,8 +4235,8 @@ export class SceneManager {
         });
         if (loadFinalize.shouldEstimateStats) {
             void this.estimateNbimStats(file, manifest.chunks, version).then((stats) => {
-                this.unregisterOriginalStats(rootId);
-                this.registerOriginalStats(rootId, stats);
+                this.unregisterOriginalStats(fileId);
+                this.registerOriginalStats(fileId, stats);
             }).catch((error) => {
                 console.warn("NBIM 统计估算失败:", error);
             });
@@ -3488,7 +4321,7 @@ export class SceneManager {
             this.chunkIdSet.clear();
             this.chunkById.clear();
             this.chunkIndexById.clear();
-            this.lastReportedProgress = { loaded: -1, total: -1 };
+            this.lastReportedProgress = { loaded: -1, total: -1, pending: -1 };
             this.processingChunks.clear();
             this.cancelledChunkIds.clear();
             this.prefetchQueue = [];
@@ -3507,6 +4340,9 @@ export class SceneManager {
             this.contentGroup.visible = true;
             this.ghostGroup.visible = true;
             this.chunkWarmupActive = false;
+            this.allowFullChunkLoad = false;
+            this.chunkLoadPlanPending = false;
+            this.nbimDecodedMBPerRawByte = 1;
 
             // 6. 重置全局偏移
             this.globalOffset.set(0, 0, 0);
@@ -3566,6 +4402,66 @@ export class SceneManager {
 
     getNbimPropertyNameIndexVersion(): number {
         return this.nbimPropertyNameIndexVersion;
+    }
+
+    private structureLabelCache = new Map<string, string>();
+
+    /**
+     * 结构树显示名：优先使用有语义的名称（名称/型号/类型），
+     * 避免整棵树都显示 “Node_1234” 这种导出器生成的占位序号；
+     * 占位名回退到 BIM_ID / ExpressID（`#126`），再不行用短 uuid。
+     */
+    resolveStructureNodeLabel(node: any): string {
+        const cacheKey = String(node?.id ?? node?.uuid ?? "");
+        if (cacheKey) {
+            const cached = this.structureLabelCache.get(cacheKey);
+            if (cached) return cached;
+        }
+
+        const isPlaceholder = (value: unknown) => {
+            const text = String(value ?? "").trim();
+            if (!text) return true;
+            if (/^(node|mesh|group|object|instance|element|part|solid|component)[-_ ]?\d*$/i.test(text)) return true;
+            return /^(mesh|group|object|instance|element|component)$/i.test(text);
+        };
+
+        let label = String(node?.name ?? "").trim();
+        if (isPlaceholder(label)) {
+            label = "";
+            const uuid = String(node?.uuid ?? node?.id ?? "");
+            const doc = uuid ? this.getNbimPropertySearchDocument(uuid) : null;
+            if (doc && !isPlaceholder(doc.name)) {
+                label = String(doc.name).trim();
+            }
+            if (!label && Array.isArray(doc?.rows)) {
+                const preferred = ["名称", "型号", "类型", "类别", "Name", "Type", "Category"];
+                for (const key of preferred) {
+                    const row = doc.rows.find((item: any) => item?.key === key
+                        || (typeof item?.path === "string" && item.path.endsWith(`.${key}`)));
+                    if (row && !isPlaceholder(row.value)) {
+                        label = String(row.value).trim();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!label) {
+            const bimId = node?.bimId ?? node?.userData?.expressID ?? node?.userData?.bimId;
+            if (bimId !== undefined && bimId !== null && String(bimId).trim() !== "") {
+                label = `#${bimId}`;
+            } else if (node?.uuid) {
+                label = `#${String(node.uuid).slice(0, 8)}`;
+            } else {
+                label = "未命名";
+            }
+        }
+
+        if (cacheKey) {
+            if (this.structureLabelCache.size > 20000) this.structureLabelCache.clear();
+            this.structureLabelCache.set(cacheKey, label);
+        }
+        return label;
     }
 
     getNbimPropertySearchDocument(uuid: string): NbimPropertyDocument | null {
@@ -4047,6 +4943,7 @@ export class SceneManager {
         });
 
         const instanceBox = new THREE.Box3();
+        const localBox = new THREE.Box3();
         const instanceMatrix = new THREE.Matrix4();
         const worldMatrix = new THREE.Matrix4();
         this.optimizedMapping.forEach((mappings, originalUuid) => {
@@ -4056,11 +4953,12 @@ export class SceneManager {
                 const key = `${mapping.mesh.uuid}:${mapping.instanceId}`;
                 if (this.explodeInstanceStates.has(key)) return;
                 mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
-                const geometry = mapping.geometry || mapping.mesh.geometry;
-                if (!geometry?.boundingBox) geometry?.computeBoundingBox?.();
-                if (!geometry?.boundingBox) return;
                 worldMatrix.copy(mapping.mesh.matrixWorld).multiply(instanceMatrix);
-                instanceBox.copy(geometry.boundingBox).applyMatrix4(worldMatrix);
+                const localGeometryBox = mapping.geometry
+                    ? (mapping.geometry.boundingBox || (mapping.geometry.computeBoundingBox(), mapping.geometry.boundingBox))
+                    : getBatchedInstanceLocalBox(mapping.mesh, mapping.instanceId, localBox);
+                if (!localGeometryBox) return;
+                instanceBox.copy(localGeometryBox).applyMatrix4(worldMatrix);
                 if (instanceBox.isEmpty()) return;
                 objectCenter.copy(instanceBox.getCenter(new THREE.Vector3()));
                 const offset = objectCenter.sub(this.explodeCenter);
@@ -4459,8 +5357,7 @@ export class SceneManager {
         const mapping = this.optimizedMapping
             .get(focus.uuid)
             ?.find((item) => item.mesh === focus.mesh && item.instanceId === focus.instanceId);
-        const geometry = mapping?.geometry
-            || (focus.mesh.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined)?.get(focus.instanceId);
+        const geometry = mapping?.geometry || getBatchedInstanceGeometry(focus.mesh, focus.instanceId);
         if (!geometry) {
             if (this.highlightGlowMesh) this.highlightGlowMesh.visible = false;
             return;
@@ -4641,9 +5538,27 @@ export class SceneManager {
         this.sceneSphereValid = false;
     }
 
-    fitView(keepOrientation = true) {
+    /**
+     * 用已注册分块的包围盒做初始视角适配。
+     * 不再依赖 manifest.globalBounds —— 某些批量导出的 globalBounds 明显偏大，
+     * 会导致刚打开模型时缩成一个极小的点（必须手动点“充满”才正常）。
+     */
+    private fitViewToChunks(keepOrientation = true) {
+        const box = new THREE.Box3();
+        for (const chunk of this.chunks) {
+            if (chunk?.bounds) box.union(chunk.bounds);
+        }
+        if (box.isEmpty()) {
+            this.fitView(keepOrientation, false);
+            return;
+        }
+        this.sceneBounds = box.clone();
+        this.fitBox(box, !keepOrientation);
+    }
+
+    fitView(keepOrientation = true, visibleOnly = true) {
         this.contentGroup.updateMatrixWorld(true);
-        let box = this.computeTotalBounds(true);
+        let box = this.computeTotalBounds(visibleOnly);
 
         // 如果可见部分为空，尝试使用完整包围盒
         if (box.isEmpty()) {
@@ -4684,15 +5599,20 @@ export class SceneManager {
         if (!mappings || mappings.length === 0) return;
 
         const instanceMatrix = new THREE.Matrix4();
+        const tempWorldBox = new THREE.Box3();
         for (const mapping of mappings) {
             if (visibleOnly && !this.isWorldVisible(mapping.mesh)) continue;
-            const geometry = mapping.geometry || mapping.mesh.geometry;
-            if (!geometry.boundingBox) geometry.computeBoundingBox();
-            if (!geometry.boundingBox) continue;
-            mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
-            instanceMatrix.premultiply(mapping.mesh.matrixWorld);
-            const box = geometry.boundingBox.clone().applyMatrix4(instanceMatrix);
-            if (!box.isEmpty()) targetBox.union(box);
+            let worldBox: THREE.Box3 | null;
+            if (mapping.geometry) {
+                if (!mapping.geometry.boundingBox) mapping.geometry.computeBoundingBox();
+                if (!mapping.geometry.boundingBox) continue;
+                mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
+                instanceMatrix.premultiply(mapping.mesh.matrixWorld);
+                worldBox = tempWorldBox.copy(mapping.geometry.boundingBox).applyMatrix4(instanceMatrix);
+            } else {
+                worldBox = getBatchedInstanceWorldBox(mapping.mesh, mapping.instanceId, tempWorldBox, instanceMatrix);
+            }
+            if (worldBox && !worldBox.isEmpty()) targetBox.union(worldBox);
         }
     }
 
@@ -5232,6 +6152,72 @@ export class SceneManager {
         return isBoxClippedByPlanes(this.clippingPlanes, box);
     }
 
+    /** 调试/评估用：统计实例世界尺寸分布，判断“远景剔除小构件”这类 LOD 的收益。 */
+    getInstanceSizeStats(thresholds: number[] = [0.02, 0.05, 0.1, 0.2, 0.5, 1]) {
+        const meshes: THREE.BatchedMesh[] = [];
+        for (const chunk of this.chunks) {
+            if (chunk?.mesh) meshes.push(chunk.mesh as THREE.BatchedMesh);
+        }
+        let totalVerts = 0;
+        let totalInstances = 0;
+        const instanceSizes: number[] = [];
+        const geos: Array<{ diag: number; verts: number; maxWorldDiag: number }> = [];
+        const box = new THREE.Box3();
+        const size = new THREE.Vector3();
+        const matrix = new THREE.Matrix4();
+
+        for (const mesh of meshes) {
+            const count = Number((mesh as any).instanceCount) || 0;
+            const geoMap = new Map<number, { diag: number; verts: number; maxWorldDiag: number }>();
+            for (let i = 0; i < count; i++) {
+                const gid = getBatchedGeometryId(mesh, i);
+                if (gid === null) continue;
+                let geo = geoMap.get(gid);
+                if (!geo) {
+                    const geometryBox = (mesh as any).getBoundingBoxAt?.(gid, box);
+                    const range = (mesh as any).getGeometryRangeAt?.(gid, {});
+                    const diag = geometryBox ? geometryBox.getSize(size).length() : 0;
+                    geo = { diag, verts: Number(range?.vertexCount) || 0, maxWorldDiag: 0 };
+                    geoMap.set(gid, geo);
+                    geos.push(geo);
+                    totalVerts += geo.verts;
+                }
+                mesh.getMatrixAt(i, matrix);
+                const e = matrix.elements;
+                const scale = (Math.abs(e[0]) + Math.abs(e[5]) + Math.abs(e[10])) / 3;
+                const worldDiag = geo.diag * scale;
+                if (worldDiag > geo.maxWorldDiag) geo.maxWorldDiag = worldDiag;
+                instanceSizes.push(worldDiag);
+                totalInstances++;
+            }
+        }
+
+        const sorted = instanceSizes.slice().sort((a, b) => a - b);
+        const percentile = (p: number) => sorted.length
+            ? Number(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))].toFixed(3))
+            : 0;
+        const distribution = thresholds.map((threshold) => {
+            const keptInstances = sorted.filter((value) => value >= threshold).length;
+            let keptVerts = 0;
+            for (const geo of geos) {
+                if (geo.maxWorldDiag >= threshold) keptVerts += geo.verts;
+            }
+            return {
+                threshold,
+                instanceKeepPercent: totalInstances ? Number((keptInstances / totalInstances * 100).toFixed(1)) : 0,
+                vertexKeepPercent: totalVerts ? Number((keptVerts / totalVerts * 100).toFixed(1)) : 0
+            };
+        });
+
+        return {
+            meshes: meshes.length,
+            totalInstances,
+            totalVerts,
+            percentiles: { p10: percentile(0.1), p25: percentile(0.25), p50: percentile(0.5), p75: percentile(0.75), p90: percentile(0.9) },
+            distribution
+        };
+    }
+
     getStats(): SceneManagerStats {
         return collectSceneManagerStats({
             renderer: this.renderer,
@@ -5244,8 +6230,127 @@ export class SceneManager {
         });
     }
 
+    /**
+     * 调试用：按类别估算当前内存占用（MB）。
+     * 只读，不改变状态；用于定位“每块 6.5MB”到底花在哪（合并缓冲 / CPU 源数组 / 边线 / 属性 / 结构树）。
+     */
+    getMemoryReport() {
+        const perf = (performance as any)?.memory;
+        const bytesOf = (geometry?: THREE.BufferGeometry | null) => {
+            if (!geometry) return 0;
+            let total = 0;
+            const attributes = geometry.attributes || {};
+            for (const name in attributes) {
+                const array = (attributes as any)[name]?.array;
+                if (array?.byteLength) total += array.byteLength;
+            }
+            const index = (geometry as any).index;
+            if (index?.array?.byteLength) total += index.array.byteLength;
+            return total;
+        };
+
+        let batchedBytes = 0;
+        let sourceBytes = 0;
+        let instanceCount = 0;
+        let batchedMeshCount = 0;
+        let sourceGeometryCount = 0;
+        let estimatedResidentMB = 0;
+
+        for (const chunk of this.chunks) {
+            if (chunk?.loaded) estimatedResidentMB += this.getChunkCostMB(chunk);
+            const mesh = chunk?.mesh as THREE.BatchedMesh | undefined;
+            if (!mesh) continue;
+            batchedMeshCount++;
+            batchedBytes += bytesOf(mesh.geometry);
+            instanceCount += Number((mesh as any).instanceCount) || 0;
+            // 逐实例几何视图现在按需创建，只统计真正存在的视图（position/normal 共享合并缓冲，
+            // 仅索引副本占额外内存）。
+            const viewStats = getBatchedGeometryViewStats(mesh);
+            sourceGeometryCount += viewStats.count;
+            sourceBytes += viewStats.bytes;
+        }
+
+        let readCacheBytes = 0;
+        for (const buffer of this.chunkReadCache.values()) readCacheBytes += buffer.byteLength;
+
+        const edgeStats = this.displayEdges.getStats();
+        const pendingDocs = this.nbimPendingDocs ? Object.keys(this.nbimPendingDocs).length : 0;
+        let propertyRows = 0;
+        if (this.nbimPendingDocs) {
+            for (const key in this.nbimPendingDocs) {
+                const doc = this.nbimPendingDocs[key];
+                if (Array.isArray(doc?.rows)) propertyRows += doc.rows.length;
+            }
+        } else {
+            for (const doc of this.nbimAllSearchDocs) {
+                if (Array.isArray(doc?.rows)) propertyRows += doc.rows.length;
+            }
+        }
+
+        let structureNodes = 0;
+        if (this.structureRoot) {
+            const stack: any[] = [this.structureRoot];
+            while (stack.length > 0) {
+                const node = stack.pop();
+                structureNodes++;
+                if (Array.isArray(node?.children)) stack.push(...node.children);
+            }
+        }
+
+        const toMB = (bytes: number) => Number((bytes / 1048576).toFixed(2));
+        return {
+            heap: {
+                usedMB: perf ? Number((perf.usedJSHeapSize / 1048576).toFixed(1)) : null,
+                limitMB: perf ? Number((perf.jsHeapSizeLimit / 1048576).toFixed(0)) : null
+            },
+            chunks: {
+                total: this.chunks.length,
+                loaded: this.chunkLoadedCount,
+                processing: this.processingChunks.size,
+                residentBudgetMB: Number(this.chunkResidentBudgetMB.toFixed(1)),
+                estimatedResidentMB: Number(estimatedResidentMB.toFixed(1)),
+                maxLoadedChunks: this.maxLoadedChunks,
+                cachedMeshes: this.chunkMeshCache.size,
+                coarseLod: this.chunks.reduce((sum, chunk) => sum + (chunk?.lodLevel === 1 ? 1 : 0), 0)
+            },
+            geometry: {
+                batchedMeshCount,
+                batchedBytesMB: toMB(batchedBytes),
+                sourceGeometryCount,
+                sourceBytesMB: toMB(sourceBytes),
+                instanceCount,
+                instanceMetaMB: Number(((instanceCount * 88) / 1048576).toFixed(1))
+            },
+            edges: { objects: edgeStats.count, bytesMB: toMB(edgeStats.bytes) },
+            properties: {
+                pendingDocs,
+                indexedDocs: this.nbimAllSearchDocs.length,
+                searchDocsByUuid: this.nbimSearchDocsByUuid.size,
+                searchDocsByBimId: this.nbimSearchDocsByBimId.size,
+                propertyNameIndex: this.nbimPropertyNameIndex.size,
+                rows: propertyRows
+            },
+            structure: {
+                nodes: structureNodes,
+                nodeMap: this.nodeMap.size,
+                bimIdToNodeIds: this.bimIdToNodeIds.size
+            },
+            caches: {
+                readCacheEntries: this.chunkReadCache.size,
+                readCacheMB: toMB(readCacheBytes),
+                readCacheBudgetMB: this.resolvedChunkOptions.chunkReadCacheMB
+            },
+            render: {
+                drawCalls: this.renderer.info.render.calls,
+                triangles: this.renderer.info.render.triangles
+            }
+        };
+    }
+
     dispose() {
         this.disposed = true;
+        this.renderProxy?.dispose();
+        this.renderProxy = null;
         this.animateFramePending = false;
         this.cancelCameraFlight();
         this.cancelBoxSelect();

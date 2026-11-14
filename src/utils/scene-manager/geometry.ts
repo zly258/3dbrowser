@@ -1,9 +1,11 @@
 import * as THREE from "three";
+import { clearBatchedGeometryViews, getBatchedInstanceGeometry } from "./batchedGeometryView";
 
 type OptimizedGeometryMapping = {
     mesh: THREE.BatchedMesh;
     instanceId: number;
     originalColor: number;
+    geometryId?: number;
     geometry?: THREE.BufferGeometry;
 };
 
@@ -95,11 +97,17 @@ export function getObjectGeometryDataFromScene(options: {
 
     const mappings = optimizedMapping.get(uuid);
     if (mappings && mappings.length > 0) {
+        const touchedMeshes = new Set<THREE.BatchedMesh>();
         mappings.forEach((mapping) => {
-            if (!mapping.geometry) return;
-            area += computeGeometryArea(mapping.geometry, mapping.mesh, mapping.instanceId);
-            volume += computeGeometryVolume(mapping.geometry, mapping.mesh, mapping.instanceId);
+            const geometry = mapping.geometry || getBatchedInstanceGeometry(mapping.mesh, mapping.instanceId);
+            if (!geometry) return;
+            touchedMeshes.add(mapping.mesh);
+            area += computeGeometryArea(geometry, mapping.mesh, mapping.instanceId);
+            volume += computeGeometryVolume(geometry, mapping.mesh, mapping.instanceId);
         });
+        // 面积/体积只是属性面板的瞬时需求；框选上万构件时逐实例视图可达几十 MB，
+        // 算完立即释放，等下次需要再按需重建。
+        touchedMeshes.forEach((mesh) => clearBatchedGeometryViews(mesh));
         return { area, volume };
     }
 

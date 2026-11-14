@@ -18,17 +18,22 @@ export function reportChunkProgressIfNeeded(options: {
     now: number;
     total: number;
     loaded: number;
-    lastReportedProgress: { loaded: number; total: number };
+    pending: number;
+    lastReportedProgress: { loaded: number; total: number; pending: number };
     lastChunkProgressReportAt: number;
 }) {
-    const { now, total, loaded, lastReportedProgress, lastChunkProgressReportAt } = options;
-    const changed = loaded !== lastReportedProgress.loaded || total !== lastReportedProgress.total;
-    const shouldFlush = total === 0 || (total > 0 && loaded >= total);
+    const { now, total, loaded, pending, lastReportedProgress, lastChunkProgressReportAt } = options;
+    const changed = loaded !== lastReportedProgress.loaded
+        || total !== lastReportedProgress.total
+        || pending !== lastReportedProgress.pending;
+    // pending 归零也要立即刷新一次，否则界面会停在“加载中 x/y”不动。
+    const pendingJustIdle = pending === 0 && lastReportedProgress.pending > 0;
+    const shouldFlush = total === 0 || (total > 0 && loaded >= total) || pendingJustIdle;
     const intervalReached = (now - lastChunkProgressReportAt) >= 48;
 
     return {
         shouldNotify: changed && (intervalReached || shouldFlush),
-        nextProgress: { loaded, total },
+        nextProgress: { loaded, total, pending },
         nextReportedAt: shouldFlush || intervalReached ? now : lastChunkProgressReportAt
     };
 }

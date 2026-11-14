@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { SceneManager } from "../utils/scene-manager/SceneManager";
 import { getTranslation, Lang } from "../theme/locales";
 import { ThemeColors } from "../theme/styles";
@@ -14,28 +13,30 @@ interface ViewCubeProps {
 type ViewCubeMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
 
 /* ============================================================
- * 圆角立方体（局部坐标，边长 1）
- * 由 6 个平面片 + 12 条圆柱棱 + 8 个球角拼出，视觉上等于
- * 一个半径 0.07 的倒角立方体；每个零件仍可独立拾取与高亮。
+ * 倒直角立方体（局部坐标，边长 1）
+ *
+ * 每条棱用一张 45° 平面切掉，8 个顶点被切成三角形倒角面。
+ * 于是 6 个面 + 12 条棱带 + 8 个角三角 = 26 块，全部是
+ * 可独立拾取的零件 —— 面、棱、顶点都能点。
+ *
+ * 零件各自沿边缘内缩「半条缝」，底下垫一个实心的同形外壳，
+ * 外壳用描边色：缝隙里透出来的就是分块线。这样每条棱、
+ * 每个角都有一圈细线勾着，看上去就是一格一格可点的目标。
  * ============================================================ */
-const CORNER_RADIUS = 0.07;
-const FACE_SIZE = 1 - CORNER_RADIUS * 2;
-const INNER = 0.5 - CORNER_RADIUS;
-const SEAM_OVERLAP = 0.004;
+const CHAMFER = 0.09;
+const FACE_SIZE = 1 - CHAMFER * 2;
+/** 倒角棱带的宽度（45° 切面在表面上的宽度） */
+const BAND_WIDTH = CHAMFER * Math.SQRT2;
+/** 三角倒角面外接圆半径 */
+const CORNER_CIRCUM = (CHAMFER * Math.SQRT2) / Math.sqrt(3);
 
-const CAMERA_DISTANCE = 3.2;
+const CAMERA_DISTANCE = 2.8;
 const CAMERA_FOV = 38;
 
-/** 轮廓线、棱线的屏幕线宽（像素） */
-const OUTLINE_PX = 1.25;
-const CREASE_PX = 1.15;
-
-/** 中线（Y 形三条棱）两端缩进，避免探出圆角轮廓 */
-const CREASE_TRIM_NEAR = CORNER_RADIUS * 0.4;
-const CREASE_TRIM_FAR = CORNER_RADIUS * 0.6;
-
-/** 两个相邻面都朝向相机时，才画这条棱 */
-const FACE_VISIBLE_EPS = 0.02;
+/** 相邻零件之间透出的分块线宽度（屏幕像素） */
+const SEAM_PX = 1.1;
+/** 外轮廓线宽度（屏幕像素） */
+const OUTLINE_PX = 0.8;
 
 type FaceKey = "front" | "back" | "top" | "bottom" | "left" | "right";
 
@@ -65,36 +66,173 @@ interface EdgePart {
     name: string;
     /** 这条棱延伸的轴：0=x, 1=y, 2=z */
     axis: 0 | 1 | 2;
-    position: [number, number, number];
+    /** 棱两侧面的朝向（axis 分量为 0） */
+    signs: [number, number, number];
 }
 
 const EDGE_PARTS: EdgePart[] = [
-    { name: "top-front", axis: 0, position: [0, -INNER, INNER] },
-    { name: "top-back", axis: 0, position: [0, INNER, INNER] },
-    { name: "top-left", axis: 1, position: [-INNER, 0, INNER] },
-    { name: "top-right", axis: 1, position: [INNER, 0, INNER] },
-    { name: "bottom-front", axis: 0, position: [0, -INNER, -INNER] },
-    { name: "bottom-back", axis: 0, position: [0, INNER, -INNER] },
-    { name: "bottom-left", axis: 1, position: [-INNER, 0, -INNER] },
-    { name: "bottom-right", axis: 1, position: [INNER, 0, -INNER] },
-    { name: "front-left", axis: 2, position: [-INNER, -INNER, 0] },
-    { name: "front-right", axis: 2, position: [INNER, -INNER, 0] },
-    { name: "back-left", axis: 2, position: [-INNER, INNER, 0] },
-    { name: "back-right", axis: 2, position: [INNER, INNER, 0] }
+    { name: "top-front", axis: 0, signs: [0, -1, 1] },
+    { name: "top-back", axis: 0, signs: [0, 1, 1] },
+    { name: "bottom-front", axis: 0, signs: [0, -1, -1] },
+    { name: "bottom-back", axis: 0, signs: [0, 1, -1] },
+    { name: "top-left", axis: 1, signs: [-1, 0, 1] },
+    { name: "top-right", axis: 1, signs: [1, 0, 1] },
+    { name: "bottom-left", axis: 1, signs: [-1, 0, -1] },
+    { name: "bottom-right", axis: 1, signs: [1, 0, -1] },
+    { name: "front-left", axis: 2, signs: [-1, -1, 0] },
+    { name: "front-right", axis: 2, signs: [1, -1, 0] },
+    { name: "back-left", axis: 2, signs: [-1, 1, 0] },
+    { name: "back-right", axis: 2, signs: [1, 1, 0] }
 ];
 
-const CORNER_PARTS: { name: string; position: [number, number, number] }[] = [
-    { name: "top-front-left", position: [-INNER, -INNER, INNER] },
-    { name: "top-front-right", position: [INNER, -INNER, INNER] },
-    { name: "top-back-left", position: [-INNER, INNER, INNER] },
-    { name: "top-back-right", position: [INNER, INNER, INNER] },
-    { name: "bottom-front-left", position: [-INNER, -INNER, -INNER] },
-    { name: "bottom-front-right", position: [INNER, -INNER, -INNER] },
-    { name: "bottom-back-left", position: [-INNER, INNER, -INNER] },
-    { name: "bottom-back-right", position: [INNER, INNER, -INNER] }
+const CORNER_PARTS: { name: string; signs: [number, number, number] }[] = [
+    { name: "top-front-left", signs: [-1, -1, 1] },
+    { name: "top-front-right", signs: [1, -1, 1] },
+    { name: "top-back-left", signs: [-1, 1, 1] },
+    { name: "top-back-right", signs: [1, 1, 1] },
+    { name: "bottom-front-left", signs: [-1, -1, -1] },
+    { name: "bottom-front-right", signs: [1, -1, -1] },
+    { name: "bottom-back-left", signs: [-1, 1, -1] },
+    { name: "bottom-back-right", signs: [1, 1, -1] }
 ];
 
-const UP = new THREE.Vector3(0, 1, 0);
+const AXIS_X = new THREE.Vector3(1, 0, 0);
+const AXIS_Y = new THREE.Vector3(0, 1, 0);
+const AXIS_Z = new THREE.Vector3(0, 0, 1);
+const AXIS_VECTORS = [AXIS_X, AXIS_Y, AXIS_Z];
+
+/** 倒角立方的顶点：沿 axis 方向保留满长，另外两个方向各内收 CHAMFER */
+const cornerVertex = (signs: [number, number, number], skip: 0 | 1 | 2, chamfer: number) => {
+    const inset = 0.5 - chamfer;
+    return new THREE.Vector3(
+        signs[0] * (skip === 0 ? 0.5 : inset),
+        signs[1] * (skip === 1 ? 0.5 : inset),
+        signs[2] * (skip === 2 ? 0.5 : inset)
+    );
+};
+
+/** 把一组顶点按扇形三角化写入 positions，并保证法线朝外 */
+const pushPolygon = (positions: number[], points: THREE.Vector3[]) => {
+    const centroid = new THREE.Vector3();
+    points.forEach((point) => centroid.add(point));
+    centroid.multiplyScalar(1 / points.length);
+
+    const normal = new THREE.Vector3()
+        .subVectors(points[1], points[0])
+        .cross(new THREE.Vector3().subVectors(points[2], points[0]));
+
+    if (normal.dot(centroid) < 0) points.reverse();
+
+    for (let i = 1; i < points.length - 1; i += 1) {
+        positions.push(points[0].x, points[0].y, points[0].z);
+        positions.push(points[i].x, points[i].y, points[i].z);
+        positions.push(points[i + 1].x, points[i + 1].y, points[i + 1].z);
+    }
+};
+
+/** 26 块拼成的倒角立方（封闭实体），用作描边底壳 */
+const buildChamferedHull = (chamfer: number) => {
+    const positions: number[] = [];
+    const quadOrder: [number, number][] = [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1]
+    ];
+
+    for (let axis = 0; axis < 3; axis += 1) {
+        const b = (axis + 1) % 3;
+        const d = (axis + 2) % 3;
+
+        // 6 个面
+        for (const sign of [-1, 1]) {
+            const points = quadOrder.map(([sb, sd]) => {
+                const signs: [number, number, number] = [0, 0, 0];
+                signs[axis] = sign;
+                signs[b] = sb;
+                signs[d] = sd;
+                return cornerVertex(signs, axis as 0 | 1 | 2, chamfer);
+            });
+            pushPolygon(positions, points);
+        }
+
+        // 12 条棱带（axis 方向各 4 条）
+        for (const sb of [-1, 1]) {
+            for (const sd of [-1, 1]) {
+                const plus: [number, number, number] = [0, 0, 0];
+                const minus: [number, number, number] = [0, 0, 0];
+                plus[b] = sb;
+                plus[d] = sd;
+                minus[b] = sb;
+                minus[d] = sd;
+                plus[axis] = 1;
+                minus[axis] = -1;
+
+                pushPolygon(positions, [
+                    cornerVertex(plus, b as 0 | 1 | 2, chamfer),
+                    cornerVertex(plus, d as 0 | 1 | 2, chamfer),
+                    cornerVertex(minus, d as 0 | 1 | 2, chamfer),
+                    cornerVertex(minus, b as 0 | 1 | 2, chamfer)
+                ]);
+            }
+        }
+    }
+
+    // 8 个三角倒角面
+    for (const sx of [-1, 1]) {
+        for (const sy of [-1, 1]) {
+            for (const sz of [-1, 1]) {
+                const signs: [number, number, number] = [sx, sy, sz];
+                pushPolygon(positions, [
+                    cornerVertex(signs, 0, chamfer),
+                    cornerVertex(signs, 1, chamfer),
+                    cornerVertex(signs, 2, chamfer)
+                ]);
+            }
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    return geometry;
+};
+
+/** 单个顶点的三角倒角面：以质心为中心按「缝」内缩，保证与相邻棱带留缝 */
+const buildCornerTriangle = (signs: [number, number, number], inset: number) => {
+    const points = [0, 1, 2].map((skip) =>
+        cornerVertex(signs, skip as 0 | 1 | 2, CHAMFER)
+    );
+    const centroid = new THREE.Vector3()
+        .add(points[0])
+        .add(points[1])
+        .add(points[2])
+        .multiplyScalar(1 / 3);
+
+    // 等边三角形按质心等比缩放即等于三边同时内缩；留 20% 余量避免角料被缩没
+    const scale = Math.max(0.2, 1 - (2 * inset) / CORNER_CIRCUM);
+    const local = points.map((point) => point.clone().sub(centroid).multiplyScalar(scale));
+
+    const normal = new THREE.Vector3()
+        .subVectors(local[1], local[0])
+        .cross(new THREE.Vector3().subVectors(local[2], local[0]));
+
+    if (normal.dot(centroid) < 0) {
+        const tmp = local[1];
+        local[1] = local[2];
+        local[2] = tmp;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(
+            local.flatMap((point) => [point.x, point.y, point.z]),
+            3
+        )
+    );
+
+    return { geometry, centroid };
+};
 
 export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -107,14 +245,13 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
     const raycaster = useRef(new THREE.Raycaster());
     const mouse = useRef(new THREE.Vector2());
     const hoveredPart = useRef<ViewCubeMesh | null>(null);
-    const creasesRef = useRef<THREE.Mesh[]>([]);
 
     const cubeSize = sceneMgr?.settings?.viewCubeSize || 132;
     const t = (key: string) => getTranslation(lang as Lang, key);
     const isDark = typeof document !== "undefined" && (
         document.documentElement.classList.contains("theme-dark") ||
         document.documentElement.getAttribute("data-theme") === "dark" ||
-        theme?.bg === "#0E1114"
+        theme?.bg?.toLowerCase() === "#0e1114"
     );
 
     useEffect(() => {
@@ -157,19 +294,21 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
-        // 纯线稿风格：无光照，面/棱/角统一底色，靠轮廓线与中线表达形体
+        // 极简线稿：无光照，靠「面 / 倒角」两档底色 + 分块线表达形体与可点击区域
         const palette = isDark
             ? {
                 fill: "#232B33",
+                bevelFill: "#343E4A",
                 hoverFill: "#2A5F86",
-                line: "#5A6672",
+                line: "#6C7885",
                 text: "#DCE2E8",
                 textHover: "#EAF3FA"
             }
             : {
                 fill: "#FFFFFF",
+                bevelFill: "#E4EAF2",
                 hoverFill: "#CFE4F7",
-                line: "#B9C2CC",
+                line: "#9AA6B3",
                 text: "#3B424B",
                 textHover: "#22303B"
             };
@@ -180,40 +319,53 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
         const worldPerPixel =
             (2 * CAMERA_DISTANCE * Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2))) / cubeSize;
 
+        /** 每个零件从公共边界往回收缩的距离 —— 两个零件各让一半，缝宽就是 SEAM_PX */
+        const inset = (SEAM_PX * worldPerPixel) / 2;
+
         const cubeGroup = new THREE.Group();
         scene.add(cubeGroup);
         cubeRef.current = cubeGroup;
         clickablePartsRef.current = [];
-        creasesRef.current = [];
 
         const bodyGroup = new THREE.Group();
         cubeGroup.add(bodyGroup);
 
         /**
-         * 外轮廓：用单个「实心」圆角立方体放大一圈后只渲染背面。
-         * 本体是不透明的，正面的背面被本体挡住，只剩边缘一圈轮廓线。
-         * 注意不能用零件组做这件事——每个薄零件放大后内表面会跑到本体前面。
+         * 底层实心外壳：面和棱带都内缩，缝隙里露出这层描边色，
+         * 于是每条棱、每个顶点都有一圈细线。再用一个放大一圈、
+         * 只渲染背面的同形外壳画出外轮廓。
          */
-        const outlineScale = 1 + 2 * OUTLINE_PX * worldPerPixel;
-        const hullGeometry = new RoundedBoxGeometry(1, 1, 1, 4, CORNER_RADIUS);
+        const hullGeometry = buildChamferedHull(CHAMFER);
         const hullMaterial = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(palette.line),
+            toneMapped: false,
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1
+        });
+        const hullMesh = new THREE.Mesh(hullGeometry, hullMaterial);
+        hullMesh.frustumCulled = false;
+        cubeGroup.add(hullMesh);
+
+        const outlineScale = 1 + 2 * OUTLINE_PX * worldPerPixel;
+        const outlineMaterial = new THREE.MeshBasicMaterial({
             color: new THREE.Color(palette.line),
             side: THREE.BackSide,
             toneMapped: false
         });
-        const hullMesh = new THREE.Mesh(hullGeometry, hullMaterial);
-        hullMesh.scale.setScalar(outlineScale);
-        hullMesh.frustumCulled = false;
-        cubeGroup.add(hullMesh);
+        const outlineMesh = new THREE.Mesh(hullGeometry, outlineMaterial);
+        outlineMesh.scale.setScalar(outlineScale);
+        outlineMesh.frustumCulled = false;
+        cubeGroup.add(outlineMesh);
 
         const addPart = (
             geometry: THREE.BufferGeometry,
-            position: [number, number, number],
+            position: THREE.Vector3,
             material: THREE.MeshBasicMaterial,
             name?: string
         ) => {
             const mesh = new THREE.Mesh(geometry, material) as ViewCubeMesh;
-            mesh.position.set(position[0], position[1], position[2]);
+            mesh.position.copy(position);
             if (name) mesh.name = name;
             bodyGroup.add(mesh);
 
@@ -222,7 +374,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
 
         const createFaceTexture = (text: string, fill: string, ink: string) => {
             const textureCanvas = document.createElement("canvas");
-            const size = 256;
+            const size = 384;
             textureCanvas.width = size;
             textureCanvas.height = size;
 
@@ -248,7 +400,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
 
             const texture = new THREE.CanvasTexture(textureCanvas);
             texture.colorSpace = THREE.SRGBColorSpace;
-            texture.anisotropy = 4;
+            texture.anisotropy = 8;
             texture.needsUpdate = true;
             createdTextures.push(texture);
             return texture;
@@ -261,18 +413,16 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             const right = new THREE.Vector3().crossVectors(up, normal).normalize();
             const basis = new THREE.Matrix4().makeBasis(right, up, normal);
 
-            const geometry = new THREE.PlaneGeometry(FACE_SIZE, FACE_SIZE);
+            const geometry = new THREE.PlaneGeometry(
+                FACE_SIZE - inset * 2,
+                FACE_SIZE - inset * 2
+            );
             const label = t(`cube_${part.key}`);
             const normalMap = createFaceTexture(label, palette.fill, palette.text);
             const hoverMap = createFaceTexture(label, palette.hoverFill, palette.textHover);
 
             const material = new THREE.MeshBasicMaterial({ map: normalMap, toneMapped: false });
-            const mesh = addPart(
-                geometry,
-                [normal.x * 0.5, normal.y * 0.5, normal.z * 0.5],
-                material,
-                part.key
-            );
+            const mesh = addPart(geometry, normal.clone().multiplyScalar(0.5), material, part.key);
             mesh.quaternion.setFromRotationMatrix(basis);
 
             mesh.userData.isFace = true;
@@ -283,29 +433,40 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             clickablePartsRef.current.push(mesh);
         });
 
-        // ---------- 12 条棱：圆柱，对外就是圆角 ----------
+        // ---------- 12 条棱：45° 倒角带 ----------
         EDGE_PARTS.forEach((part) => {
-            const geometry = new THREE.CylinderGeometry(
-                CORNER_RADIUS,
-                CORNER_RADIUS,
-                FACE_SIZE + SEAM_OVERLAP,
-                12,
-                1,
-                true
+            const axis = part.axis;
+            const b = (axis + 1) % 3;
+            const d = (axis + 2) % 3;
+
+            const normal = new THREE.Vector3();
+            normal.setComponent(b, part.signs[b]);
+            normal.setComponent(d, part.signs[d]);
+            normal.normalize();
+
+            // 沿棱方向 = axis；带宽方向 = 棱方向 × 倒角面法线
+            const lengthDir = AXIS_VECTORS[axis].clone();
+            const widthDir = new THREE.Vector3().crossVectors(lengthDir, normal).normalize();
+            const basis = new THREE.Matrix4().makeBasis(widthDir, lengthDir, normal);
+
+            const geometry = new THREE.PlaneGeometry(
+                BAND_WIDTH - inset * 2,
+                FACE_SIZE - inset * 2
             );
 
-            if (part.axis === 0) {
-                geometry.rotateZ(Math.PI / 2);
-            } else if (part.axis === 2) {
-                geometry.rotateX(Math.PI / 2);
-            }
+            const position = new THREE.Vector3(
+                part.signs[0] * (axis === 0 ? 0 : 0.5 - CHAMFER / 2),
+                part.signs[1] * (axis === 1 ? 0 : 0.5 - CHAMFER / 2),
+                part.signs[2] * (axis === 2 ? 0 : 0.5 - CHAMFER / 2)
+            );
 
             const material = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(palette.fill),
+                color: new THREE.Color(palette.bevelFill),
                 toneMapped: false
             });
 
-            const mesh = addPart(geometry, part.position, material, part.name);
+            const mesh = addPart(geometry, position, material, part.name);
+            mesh.quaternion.setFromRotationMatrix(basis);
 
             mesh.userData.isFace = false;
             mesh.userData.hoverColor = palette.hoverFill;
@@ -314,15 +475,16 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             clickablePartsRef.current.push(mesh);
         });
 
-        // ---------- 8 个角：球 ----------
+        // ---------- 8 个角：三角倒角面 ----------
         CORNER_PARTS.forEach((part) => {
-            const geometry = new THREE.SphereGeometry(CORNER_RADIUS, 16, 12);
+            const { geometry, centroid } = buildCornerTriangle(part.signs, inset);
+
             const material = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(palette.fill),
+                color: new THREE.Color(palette.bevelFill),
                 toneMapped: false
             });
 
-            const mesh = addPart(geometry, part.position, material, part.name);
+            const mesh = addPart(geometry, centroid, material, part.name);
 
             mesh.userData.isFace = false;
             mesh.userData.hoverColor = palette.hoverFill;
@@ -330,90 +492,14 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
 
             clickablePartsRef.current.push(mesh);
         });
-
-        // ---------- 中线：靠近相机那个角点的三条棱 ----------
-        const creaseRadius = 0.5 * CREASE_PX * worldPerPixel;
-        const creaseMaterial = new THREE.MeshBasicMaterial({
-            color: new THREE.Color(palette.line),
-            toneMapped: false
-        });
-        const creaseGeometry = new THREE.CylinderGeometry(1, 1, 1, 6, 1, false);
-
-        for (let i = 0; i < 3; i += 1) {
-            const mesh = new THREE.Mesh(creaseGeometry, creaseMaterial);
-            mesh.frustumCulled = false;
-            mesh.visible = false;
-            cubeGroup.add(mesh);
-            creasesRef.current.push(mesh);
-        }
-
-        const creaseLength = 1 - CREASE_TRIM_NEAR - CREASE_TRIM_FAR;
-        const creaseMid = CREASE_TRIM_NEAR + creaseLength / 2;
-
-        const tmpCorner = new THREE.Vector3();
-        const tmpNormalA = new THREE.Vector3();
-        const tmpNormalB = new THREE.Vector3();
-        const tmpDir = new THREE.Vector3();
-        const tmpPos = new THREE.Vector3();
-
-        const updateCreases = (rotation: THREE.Quaternion) => {
-            // 视图空间中 z 最大的角点 = 离相机最近的角
-            let bestZ = -Infinity;
-            let sx = 1;
-            let sy = 1;
-            let sz = 1;
-
-            for (let i = 0; i < 8; i += 1) {
-                const cx = i & 1 ? 1 : -1;
-                const cy = i & 2 ? 1 : -1;
-                const cz = i & 4 ? 1 : -1;
-
-                tmpCorner.set(cx * 0.5, cy * 0.5, cz * 0.5).applyQuaternion(rotation);
-
-                if (tmpCorner.z > bestZ) {
-                    bestZ = tmpCorner.z;
-                    sx = cx;
-                    sy = cy;
-                    sz = cz;
-                }
-            }
-
-            const signs = [sx, sy, sz];
-
-            for (let axis = 0; axis < 3; axis += 1) {
-                const mesh = creasesRef.current[axis];
-                if (!mesh) continue;
-
-                const a = (axis + 1) % 3;
-                const b = (axis + 2) % 3;
-
-                tmpNormalA.set(0, 0, 0).setComponent(a, signs[a]).applyQuaternion(rotation);
-                tmpNormalB.set(0, 0, 0).setComponent(b, signs[b]).applyQuaternion(rotation);
-
-                const visible = tmpNormalA.z > FACE_VISIBLE_EPS && tmpNormalB.z > FACE_VISIBLE_EPS;
-                mesh.visible = visible;
-
-                if (!visible) continue;
-
-                tmpDir.set(0, 0, 0).setComponent(axis, -signs[axis]);
-                tmpPos
-                    .set(signs[0] * 0.5, signs[1] * 0.5, signs[2] * 0.5)
-                    .addScaledVector(tmpDir, creaseMid);
-
-                mesh.position.copy(tmpPos);
-                mesh.quaternion.setFromUnitVectors(UP, tmpDir);
-                mesh.scale.set(creaseRadius, creaseLength, creaseRadius);
-            }
-        };
 
         let animationId = 0;
 
         const animate = () => {
             animationId = requestAnimationFrame(animate);
 
-            if (sceneMgr && cubeRef.current) {
+            if (cubeRef.current && sceneMgr) {
                 cubeRef.current.quaternion.copy(sceneMgr.camera.quaternion).invert();
-                updateCreases(cubeRef.current.quaternion);
             }
 
             renderer.render(scene, camera);
@@ -424,7 +510,6 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
         return () => {
             cancelAnimationFrame(animationId);
             clickablePartsRef.current = [];
-            creasesRef.current = [];
             hoveredPart.current = null;
             renderer.dispose();
 
@@ -444,7 +529,33 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             materials.forEach((material) => material.dispose());
             geometries.forEach((geometry) => geometry.dispose());
         };
-    }, [sceneMgr, cubeSize, lang, isDark]);
+    }, [sceneMgr, lang, isDark]);
+
+    // 尺寸/DPR 变化只调整渲染器，不重建场景（此前每拖一次滑块都会重建 WebGL 上下文）
+    useEffect(() => {
+        const renderer = rendererRef.current;
+        const camera = cameraRef.current;
+        const canvas = canvasRef.current;
+        if (!renderer || !canvas) return;
+        const applySize = () => {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            renderer.setPixelRatio(dpr);
+            renderer.setSize(cubeSize, cubeSize, false);
+            if (camera) {
+                camera.aspect = 1;
+                camera.updateProjectionMatrix();
+            }
+        };
+        applySize();
+        const resolutionQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+        const onResolutionChange = () => applySize();
+        resolutionQuery.addEventListener?.("change", onResolutionChange);
+        window.addEventListener("resize", applySize);
+        return () => {
+            resolutionQuery.removeEventListener?.("change", onResolutionChange);
+            window.removeEventListener("resize", applySize);
+        };
+    }, [cubeSize]);
 
     const resetPartState = (mesh: ViewCubeMesh | null) => {
         if (!mesh) return;
@@ -520,49 +631,28 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
 
         if (!mesh) return;
 
-        handleViewChange(mesh.name);
-    };
-
-    const handleViewChange = (viewName: string) => {
-        if (!sceneMgr) return;
-
-        const viewMap: Record<string, string> = {
-            top: "top",
-            bottom: "bottom",
-            front: "front",
-            back: "back",
-            left: "left",
-            right: "right",
-            "top-front-right": "se",
-            "top-front-left": "sw",
-            "top-back-right": "ne",
-            "top-back-left": "nw",
-            "front-right": "right",
-            "front-left": "left",
-            "back-right": "right",
-            "back-left": "left",
-            "top-front": "front",
-            "top-back": "back",
-            "top-left": "left",
-            "top-right": "right",
-            "bottom-front": "front",
-            "bottom-back": "back",
-            "bottom-left": "left",
-            "bottom-right": "right"
-        };
-
-        sceneMgr.setView(viewMap[viewName] || viewName);
+        // 面 / 棱 / 顶点都直接对应 setView 支持的视图名
+        sceneMgr.setView(mesh.name);
     };
 
     return (
         <div
             ref={containerRef}
             className="ui-viewcube ui-viewcube-clean"
+            role="button"
+            tabIndex={0}
+            aria-label={lang === "zh" ? "视图立方：点击或回车切换视图" : "View cube: click or press Enter to change view"}
             style={{
                 width: `${cubeSize}px`,
                 height: `${cubeSize}px`
             }}
             onClick={handleClick}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    sceneMgr?.setView("front");
+                }
+            }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
         >

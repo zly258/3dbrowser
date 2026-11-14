@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ValueOption } from "./types";
 import { cx } from "./utils";
 
@@ -31,7 +32,43 @@ export function Select<T extends string = string>({
 }: SelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 下拉挂到 body（portal）：避免被面板的 overflow 滚动容器裁掉。
+  // 空间不足时向上翻转，并跟随滚动/窗口变化重新定位。
+  const updateDropdownPosition = useCallback(() => {
+    const selector = containerRef.current;
+    if (!selector) return;
+    const rect = selector.getBoundingClientRect();
+    const safeMargin = 8;
+    const estimatedHeight = Math.min(260, Math.max(120, (dropdownRef.current?.offsetHeight || 0)));
+    const spaceBelow = window.innerHeight - rect.bottom - safeMargin;
+    const spaceAbove = rect.top - safeMargin;
+    const openUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    const width = Math.min(Math.max(rect.width, 140), 320);
+    const left = Math.min(Math.max(safeMargin, rect.left), Math.max(safeMargin, window.innerWidth - width - safeMargin));
+    setDropdownStyle(openUp
+      ? { position: "fixed", left, bottom: window.innerHeight - rect.top + 4, width, minWidth: width, maxWidth: width, maxHeight: Math.max(120, spaceAbove) }
+      : { position: "fixed", left, top: rect.bottom + 4, width, minWidth: width, maxWidth: width, maxHeight: Math.max(120, spaceBelow) });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    updateDropdownPosition();
+  }, [isOpen, updateDropdownPosition]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onReposition = () => updateDropdownPosition();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [isOpen, updateDropdownPosition]);
 
   const selectedOption = useMemo(
     () => options.find((item) => item.value === value),
@@ -51,7 +88,9 @@ export function Select<T extends string = string>({
     if (!isOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (containerRef.current && !containerRef.current.contains(target)
+        && !(dropdownRef.current && dropdownRef.current.contains(target))) {
         setIsOpen(false);
       }
     };
@@ -96,8 +135,13 @@ export function Select<T extends string = string>({
           </svg>
         </span>
       </button>
-      {isOpen && !disabled && (
-        <div className="ui-select-dropdown" role="listbox">
+      {isOpen && !disabled && createPortal(
+        <div
+          ref={dropdownRef}
+          className="ui-select-dropdown"
+          role="listbox"
+          style={{ ...dropdownStyle, zIndex: 400, overflowY: "auto" }}
+        >
           {searchable && (
             <div className="ui-select-search-wrap">
               <input
@@ -127,7 +171,8 @@ export function Select<T extends string = string>({
               </button>
             ))
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type MutableRefObject } from "r
 import * as THREE from "three";
 import { OBB } from "three/examples/jsm/math/OBB.js";
 import { SceneManager } from "../utils/scene-manager/SceneManager";
+import { getBatchedInstanceGeometry } from "../utils/scene-manager/batchedGeometryView";
 
 export type ClashResultItem = {
   id: string;
@@ -284,6 +285,14 @@ export function useClashCheck({
     targets.forEach((target) => {
       if (!target?.box || target.box.isEmpty()) return;
 
+      const targetGeometry = clashUseNarrowPhase
+        ? (target.geometry
+          || (target.batchedMesh && typeof target.instanceId === "number"
+            ? getBatchedInstanceGeometry(target.batchedMesh, target.instanceId)
+            : (target.object as THREE.Mesh)?.geometry)
+          || null)
+        : (target.geometry || null);
+
       const nodes = sceneMgr.getStructureNodes(target.uuid) || [];
       if (nodes.length > 0 && nodes.every((node) => node.visible === false)) return;
 
@@ -305,8 +314,9 @@ export function useClashCheck({
         modelName: clashModelNameById.get(modelId) || modelId || target.name || target.uuid,
         box: target.box.clone(),
         testBox: target.box.clone(),
-        obb: clashUseNarrowPhase ? buildObbFromGeometry(target.geometry, target.matrixWorld) : null,
-        meshInfo: buildMeshInfo(target.key, target.geometry, target.matrixWorld)
+        // NBIM 实例的几何按需从合并缓冲构建视图；碰撞窄相位才需要，宽相位只用包围盒。
+        obb: clashUseNarrowPhase && targetGeometry ? buildObbFromGeometry(targetGeometry, target.matrixWorld) : null,
+        meshInfo: targetGeometry ? buildMeshInfo(target.key, targetGeometry, target.matrixWorld) : null
       };
       cached.set(candidate.key, candidate);
     });

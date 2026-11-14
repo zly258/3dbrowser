@@ -77,28 +77,29 @@
   cursor: default;
 }
 
-/* 面板内分段控件占满宽度 */
-.ui-measure-types .ui-segmented,
-.ui-settings-panel-body .ui-segmented {
+/* 面板内分段控件按内容自适应宽度（设置面板不再拉满） */
+.ui-measure-types .ui-segmented {
   width: 100%;
 }
 
 .ui-settings-panel-body .ui-segmented {
+  width: auto;
+  max-width: 100%;
   height: 28px;
   min-height: 28px;
   padding: 0;
 }
 
 .ui-settings-panel-body .ui-form-value > .ui-segmented {
-  width: 100%;
+  width: auto;
 }
 
 .ui-settings-panel-body .ui-segmented-item {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 0;
   height: 26px;
   min-height: 26px;
-  padding: 0 6px;
+  padding: 0 12px;
   font-size: var(--font-size-secondary);
   overflow: hidden;
   text-overflow: ellipsis;

@@ -176,7 +176,7 @@ export const ThreeViewer = ({
         chunksQueued: 0,
         pixelRatio: 1
     });
-    const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0 });
+    const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0, pending: 0 });
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     
     // Viewport coords
@@ -224,7 +224,8 @@ export const ThreeViewer = ({
     });
 
     // Toolbar State - 从localStorage恢复状态
-    const [pickEnabled, setPickEnabled] = usePersistentState<boolean>('3dbrowser_pickEnabled', false, {
+    // 默认开启点选：否则用户会以为“点选失效”（需要先手动点工具栏“选择”）。
+    const [pickEnabled, setPickEnabled] = usePersistentState<boolean>('3dbrowser_pickEnabled_v2', true, {
         serializer: (value) => String(value),
         parser: (raw) => raw === 'true'
     });
@@ -258,10 +259,11 @@ export const ThreeViewer = ({
             exposure: 0.92,
             shadowQuality: 'medium',
             adaptiveQuality: true,
-            minPixelRatio: 0.8,
+            minPixelRatio: 0.6,
             maxPixelRatio: 2,
             targetFps: 50,
             performanceMode: 'balanced',
+            autoResident: true,
             locateIsolateMode: false,
             backLightInt: 0.62,
             highlightColor: "#0b5fa5",
@@ -297,6 +299,10 @@ export const ThreeViewer = ({
                 if (parsed.ambientInt === 0.78) parsed.ambientInt = 0.62;
                 if (parsed.hemiInt === 0.58) parsed.hemiInt = 0.46;
                 if (parsed.dirInt === 1.48) parsed.dirInt = 1.55;
+                // 历史版本存过 renderStrategy（自适应 LOD/线框预算），已废弃：
+                // 不清掉会让旧用户被悄悄开启 LOD，出现“缩放变糊/小构件消失”。
+                delete (parsed as any).renderStrategy;
+                if (parsed.minPixelRatio !== undefined && parsed.minPixelRatio > 0.8) parsed.minPixelRatio = 0.8;
             }
             return parsed;
         }
@@ -340,7 +346,9 @@ export const ThreeViewer = ({
         leftWidth,
         rightWidth,
         resizingLeft,
-        resizingRight
+        resizingRight,
+        nudgeLeft,
+        nudgeRight
     } = useViewerLayout({
         propShowOutline,
         propShowProperties,
@@ -356,7 +364,7 @@ export const ThreeViewer = ({
         manager.setChunkOptions(effectiveChunkOptions);
         manager.updateSettings({
             ...sceneSettings,
-            performanceMode: performancePreset,
+            performanceMode: sceneSettings.performanceMode ?? performancePreset,
             targetFps: effectiveChunkOptions.targetMinFps ?? sceneSettings.targetFps
         });
     }, [effectiveChunkOptions, performancePreset, sceneSettings]);
@@ -442,12 +450,12 @@ export const ThreeViewer = ({
         onProgress: setChunkProgress,
         onCompleted: () => {
             setToast({ message: t("all_chunks_loaded"), type: 'success' });
-            setChunkProgress({ loaded: 0, total: 0 });
+            setChunkProgress({ loaded: 0, total: 0, pending: 0 });
         }
     });
 
-    const handleManagerChunkProgress = useCallback((loaded: number, total: number) => {
-        onManagerChunkProgress(loaded, total);
+    const handleManagerChunkProgress = useCallback((loaded: number, total: number, pending: number) => {
+        onManagerChunkProgress(loaded, total, pending);
     }, [onManagerChunkProgress]);
 
     useSceneStats({
@@ -649,14 +657,38 @@ export const ThreeViewer = ({
             const hasChildren = rawChildren.length > 0;
             const shouldLoadChildren = forceLoadChildren || loadedMap.get(uuid) === true;
 
+            const children = shouldLoadChildren
+                ? rawChildren.map((child: any) => convertNode(child, depth + 1, false, false))
+                : [];
+
+            // 同级出现重名时补一个短 ID，既保留原语义又能区分（不重名的不动）。
+            const nameCounts = new Map<string, number>();
+            for (const child of children) {
+                nameCounts.set(child.name, (nameCounts.get(child.name) || 0) + 1);
+            }
+            if (children.length > 1) {
+                for (const child of children) {
+                    if ((nameCounts.get(child.name) || 0) <= 1) continue;
+                    const nodeData = child.object || {};
+                    const suffix = nodeData.bimId
+                        ?? nodeData.userData?.expressID
+                        ?? nodeData.userData?.bimId
+                        ?? String(nodeData.uuid || child.uuid || "").slice(0, 8);
+                    if (suffix !== undefined && suffix !== null && String(suffix) !== "") {
+                        child.name = `${child.name} · ${suffix}`;
+                    }
+                }
+            }
+
+            const displayName = (sceneMgr.current as any)?.resolveStructureNodeLabel?.(node) || node.name;
+
             return {
                 uuid,
-                name: node.name,
+                name: displayName,
+                rawName: node.name,
                 type: node.type === 'Mesh' ? 'MESH' : 'GROUP',
                 depth,
-                children: shouldLoadChildren
-                    ? rawChildren.map((child: any) => convertNode(child, depth + 1, false, false))
-                    : [],
+                children,
                 expanded: expandedMap.get(uuid) ?? false,
                 visible: node.visible !== false,
                 object: node,
@@ -778,7 +810,7 @@ export const ThreeViewer = ({
         if (!canvasRef.current) return;
         
         const manager = new SceneManager(canvasRef.current, {
-            performancePreset,
+            performancePreset: (sceneSettings.performanceMode as PerformancePreset) ?? performancePreset,
             chunkOptions: effectiveChunkOptions
         });
         sceneMgr.current = manager;
@@ -1086,6 +1118,13 @@ export const ThreeViewer = ({
         mgrInstance.setDisplayMode(displayMode);
     }, [mgrInstance, displayMode, loading]);
 
+    // 同一时刻只允许一个模态：打开设置时关闭“关于”，避免遮罩叠加与底层可点
+    useEffect(() => {
+        if (activeTool === 'settings' && isAboutOpen) {
+            setIsAboutOpen(false);
+        }
+    }, [activeTool, isAboutOpen]);
+
     return (
         <ErrorBoundary t={t} theme={theme}>
             <div
@@ -1119,7 +1158,7 @@ export const ThreeViewer = ({
                  sceneMgr={sceneMgr.current}
                  theme={theme}
                  hiddenMenus={hiddenMenus}
-                 onOpenAbout={() => setIsAboutOpen(true)}
+                 onOpenAbout={() => { setActiveTool('none'); setIsAboutOpen(true); }}
                  hasModels={hasModels}
              />
 
@@ -1166,6 +1205,14 @@ export const ThreeViewer = ({
                         {/* Resize handle */}
                         <div
                             className="ui-sidebar-resize ui-sidebar-resize-left"
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label={lang === 'zh' ? '调整左侧栏宽度' : 'Resize left panel'}
+                            tabIndex={0}
+                            onKeyDown={(event) => {
+                                if (event.key === "ArrowLeft") { event.preventDefault(); nudgeLeft(-16); }
+                                if (event.key === "ArrowRight") { event.preventDefault(); nudgeLeft(16); }
+                            }}
                             onMouseDown={(event) => {
                                 event.preventDefault();
                                 resizingLeft.current = true;
@@ -1230,6 +1277,8 @@ export const ThreeViewer = ({
 
                     <LoadingOverlay t={t} loading={loading} status={status} progress={progress} theme={theme} />
 
+                    {/* 工具面板层：position:fixed，脱离侧栏挤压与视口裁切，宽度按窗口计算 */}
+                    <div className="ui-panel-layer">
                     {/* Overlay Panels for Tools */}
                     {activeTool === 'measure' && (
                         <MeasurePanel 
@@ -1292,15 +1341,6 @@ export const ThreeViewer = ({
                                 handleScreenshot(mode);
                                 setActiveTool('none');
                             }}
-                            theme={theme}
-                        />
-                    )}
-
-                    {activeTool === 'settings' && (
-                        <SettingsPanel 
-                            t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
-                            currentLang={lang} setLang={setLang}
-                            showStats={showStats} setShowStats={setShowStats}
                             theme={theme}
                         />
                     )}
@@ -1403,6 +1443,7 @@ export const ThreeViewer = ({
                             theme={theme}
                         />
                     )}
+                    </div>
                 </div>
 
                 {/* Right Sidebar: Properties */}
@@ -1424,6 +1465,14 @@ export const ThreeViewer = ({
                         </div>
                         {/* Resize handle */}
                         <div
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label={lang === 'zh' ? '调整右侧栏宽度' : 'Resize right panel'}
+                            tabIndex={0}
+                            onKeyDown={(event) => {
+                                if (event.key === "ArrowLeft") { event.preventDefault(); nudgeRight(16); }
+                                if (event.key === "ArrowRight") { event.preventDefault(); nudgeRight(-16); }
+                            }}
                             onMouseDown={(event) => {
                                 event.preventDefault();
                                 resizingRight.current = true;
@@ -1444,7 +1493,7 @@ export const ThreeViewer = ({
                             {t("selected_count")}: {selectedUuids.length}
                         </span>
                     )}
-                    {chunkProgress.total > 0 && chunkProgress.loaded < chunkProgress.total && (
+                    {chunkProgress.total > 0 && chunkProgress.loaded < chunkProgress.total && chunkProgress.pending > 0 && (
                         <div className="ui-chunk-progress">
                             <span>
                                 {t("chunk_loading")}: {chunkProgress.loaded}/{chunkProgress.total}
@@ -1472,7 +1521,7 @@ export const ThreeViewer = ({
                 </div>
                 <div className="ui-statusbar-right">
                     {mousePos && (
-                        <div className="ui-statusbar-coords">
+                        <div className="ui-statusbar-coords" title={`${mousePos.x.toFixed(2)}, ${mousePos.y.toFixed(2)}, ${mousePos.z.toFixed(2)}`}>
                             {mousePos.x.toFixed(2)}, {mousePos.y.toFixed(2)}, {mousePos.z.toFixed(2)}
                         </div>
                     )}
@@ -1547,6 +1596,16 @@ export const ThreeViewer = ({
                 onClose={() => setIsAboutOpen(false)} 
                 t={t} theme={theme} 
              />
+
+             {activeTool === 'settings' && (
+                <SettingsPanel
+                   t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
+                   currentLang={lang} setLang={setLang}
+                   showStats={showStats} setShowStats={setShowStats}
+                   theme={theme}
+                   getRuntimeInfo={() => sceneMgr.current?.getRenderStrategyInfo()}
+                />
+             )}
 
              {/* Error Modal */}
              {errorState.isOpen && (
