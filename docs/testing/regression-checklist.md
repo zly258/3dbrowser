@@ -15,9 +15,9 @@
    localStorage.clear(); location.reload();
    ```
 4. 测试文件：
-   - 全模型：`C:\Users\14532\Downloads\批量导出_20261113_093819.nbim`（2.9 GB / 1271 块）
-   - 子集：`D:\models\hf-test\nbim-200chunks.nbim`（437 MB / 200 块）
-   - LMB：`D:\models\hf\1#炉给水管道.lmb`、`2#炉汽水管道.lmb`、`AAZ02201-FCS54.2-1.lmb`
+   - 全模型：`<源模型>.nbim`（2.9 GB / 1271 块）
+   - 子集：`nbim-200chunks.nbim`（437 MB / 200 块）
+   - LMB：`1#炉给水管道.lmb`、`2#炉汽水管道.lmb`、`AAZ02201-FCS54.2-1.lmb`
 5. 记录基线：`performance.memory`、状态栏文本、控制台错误数。
 
 > 说明：同一浏览器上下文重复加载会残留堆内存，**每组大模型测试前请新开无痕/隔离上下文页**，并在测量前执行一次 GC（DevTools Memory → Collect garbage）。
@@ -483,7 +483,7 @@ UI 框选 231,284 与 API 一致；单选 Node_18872；样式真实/着色切换
 
 UI 端到端：框选 14,166 个 → **501 ms**（含高亮），单选 Node_5408 正常，Console 0 error。
 
-说明：全模型（231,284 实例）的改前实测为 select 510ms + highlight 1376ms；本修复移除其中的包围盒遍历（≈1.3s），预计高亮降至 ~100ms 量级，但全模型复测多次被共享浏览器会话劫持，未取得完整后测数值，故此处只报子集实测。
+说明：全模型（231,284 实例）的改前实测为 select 510ms + highlight 1376ms；本修复移除其中的包围盒遍历（≈1.3s），预计高亮降至 ~100ms 量级，但全模型复测受测试环境限制未取得完整后测数值，故此处只报子集实测。
 
 ---
 

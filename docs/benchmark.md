@@ -76,9 +76,9 @@
 
 ```bash
 # 生成 200 块子集
-node scripts/make-test-subset.mjs <源.nbim> D:\models\hf-test\nbim-200chunks.nbim 200
+node scripts/make-test-subset.mjs <源.nbim> nbim-200chunks.nbim 200
 # 转 v9
-node scripts/nbim-v8-to-v9.mjs <源.nbim> D:\models\hf-test\nbim-full-v9.nbim
+node scripts/nbim-v8-to-v9.mjs <源.nbim> nbim-full-v9.nbim
 # 本地开发
 npm run dev
 # 调试钩子（控制台）

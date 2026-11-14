@@ -6,8 +6,8 @@
  *
  * 例：
  *   node scripts/make-test-subset.mjs ^
- *     "C:\Users\me\Downloads\批量导出_20261113_093819.nbim" ^
- *     "D:\models\hf-test\nbim-200chunks.nbim" 200
+ *     "<源模型>.nbim" ^
+ *     "nbim-200chunks.nbim" 200
  *
  * 说明：按 originalUuid 分组，整模型选取，保留原始 globalBounds（用于验证初始视角修复），
  * 过滤结构树与属性文档，重算统计。仅供本地测试，不参与构建。
@@ -16,7 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const SRC = process.argv[2];
-const OUT = process.argv[3] || "D:\\models\\hf-test\\nbim-200chunks.nbim";
+const OUT = process.argv[3] || "nbim-200chunks.nbim";
 const TARGET_CHUNKS = Number(process.argv[4]) || 200;
 if (!SRC) {
   console.error("用法: node scripts/make-test-subset.mjs <源.nbim> [输出.nbim] [目标分块数=200]");
