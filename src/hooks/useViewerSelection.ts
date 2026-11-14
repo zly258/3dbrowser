@@ -153,6 +153,33 @@ export function useViewerSelection({
         const sceneManager = sceneMgrRef.current;
         if (!sceneManager || selectedUuids.length <= 1) return;
 
+        // 大数量选择（框选上万构件）时，逐构件汇总面积/体积的成本是 O(n)·0.1ms
+        // （实测 17k≈1.8s、23 万≈24s），且这些数值对超大集合意义有限。
+        // 超过阈值只给轻量汇总（数量 + 模型数），保证交互不被后台计算拖住。
+        const LARGE_SELECTION_THRESHOLD = 2000;
+        if (selectedUuids.length > LARGE_SELECTION_THRESHOLD) {
+            const modelNames = new Set<string>();
+            const sample = selectedUuids.slice(0, 200);
+            for (const uuid of sample) {
+                const node = sceneManager.getStructureNodes(uuid)?.[0];
+                const rootName = node?.userData?.rootName || node?.userData?.modelName;
+                if (rootName) modelNames.add(String(rootName));
+            }
+            const groupName = `${selectedUuids.length} ${t("selected_count")}`;
+            setSelectedProps([
+                {
+                    name: groupName,
+                    items: createPropertyEntries(groupName, [
+                        { key: t("selected_count"), value: String(selectedUuids.length) },
+                        { key: t("summary_models"), value: String(modelNames.size || 1) },
+                        // 类型分布/面积/体积需要逐构件几何计算，超大集合下省略（用 — 表示未计算）
+                        { key: t("summary_types"), value: "—" }
+                    ])
+                }
+            ]);
+            return;
+        }
+
         let cancelled = false;
 
         const computeSummaryAsync = async () => {
