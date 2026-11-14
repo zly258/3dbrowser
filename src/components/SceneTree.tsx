@@ -3,9 +3,13 @@ import { IconChevronRight, IconChevronDown, IconClose } from "../theme/Icons";
 import { Button, Checkbox } from "./common";
 import { ContextMenu } from "./ContextMenu";
 
+/** 防止节点名里的正则元字符（如 ( ) [ ] . *）让 highlighter 抛错 */
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 interface TreeNode {
     uuid: string;
     name: string;
+    rawName?: string;
     type: "GROUP" | "MESH" | "TILES";
     depth: number;
     children: TreeNode[];
@@ -185,13 +189,21 @@ const TreeRowItem = React.memo(({
     onSelect, 
     onToggleNode, 
     onToggleVisibility, 
-    onContextMenu 
+    onContextMenu,
+    onKeyDown
 }: any) => {
     return (
         <div
             className={`ui-tree-node ${isActive ? "selected" : ""} ${isMatched ? "matched" : ""} ${isLocated ? "located" : ""}`}
             style={{ paddingLeft: 8 + node.depth * 16 }}
+            role="treeitem"
+            aria-level={node.depth + 1}
+            aria-selected={isActive}
+            aria-expanded={node.hasChildren ? !!node.expanded : undefined}
+            tabIndex={isActive ? 0 : -1}
+            data-tree-uuid={node.uuid}
             onClick={() => onSelect(node)}
+            onKeyDown={(e) => onKeyDown?.(e, node)}
             onDoubleClick={(e) => {
                 if (node.hasChildren) {
                     e.stopPropagation();
@@ -215,13 +227,17 @@ const TreeRowItem = React.memo(({
             <Checkbox
                 checked={node.visible}
                 onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
+                ariaLabel={`${node.visible === false ? "显示" : "隐藏"} ${node.name}`}
                 style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
             />
 
-            <div className={`ui-tree-label${node.visible === false ? " is-off" : ""}`} title={node.name}>
+            <div
+                className={`ui-tree-label${node.visible === false ? " is-off" : ""}`}
+                title={node.rawName && node.rawName !== node.name ? `${node.name}（原始名：${node.rawName}）` : node.name}
+            >
                 {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
                     <span>
-                        {node.name.split(new RegExp(`(${searchQuery})`, "gi")).map((part: string, index: number) =>
+                        {node.name.split(new RegExp(`(${escapeRegExp(searchQuery)})`, "gi")).map((part: string, index: number) =>
                             part.toLowerCase() === searchQuery.toLowerCase() ? (
                                 <span key={index} className="ui-search-hit">
                                     {part}
@@ -296,7 +312,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     locateResultUuids = [],
     clashSummaryByUuid = {}
 }) => {
+    const [searchInput, setSearchInput] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
+
+    // 搜索防抖：大树每次按键都会重建过滤树，120ms 后再过滤
+    useEffect(() => {
+        const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 120);
+        return () => clearTimeout(timer);
+    }, [searchInput]);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [containerHeight, setContainerHeight] = useState(400);
@@ -387,8 +410,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }, []);
     };
 
-    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
-    const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);    const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
     const firstSearchMatch = useMemo(() => {
         if (!searchQuery) return null;
         const query = searchQuery.toLowerCase();
@@ -420,7 +442,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         return results;
     }, [searchQuery, treeRoot]);
 
-    const rowHeight = 26;
+    // 行高跟随 CSS 令牌 --tree-row-h，避免虚拟化与样式漂移
+    const rowHeight = useMemo(() => {
+        if (typeof window === "undefined") return 26;
+        const raw = getComputedStyle(document.documentElement).getPropertyValue("--tree-row-h");
+        const parsed = parseFloat(raw);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 26;
+    }, []);
     const totalHeight = flatData.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight));
     const visibleCount = Math.ceil(containerHeight / rowHeight);
@@ -474,6 +502,63 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         setTreeRoot((prev) => collapse(prev));
     };
 
+    const focusTreeNode = (uuid: string) => {
+        requestAnimationFrame(() => {
+            const el = containerRef.current?.querySelector(`[data-tree-uuid="${uuid}"]`) as HTMLElement | null;
+            el?.focus();
+        });
+    };
+
+    const handleTreeKeyDown = (event: React.KeyboardEvent, node: TreeNode) => {
+        const index = flatData.findIndex((item) => item.uuid === node.uuid);
+        if (index < 0) return;
+        const selectAt = (targetIndex: number) => {
+            const target = flatData[targetIndex];
+            if (!target) return;
+            selectionSourceRef.current = "tree";
+            setActiveTreeUuid(target.uuid);
+            onSelect(target.uuid, target.object);
+            focusTreeNode(target.uuid);
+        };
+        switch (event.key) {
+            case "ArrowDown":
+                event.preventDefault();
+                selectAt(Math.min(flatData.length - 1, index + 1));
+                break;
+            case "ArrowUp":
+                event.preventDefault();
+                selectAt(Math.max(0, index - 1));
+                break;
+            case "ArrowRight":
+                event.preventDefault();
+                if (node.hasChildren && !node.expanded) toggleNode(node.uuid);
+                else if (node.expanded) selectAt(index + 1);
+                break;
+            case "ArrowLeft":
+                event.preventDefault();
+                if (node.hasChildren && node.expanded) {
+                    toggleNode(node.uuid);
+                } else {
+                    for (let i = index - 1; i >= 0; i -= 1) {
+                        if (flatData[i].depth < node.depth) { selectAt(i); break; }
+                    }
+                }
+                break;
+            case "Enter":
+            case " ":
+                event.preventDefault();
+                selectAt(index);
+                break;
+            case "h":
+            case "H":
+                event.preventDefault();
+                onToggleVisibility(node.uuid, node.visible === false);
+                break;
+            default:
+                break;
+        }
+    };
+
     const handleLocateFirstMatch = () => {
         if (!firstSearchMatch) return;
         onLocate?.(firstSearchMatch.object);
@@ -507,8 +592,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     <input
                         type="text"
                         placeholder={t("search_nodes")}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === "Enter") {
                                 e.preventDefault();
@@ -517,8 +602,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         }}
                         className="ui-input ui-input-compact"
                     />
-                    {searchQuery && (
-                        <button className="ui-search-clear" onClick={() => setSearchQuery("")}>
+                    {searchInput && (
+                        <button className="ui-search-clear" aria-label="清空搜索" onClick={() => setSearchInput("")}>
                             <IconClose width={14} height={14} />
                         </button>
                     )}
@@ -543,10 +628,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <div
                 ref={containerRef}
                 className="ui-tree-container flex-1 overflow-auto"
+                role="tree"
+                aria-label={t("interface_outline") || "模型结构"}
                 onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
-                <div style={{ height: totalHeight, position: "relative", minWidth: "max-content" }}>
-                    <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0, minWidth: "max-content" }}>
+                <div style={{ height: totalHeight, position: "relative" }}>
+                    <div style={{ position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 }}>
                         {visibleItems.map((node) => (
                             <TreeRowItem
                                 key={node.uuid}
@@ -563,6 +650,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 }}
                                 onToggleNode={toggleNode}
                                 onToggleVisibility={onToggleVisibility}
+                                onKeyDown={handleTreeKeyDown}
                                 onContextMenu={(e: any, n: any) => {
                                     e.preventDefault();
                                     setContextMenu({ x: e.clientX, y: e.clientY, node: n });

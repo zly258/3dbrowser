@@ -4,6 +4,8 @@ import { cx } from "./utils";
 
 export interface CheckboxProps extends BaseComponentProps {
   label?: React.ReactNode;
+  /** 无可见文字时提供给读屏的标签 */
+  ariaLabel?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   labelStyle?: React.CSSProperties;
@@ -13,6 +15,7 @@ export interface CheckboxProps extends BaseComponentProps {
 
 export const Checkbox: React.FC<CheckboxProps> = ({
   label,
+  ariaLabel,
   checked,
   onChange,
   disabled = false,
@@ -40,7 +43,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         disabled={disabled}
         onChange={handleChange}
         className="ui-checkbox-native"
-        aria-label={typeof label === "string" ? label : undefined}
+        aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
       />
       <span className={cx("ui-checkbox-box", checked && "ui-checkbox-box-checked")} aria-hidden="true">
         {checked && (

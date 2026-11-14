@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clearBatchedGeometryViews, getBatchedInstanceGeometry } from "./batchedGeometryView";
 
 /**
  * 构件边线生成器：只为“真实的几何棱边”生成线，不显示三角形网格线。
@@ -10,6 +11,15 @@ import * as THREE from "three";
 const EDGE_ANGLE = 30;
 /** 单个批量网格的边线顶点预算，超出部分不再生成（避免超大场景内存暴涨） */
 const MAX_EDGE_VERTS_PER_BATCH = 6000000;
+/**
+ * 单个分块索引数超过该值就跳过棱边生成：
+ * EdgesGeometry 的耗时与索引数成正比，个别分块可达 500 万+ 索引（约 200 万三角面），
+ * 单块就要十几秒，是切“真实/线框”样式卡死的主因。跳过这些超大块后，
+ * 它们仍保留实体着色，只是没有描边。
+ */
+const EDGE_MAX_INDEX_PER_BATCH = 200000;
+/** 单个几何索引数超过该值时跳过的描边，避免个别超大网格拖垮整块 */
+const EDGE_MAX_INDEX_PER_GEOMETRY = 80000;
 
 export class DisplayEdgeBuilder {
     private geometryEdgeCache = new Map<string, Float32Array>();
@@ -26,6 +36,18 @@ export class DisplayEdgeBuilder {
     private lineColor = 0x23292f;
     private baseOpacity = 0.62;
     private opacityFactor = 1;
+    /** 全部边线顶点的总字节预算；超过后不再为新分块生成（防止切线框时 OOM） */
+    private byteBudget = Number.POSITIVE_INFINITY;
+    private totalBytes = 0;
+
+    /** 设置边线总字节预算（MB）；不传则不限 */
+    setByteBudget(mb?: number) {
+        this.byteBudget = mb && mb > 0 ? mb * 1048576 : Number.POSITIVE_INFINITY;
+    }
+
+    private canAllocate(bytes: number) {
+        return this.totalBytes + bytes <= this.byteBudget;
+    }
 
     private applyOpacity() {
         const next = THREE.MathUtils.clamp(this.baseOpacity * this.opacityFactor, 0.08, 1);
@@ -77,7 +99,8 @@ export class DisplayEdgeBuilder {
         }
     }
 
-    private createLine(positions: Float32Array): THREE.LineSegments {
+    private createLine(positions: Float32Array): THREE.LineSegments | null {
+        if (!this.canAllocate(positions.byteLength)) return null;
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
         geometry.computeBoundingSphere();
@@ -86,6 +109,7 @@ export class DisplayEdgeBuilder {
         line.userData.isDisplayEdges = true;
         line.raycast = () => {};
         line.renderOrder = 1;
+        this.totalBytes += positions.byteLength;
         return line;
     }
 
@@ -94,6 +118,7 @@ export class DisplayEdgeBuilder {
         const positions = this.getGeometryEdges(mesh.geometry);
         if (!positions || positions.length === 0) return;
         const line = this.createLine(positions);
+        if (!line) return;
         mesh.add(line);
         mesh.userData.__displayEdges = line;
         this.objects.push(line);
@@ -101,11 +126,16 @@ export class DisplayEdgeBuilder {
 
     private attachToBatch(batch: THREE.BatchedMesh) {
         if (batch.userData.__displayEdges) return;
-        const geometryById = batch.userData.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
-        if (!geometryById) return;
 
         const instanceCount = (batch as any).instanceCount ?? 0;
         if (instanceCount <= 0) return;
+
+        const mergedIndexCount = batch.geometry.getIndex()?.count || 0;
+        if (mergedIndexCount > EDGE_MAX_INDEX_PER_BATCH) {
+            // 超大分块直接不描边：优先保证样式切换不卡死；线框模式下由实体面兜底。
+            batch.userData.__edgeSkipped = true;
+            return;
+        }
 
         const plans: Array<{ edges: Float32Array; matrix: THREE.Matrix4 }> = [];
         let totalVerts = 0;
@@ -114,8 +144,10 @@ export class DisplayEdgeBuilder {
 
         for (let instanceId = 0; instanceId < instanceCount; instanceId++) {
             if (visibility && visibility.getVisibleAt(instanceId) === false) continue;
-            const geometry = geometryById.get(instanceId);
+            const geometry = getBatchedInstanceGeometry(batch, instanceId);
             if (!geometry) continue;
+            const indexCount = geometry.getIndex()?.count || 0;
+            if (indexCount > EDGE_MAX_INDEX_PER_GEOMETRY) continue;
             const edges = this.getGeometryEdges(geometry);
             if (!edges || edges.length === 0) continue;
             totalVerts += edges.length / 3;
@@ -123,7 +155,15 @@ export class DisplayEdgeBuilder {
             batch.getMatrixAt(instanceId, matrix);
             plans.push({ edges, matrix: matrix.clone() });
         }
-        if (plans.length === 0) return;
+        if (plans.length === 0) {
+            batch.userData.__edgeSkipped = true;
+            clearBatchedGeometryViews(batch);
+            return;
+        }
+        if (!this.canAllocate(totalVerts * 3 * 4)) {
+            clearBatchedGeometryViews(batch);
+            return;
+        }
 
         const positions = new Float32Array(totalVerts * 3);
         const vertex = new THREE.Vector3();
@@ -139,10 +179,16 @@ export class DisplayEdgeBuilder {
         }
 
         const line = this.createLine(positions);
+        if (!line) {
+            clearBatchedGeometryViews(batch);
+            return;
+        }
         line.userData.isBatchedEdges = true;
         batch.add(line);
         batch.userData.__displayEdges = line;
         this.objects.push(line);
+        // 边线顶点已经合并进 line.geometry，逐几何视图（索引副本）可以立刻释放。
+        clearBatchedGeometryViews(batch);
     }
 
     /** 为根节点下的内容生成棱边线；append=false 时先清理已有边线 */
@@ -165,6 +211,19 @@ export class DisplayEdgeBuilder {
         for (const object of this.objects) object.visible = visible;
     }
 
+    /** 调试用：当前边线对象数与顶点字节数（用于内存分类统计） */
+    getStats() {
+        let bytes = 0;
+        for (const object of this.objects) {
+            const attribute = object.geometry?.getAttribute?.("position") as THREE.BufferAttribute | undefined;
+            const array = attribute?.array as ArrayLike<number> | undefined;
+            if (array && typeof (array as any).byteLength === "number") {
+                bytes += (array as any).byteLength;
+            }
+        }
+        return { count: this.objects.length, bytes };
+    }
+
     /** 爆炸状态下批量网格的实例矩阵会变化，合并后的边线不再准确，先隐藏 */
     setBatchedVisible(visible: boolean) {
         for (const object of this.objects) {
@@ -180,6 +239,10 @@ export class DisplayEdgeBuilder {
             object.geometry.dispose();
         }
         this.objects = [];
+        this.totalBytes = 0;
+        // 棱边顶点缓存（按 geometry.uuid）在全模型可达数百 MB，必须一起释放，
+        // 否则切回着色后对象虽已移除，堆仍然降不下来。
+        this.geometryEdgeCache.clear();
     }
 
     /** 单个对象被销毁/移除时清理它的边线（分块网格回收） */
@@ -187,6 +250,10 @@ export class DisplayEdgeBuilder {
         const line = (object.userData as any)?.__displayEdges as THREE.LineSegments | undefined;
         if (!line) return;
         delete (object.userData as any).__displayEdges;
+        const positionArray = line.geometry.getAttribute?.("position")?.array as ArrayLike<number> | undefined;
+        if (positionArray && typeof (positionArray as any).byteLength === "number") {
+            this.totalBytes = Math.max(0, this.totalBytes - (positionArray as any).byteLength);
+        }
         line.removeFromParent();
         line.geometry.dispose();
         this.objects = this.objects.filter((item) => item !== line);

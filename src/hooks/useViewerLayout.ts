@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { usePersistentState } from "./usePersistentState";
 
 interface UseViewerLayoutOptions {
     propShowOutline?: boolean;
@@ -30,8 +31,27 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
         setShowProps
     } = options;
 
-    const [leftWidth, setLeftWidth] = useState(() => initialWidth(0.22, LEFT_MIN, 320, 268));
-    const [rightWidth, setRightWidth] = useState(() => initialWidth(0.27, RIGHT_MIN, 440, 344));
+    // 宽度持久化：ID 用面板级 key，避免与其它布局状态冲突
+    const [leftWidth, setLeftWidth] = usePersistentState<number>(
+        "viewer_sidebar_left_w",
+        () => initialWidth(0.22, LEFT_MIN, 320, 268),
+        {
+            parser: (raw) => {
+                const parsed = Number(JSON.parse(raw));
+                return Number.isFinite(parsed) ? clampWidth(parsed, LEFT_MIN, LEFT_MAX) : initialWidth(0.22, LEFT_MIN, 320, 268);
+            }
+        }
+    );
+    const [rightWidth, setRightWidth] = usePersistentState<number>(
+        "viewer_sidebar_right_w",
+        () => initialWidth(0.27, RIGHT_MIN, 440, 344),
+        {
+            parser: (raw) => {
+                const parsed = Number(JSON.parse(raw));
+                return Number.isFinite(parsed) ? clampWidth(parsed, RIGHT_MIN, RIGHT_MAX) : initialWidth(0.27, RIGHT_MIN, 440, 344);
+            }
+        }
+    );
     const resizingLeft = useRef(false);
     const resizingRight = useRef(false);
 
@@ -58,7 +78,6 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
             setShowOutline(propShowOutline);
         }
     }, [propShowOutline, setShowOutline]);
-
     useEffect(() => {
         if (propShowProperties !== undefined) {
             setShowProps(propShowProperties);
@@ -108,10 +127,34 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
         };
     }, [flushPendingWidths]);
 
+    // 窗口变小时重新钳制，避免“右侧栏 428px 把视口压到 350px”这类问题
+    useEffect(() => {
+        const handleResize = () => {
+            const width = window.innerWidth;
+            const maxLeft = Math.min(LEFT_MAX, Math.max(LEFT_MIN, Math.floor(width * 0.28)));
+            const maxRight = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, Math.floor(width * 0.32)));
+            setLeftWidth((value) => clampWidth(value, LEFT_MIN, maxLeft));
+            setRightWidth((value) => clampWidth(value, Math.min(RIGHT_MIN, Math.max(220, Math.floor(width * 0.24))), maxRight));
+        };
+        handleResize();
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, [setLeftWidth, setRightWidth]);
+
+    const nudgeLeft = useCallback((delta: number) => {
+        setLeftWidth((value) => clampWidth(value + delta, LEFT_MIN, LEFT_MAX));
+    }, [setLeftWidth]);
+
+    const nudgeRight = useCallback((delta: number) => {
+        setRightWidth((value) => clampWidth(value - delta, RIGHT_MIN, RIGHT_MAX));
+    }, [setRightWidth]);
+
     return {
         leftWidth,
         rightWidth,
         resizingLeft,
-        resizingRight
+        resizingRight,
+        nudgeLeft,
+        nudgeRight
     };
 }

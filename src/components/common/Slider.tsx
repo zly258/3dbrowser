@@ -58,6 +58,21 @@ export const Slider: React.FC<SliderProps> = ({
       className={cx("ui-slider", "ui-slider-control", disabled ? "ui-slider-control-disabled" : "ui-slider-control-interactive", className)}
       style={style}
       onMouseDown={handleMouseDown}
+      onKeyDown={(event) => {
+        if (disabled) return;
+        let next = safeValue;
+        switch (event.key) {
+          case "ArrowRight":
+          case "ArrowUp": next = safeValue + step; break;
+          case "ArrowLeft":
+          case "ArrowDown": next = safeValue - step; break;
+          case "Home": next = min; break;
+          case "End": next = max; break;
+          default: return;
+        }
+        event.preventDefault();
+        onChange(normalizeNumber(next, min, max, step));
+      }}
       role="slider"
       aria-valuemin={min}
       aria-valuemax={max}

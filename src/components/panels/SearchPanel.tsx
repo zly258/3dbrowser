@@ -141,8 +141,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       title={t("tb_search") || "属性搜索"}
       closeLabel={t("panel_close") || "关闭"}
       onClose={onClose}
-      width={760}
-      height={580}
+      width={640}
+      height={520}
       resizable={true}
       storageId="tool_search"
       autoHeight={false}
@@ -280,6 +280,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           )}
         </div>
 
+        {results.length > 0 && (
         <div className="ui-search-pagination">
           <PaginationControls
             prevTitle={t("search_page_prev") || "上一页"}
@@ -293,11 +294,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 <Select
                   value={String(pageSize)}
                   onChange={(value) => setPageSize(Number(value) || 10)}
-                  options={[
-                    { value: "10", label: "10 / 页" },
-                    { value: "20", label: "20 / 页" },
-                    { value: "50", label: "50 / 页" },
-                  ]}
+                  options={[10, 20, 50].map((size) => ({
+                    value: String(size),
+                    label: `${size} / ${t("page_size_unit") || "页"}`
+                  }))}
                   className="ui-input-compact ui-search-page-size"
                 />
                 <Button
@@ -311,6 +311,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             }
           />
         </div>
+        )}
 
         {searching && (
           <div className="ui-toolpanel-overlay">

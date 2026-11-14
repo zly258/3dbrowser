@@ -34,6 +34,8 @@ export interface SceneSettings {
     maxPixelRatio?: number;
     targetFps?: number;
     performanceMode?: "balanced" | "smooth" | "quality";
+    /** 内存不足时是否自动卸载最远分块（默认 true；关闭后可能 OOM） */
+    autoResident?: boolean;
     locateIsolateMode?: boolean;
     themeType?: "indigo" | "sky" | "emerald" | "violet" | "rose" | "amber" | "custom";
     themeCustomColor?: string;

@@ -10,7 +10,7 @@
 .ui-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10050;
+  z-index: var(--z-scrim);
   background: var(--scrim);
 }
 
@@ -236,7 +236,7 @@
   position: fixed;
   top: 20px;
   left: 50%;
-  z-index: 100000;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -470,7 +470,7 @@
 .ui-loading-overlay {
   position: absolute;
   inset: 0;
-  z-index: 9000;
+  z-index: var(--z-loading);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -484,7 +484,7 @@
 .ui-error-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10060;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -8,58 +8,77 @@ export function hasValidChunkBinaryRange(chunk: any) {
         && chunk.byteLength > 0;
 }
 
-export function touchChunkReadCache(cacheOrder: string[], cacheKey: string) {
-    const nextOrder = cacheOrder.filter((key) => key !== cacheKey);
-    nextOrder.push(cacheKey);
-    return nextOrder;
+export function getChunkReadCacheBytes(cache: Map<string, ArrayBuffer>) {
+    let bytes = 0;
+    for (const buffer of cache.values()) bytes += buffer.byteLength || 0;
+    return bytes;
+}
+
+/**
+ * 按 LRU 顺序淘汰缓存，直到满足“条数 + 字节”双上限。
+ * 注意：不能再用调用方传入的 order 快照回写——并发读取时快照会过期，
+ * 导致 order 丢项、map 无界增长（实测全模型曾缓存 410 条 / 943MB）。
+ * 这里直接从 Map 的插入顺序重建 order（命中时 delete+set 即为 LRU touch）。
+ */
+export function trimChunkReadCache(options: {
+    chunkReadCache: Map<string, ArrayBuffer>;
+    chunkReadCacheSize: number;
+    chunkReadCacheMB: number;
+}) {
+    const { chunkReadCache, chunkReadCacheSize, chunkReadCacheMB } = options;
+    const maxBytes = Math.max(16, chunkReadCacheMB) * 1048576;
+    let bytes = getChunkReadCacheBytes(chunkReadCache);
+    const order = Array.from(chunkReadCache.keys());
+
+    while (order.length > chunkReadCacheSize || bytes > maxBytes) {
+        if (order.length <= 1) break; // 至少保留最后写入的一条
+        const evictKey = order.shift()!;
+        const evicted = chunkReadCache.get(evictKey);
+        if (!evicted) continue;
+        bytes -= evicted.byteLength || 0;
+        chunkReadCache.delete(evictKey);
+    }
+
+    return Array.from(chunkReadCache.keys());
 }
 
 export function putChunkReadCache(options: {
     chunkReadCache: Map<string, ArrayBuffer>;
-    chunkReadCacheOrder: string[];
     cacheKey: string;
     buffer: ArrayBuffer;
     chunkReadCacheSize: number;
+    chunkReadCacheMB: number;
 }) {
-    const {
-        chunkReadCache,
-        chunkReadCacheOrder,
-        cacheKey,
-        buffer,
-        chunkReadCacheSize
-    } = options;
-
+    const { chunkReadCache, cacheKey, buffer, chunkReadCacheSize, chunkReadCacheMB } = options;
+    // 先删后插：把最近写入/访问的条目移到 Map 末尾（LRU）
+    chunkReadCache.delete(cacheKey);
     chunkReadCache.set(cacheKey, buffer);
-    let nextOrder = touchChunkReadCache(chunkReadCacheOrder, cacheKey);
-    while (nextOrder.length > chunkReadCacheSize) {
-        const evictKey = nextOrder.shift();
-        if (!evictKey) continue;
-        chunkReadCache.delete(evictKey);
-    }
-    return nextOrder;
+    return trimChunkReadCache({ chunkReadCache, chunkReadCacheSize, chunkReadCacheMB });
 }
 
 export async function readChunkBuffer(options: {
     chunk: any;
     nbimFiles: Map<string, File>;
     chunkReadCache: Map<string, ArrayBuffer>;
-    chunkReadCacheOrder: string[];
     chunkReadCacheSize: number;
+    chunkReadCacheMB: number;
 }) {
     const {
         chunk,
         nbimFiles,
         chunkReadCache,
-        chunkReadCacheOrder,
-        chunkReadCacheSize
+        chunkReadCacheSize,
+        chunkReadCacheMB
     } = options;
 
     const cacheKey = getChunkReadCacheKey(chunk);
     const cached = chunkReadCache.get(cacheKey);
     if (cached) {
+        chunkReadCache.delete(cacheKey);
+        chunkReadCache.set(cacheKey, cached);
         return {
             buffer: cached.slice(0),
-            chunkReadCacheOrder: touchChunkReadCache(chunkReadCacheOrder, cacheKey)
+            chunkReadCacheOrder: Array.from(chunkReadCache.keys())
         };
     }
 
@@ -73,10 +92,10 @@ export async function readChunkBuffer(options: {
         buffer,
         chunkReadCacheOrder: putChunkReadCache({
             chunkReadCache,
-            chunkReadCacheOrder,
             cacheKey,
             buffer: buffer.slice(0),
-            chunkReadCacheSize
+            chunkReadCacheSize,
+            chunkReadCacheMB
         })
     };
 }

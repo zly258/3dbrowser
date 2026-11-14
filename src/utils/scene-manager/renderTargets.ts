@@ -1,10 +1,14 @@
 import * as THREE from "three";
 import type { StructureTreeNode } from "./types";
+import { getBatchedInstanceGeometry, getBatchedInstanceWorldBox } from "./batchedGeometryView";
 
 export type OptimizedMappingEntry = {
     mesh: THREE.BatchedMesh;
     instanceId: number;
     originalColor: number;
+    /** 合并缓冲中的几何 id（NBIM 路径），按需构建视图 */
+    geometryId?: number;
+    /** 原始几何（LMB 路径） */
     geometry?: THREE.BufferGeometry;
 };
 
@@ -13,13 +17,15 @@ export type RenderTarget = {
     uuid: string;
     name: string;
     object: THREE.Object3D;
-    geometry: THREE.BufferGeometry;
+    /** 仅普通 Mesh / LMB 实例持有；NBIM 实例按需解析 */
+    geometry?: THREE.BufferGeometry;
     matrixWorld: THREE.Matrix4;
     box: THREE.Box3;
     type: "mesh" | "instance";
     ownerUuid?: string;
     batchedMesh?: THREE.BatchedMesh;
     instanceId?: number;
+    geometryId?: number;
     originalColor?: number;
 };
 
@@ -71,16 +77,14 @@ function getCachedMeshWorldBox(mesh: THREE.Mesh) {
 function getCachedInstanceWorldBox(
     uuid: string,
     mapping: OptimizedMappingEntry,
-    geometry: THREE.BufferGeometry,
-    matrixWorld: THREE.Matrix4
+    box: THREE.Box3
 ) {
     const meshUserData = mapping.mesh.userData || (mapping.mesh.userData = {});
     const cache = (meshUserData.__rtInstanceBoxCache ||= new Map<string, THREE.Box3>()) as Map<string, THREE.Box3>;
     const key = `${uuid}:${mapping.instanceId}`;
     const cached = cache.get(key);
     if (cached) return cached.clone();
-    const box = buildBox(geometry, matrixWorld);
-    if (box) cache.set(key, box.clone());
+    cache.set(key, box.clone());
     return box;
 }
 
@@ -112,13 +116,19 @@ function addInstanceTarget(
     targets: Map<string, RenderTarget>
 ) {
     if (!isWorldVisible(mapping.mesh) || !nodeVisible(context, uuid)) return;
-    const geometry = mapping.geometry || mapping.mesh.geometry;
-    if (!geometry) return;
 
     const instanceMatrix = new THREE.Matrix4();
     mapping.mesh.getMatrixAt(mapping.instanceId, instanceMatrix);
     instanceMatrix.premultiply(mapping.mesh.matrixWorld);
-    const box = getCachedInstanceWorldBox(uuid, mapping, geometry, instanceMatrix);
+
+    let worldBox: THREE.Box3 | null = null;
+    if (mapping.geometry) {
+        worldBox = buildBox(mapping.geometry, instanceMatrix);
+    } else {
+        worldBox = getBatchedInstanceWorldBox(mapping.mesh, mapping.instanceId, new THREE.Box3(), new THREE.Matrix4());
+    }
+    if (!worldBox) return;
+    const box = getCachedInstanceWorldBox(uuid, mapping, worldBox);
     if (!box) return;
 
     const key = `instance:${mapping.mesh.uuid}:${mapping.instanceId}`;
@@ -127,13 +137,14 @@ function addInstanceTarget(
         uuid,
         name: getNodeName(context, uuid, uuid),
         object: mapping.mesh,
-        geometry,
+        geometry: mapping.geometry,
         matrixWorld: instanceMatrix.clone(),
         box,
         type: "instance",
         ownerUuid: uuid,
         batchedMesh: mapping.mesh,
         instanceId: mapping.instanceId,
+        geometryId: mapping.geometryId,
         originalColor: mapping.originalColor
     });
 }
@@ -226,14 +237,15 @@ export function collectRenderableBoundsForIds(context: RenderTargetContext, ids:
             if (!mappings || mappings.length === 0) return;
             for (const mapping of mappings) {
                 if (!isWorldVisible(mapping.mesh) || !nodeVisible(context, uuid)) continue;
-                const geometry = mapping.geometry || mapping.mesh.geometry;
-                if (!geometry) continue;
-                if (!geometry.boundingBox) geometry.computeBoundingBox();
-                if (!geometry.boundingBox) continue;
-                mapping.mesh.getMatrixAt(mapping.instanceId, matrix);
-                matrix.premultiply(mapping.mesh.matrixWorld);
-                temp.copy(geometry.boundingBox).applyMatrix4(matrix);
-                if (!temp.isEmpty()) box.union(temp);
+                const worldBox = (() => {
+                    if (mapping.geometry) {
+                        mapping.mesh.getMatrixAt(mapping.instanceId, matrix);
+                        matrix.premultiply(mapping.mesh.matrixWorld);
+                        return buildBox(mapping.geometry, matrix);
+                    }
+                    return getBatchedInstanceWorldBox(mapping.mesh, mapping.instanceId, temp, matrix);
+                })();
+                if (worldBox && !worldBox.isEmpty()) box.union(worldBox);
             }
         });
         if (!box.isEmpty()) return box;

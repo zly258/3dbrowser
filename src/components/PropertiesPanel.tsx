@@ -386,7 +386,16 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 >
                                     <div
                                         className={`ui-prop-group${isCollapsed ? " collapsed" : ""}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-expanded={!isCollapsed}
                                         onClick={() => toggleGroup(group.name)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                                event.preventDefault();
+                                                toggleGroup(group.name);
+                                            }
+                                        }}
                                         onContextMenu={(event) => openGroupContextMenu(event, group)}
                                     >
                                         <span className="truncate" title={group.name}>
@@ -419,7 +428,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                             >
                                                 <div
                                                     className="ui-prop-key"
-                                                    title={`${item.path} (${t("click_to_copy") || "点击复制"})`}
+                                                    title={`${item.path}（${t("double_click_to_copy") || "双击复制"}）`}
                                                     onDoubleClick={() => handleCopy(item.key)}
                                                 >
                                                     {item.key}

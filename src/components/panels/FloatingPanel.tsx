@@ -42,12 +42,18 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         tool_export: { w: 400, h: 430 },
         tool_screenshot: { w: 380, h: 300 },
         tool_clip: { w: 410, h: 260 },
-        tool_settings: { w: 380, h: 520 },
         tool_viewpoint: { w: 380, h: 460 },
         tool_explode: { w: 340, h: 360 },
-        tool_clash: { w: 520, h: 560 }
+        tool_clash: { w: 520, h: 460 }
     };
     const panelMinSize = storageId ? panelMinSizeByStorage[storageId] : undefined;
+    // 面板默认/上限尺寸：超出时按上限收敛，避免“面板过大挡住视口”
+    const panelMaxSizeByStorage: Record<string, { w: number; h: number }> = {
+        tool_search: { w: 640, h: 520 },
+        tool_clash: { w: 520, h: 500 },
+        tool_viewpoint: { w: 380, h: 460 }
+    };
+    const panelMaxSize = storageId ? panelMaxSizeByStorage[storageId] : undefined;
     const minWidth = panelMinSize?.w ?? 220;
     const minHeight = panelMinSize?.h ?? 120;
     const getViewportSizeLimit = () => ({
@@ -58,9 +64,11 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         const limit = getViewportSizeLimit();
         const effectiveMinWidth = Math.min(minWidth, limit.w);
         const effectiveMinHeight = Math.min(minHeight, limit.h);
+        const maxWidth = panelMaxSize ? Math.min(limit.w, Math.max(effectiveMinWidth, panelMaxSize.w)) : limit.w;
+        const maxHeight = panelMaxSize ? Math.min(limit.h, Math.max(effectiveMinHeight, panelMaxSize.h)) : limit.h;
         return {
-            w: Math.max(effectiveMinWidth, Math.min(w, limit.w)),
-            h: Math.max(effectiveMinHeight, Math.min(h, limit.h))
+            w: Math.max(effectiveMinWidth, Math.min(w, maxWidth)),
+            h: Math.max(effectiveMinHeight, Math.min(h, maxHeight))
         };
     };
     const getInitialPos = () => {
@@ -289,6 +297,19 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
         onClose?.();
     };
 
+    // 模态：ESC 关闭
+    useEffect(() => {
+        if (!modal || !onClose) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                event.stopPropagation();
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [modal, onClose]);
+
     const pos = posRef.current;
     const size = sizeRef.current;
     const viewportLimitedHeight = typeof window !== "undefined"
@@ -300,6 +321,7 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
             {modal && (
                 <div
                     className="ui-modal-scrim"
+                    onClick={() => onClose?.()}
                 />
             )}
             <div

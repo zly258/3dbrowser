@@ -690,6 +690,37 @@ export function collectNbimPropertyOwners(
 }
 
 /**
+ * 属性文档字符串池：group/key/source 这类低基数字段在 20 万+ 文档里重复上百万次，
+ * JSON.parse 会为每次出现生成独立字符串；这里统一复用，并把可推导的 path 字段释放掉。
+ * 只做原地赋值（不重建对象），避免加载期出现第二份文档造成瞬时峰值。
+ */
+const propertyStringPool = new Map<string, string>();
+
+function internPropertyString(value: string, maxLength = 64) {
+    if (value.length === 0 || value.length > maxLength) return value;
+    const cached = propertyStringPool.get(value);
+    if (cached !== undefined) return cached;
+    if (propertyStringPool.size < 50000) propertyStringPool.set(value, value);
+    return value;
+}
+
+export function compactPropertyDocuments(docs: Record<string, NbimPropertyDocument>) {
+    for (const key in docs) {
+        const doc = docs[key];
+        if (!doc || !Array.isArray(doc.rows)) continue;
+        for (const row of doc.rows) {
+            if (!row) continue;
+            if (typeof row.group === "string") row.group = internPropertyString(row.group);
+            if (typeof row.key === "string") row.key = internPropertyString(row.key);
+            if (typeof row.source === "string") row.source = internPropertyString(row.source);
+            if (typeof row.rawKey === "string") row.rawKey = internPropertyString(row.rawKey);
+            if (row.path !== undefined) row.path = undefined;
+        }
+    }
+    return docs;
+}
+
+/**
  * 统一解析 NBIM 属性文档：
  * 1) 当前版本 manifest 内置的 bimPropertyDocs（propertyNameIndex 缺失时按文档重建）；
  * 2) 旧版 manifest 的 bimProperties 现场转换；
@@ -712,7 +743,7 @@ export function resolveNbimPropertyDocuments(options: {
 
     if (manifestDocs && Object.keys(manifestDocs).length > 0) {
         return {
-            docs: manifestDocs,
+            docs: compactPropertyDocuments(manifestDocs),
             propertyNameIndex: manifestPropertyNameIndex && manifestPropertyNameIndex.length > 0
                 ? manifestPropertyNameIndex
                 : buildPropertyNameIndex(manifestDocs),
@@ -724,7 +755,7 @@ export function resolveNbimPropertyDocuments(options: {
         const converted = convertLegacyBimPropertiesToDocs(manifestBimProperties);
         if (Object.keys(converted.bimPropertyDocs).length > 0) {
             return {
-                docs: converted.bimPropertyDocs,
+                docs: compactPropertyDocuments(converted.bimPropertyDocs),
                 propertyNameIndex: converted.propertyNameIndex,
                 source: "legacy" as const
             };
@@ -733,7 +764,7 @@ export function resolveNbimPropertyDocuments(options: {
 
     const fromTree = buildNbimPropertyDocsFromStructureTree({ structureTree, fallbackOwner });
     return {
-        docs: fromTree.bimPropertyDocs,
+        docs: compactPropertyDocuments(fromTree.bimPropertyDocs),
         propertyNameIndex: fromTree.propertyNameIndex,
         source: "structure" as const
     };

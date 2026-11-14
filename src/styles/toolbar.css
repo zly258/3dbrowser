@@ -27,7 +27,9 @@
 .ui-toolbar-group {
   display: inline-flex;
   align-items: center;
-  flex: 0 0 auto;
+  /* 允许分组收缩，分组内按钮才能省略文字而不是被父级静默裁掉 */
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 2px;
   padding: 0;
   background: transparent;
@@ -47,7 +49,7 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   height: var(--control-h);
   min-height: var(--control-h);
   min-width: 0;
@@ -84,10 +86,11 @@
 
 .ui-toolbar-btn-label {
   display: inline-block;
-  max-width: none;
+  min-width: 0;
+  max-width: 120px;
   min-height: 0;
-  overflow: visible;
-  text-overflow: clip;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--font-size-base);
   font-weight: 400;
@@ -259,9 +262,10 @@
   background: var(--border-sub);
 }
 
-/* 窄屏：收起按钮文字，只保留图标，避免顶栏内容溢出 */
+/* 窄屏：收起工具栏按钮文字，只保留图标，避免顶栏内容溢出。
+   注意只作用于应用工具栏，不要影响 MenuBar（.ui-menubar 内的同名标签）。 */
 @media (max-width: 1180px) {
-  .ui-toolbar-btn-label { display: none; }
+  .ui-toolbar .ui-toolbar-btn-label { display: none; }
   .ui-toolbar-btn { padding: 0 7px; }
 }
 

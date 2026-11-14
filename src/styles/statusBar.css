@@ -39,9 +39,37 @@
 }
 
 .ui-statusbar-right {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   justify-content: flex-end;
+  overflow: hidden;
 }
+
+.ui-statusbar-right > *,
+.ui-statusbar-left > * {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* 状态栏内的文本节点统一省略，避免窄窗被静默裁掉右端信息 */
+.ui-statusbar-left span,
+.ui-statusbar-right span,
+.ui-statusbar-coords,
+.ui-statusbar-metric,
+.ui-statusbar-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 模式徽章托盘：超宽时内部横向滚动，不再把右侧项挤出视口 */
+.ui-mode-tray {
+  max-width: 40vw;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.ui-mode-tray::-webkit-scrollbar { display: none; }
 
 /* 状态文字：可收缩但不截断关键信息，长文本换省略号时带 title（由组件保证） */
 .ui-statusbar-left > span:first-child {
@@ -292,4 +320,19 @@
   background: var(--accent);
   border-radius: var(--radius-pill);
   transition: width 150ms linear;
+}
+
+/* 窄窗逐级隐藏次要信息：坐标 → 操作提示 → 统计。
+   必须放在文件末尾：基础规则里 .ui-tips/.ui-stats-group 设了 display:inline-flex。 */
+@media (max-width: 1200px) {
+  .ui-statusbar-coords { display: none !important; }
+}
+
+@media (max-width: 1024px) {
+  .ui-tips { display: none !important; }
+}
+
+@media (max-width: 900px) {
+  .ui-stats-group { display: none !important; }
+  .ui-statusbar-metric { display: none; }
 }

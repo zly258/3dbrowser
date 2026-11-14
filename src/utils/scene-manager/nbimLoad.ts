@@ -115,6 +115,7 @@ export async function registerNbimChunks(options: {
     immediateGhostLimit: number;
     registrationBatchSize: number;
     onProgress?: (p: number, msg: string) => void;
+    estimateDecodedMB?: (chunkEntry: any) => number;
     registerChunk: (chunk: any) => void;
     createGhostLine: (name: string, bounds: THREE.Box3) => THREE.LineSegments;
     addGhostLine: (line: THREE.LineSegments) => void;
@@ -129,6 +130,7 @@ export async function registerNbimChunks(options: {
         immediateGhostLimit,
         registrationBatchSize,
         onProgress,
+        estimateDecodedMB,
         registerChunk,
         createGhostLine,
         addGhostLine,
@@ -157,7 +159,10 @@ export async function registerNbimChunks(options: {
             bounds.translate(chunkOffset);
         }
 
-        const chunkId = chunkEntry.id;
+        // 分块 id 必须带上本次加载的文件 id：同一个 NBIM 打开两次时，
+        // manifest 里的 chunk id 完全相同，直接使用会覆盖 chunkById / chunkIdSet，
+        // 删除其中一个模型时会把另一个的分块一起删掉。
+        const chunkId = `${fileId}::${chunkEntry.id}`;
         const center = bounds.getCenter(new THREE.Vector3());
         const paddedBounds = bounds.clone();
         const padSize = bounds.getSize(new THREE.Vector3()).multiplyScalar(chunkPadding);
@@ -172,8 +177,11 @@ export async function registerNbimChunks(options: {
             loaded: false,
             byteOffset: chunkEntry.byteOffset,
             byteLength: chunkEntry.byteLength,
-            // 解码后的几何/实例数据约为原始分块的 5.5 倍，用于驻留内存预算。
-            estimatedDecodedMB: Math.max(1.5, ((Number(chunkEntry.byteLength) || 0) / 1048576) * 5.5),
+            // 解码后的几何/实例数据内存估算：优先用导出时统计的真实比例，
+            // 缺省时按原始分块大小 1:1 估算（NBIM 分块本身已是解码后的顶点/索引数据）。
+            estimatedDecodedMB: estimateDecodedMB
+                ? estimateDecodedMB(chunkEntry)
+                : Math.max(1.5, (Number(chunkEntry.byteLength) || 0) / 1048576),
             nbimFileId: fileId,
             groupName: `optimized_${rootId}`,
             originalUuid: chunkEntry.originalUuid ? String(chunkEntry.originalUuid) : rootId

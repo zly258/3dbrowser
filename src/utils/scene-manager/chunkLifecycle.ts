@@ -9,6 +9,8 @@ export function selectChunksToUnload(options: {
     cameraPos: { distanceToSquared(target: any): number };
     now: number;
     chunkResidencyMs: number;
+    /** 即使没超数量上限，也至少腾出这么多位置给新进入视野的分块（流式平移时用） */
+    minFreeSlots?: number;
 }) {
     const {
         isCameraMoving,
@@ -18,7 +20,8 @@ export function selectChunksToUnload(options: {
         chunkCostMB,
         cameraPos,
         now,
-        chunkResidencyMs
+        chunkResidencyMs,
+        minFreeSlots = 0
     } = options;
 
     const cost = chunkCostMB || (() => 0);
@@ -27,8 +30,9 @@ export function selectChunksToUnload(options: {
         ? loadedChunks.reduce((sum, chunk) => sum + cost(chunk), 0)
         : 0;
     const countExcess = Math.max(0, loadedChunks.length - maxLoadedChunks);
+    const targetExcess = Math.max(countExcess, minFreeSlots);
     const overMemory = hasMemoryBudget && usedMB > maxResidentMB;
-    if (countExcess === 0 && !overMemory) {
+    if (targetExcess === 0 && !overMemory) {
         return [];
     }
 
@@ -42,7 +46,7 @@ export function selectChunksToUnload(options: {
     const picked = new Set<any>();
     let remainingMB = usedMB;
 
-    const needsMore = () => unloadTargets.length < countExcess || (hasMemoryBudget && remainingMB > maxResidentMB);
+    const needsMore = () => unloadTargets.length < targetExcess || (hasMemoryBudget && remainingMB > maxResidentMB);
     const pick = (chunk: any) => {
         if (picked.has(chunk)) return;
         picked.add(chunk);
@@ -142,8 +146,12 @@ export function planChunkLoads<TProfile extends ChunkRuntimeProfileLike>(options
     for (const chunk of sortedChunks) {
         if (selected.length >= maxSelectable) break;
         const chunkMB = cost(chunk);
-        // 至少允许加载第一个分块，避免预算极小时完全卡住；后续跳过会超预算的大分块。
-        if (hasMemoryBudget && selected.length > 0 && chunkMB > budgetLeftMB) continue;
+        // 冷启动（没有任何驻留分块）时至少允许加载第一个，避免预算极小时完全卡住；
+        // 已有驻留分块后必须严格守预算——否则会“多加载一块 → 超预算 → 卸载一块 → 再加载”，
+        // 进度在 92/93 之间反复跳动，模型永远加载不完。
+        if (hasMemoryBudget && chunkMB > budgetLeftMB) {
+            if (residentUsedMB > 0 || selected.length > 0) continue;
+        }
         selected.push(chunk);
         budgetLeftMB -= chunkMB;
     }
