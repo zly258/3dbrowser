@@ -224,13 +224,60 @@ export function selectInteractablesByScreenRect(
             }
 
             const getVisibleAt = (batchedMesh as any).getVisibleAt as ((id: number) => boolean) | undefined;
+            const getGeometryIdAt = (batchedMesh as any).getGeometryIdAt as ((id: number) => number) | undefined;
+            const getBoundingBoxAt = (batchedMesh as any).getBoundingBoxAt as
+                ((geometryId: number, target: THREE.Box3) => THREE.Box3 | null) | undefined;
+            // 几何级局部盒（中心 + 半尺寸）缓存
+            const geometrySphereCache = new Map<number, { cx: number; cy: number; cz: number; hx: number; hy: number; hz: number }>();
 
             for (const [batchId, uuid] of batchIdToUuid) {
                 try {
                     if (selectedSet.has(uuid)) continue;
                     if (getVisibleAt && getVisibleAt.call(batchedMesh, batchId) === false) continue;
 
-                    // 直接用合并缓冲上的 per-geometry 包围盒，不创建逐实例几何视图。
+                    // 廉价粗筛：用 OBB→AABB 公式构造“世界 AABB 的精确包球”再测 6 平面。
+                    // 注意：不能直接用局部球 × 矩阵 —— 盒测试判定的是【世界 AABB】
+                    // （实例旋转后 AABB 被盒化放大 √2），局部球不包住它，会误剔盒命中实例（已实测复现）。
+                    // 世界 AABB 半尺寸 = |矩阵列| × 局部半尺寸（标准 OBB→AABB 公式，精确），
+                    // 包球半径 = 该半尺寸向量的长度，球心 = 局部盒中心 × 矩阵。
+                    if (getGeometryIdAt && getBoundingBoxAt) {
+                        const geometryId = getGeometryIdAt.call(batchedMesh, batchId);
+                        let local = geometrySphereCache.get(geometryId);
+                        if (!local) {
+                            const box = new THREE.Box3();
+                            if (getBoundingBoxAt.call(batchedMesh, geometryId, box) === null) {
+                                continue;
+                            }
+                            local = {
+                                cx: (box.min.x + box.max.x) / 2,
+                                cy: (box.min.y + box.max.y) / 2,
+                                cz: (box.min.z + box.max.z) / 2,
+                                hx: (box.max.x - box.min.x) / 2,
+                                hy: (box.max.y - box.min.y) / 2,
+                                hz: (box.max.z - box.min.z) / 2
+                            };
+                            geometrySphereCache.set(geometryId, local);
+                        }
+                        batchedMesh.getMatrixAt(batchId, tmpMatrix);
+                        tmpMatrix.premultiply(batchedMesh.matrixWorld);
+                        const e = tmpMatrix.elements;
+                        const wx = e[0] * local.cx + e[4] * local.cy + e[8] * local.cz + e[12];
+                        const wy = e[1] * local.cx + e[5] * local.cy + e[9] * local.cz + e[13];
+                        const wz = e[2] * local.cx + e[6] * local.cy + e[10] * local.cz + e[14];
+                        const hxW = Math.abs(e[0]) * local.hx + Math.abs(e[4]) * local.hy + Math.abs(e[8]) * local.hz;
+                        const hyW = Math.abs(e[1]) * local.hx + Math.abs(e[5]) * local.hy + Math.abs(e[9]) * local.hz;
+                        const hzW = Math.abs(e[2]) * local.hx + Math.abs(e[6]) * local.hy + Math.abs(e[10]) * local.hz;
+                        const rW = Math.hypot(hxW, hyW, hzW) + 1e-4;
+                        let miss = false;
+                        for (let pi = 0; pi < 6; pi++) {
+                            const plane = frustum.planes[pi];
+                            const d = plane.normal.x * wx + plane.normal.y * wy + plane.normal.z * wz + plane.constant;
+                            if (d < -rW) { miss = true; break; }
+                        }
+                        if (miss) continue;
+                    }
+
+                    // 精确判定：直接用合并缓冲上的 per-geometry 包围盒，不创建逐实例几何视图。
                     const worldBox = getBatchedInstanceWorldBox(batchedMesh, batchId, instanceBox, tmpMatrix);
                     if (worldBox && frustum.intersectsBox(worldBox)) {
                         selectedSet.add(uuid);
