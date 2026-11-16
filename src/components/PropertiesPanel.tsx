@@ -205,12 +205,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
         const items: ContextMenuState["items"] = [
             {
-                label: t("expand_all") || "全部展开",
+                label: t("expand_all"),
                 onClick: expandAll,
                 disabled: !filteredProps || filteredProps.length === 0
             },
             {
-                label: t("collapse_all") || "全部折叠",
+                label: t("collapse_all"),
                 onClick: collapseAll,
                 disabled: !filteredProps || filteredProps.length === 0
             },
@@ -218,7 +218,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 divider: true
             },
             {
-                label: t("copy_all_props") || "复制全部",
+                label: t("copy_all_props"),
                 onClick: () => {
                     if (selectedProps) {
                         handleCopy(serializePropertyGroups(selectedProps));
@@ -244,27 +244,27 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         const items: ContextMenuState["items"] = [
             {
                 label: isCollapsed
-                    ? t("expand_group") || "展开分组"
-                    : t("collapse_group") || "折叠分组",
+                    ? t("expand_group")
+                    : t("collapse_group"),
                 onClick: () => toggleGroup(group.name)
             },
             {
-                label: t("expand_all") || "全部展开",
+                label: t("expand_all"),
                 onClick: expandAll
             },
             {
-                label: t("collapse_all") || "全部折叠",
+                label: t("collapse_all"),
                 onClick: collapseAll
             },
             {
                 divider: true
             },
             {
-                label: t("copy_group_props") || "复制分组",
+                label: t("copy_group_props"),
                 onClick: () => handleCopy(getGroupText(group))
             },
             {
-                label: t("copy_all_props") || "复制全部",
+                label: t("copy_all_props"),
                 onClick: () => {
                     if (selectedProps) {
                         handleCopy(serializePropertyGroups(selectedProps));
@@ -291,26 +291,26 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
         const items: ContextMenuState["items"] = [
             {
-                label: t("copy_item_props") || "复制单个",
+                label: t("copy_item_props"),
                 onClick: () => handleCopy(getItemText(item))
             },
             {
-                label: t("copy_prop_key") || "复制属性名",
+                label: t("copy_prop_key"),
                 onClick: () => handleCopy(item.key)
             },
             {
-                label: t("copy_prop_value") || "复制属性值",
+                label: t("copy_prop_value"),
                 onClick: () => handleCopy(item.value)
             },
             {
                 divider: true
             },
             {
-                label: t("copy_group_props") || "复制分组",
+                label: t("copy_group_props"),
                 onClick: () => handleCopy(getGroupText(group))
             },
             {
-                label: t("copy_all_props") || "复制全部",
+                label: t("copy_all_props"),
                 onClick: () => {
                     if (selectedProps) {
                         handleCopy(serializePropertyGroups(selectedProps));
@@ -337,7 +337,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     <div className="ui-search-input-wrap">
                         <input
                             type="text"
-                            placeholder={t("search_props") || "搜索属性"}
+                            placeholder={t("search_props")}
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
                             className="ui-input ui-input-compact"
@@ -348,8 +348,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 type="button"
                                 className="ui-search-clear"
                                 onClick={clearSearch}
-                                title={t("search_clear") || "清空"}
-                                aria-label={t("search_clear") || "清空"}
+                                title={t("search_clear")}
+                                aria-label={t("search_clear")}
                             >
                                 <IconClose width={12} height={12} />
                             </button>
@@ -359,11 +359,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     <div className="ui-properties-subbar">
                         <div className="ui-properties-meta">
                             {(debouncedSearchQuery
-                                ? t("search_results") || "搜索结果"
-                                : t("prop_groups") || "属性组")}
+                                ? t("search_results")
+                                : t("prop_groups"))}
                             : {groupCount}
                             <span> · </span>
-                            {t("prop_items") || "属性项"}: {itemCount}
+                            {t("prop_items")}: {itemCount}
                         </div>
                     </div>
                 </div>
@@ -373,7 +373,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 {filteredProps ? (
                     filteredProps.length === 0 ? (
                         <div className="ui-properties-empty">
-                            {t("search_no_results") || "暂无结果"}
+                            {t("search_no_results")}
                         </div>
                     ) : (
                         filteredProps.map((group) => {
@@ -428,7 +428,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                             >
                                                 <div
                                                     className="ui-prop-key"
-                                                    title={`${item.path}（${t("double_click_to_copy") || "双击复制"}）`}
+                                                    title={`${item.path}（${t("double_click_to_copy")}）`}
                                                     onDoubleClick={() => handleCopy(item.key)}
                                                 >
                                                     {item.key}
@@ -449,7 +449,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     )
                 ) : (
                     <div className="ui-properties-empty">
-                        {t("no_selection") || "未选择对象"}
+                        {t("no_selection")}
                     </div>
                 )}
             </div>
@@ -465,7 +465,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
             {copiedVisible && (
                 <div className="ui-copy-toast">
-                    {t("copied") || "已复制"}
+                    {t("copied")}
                 </div>
             )}
         </div>

@@ -38,7 +38,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
     const [saveOptions, setSaveOptions] = useState<ViewpointSaveOptions>(DEFAULT_SAVE_OPTIONS);
 
     useEffect(() => {
-        setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
+        setNewName(`${t("viewpoint_title")} ${viewpoints.length + 1}`);
     }, [viewpoints.length, t]);
 
     useEffect(() => {
@@ -54,7 +54,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
         const normalized = newName.trim();
         if (!normalized) return;
         onSave(normalized, saveOptions);
-        setNewName(`${t("viewpoint_title") || "视点"} ${viewpoints.length + 1}`);
+        setNewName(`${t("viewpoint_title")} ${viewpoints.length + 1}`);
     };
 
     const handleRenameCommit = (id: string) => {
@@ -71,10 +71,10 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
 
     return (
         <FloatingPanel
-            title={t("viewpoint_title") || "视点管理"}
-            closeLabel={t("panel_close") || "关闭"}
+            title={t("viewpoint_title")}
+            closeLabel={t("panel_close")}
             onClose={onClose}
-            width={380}
+            width={340}
             height={460}
             resizable={true}
             theme={theme}
@@ -90,31 +90,31 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                             if (e.key === "Enter") handleSave();
                         }}
                         className="ui-input"
-                        placeholder={t("viewpoint_title") || "视点名称"}
+                        placeholder={t("viewpoint_title")}
                     />
                     <Button variant="primary" onClick={handleSave}>
-                        {t("btn_confirm") || "保存"}
+                        {t("btn_confirm")}
                     </Button>
                 </div>
 
                 <div className="ui-viewpoint-options">
                     <Checkbox
-                        label={t("viewpoint_save_visibility") || "保存可见性"}
+                        label={t("viewpoint_save_visibility")}
                         checked={saveOptions.visibility}
                         onChange={(checked) => setSaveOptions((prev) => ({ ...prev, visibility: checked }))}
                     />
                     <Checkbox
-                        label={t("viewpoint_save_selection") || "保存选择"}
+                        label={t("viewpoint_save_selection")}
                         checked={saveOptions.selection}
                         onChange={(checked) => setSaveOptions((prev) => ({ ...prev, selection: checked }))}
                     />
                     <Checkbox
-                        label={t("viewpoint_save_clip") || "保存剖切"}
+                        label={t("viewpoint_save_clip")}
                         checked={saveOptions.clip}
                         onChange={(checked) => setSaveOptions((prev) => ({ ...prev, clip: checked }))}
                     />
                     <Checkbox
-                        label={t("viewpoint_save_explode") || "保存爆炸图"}
+                        label={t("viewpoint_save_explode")}
                         checked={saveOptions.explode}
                         onChange={(checked) => setSaveOptions((prev) => ({ ...prev, explode: checked }))}
                     />
@@ -123,7 +123,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                 <div className="ui-viewpoint-list-wrap">
                     {viewpoints.length === 0 ? (
                         <div className="ui-empty-state">
-                            {t("viewpoint_empty") || "暂无保存的视点"}
+                            {t("viewpoint_empty")}
                         </div>
                     ) : (
                         <div className="ui-viewpoint-grid">
@@ -133,7 +133,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                                     <div
                                         className="ui-viewpoint-image"
                                         onDoubleClick={() => onLoad(vp)}
-                                        title={t("viewpoint_load") || "双击恢复视点"}
+                                        title={t("viewpoint_load")}
                                     >
                                         {vp.image ? (
                                             <img
@@ -142,7 +142,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                                             />
                                         ) : (
                                             <div className="ui-viewpoint-no-preview">
-                                                {t("viewpoint_no_preview") || "无预览"}
+                                                {t("viewpoint_no_preview")}
                                             </div>
                                         )}
                                         {/* 删除按钮 */}
@@ -152,7 +152,7 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                                                 e.stopPropagation();
                                                 onDelete(vp.id);
                                             }}
-                                            title={t("delete_item") || "删除"}
+                                            title={t("delete_item")}
                                         >
                                             <IconTrash2 size={12} />
                                         </button>
@@ -173,10 +173,10 @@ export const ViewpointPanel: React.FC<ViewpointPanelProps> = ({
                                         }}
                                     />
                                     <div className="ui-viewpoint-flags">
-                                        {vp.saveOptions?.visibility !== false && <span>{t("viewpoint_flag_visibility") || "可见性"}</span>}
-                                        {vp.saveOptions?.selection !== false && <span>{t("viewpoint_flag_selection") || "选择"}</span>}
-                                        {vp.saveOptions?.clip !== false && <span>{t("viewpoint_flag_clip") || "剖切"}</span>}
-                                        {vp.saveOptions?.explode !== false && <span>{t("viewpoint_flag_explode") || "爆炸图"}</span>}
+                                        {vp.saveOptions?.visibility !== false && <span>{t("viewpoint_flag_visibility")}</span>}
+                                        {vp.saveOptions?.selection !== false && <span>{t("viewpoint_flag_selection")}</span>}
+                                        {vp.saveOptions?.clip !== false && <span>{t("viewpoint_flag_clip")}</span>}
+                                        {vp.saveOptions?.explode !== false && <span>{t("viewpoint_flag_explode")}</span>}
                                     </div>
                                 </div>
                             ))}

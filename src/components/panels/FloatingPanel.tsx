@@ -37,21 +37,21 @@ export const FloatingPanel: React.FC<FloatingPanelProps> = ({
 }) => {
     const panelRef = useRef<HTMLDivElement>(null);
     const panelMinSizeByStorage: Record<string, { w: number; h: number }> = {
-        tool_measure: { w: 320, h: 400 },
-        tool_search: { w: 620, h: 500 },
-        tool_export: { w: 400, h: 430 },
-        tool_screenshot: { w: 380, h: 300 },
-        tool_clip: { w: 410, h: 260 },
-        tool_viewpoint: { w: 380, h: 460 },
-        tool_explode: { w: 340, h: 360 },
-        tool_clash: { w: 520, h: 460 }
+        tool_measure: { w: 300, h: 380 },
+        tool_search: { w: 460, h: 480 },
+        tool_export: { w: 300, h: 430 },
+        tool_screenshot: { w: 300, h: 300 },
+        tool_clip: { w: 340, h: 260 },
+        tool_viewpoint: { w: 340, h: 460 },
+        tool_explode: { w: 300, h: 360 },
+        tool_clash: { w: 460, h: 460 }
     };
     const panelMinSize = storageId ? panelMinSizeByStorage[storageId] : undefined;
     // 面板默认/上限尺寸：超出时按上限收敛，避免“面板过大挡住视口”
     const panelMaxSizeByStorage: Record<string, { w: number; h: number }> = {
-        tool_search: { w: 640, h: 520 },
+        tool_search: { w: 560, h: 520 },
         tool_clash: { w: 520, h: 500 },
-        tool_viewpoint: { w: 380, h: 460 }
+        tool_viewpoint: { w: 340, h: 460 }
     };
     const panelMaxSize = storageId ? panelMaxSizeByStorage[storageId] : undefined;
     const minWidth = panelMinSize?.w ?? 220;

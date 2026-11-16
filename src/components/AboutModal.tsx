@@ -22,7 +22,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
         <FloatingPanel
             title={t("about_title")}
             onClose={onClose}
-            closeLabel={t("panel_close") || "关闭"}
+            closeLabel={t("panel_close")}
             width={460}
             autoHeight={true}
             modal={true}

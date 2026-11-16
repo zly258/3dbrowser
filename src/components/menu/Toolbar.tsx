@@ -7,14 +7,13 @@ import { cx, isMenuHidden } from "./utils";
 import {
     IconFile,
     IconMaximize,
-    IconEye,
     IconRuler,
     IconTarget,
     IconScissors,
     IconSettings,
     IconInfo,
     IconMousePointer,
-    IconBox,
+    IconMenu,
     IconList,
     IconCamera,
     IconSearch,
@@ -22,25 +21,16 @@ import {
     IconWrench,
     IconImage,
     IconExplode,
-    IconViewTop,
-    IconViewBottom,
-    IconViewFront,
-    IconViewBack,
-    IconViewLeft,
-    IconViewRight,
-    IconViewSW,
-    IconViewSE,
-    IconViewNE,
-    IconViewNW,
     IconOpenFile,
     IconExportScene,
     IconClear
 } from "../../theme/Icons";
 
 /**
- * 顶栏（MD3 语言）：左「品牌 + 文件/视图」｜中「显示样式分段」｜右「显示开关 + 工具 + 搜索/设置/关于」。
- * 长尾工具（测量/框选/剖切/视点/截图/碰撞/爆炸）收进「工具」下拉，
- * 激活态在菜单内用对勾标记，同时底栏模式托盘展示可清除的模式胶囊。
+ * 顶栏（MD3 语言）：左「模型开关 + 品牌 + 文件 + 充满」｜中「显示样式分段」｜右「选择 + 工具 + 搜索/设置/关于 + 属性开关」。
+ * 模型（左栏）/属性（右栏）为边缘图标开关（与参考 dxfviewer 一致）；
+ * 正交/轴测视角由视口内的 ViewCube 承担，顶栏不再提供视图菜单；
+ * 长尾工具收进「工具」下拉，且可通过设置的「工具栏位置」切到底部居中工具坞（ToolsDock）。
  */
 export const Toolbar: React.FC<ToolbarProps> = (props) => {
     const {
@@ -135,9 +125,9 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
 
     /* 显示样式分段（真实/着色/线框），对齐参考中部分段切换 */
     const displayModeOptions = [
-        { value: "realistic", label: t("dm_realistic") || "真实" },
-        { value: "shaded", label: t("dm_solid") || "着色" },
-        { value: "wireframe", label: t("dm_wireframe") || "线框" }
+        { value: "realistic", label: t("dm_realistic") },
+        { value: "shaded", label: t("dm_solid") },
+        { value: "wireframe", label: t("dm_wireframe") }
     ];
 
     return (
@@ -160,8 +150,20 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 onChange={props.handleBatchConvert}
             />
 
-            {/* ---------- 左：品牌 + 文件 + 视图 ---------- */}
+            {/* ---------- 左：模型开关 + 品牌 + 文件 + 充满 ---------- */}
             <div className="ui-toolbar-left">
+                {!hidden("interface") && !hidden("outline") && (
+                    <ImageButton
+                        icon={<IconMenu />}
+                        className="ui-toolbar-btn-icononly"
+                        active={props.showOutline}
+                        onClick={() => props.setShowOutline?.(!props.showOutline)}
+                        title={t("tb_model")}
+                        aria-label={t("tb_model")}
+                        theme={theme}
+                    />
+                )}
+
                 <span className="ui-toolbar-brand">3D Browser</span>
                 <div className="ui-toolbar-divider-vertical" aria-hidden="true" />
 
@@ -169,7 +171,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                     <div className="ui-toolbar-menu-anchor">
                         <ImageButton
                             icon={<IconFile />}
-                            label={t("tb_file") || "文件"}
+                            label={t("tb_file")}
                             active={openMenu === "file"}
                             onClick={() => toggleMenu("file")}
                             theme={theme}
@@ -177,12 +179,12 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
 
                         {renderDropdown("file", (
                             <>
-                                {!hidden("open_file") && menuItem(<IconOpenFile />, t("menu_open_file") || "打开文件", () => {
+                                {!hidden("open_file") && menuItem(<IconOpenFile />, t("menu_open_file"), () => {
                                     fileInputRef.current?.click();
                                     closeMenu();
                                 })}
 
-                                {!hidden("open_url") && menuItem(<IconOpenFile />, t("menu_open_url") || "打开地址", () => {
+                                {!hidden("open_url") && menuItem(<IconOpenFile />, t("menu_open_url"), () => {
                                     props.handleOpenUrl?.();
                                     closeMenu();
                                 })}
@@ -190,7 +192,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                                 {!hidden("batch_convert") && (
                                     <>
                                         {menuDivider()}
-                                        {menuItem(<IconExportScene />, t("menu_batch_convert") || "批量转换", () => {
+                                        {menuItem(<IconExportScene />, t("menu_batch_convert"), () => {
                                             batchConvertInputRef.current?.click();
                                             closeMenu();
                                         })}
@@ -200,7 +202,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                                 {!hidden("export") && (
                                     <>
                                         {menuDivider()}
-                                        {menuItem(<IconExportScene />, t("menu_export") || "导出", () => {
+                                        {menuItem(<IconExportScene />, t("menu_export"), () => {
                                             props.setActiveTool?.("export");
                                             closeMenu();
                                         })}
@@ -210,7 +212,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                                 {!hidden("clear") && (
                                     <>
                                         {menuDivider()}
-                                        {menuItem(<IconClear />, t("op_clear") || "清空", () => {
+                                        {menuItem(<IconClear />, t("op_clear"), () => {
                                             props.handleClear?.();
                                             closeMenu();
                                         })}
@@ -221,39 +223,14 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                     </div>
                 )}
 
-                {!hidden("view") && (
-                    <div className="ui-toolbar-menu-anchor">
-                        <ImageButton
-                            icon={<IconEye />}
-                            label={t("tb_view") || "视图"}
-                            active={openMenu === "views"}
-                            onClick={() => toggleMenu("views")}
-                            theme={theme}
-                        />
-
-                        {renderDropdown("views", (
-                            <>
-                                {!hidden("fit_view") && menuItem(<IconMaximize />, t("tb_fit") || "充满视图", () => {
-                                    props.sceneMgr?.restoreView();
-                                    closeMenu();
-                                })}
-
-                                {!hidden("fit_view") && menuDivider()}
-
-                                {menuItem(<IconViewFront />, t("view_front") || "前视图", () => { props.handleView?.("front"); closeMenu(); })}
-                                {menuItem(<IconViewBack />, t("view_back") || "后视图", () => { props.handleView?.("back"); closeMenu(); })}
-                                {menuItem(<IconViewTop />, t("view_top") || "顶视图", () => { props.handleView?.("top"); closeMenu(); })}
-                                {menuItem(<IconViewBottom />, t("view_bottom") || "底视图", () => { props.handleView?.("bottom"); closeMenu(); })}
-                                {menuItem(<IconViewLeft />, t("view_left") || "左视图", () => { props.handleView?.("left"); closeMenu(); })}
-                                {menuItem(<IconViewRight />, t("view_right") || "右视图", () => { props.handleView?.("right"); closeMenu(); })}
-                                {menuDivider()}
-                                {menuItem(<IconViewSE />, t("view_se") || "东南", () => { props.handleView?.("se"); closeMenu(); })}
-                                {menuItem(<IconViewSW />, t("view_sw") || "西南", () => { props.handleView?.("sw"); closeMenu(); })}
-                                {menuItem(<IconViewNE />, t("view_ne") || "东北", () => { props.handleView?.("ne"); closeMenu(); })}
-                                {menuItem(<IconViewNW />, t("view_nw") || "西北", () => { props.handleView?.("nw"); closeMenu(); })}
-                            </>
-                        ))}
-                    </div>
+                {/* 充满视图：正交/轴测向视角已由视口内的 ViewCube 承担，这里只保留「充满」动作 */}
+                {!hidden("view") && !hidden("fit_view") && (
+                    <ImageButton
+                        icon={<IconMaximize />}
+                        label={t("tb_fit")}
+                        onClick={() => props.sceneMgr?.restoreView()}
+                        theme={theme}
+                    />
                 )}
             </div>
 
@@ -269,49 +246,27 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 </div>
             )}
 
-            {/* ---------- 右：显示开关 + 工具 + 搜索 + 设置/关于 ---------- */}
+            {/* ---------- 右：选择 + 工具 + 搜索 + 设置/关于 + 属性开关 ---------- */}
             <div className="ui-toolbar-right">
-                {!hidden("interface") && (
+                {!hidden("interface") && !hidden("pick") && (
                     <>
-                        {!hidden("outline") && (
-                            <ImageButton
-                                icon={<IconBox />}
-                                label={t("tb_model") || "模型"}
-                                active={props.showOutline}
-                                onClick={() => props.setShowOutline?.(!props.showOutline)}
-                                theme={theme}
-                            />
-                        )}
-
-                        {!hidden("props") && (
-                            <ImageButton
-                                icon={<IconList />}
-                                label={t("tb_props") || "属性"}
-                                active={props.showProps}
-                                onClick={() => props.setShowProps?.(!props.showProps)}
-                                theme={theme}
-                            />
-                        )}
-
-                        {!hidden("pick") && (
-                            <ImageButton
-                                icon={<IconMousePointer />}
-                                label={t("tb_pick") || "选择"}
-                                active={props.pickEnabled}
-                                onClick={() => props.setPickEnabled?.(!props.pickEnabled)}
-                                theme={theme}
-                            />
-                        )}
+                        <ImageButton
+                            icon={<IconMousePointer />}
+                            label={t("tb_pick")}
+                            active={props.pickEnabled}
+                            onClick={() => props.setPickEnabled?.(!props.pickEnabled)}
+                            theme={theme}
+                        />
 
                         <div className="ui-toolbar-divider-vertical" aria-hidden="true" />
                     </>
                 )}
 
-                {!hidden("tool") && (
+                {!hidden("tool") && props.toolsDock !== "bottom" && (
                     <div className="ui-toolbar-menu-anchor">
                         <ImageButton
                             icon={<IconWrench />}
-                            label={t("tb_tools") || "工具"}
+                            label={t("tb_tools")}
                             active={openMenu === "tools" || props.activeTool !== "none" && props.activeTool !== "search" && props.activeTool !== "settings"}
                             onClick={() => toggleMenu("tools")}
                             theme={theme}
@@ -319,13 +274,13 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
 
                         {renderDropdown("tools", (
                             <>
-                                {!hidden("measure") && toolMenuItem(<IconRuler />, t("tb_measure") || "测量", "measure")}
-                                {!hidden("boxSelect") && toolMenuItem(<IconSelectAll />, t("tb_boxSelect") || "框选", "boxSelect")}
-                                {!hidden("clip") && toolMenuItem(<IconScissors />, t("tb_clip") || "剖切", "clip")}
-                                {!hidden("viewpoint") && toolMenuItem(<IconCamera />, t("viewpoint_default_name") || "视点", "viewpoint")}
-                                {!hidden("screenshot") && toolMenuItem(<IconImage />, t("tb_screenshot") || "截图", "screenshot")}
-                                {!hidden("clash") && toolMenuItem(<IconTarget />, t("tb_clash") || "碰撞", "clash")}
-                                {!hidden("explode") && toolMenuItem(<IconExplode />, t("tb_explode") || "爆炸", "explode")}
+                                {!hidden("measure") && toolMenuItem(<IconRuler />, t("tb_measure"), "measure")}
+                                {!hidden("boxSelect") && toolMenuItem(<IconSelectAll />, t("tb_boxSelect"), "boxSelect")}
+                                {!hidden("clip") && toolMenuItem(<IconScissors />, t("tb_clip"), "clip")}
+                                {!hidden("viewpoint") && toolMenuItem(<IconCamera />, t("viewpoint_default_name"), "viewpoint")}
+                                {!hidden("screenshot") && toolMenuItem(<IconImage />, t("tb_screenshot"), "screenshot")}
+                                {!hidden("clash") && toolMenuItem(<IconTarget />, t("tb_clash"), "clash")}
+                                {!hidden("explode") && toolMenuItem(<IconExplode />, t("tb_explode"), "explode")}
                             </>
                         ))}
                     </div>
@@ -334,7 +289,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 {!hidden("search") && (
                     <ImageButton
                         icon={<IconSearch />}
-                        label={t("tb_search") || "搜索"}
+                        label={t("tb_search")}
                         active={props.activeTool === "search"}
                         onClick={() => setToggleTool("search")}
                         theme={theme}
@@ -344,7 +299,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 {!hidden("settings") && (
                     <ImageButton
                         icon={<IconSettings />}
-                        label={t("tb_settings") || "设置"}
+                        label={t("tb_settings")}
                         active={props.activeTool === "settings"}
                         onClick={() => setToggleTool("settings")}
                         theme={theme}
@@ -354,8 +309,20 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 {!hidden("about") && (
                     <ImageButton
                         icon={<IconInfo />}
-                        label={t("tb_about") || "关于"}
+                        label={t("tb_about")}
                         onClick={() => props.onOpenAbout?.()}
+                        theme={theme}
+                    />
+                )}
+
+                {!hidden("interface") && !hidden("props") && (
+                    <ImageButton
+                        icon={<IconList />}
+                        className="ui-toolbar-btn-icononly"
+                        active={props.showProps}
+                        onClick={() => props.setShowProps?.(!props.showProps)}
+                        title={t("tb_props")}
+                        aria-label={t("tb_props")}
                         theme={theme}
                     />
                 )}

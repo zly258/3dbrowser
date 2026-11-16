@@ -629,7 +629,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 ref={containerRef}
                 className="ui-tree-container flex-1 overflow-auto"
                 role="tree"
-                aria-label={t("interface_outline") || "模型结构"}
+                aria-label={t("interface_outline")}
                 onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
                 <div style={{ height: totalHeight, position: "relative" }}>

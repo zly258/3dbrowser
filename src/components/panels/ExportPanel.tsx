@@ -19,7 +19,7 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
     }, [format, getDefaultFileName]);
 
     return (
-        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close") || "关闭"} onClose={onClose} width={400} autoHeight={true} resizable={false} theme={theme} storageId="tool_export">
+        <FloatingPanel title={t("export_title")} closeLabel={t("panel_close")} onClose={onClose} width={300} autoHeight={true} resizable={false} theme={theme} storageId="tool_export">
             <div className="ui-toolpanel-body ui-export-panel-body">
                 <div className="ui-toolpanel-caption">{t("export_format")}:</div>
 
@@ -43,17 +43,17 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
                 ))}
 
                 <div className="ui-toolpanel-caption ui-toolpanel-caption-spaced">
-                    {t("export_filename") || "文件名"}:
+                    {t("export_filename")}:
                 </div>
                 <input
                     type="text"
                     value={fileName}
                     onChange={(e) => setFileName(e.target.value)}
-                    placeholder={t("export_filename_placeholder") || "请输入文件名"}
+                    placeholder={t("export_filename_placeholder")}
                     className="ui-input ui-input-compact"
                 />
                 <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">
-                    {t("export_filename_hint") || "留空时自动按模型名生成"}
+                    {t("export_filename_hint")}
                 </div>
 
                 <Button

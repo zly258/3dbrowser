@@ -16,6 +16,7 @@ export interface SelectProps<T extends string = string> {
   searchable?: boolean;
   searchPlaceholder?: string;
   emptyText?: string;
+  t?: (key: string) => string;
 }
 
 export function Select<T extends string = string>({
@@ -28,7 +29,8 @@ export function Select<T extends string = string>({
   placeholder,
   searchable = false,
   searchPlaceholder,
-  emptyText = "暂无数据"
+  emptyText,
+  t
 }: SelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -148,14 +150,14 @@ export function Select<T extends string = string>({
                 className="ui-input ui-input-compact ui-select-search-input"
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
-                placeholder={searchPlaceholder || "搜索..."}
+                placeholder={searchPlaceholder || (t ? t("select_search_placeholder") : "")}
                 onClick={(event) => event.stopPropagation()}
                 autoFocus
               />
             </div>
           )}
           {filteredOptions.length === 0 ? (
-            <div className="ui-select-empty">{emptyText}</div>
+            <div className="ui-select-empty">{emptyText || (t ? t("select_no_data") : "")}</div>
           ) : (
             filteredOptions.map((option) => (
               <button

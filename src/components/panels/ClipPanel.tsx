@@ -95,9 +95,9 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
   return (
     <FloatingPanel
       title={t("clip_title")}
-      closeLabel={t("panel_close") || "关闭"}
+      closeLabel={t("panel_close")}
       onClose={onClose}
-      width={410}
+      width={340}
       resizable={false}
       storageId="tool_clip"
     >
@@ -174,7 +174,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
           />
           {clipBounds && (
             <div className="ui-clip-range-hint">
-              <span>{t("clip_range_current") || "当前模型范围"}</span>
+              <span>{t("clip_range_current")}</span>
               <span className="ui-clip-range-hint-value">
                 X {clipBounds.min[0].toFixed(2)}~{clipBounds.max[0].toFixed(2)}
                 {"  "}Y {clipBounds.min[1].toFixed(2)}~{clipBounds.max[1].toFixed(2)}
@@ -186,7 +186,7 @@ export const ClipPanel: React.FC<ClipPanelProps> = ({
 
         <div className="ui-panel-footer ui-clip-panel-footer">
           <Button variant="default" onClick={handleReset} disabled={!clipEnabled}>
-            {t("clip_reset") || "重置范围"}
+            {t("clip_reset")}
           </Button>
         </div>
       </div>

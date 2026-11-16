@@ -100,6 +100,15 @@ export const IconWrench = (props: any) => createIcon(
   props
 );
 
+export const IconMenu = (props: any) => createIcon(
+  <>
+    <line x1="4" y1="6" x2="20" y2="6" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="4" y1="18" x2="20" y2="18" />
+  </>,
+  props
+);
+
 export const IconScissors = (props: any) => createIcon(
   <>
     <circle cx="6" cy="6" r="3" />

@@ -48,6 +48,12 @@
   gap: 8px;
 }
 
+/* 顶栏中部分段：按内容取宽，不随 center 区拉伸 */
+.ui-toolbar-center .ui-segmented,
+.ui-toolbar-seg {
+  flex: 0 0 auto;
+}
+
 /* 品牌标题（左上角） */
 .ui-toolbar-brand {
   flex: 0 0 auto;
@@ -69,11 +75,128 @@
   background: var(--border-sub);
 }
 
-/* 顶栏中部分段：按内容取宽，不随 center 区拉伸 */
-.ui-toolbar-center .ui-segmented,
-.ui-toolbar-seg {
-  flex: 0 0 auto;
+/* 仅图标边缘开关（模型在左、属性在右）：方形胶囊，无文字 */
+.ui-toolbar-btn.ui-toolbar-btn-icononly {
+  width: var(--control-h);
+  min-width: var(--control-h);
+  padding: 0;
 }
+
+/* ---------- 底部居中工具坞（MD3 胶囊浮条） ---------- */
+.ui-tools-dock {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--footer-h) + 12px);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  color: var(--text-sec);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-overlay);
+  transform: translateX(-50%);
+  animation: fadeIn 140ms ease-out;
+}
+
+.ui-tools-dock-collapsed {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 坞内按钮：正方形图标胶囊（title 提供文字提示） */
+.ui-tools-dock .ui-toolbar-btn.ui-tools-dock-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-sec);
+  background: transparent;
+  border-radius: var(--radius-pill);
+}
+
+.ui-tools-dock .ui-toolbar-btn.ui-tools-dock-btn:hover:not(:disabled):not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.ui-tools-dock .ui-toolbar-btn.ui-tools-dock-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ui-tools-dock-divider {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border-main);
+}
+
+.ui-tools-dock-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ui-tools-dock-toggle:hover {
+  color: var(--text-main);
+  background: var(--bg-hover);
+}
+
+.ui-tools-dock-toggle svg { display: block; flex-shrink: 0; }
+
+/* 收起态：单个圆形浮动按钮 */
+.ui-tools-dock-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--accent-contrast);
+  background: var(--accent-solid);
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-overlay);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.ui-tools-dock-fab:hover { background: var(--accent-solid-hover); }
+
+.ui-tools-dock-fab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ui-tools-dock-fab svg { display: block; flex-shrink: 0; }
+
+/* 窄屏：工具坞横向可滚，避免溢出视口 */
+@media (max-width: 720px) {
+  .ui-tools-dock:not(.ui-tools-dock-collapsed) {
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+  }
+}
+
 
 /* ---------- 分组 ---------- */
 .ui-toolbar-group {

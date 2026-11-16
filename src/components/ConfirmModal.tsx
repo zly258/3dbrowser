@@ -33,7 +33,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <FloatingPanel
             title={title}
             onClose={onCancel}
-            closeLabel={t("panel_close") || "关闭"}
+            closeLabel={t("panel_close")}
             width={400}
             autoHeight={true}
             modal={true}

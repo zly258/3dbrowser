@@ -122,9 +122,9 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
 
   const getTypeLabel = (type: string) => {
     switch (type) {
-      case 'dist': return t("measure_dist") || 'Distance';
-      case 'angle': return t("measure_angle") || 'Angle';
-      case 'coord': return t("measure_coord") || 'Coordinate';
+      case 'dist': return t("measure_dist");
+      case 'angle': return t("measure_angle");
+      case 'coord': return t("measure_coord");
       default: return type;
     }
   };
@@ -132,7 +132,7 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
   return (
     <FloatingPanel
       title={t("measure_title")}
-      closeLabel={t("panel_close") || "关闭"}
+      closeLabel={t("panel_close")}
       onClose={onClose}
       width={300}
       height={400}
@@ -146,40 +146,40 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
               className={`ui-segmented-item ${measureType === 'none' ? 'active' : ''}`}
               onClick={() => handleTypeChange('none')}
             >
-              <span>{t("measure_none") || 'None'}</span>
+              <span>{t("measure_none")}</span>
             </button>
             <button
               className={`ui-segmented-item ${measureType === 'dist' ? 'active' : ''}`}
               onClick={() => handleTypeChange('dist')}
             >
-              <span>{t("measure_dist") || 'Distance'}</span>
+              <span>{t("measure_dist")}</span>
             </button>
             <button
               className={`ui-segmented-item ${measureType === 'angle' ? 'active' : ''}`}
               onClick={() => handleTypeChange('angle')}
             >
-              <span>{t("measure_angle") || 'Angle'}</span>
+              <span>{t("measure_angle")}</span>
             </button>
             <button
               className={`ui-segmented-item ${measureType === 'coord' ? 'active' : ''}`}
               onClick={() => handleTypeChange('coord')}
             >
-              <span>{t("measure_coord") || 'Coord'}</span>
+              <span>{t("measure_coord")}</span>
             </button>
           </div>
           <ClearButton
             onClick={onClear}
             disabled={measureHistory.length === 0}
-            title={t("search_clear") || "清空"}
+            title={t("search_clear")}
           />
         </div>
 
         <div className="ui-toolpanel-row-between ui-toolpanel-caption">
           <span>{getInstructionText()}</span>
-          {measureType !== 'none' && <span className="ui-toolpanel-caption-muted">{t("esc_exit") || "[ESC] 退出"}</span>}
+          {measureType !== 'none' && <span className="ui-toolpanel-caption-muted">{t("esc_exit")}</span>}
         </div>
 
-        <DataPanel empty={measureHistory.length === 0} emptyText={t("no_measurements") || 'No measurements'}>
+        <DataPanel empty={measureHistory.length === 0} emptyText={t("no_measurements")}>
           {measureHistory.length > 0 && (
             <div className="ui-measure-results-scroll">
               {(Object.entries(groupedHistory) as [string, any[]][]).map(([type, items]) => {

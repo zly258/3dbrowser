@@ -10,6 +10,7 @@ import { applyTheme } from "./theme/themeManager";
 
 // 组件
 import { Toolbar } from "./components/menu";
+import { ToolsDock } from "./components/ToolsDock";
 import { SceneTree } from "./components/SceneTree";
 import { MeasurePanel, ClipPanel, ExportPanel, ScreenshotPanel, ViewpointPanel, SettingsPanel, ExplodePanel, SearchPanel, ClashPanel } from "./components/panels";
 import { LoadingOverlay } from "./components/LoadingOverlay";
@@ -246,6 +247,10 @@ export const ThreeViewer = ({
         serializer: (value) => String(value),
         parser: (raw) => raw === 'true'
     });
+
+    // 工具栏位置（顶栏 / 底部居中工具坞）与工具坞收起状态
+    const [toolsDock, setToolsDock] = usePersistentState<'top' | 'bottom'>('viewer_tools_dock', 'top');
+    const [toolsDockCollapsed, setToolsDockCollapsed] = usePersistentState<boolean>('viewer_tools_dock_collapsed', false);
 
     const [sceneSettings, setSceneSettings] = usePersistentState<SceneSettings>('3dbrowser_sceneSettings', () => {
         // 外观模式优先级：initialSettings.themeMode > defaultTheme > light
@@ -954,7 +959,7 @@ export const ThreeViewer = ({
                 key: "hidden",
                 label: `${t("mode_hidden")} ${hiddenUuids.size}`,
                 onClear: handleShowAll,
-                clearLabel: t("mode_restore_visibility") || t("mode_clear")
+                clearLabel: t("mode_restore_visibility")
             });
         }
 
@@ -963,7 +968,7 @@ export const ThreeViewer = ({
                 key: "isolated",
                 label: `${t("mode_isolated")} ${isolatedUuids.size}`,
                 onClear: handleShowAll,
-                clearLabel: t("mode_restore_visibility") || t("mode_clear")
+                clearLabel: t("mode_restore_visibility")
             });
         }
 
@@ -1164,7 +1169,21 @@ export const ThreeViewer = ({
                  hiddenMenus={hiddenMenus}
                  onOpenAbout={() => { setActiveTool('none'); setIsAboutOpen(true); }}
                  hasModels={hasModels}
+                 toolsDock={toolsDock}
              />
+
+             {/* 底部居中工具坞：设置「工具栏位置 = 底部居中」时启用，顶栏不再重复显示工具 */}
+             {toolsDock === "bottom" && (
+                 <ToolsDock
+                     t={t}
+                     theme={theme}
+                     activeTool={activeTool}
+                     setActiveTool={setActiveTool}
+                     hiddenMenus={hiddenMenus}
+                     collapsed={toolsDockCollapsed}
+                     onToggleCollapsed={() => setToolsDockCollapsed((v) => !v)}
+                 />
+             )}
 
              {/* Main Content Area */}
              <div className="ui-main-layout">
@@ -1177,8 +1196,8 @@ export const ThreeViewer = ({
                             <button 
                                 className="ui-sidebar-close"
                                 onClick={() => setShowOutline(false)} 
-                                title={t("panel_close") || "关闭"}
-                                aria-label={t("panel_close") || "关闭"}
+                                title={t("panel_close")}
+                                aria-label={t("panel_close")}
                             >
                                 <IconClose width={13} height={13} />
                             </button>
@@ -1271,8 +1290,8 @@ export const ThreeViewer = ({
                             <button
                                 className="ui-toast-close"
                                 onClick={() => setToast(null)}
-                                title={t("panel_close") || "关闭"}
-                                aria-label={t("panel_close") || "关闭"}
+                                title={t("panel_close")}
+                                aria-label={t("panel_close")}
                             >
                                 <IconClose size={12} />
                             </button>
@@ -1458,8 +1477,8 @@ export const ThreeViewer = ({
                             <button
                                 className="ui-sidebar-close"
                                 onClick={() => setShowProps(false)} 
-                                title={t("panel_close") || "关闭"}
-                                aria-label={t("panel_close") || "关闭"}
+                                title={t("panel_close")}
+                                aria-label={t("panel_close")}
                             >
                                 <IconClose width={13} height={13} />
                             </button>
@@ -1606,6 +1625,7 @@ export const ThreeViewer = ({
                    t={t} onClose={() => setActiveTool('none')} settings={sceneSettings} onUpdate={handleSettingsUpdate}
                    currentLang={lang} setLang={setLang}
                    showStats={showStats} setShowStats={setShowStats}
+                   toolsDock={toolsDock} setToolsDock={setToolsDock}
                    theme={theme}
                    getRuntimeInfo={() => sceneMgr.current?.getRenderStrategyInfo()}
                 />
@@ -1621,8 +1641,8 @@ export const ThreeViewer = ({
                                 type="button"
                                 onClick={() => setErrorState(prev => ({ ...prev, isOpen: false }))} 
                                 className="ui-error-close"
-                                title={t("panel_close") || "关闭"}
-                                aria-label={t("panel_close") || "关闭"}
+                                title={t("panel_close")}
+                                aria-label={t("panel_close")}
                             >
                                 <IconClose width={14} height={14} />
                             </button>

@@ -15,22 +15,22 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
     const options = [
         {
             id: 'scene' as const,
-            label: t("op_screenshot") || '场景截图',
-            desc: t("screenshot_scene_desc") || '保留当前背景色和界面里的场景效果'
+            label: t("op_screenshot"),
+            desc: t("screenshot_scene_desc")
         },
         {
             id: 'transparent' as const,
-            label: t("op_screenshot_transparent") || '透明背景截图',
-            desc: t("screenshot_transparent_desc") || '导出透明背景 PNG，便于汇报和排版'
+            label: t("op_screenshot_transparent"),
+            desc: t("screenshot_transparent_desc")
         }
     ];
 
     return (
         <FloatingPanel
-            title={t("op_screenshot") || "场景截图"}
-            closeLabel={t("panel_close") || "关闭"}
+            title={t("op_screenshot")}
+            closeLabel={t("panel_close")}
             onClose={onClose}
-            width={380}
+            width={300}
             resizable={false}
             autoHeight={true}
             theme={theme}
@@ -38,7 +38,7 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
         >
             <div className="ui-toolpanel-body ui-screenshot-panel-body">
                 <div className="ui-toolpanel-caption">
-                    {t("screenshot_mode") || "截图方式"}:
+                    {t("screenshot_mode")}:
                 </div>
 
                 {options.map((opt) => (
@@ -63,7 +63,7 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({ t, onClose, on
                     onClick={() => onCapture(mode)}
                     className="ui-toolpanel-submit"
                 >
-                    {t("btn_confirm") || "确定"}
+                    {t("btn_confirm")}
                 </Button>
             </div>
         </FloatingPanel>

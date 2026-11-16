@@ -53,4 +53,6 @@ export interface ToolbarProps extends BaseMenuProps {
     openScreenshotPanel?: () => void;
     handleDisplayModeChange?: (mode: DisplayMode) => void;
     displayMode?: DisplayMode;
+    /** 工具栏位置：top = 顶栏「工具」下拉（默认）；bottom = 底部居中工具坞 */
+    toolsDock?: "top" | "bottom";
 }

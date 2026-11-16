@@ -1177,6 +1177,26 @@
   font-weight: 500;
 }
 
+/* ---------- 设置分组卡片：相似设置归入同一组 ---------- */
+.ui-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 10px;
+  background: var(--bg-chrome);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-lg);
+}
+
+.ui-settings-group-title {
+  margin-bottom: 2px;
+  color: var(--text-sec);
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
 .ui-settings-content {
   flex: 1 1 auto;
   min-width: 0;

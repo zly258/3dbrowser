@@ -51,20 +51,20 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
 }) => {
   return (
     <FloatingPanel
-      title={t("explode_title") || "爆炸图"}
-      closeLabel={t("panel_close") || "关闭"}
+      title={t("explode_title")}
+      closeLabel={t("panel_close")}
       onClose={onClose}
-      width={360}
+      width={300}
       storageId="tool_explode"
       modal={false}
       autoHeight={true}
       theme={theme}
     >
       <div className="ui-toolpanel-body ui-toolpanel-body-compact">
-        <Row label={t("explode_enable") || "启用"}>
+        <Row label={t("explode_enable")}>
           <Switch checked={enabled} onChange={onEnabledChange} />
         </Row>
-        <Row label={t("explode_strength") || "强度"} stretch={true}>
+        <Row label={t("explode_strength")} stretch={true}>
           <div className="ui-slider-field">
             <div className="ui-inline-actions-stretch">
               <Slider
@@ -80,12 +80,12 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
             </div>
           </div>
         </Row>
-        <Row label={t("explode_mode") || "方向"} stretch={true}>
+        <Row label={t("explode_mode")} stretch={true}>
           <SegmentedControl
             options={[
-              { value: "radial", label: t("explode_mode_radial") || "四周" },
-              { value: "horizontal", label: t("explode_mode_horizontal") || "横向" },
-              { value: "vertical", label: t("explode_mode_vertical") || "纵向" }
+              { value: "radial", label: t("explode_mode_radial") },
+              { value: "horizontal", label: t("explode_mode_horizontal") },
+              { value: "vertical", label: t("explode_mode_vertical") }
             ]}
             value={mode}
             onChange={(value) => onModeChange(value as ExplodeMode)}
@@ -93,7 +93,7 @@ export const ExplodePanel: React.FC<ExplodePanelProps> = ({
         </Row>
         <div className="ui-panel-footer ui-panel-footer-spaced">
           <Button className="ui-properties-action" onClick={onReset}>
-            {t("explode_reset") || "重置"}
+            {t("explode_reset")}
           </Button>
         </div>
       </div>

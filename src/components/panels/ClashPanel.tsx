@@ -67,13 +67,6 @@ interface ClashPanelProps {
   theme?: any;
 }
 
-const useSafeText = (t: (key: string) => string) => {
-  return (key: string, fallback: string) => {
-    const value = t(key);
-    return value && value !== key ? value : fallback;
-  };
-};
-
 const SectionToggle: React.FC<{
   title: string;
   summary?: string;
@@ -103,14 +96,14 @@ const formatNumber = (value: number) => {
   return String(value);
 };
 
-const getSeverityText = (tr: (key: string, fallback: string) => string, severity: ClashResultItem["severity"]) => {
-  if (severity === "high") return tr("clash_severity_high", "高");
-  if (severity === "medium") return tr("clash_severity_medium", "中");
-  return tr("clash_severity_low", "低");
+const getSeverityText = (t: (key: string) => string, severity: ClashResultItem["severity"]) => {
+  if (severity === "high") return t("clash_severity_high");
+  if (severity === "medium") return t("clash_severity_medium");
+  return t("clash_severity_low");
 };
 
-const getClashTypeText = (tr: (key: string, fallback: string) => string, type: ClashResultItem["type"]) => {
-  return type === "hard" ? tr("clash_type_hard", "硬碰撞") : tr("clash_type_clearance", "净空碰撞");
+const getClashTypeText = (t: (key: string) => string, type: ClashResultItem["type"]) => {
+  return type === "hard" ? t("clash_type_hard") : t("clash_type_clearance");
 };
 
 export const ClashPanel: React.FC<ClashPanelProps> = ({
@@ -153,7 +146,6 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   onFocusResult,
   theme
 }) => {
-  const tr = useSafeText(t);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [scopeExpanded, setScopeExpanded] = useState(false);
@@ -178,10 +170,10 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
   const setAIds = useMemo(() => new Set(setA), [setA]);
   const setBIds = useMemo(() => new Set(setB), [setB]);
   const safeProgress = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
-  const readyText = status || (running ? tr("clash_running", "正在执行碰撞检查...") : tr("clash_ready", "准备就绪"));
-  const scopeSummary = `${tr("clash_set_a", "模型集 A")} ${setA.length} · ${tr("clash_set_b", "模型集 B")} ${setB.length}`;
+  const readyText = status || (running ? t("clash_running") : t("clash_ready"));
+  const scopeSummary = `${t("clash_set_a")} ${setA.length} · ${t("clash_set_b")} ${setB.length}`;
   const resultsSummary = `${filteredResults.length}`;
-  const paramsSummary = `${tr("clash_tolerance", "容差")} ${tolerance} · ${tr("clash_clearance_distance", "净空")} ${clearanceDistance}`;
+  const paramsSummary = `${t("clash_tolerance")} ${tolerance} · ${t("clash_clearance_distance")} ${clearanceDistance}`;
 
   const toggleFromSet = (source: string[], id: string, onChange: (next: string[]) => void) => {
     const nextSet = new Set(source);
@@ -192,10 +184,10 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
 
   return (
     <FloatingPanel
-      title={tr("tb_clash", "碰撞")}
-      closeLabel={tr("panel_close", "关闭")}
+      title={t("tb_clash")}
+      closeLabel={t("panel_close")}
       onClose={onClose}
-      width={520}
+      width={480}
       height={500}
       resizable={true}
       storageId="tool_clash"
@@ -211,33 +203,33 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 <span>{readyText}</span>
               </div>
               <div className="ui-clash-mini-stats">
-                <span>{tr("clash_candidates", "候选")} <b>{formatNumber(scannedCount)}</b></span>
-                <span>{tr("clash_pairs_scanned", "已扫描")} <b>{formatNumber(pairsScanned)}</b></span>
-                <span>{tr("clash_results", "结果")} <b>{formatNumber(results.length)}</b></span>
+                <span>{t("clash_candidates")} <b>{formatNumber(scannedCount)}</b></span>
+                <span>{t("clash_pairs_scanned")} <b>{formatNumber(pairsScanned)}</b></span>
+                <span>{t("clash_results")} <b>{formatNumber(results.length)}</b></span>
               </div>
             </div>
             <div className="ui-clash-actions-row">
               {!running ? (
                 <Button className="ui-properties-action" onClick={onRun} variant="primary">
-                  {tr("clash_run", "开始检查")}
+                  {t("clash_run")}
                 </Button>
               ) : (
                 <Button className="ui-properties-action" onClick={onCancel}>
-                  {tr("search_cancel", "取消")}
+                  {t("search_cancel")}
                 </Button>
               )}
               <Button className="ui-properties-action" onClick={onClear}>
-                {tr("clash_clear", "清空结果")}
+                {t("clash_clear")}
               </Button>
               <Button className="ui-properties-action" onClick={onExportCsv} disabled={results.length === 0}>
-                {tr("clash_export_csv", "导出 CSV")}
+                {t("clash_export_csv")}
               </Button>
             </div>
           </div>
 
           <div className="ui-clash-section">
             <SectionToggle
-              title={tr("clash_scope_visible", "检测范围")}
+              title={t("clash_scope_visible")}
               summary={scopeSummary}
               expanded={scopeExpanded}
               onToggle={() => setScopeExpanded((prev) => !prev)}
@@ -246,15 +238,15 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
               <div className="ui-clash-section-content ui-clash-scope-grid">
                 <div className="ui-selection-box">
                   <div className="ui-selection-box-header">
-                    <div className="ui-toolpanel-caption-strong">{tr("clash_set_a", "模型集 A")}</div>
+                    <div className="ui-toolpanel-caption-strong">{t("clash_set_a")}</div>
                     <div className="ui-selection-box-actions">
-                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetASelectAll}>{tr("select_all", "全选")}</button>
-                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetAClear}>{tr("search_clear", "清空")}</button>
+                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetASelectAll}>{t("select_all")}</button>
+                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetAClear}>{t("search_clear")}</button>
                     </div>
                   </div>
                   <div className="ui-selection-box-list ui-clash-selection-list">
                     {modelOptions.length === 0 ? (
-                      <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">{tr("clash_no_models", "暂无模型")}</div>
+                      <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">{t("clash_no_models")}</div>
                     ) : (
                       modelOptions.map((item) => (
                         <Checkbox
@@ -270,15 +262,15 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 </div>
                 <div className="ui-selection-box">
                   <div className="ui-selection-box-header">
-                    <div className="ui-toolpanel-caption-strong">{tr("clash_set_b", "模型集 B")}</div>
+                    <div className="ui-toolpanel-caption-strong">{t("clash_set_b")}</div>
                     <div className="ui-selection-box-actions">
-                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetBSelectAll}>{tr("select_all", "全选")}</button>
-                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetBClear}>{tr("search_clear", "清空")}</button>
+                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetBSelectAll}>{t("select_all")}</button>
+                      <button className="ui-statusbar-tag ui-statusbar-tag-compact" onClick={onSetBClear}>{t("search_clear")}</button>
                     </div>
                   </div>
                   <div className="ui-selection-box-list ui-clash-selection-list">
                     {modelOptions.length === 0 ? (
-                      <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">{tr("clash_no_models", "暂无模型")}</div>
+                      <div className="ui-toolpanel-caption ui-toolpanel-caption-muted">{t("clash_no_models")}</div>
                     ) : (
                       modelOptions.map((item) => (
                         <Checkbox
@@ -298,7 +290,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
 
           <div className="ui-clash-section">
             <SectionToggle
-              title={tr("settings_more", "检测参数")}
+              title={t("settings_more")}
               summary={paramsSummary}
               expanded={advancedExpanded}
               onToggle={() => setAdvancedExpanded((prev) => !prev)}
@@ -306,7 +298,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             {advancedExpanded && (
               <div className="ui-clash-section-content ui-clash-settings-compact">
                 <div className="ui-clash-fields-grid">
-                  <Field label={tr("clash_tolerance", "容差")}>
+                  <Field label={t("clash_tolerance")}>
                     <InputNumber
                       className="ui-input-compact ui-clash-input-full"
                       value={Number.isFinite(tolerance) ? tolerance : 0}
@@ -315,7 +307,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                       onChange={(value) => onToleranceChange(Math.max(0, value || 0))}
                     />
                   </Field>
-                  <Field label={tr("clash_min_overlap", "最小重叠体积")}>
+                  <Field label={t("clash_min_overlap")}>
                     <InputNumber
                       className="ui-input-compact ui-clash-input-full"
                       value={Number.isFinite(minOverlapVolume) ? minOverlapVolume : 0}
@@ -324,7 +316,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                       onChange={(value) => onMinOverlapVolumeChange(Math.max(0, value || 0))}
                     />
                   </Field>
-                  <Field label={tr("clash_clearance_distance", "最小净空距离")}>
+                  <Field label={t("clash_clearance_distance")}>
                     <InputNumber
                       className="ui-input-compact ui-clash-input-full"
                       value={Number.isFinite(clearanceDistance) ? clearanceDistance : 0}
@@ -338,19 +330,19 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                   <Checkbox
                     checked={useNarrowPhase}
                     onChange={onUseNarrowPhaseChange}
-                    label={tr("clash_narrow_phase", "精筛（OBB）")}
+                    label={t("clash_narrow_phase")}
                     labelStyle={{ fontSize: 12 }}
                   />
                   <Checkbox
                     checked={useTrianglePhase}
                     onChange={onUseTrianglePhaseChange}
-                    label={tr("clash_triangle_phase", "三角面复核")}
+                    label={t("clash_triangle_phase")}
                     labelStyle={{ fontSize: 12 }}
                   />
                   <Checkbox
                     checked={includeSameModel}
                     onChange={onIncludeSameModelChange}
-                    label={tr("clash_include_same_model", "同模型内检测")}
+                    label={t("clash_include_same_model")}
                     labelStyle={{ fontSize: 12 }}
                   />
                 </div>
@@ -361,7 +353,7 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
           <div className="ui-clash-section ui-clash-results-section">
             <div className="ui-clash-section-toggle ui-clash-section-toggle-static">
               <span className="ui-clash-section-title-wrap">
-                <span className="ui-clash-section-title">{tr("clash_results", "碰撞结果")}</span>
+                <span className="ui-clash-section-title">{t("clash_results")}</span>
               </span>
               <span className="ui-clash-section-summary">{resultsSummary}</span>
             </div>
@@ -371,31 +363,33 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                     value={typeFilter}
                     onChange={(value) => onTypeFilterChange(value as ClashTypeFilter)}
                     options={[
-                      { value: "ALL", label: tr("clash_type_all", "全部类型") },
-                      { value: "HARD", label: tr("clash_type_hard", "硬碰撞") },
-                      { value: "CLEARANCE", label: tr("clash_type_clearance", "净空碰撞") }
+                      { value: "ALL", label: t("clash_type_all") },
+                      { value: "HARD", label: t("clash_type_hard") },
+                      { value: "CLEARANCE", label: t("clash_type_clearance") }
                     ]}
+                    t={t}
                     className="ui-input-compact ui-clash-filter-select"
                   />
                   <Select
                     value={String(pageSize)}
                     onChange={(value) => setPageSize(Number(value) || 10)}
                     options={[
-                      { value: "10", label: "10 / 页" },
-                      { value: "20", label: "20 / 页" },
-                      { value: "50", label: "50 / 页" }
+                      { value: "10", label: `10 / ${t("page_size_unit")}` },
+                      { value: "20", label: `20 / ${t("page_size_unit")}` },
+                      { value: "50", label: `50 / ${t("page_size_unit")}` }
                     ]}
+                    t={t}
                     className="ui-input-compact ui-clash-page-size"
                   />
                   <Button size="sm" className="ui-properties-action" onClick={onRestoreVisibility}>
-                    {tr("show_all", "恢复显示")}
+                    {t("show_all")}
                   </Button>
                 </div>
 
                 <div className="ui-toolpanel-results-box ui-clash-results-box">
                   {filteredResults.length === 0 ? (
                     <div className="ui-toolpanel-results-empty">
-                      {tr("clash_no_results", "暂无碰撞结果")}
+                      {t("clash_no_results")}
                     </div>
                   ) : (
                     pageItems.map((item) => (
@@ -407,11 +401,11 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                       >
                         <div className="ui-clash-result-top">
                           <span className="ui-clash-result-title">{item.aName || item.aUuid} {" <> "} {item.bName || item.bUuid}</span>
-                          <span className={`ui-clash-badge ui-clash-badge-${item.severity}`}>{getSeverityText(tr, item.severity)}</span>
+                          <span className={`ui-clash-badge ui-clash-badge-${item.severity}`}>{getSeverityText(t, item.severity)}</span>
                         </div>
                         <div className="ui-toolpanel-row-between ui-clash-result-meta">
                           <span className="ui-result-item-secondary">
-                            {getClashTypeText(tr, item.type)} · {item.type === "hard" ? tr("clash_overlap_volume", "重叠体积") : tr("clash_distance", "净空距离")}
+                            {getClashTypeText(t, item.type)} · {item.type === "hard" ? t("clash_overlap_volume") : t("clash_distance")}
                           </span>
                           <span className="ui-result-item-secondary-value">
                             {item.type === "hard"
@@ -427,8 +421,8 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
                 {filteredResults.length > 0 && (
                   <div className="ui-clash-pagination">
                     <PaginationControls
-                      prevTitle={tr("search_page_prev", "上一页")}
-                      nextTitle={tr("search_page_next", "下一页")}
+                      prevTitle={t("search_page_prev")}
+                      nextTitle={t("search_page_next")}
                       currentPage={currentPage}
                       totalPages={totalPages}
                       onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
@@ -445,14 +439,14 @@ export const ClashPanel: React.FC<ClashPanelProps> = ({
             <div className="ui-clash-running-card">
               <div className="ui-clash-running-title">{readyText}</div>
               <div className="ui-clash-running-meta">
-                {tr("clash_candidates", "候选")} {scannedCount} · {tr("clash_pairs_scanned", "已扫描对数")} {pairsScanned}
+                {t("clash_candidates")} {scannedCount} · {t("clash_pairs_scanned")} {pairsScanned}
               </div>
               <div className="ui-progress-bar ui-progress-bar-full ui-clash-running-progress">
                 <div className="ui-progress-fill" style={{ width: `${safeProgress}%` }} />
               </div>
               <div className="ui-clash-running-footer">
                 <span>{Math.round(safeProgress)}%</span>
-                <Button size="sm" onClick={onCancel}>{tr("search_cancel", "取消")}</Button>
+                <Button size="sm" onClick={onCancel}>{t("search_cancel")}</Button>
               </div>
             </div>
           </div>

@@ -138,10 +138,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
   return (
     <FloatingPanel
-      title={t("tb_search") || "属性搜索"}
-      closeLabel={t("panel_close") || "关闭"}
+      title={t("tb_search")}
+      closeLabel={t("panel_close")}
       onClose={onClose}
-      width={640}
+      width={500}
       height={520}
       resizable={true}
       storageId="tool_search"
@@ -151,11 +151,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
       <div className="ui-toolpanel-body ui-search-panel-body">
         <div className="ui-toolpanel-row-between">
           <div className="ui-toolpanel-caption">
-            {t("search_conditions") || "搜索条件"}
+            {t("search_conditions")}
           </div>
           <div className="ui-toolpanel-row">
             <Button className="ui-properties-action" onClick={addCondition}>
-              {t("search_add_condition") || "添加条件"}
+              {t("search_add_condition")}
             </Button>
             <Button
               className="ui-properties-action"
@@ -164,8 +164,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               disabled={searching}
             >
               {searching
-                ? t("searching") || "搜索中..."
-                : t("search_run") || "搜索"}
+                ? t("searching")
+                : t("search_run")}
             </Button>
           </div>
         </div>
@@ -199,10 +199,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               onChange={(value) =>
                 updateCondition(condition.id, { propertyName: value })
               }
-              placeholder={t("search_field_name") || "属性名"}
+              placeholder={t("search_field_name")}
               searchable={true}
-              searchPlaceholder={t("search_field_filter") || "搜索属性名"}
-              emptyText={t("search_no_fields") || "暂无可用属性"}
+              searchPlaceholder={t("search_field_filter")}
+              emptyText={t("search_no_fields")}
               className="ui-input-compact ui-search-field-input"
             />
 
@@ -222,7 +222,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
             <input
               className="ui-input ui-input-compact ui-search-value-input"
-              placeholder={t("search_field_value") || "属性值"}
+              placeholder={t("search_field_value")}
               value={condition.value}
               onChange={(e) =>
                 updateCondition(condition.id, { value: e.target.value })
@@ -234,7 +234,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 <button
                   className="ui-search-clear ui-search-clear-static ui-search-remove-btn"
                   onClick={() => removeCondition(condition.id)}
-                  title={t("remove_condition") || "移除条件"}
+                  title={t("remove_condition")}
                 >
                   <IconClose width={14} height={14} />
                 </button>
@@ -245,17 +245,17 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
         <div className="ui-toolpanel-row-between ui-toolpanel-caption ui-search-results-summary">
           <span>
-            {t("search_results") || "搜索结果"}: {results.length}
+            {t("search_results")}: {results.length}
           </span>
         </div>
 
         <div className="ui-toolpanel-results-box ui-search-results-box">
-          <div className="ui-search-hint-strip" title={`${t("search_fields_total") || "可搜索属性"}: ${propertyFieldOptions.length}`}>
-            {t("search_fields_total") || "可搜索属性"}: {propertyFieldOptions.length}
+          <div className="ui-search-hint-strip" title={`${t("search_fields_total")}: ${propertyFieldOptions.length}`}>
+            {t("search_fields_total")}: {propertyFieldOptions.length}
           </div>
           {results.length === 0 ? (
             <div className="ui-toolpanel-results-empty">
-              {t("search_no_results") || "暂无结果"}
+              {t("search_no_results")}
             </div>
           ) : (
             pageItems.map((item) => (
@@ -283,8 +283,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         {results.length > 0 && (
         <div className="ui-search-pagination">
           <PaginationControls
-            prevTitle={t("search_page_prev") || "上一页"}
-            nextTitle={t("search_page_next") || "下一页"}
+            prevTitle={t("search_page_prev")}
+            nextTitle={t("search_page_next")}
             currentPage={currentPage}
             totalPages={totalPages}
             onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
@@ -296,7 +296,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   onChange={(value) => setPageSize(Number(value) || 10)}
                   options={[10, 20, 50].map((size) => ({
                     value: String(size),
-                    label: `${size} / ${t("page_size_unit") || "页"}`
+                    label: `${size} / ${t("page_size_unit")}`
                   }))}
                   className="ui-input-compact ui-search-page-size"
                 />
@@ -305,7 +305,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   onClick={onClearResult}
                   disabled={results.length === 0}
                 >
-                  {t("search_clear") || "清除结果"}
+                  {t("search_clear")}
                 </Button>
               </div>
             }
@@ -317,7 +317,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           <div className="ui-toolpanel-overlay">
             <div className="ui-toolpanel-overlay-card">
               <div className="ui-toolpanel-overlay-title">
-                {searchStatus || t("searching") || "搜索中..."}
+                {searchStatus || t("searching")}
               </div>
               <div className="ui-progress-bar ui-progress-bar-full">
                 <div
@@ -335,7 +335,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   className="ui-properties-action"
                   onClick={onCancelSearch}
                 >
-                  {t("search_cancel") || "取消搜索"}
+                  {t("search_cancel")}
                 </Button>
               </div>
             </div>

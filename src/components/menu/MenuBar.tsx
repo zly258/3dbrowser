@@ -51,13 +51,13 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
             />
 
             {!hidden("file") && (
-                <ClassicMenuItem label={t("menu_file") || "文件"}>
+                <ClassicMenuItem label={t("menu_file")}>
                     {(close) => (
                         <>
                             {!hidden("open_file") && (
                                 <ClassicSubItem
                                     icon={<IconOpenFile />}
-                                    label={t("menu_open_file") || "打开文件"}
+                                    label={t("menu_open_file")}
                                     onClick={() => {
                                         fileInputRef.current?.click();
                                         close();
@@ -67,7 +67,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
 
                             {!hidden("open_url") && (
                                 <ClassicSubItem
-                                    label={t("menu_open_url") || "打开地址"}
+                                    label={t("menu_open_url")}
                                     onClick={() => {
                                         props.handleOpenUrl?.();
                                         close();
@@ -79,7 +79,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                                 <>
                                     <div className="ui-context-menu-divider" />
                                     <ClassicSubItem
-                                        label={t("menu_batch_convert") || "批量转换"}
+                                        label={t("menu_batch_convert")}
                                         onClick={() => {
                                             batchConvertInputRef.current?.click();
                                             close();
@@ -93,7 +93,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                                     <div className="ui-context-menu-divider" />
                                     <ClassicSubItem
                                         icon={<IconExportScene />}
-                                        label={t("menu_export") || "导出"}
+                                        label={t("menu_export")}
                                         onClick={() => {
                                             props.setActiveTool?.("export");
                                             close();
@@ -107,7 +107,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                                     <div className="ui-context-menu-divider" />
                                     <ClassicSubItem
                                         icon={<IconClear />}
-                                        label={t("op_clear") || "清空"}
+                                        label={t("op_clear")}
                                         onClick={() => {
                                             props.handleClear?.();
                                             close();
@@ -121,12 +121,12 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
             )}
 
             {!hidden("view") && (
-                <ClassicMenuItem label={t("view") || "视图"}>
+                <ClassicMenuItem label={t("view")}>
                     {(close) => (
                         <>
                             {!hidden("fit_view") && (
                                 <ClassicSubItem
-                                    label={t("menu_fit_view") || "充满视图"}
+                                    label={t("menu_fit_view")}
                                     onClick={() => {
                                         props.sceneMgr?.restoreView();
                                         close();
@@ -137,17 +137,17 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                             {!hidden("views") && (
                                 <>
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem icon={<IconViewFront />} label={t("view_front") || "前视图"} onClick={() => { props.handleView?.("front"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewBack />} label={t("view_back") || "后视图"} onClick={() => { props.handleView?.("back"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewTop />} label={t("view_top") || "顶视图"} onClick={() => { props.handleView?.("top"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewBottom />} label={t("view_bottom") || "底视图"} onClick={() => { props.handleView?.("bottom"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewLeft />} label={t("view_left") || "左视图"} onClick={() => { props.handleView?.("left"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewRight />} label={t("view_right") || "右视图"} onClick={() => { props.handleView?.("right"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewFront />} label={t("view_front")} onClick={() => { props.handleView?.("front"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewBack />} label={t("view_back")} onClick={() => { props.handleView?.("back"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewTop />} label={t("view_top")} onClick={() => { props.handleView?.("top"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewBottom />} label={t("view_bottom")} onClick={() => { props.handleView?.("bottom"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewLeft />} label={t("view_left")} onClick={() => { props.handleView?.("left"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewRight />} label={t("view_right")} onClick={() => { props.handleView?.("right"); close(); }} />
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem icon={<IconViewSE />} label={t("view_se") || "东南"} onClick={() => { props.handleView?.("se"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewSW />} label={t("view_sw") || "西南"} onClick={() => { props.handleView?.("sw"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewNE />} label={t("view_ne") || "东北"} onClick={() => { props.handleView?.("ne"); close(); }} />
-                                    <ClassicSubItem icon={<IconViewNW />} label={t("view_nw") || "西北"} onClick={() => { props.handleView?.("nw"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewSE />} label={t("view_se")} onClick={() => { props.handleView?.("se"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewSW />} label={t("view_sw")} onClick={() => { props.handleView?.("sw"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewNE />} label={t("view_ne")} onClick={() => { props.handleView?.("ne"); close(); }} />
+                                    <ClassicSubItem icon={<IconViewNW />} label={t("view_nw")} onClick={() => { props.handleView?.("nw"); close(); }} />
                                 </>
                             )}
                         </>
@@ -156,12 +156,12 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
             )}
 
             {!hidden("interface") && (
-                <ClassicMenuItem label={t("interface_display") || "界面显示"}>
+                <ClassicMenuItem label={t("interface_display")}>
                     {(close) => (
                         <>
                             {!hidden("outline") && (
                                 <ClassicSubItem
-                                    label={t("interface_outline") || "模型结构"}
+                                    label={t("interface_outline")}
                                     checked={props.showOutline}
                                     onClick={() => {
                                         props.setShowOutline?.(!props.showOutline);
@@ -172,7 +172,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
 
                             {!hidden("props") && (
                                 <ClassicSubItem
-                                    label={t("interface_props") || "对象属性"}
+                                    label={t("interface_props")}
                                     checked={props.showProps}
                                     onClick={() => {
                                         props.setShowProps?.(!props.showProps);
@@ -183,7 +183,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
 
                             {!hidden("stats") && (
                                 <ClassicSubItem
-                                    label={t("st_monitor") || "状态监控"}
+                                    label={t("st_monitor")}
                                     checked={props.showStats}
                                     onClick={() => {
                                         props.setShowStats?.(!props.showStats);
@@ -196,7 +196,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                                 <>
                                     <div className="ui-context-menu-divider" />
                                     <ClassicSubItem
-                                        label={t("op_pick") || "选择"}
+                                        label={t("op_pick")}
                                         checked={props.pickEnabled}
                                         onClick={() => {
                                             props.setPickEnabled?.(!props.pickEnabled);
@@ -211,17 +211,17 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
             )}
 
             {!hidden("tool") && (
-                <ClassicMenuItem label={t("tool") || "工具"}>
+                <ClassicMenuItem label={t("tool")}>
                     {(close) => (
                         <>
-                            {!hidden("measure") && <ClassicSubItem label={t("tool_measure") || "测量"} onClick={() => { props.setActiveTool?.("measure"); close(); }} />}
-                            {!hidden("clip") && <ClassicSubItem label={t("tool_clip") || "剖切"} onClick={() => { props.setActiveTool?.("clip"); close(); }} />}
-                            {!hidden("viewpoint") && <ClassicSubItem label={t("viewpoint_title") || "视点"} onClick={() => { props.setActiveTool?.("viewpoint"); close(); }} />}
+                            {!hidden("measure") && <ClassicSubItem label={t("tool_measure")} onClick={() => { props.setActiveTool?.("measure"); close(); }} />}
+                            {!hidden("clip") && <ClassicSubItem label={t("tool_clip")} onClick={() => { props.setActiveTool?.("clip"); close(); }} />}
+                            {!hidden("viewpoint") && <ClassicSubItem label={t("viewpoint_title")} onClick={() => { props.setActiveTool?.("viewpoint"); close(); }} />}
 
                             {!hidden("sun") && (
                                 <>
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem label={t("st_sun_simulation") || "日照模拟"} onClick={() => { props.setActiveTool?.("sun"); close(); }} />
+                                    <ClassicSubItem label={t("st_sun_simulation")} onClick={() => { props.setActiveTool?.("sun"); close(); }} />
                                 </>
                             )}
                         </>
@@ -230,15 +230,15 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
             )}
 
             {!hidden("settings_panel") && (
-                <ClassicMenuItem label={t("settings") || "设置"}>
+                <ClassicMenuItem label={t("settings")}>
                     {(close) => (
                         <>
-                            {!hidden("settings") && <ClassicSubItem label={t("settings") || "设置"} onClick={() => { props.setActiveTool?.("settings"); close(); }} />}
+                            {!hidden("settings") && <ClassicSubItem label={t("settings")} onClick={() => { props.setActiveTool?.("settings"); close(); }} />}
 
                             {!hidden("about") && (
                                 <>
                                     <div className="ui-context-menu-divider" />
-                                    <ClassicSubItem label={t("menu_about") || "关于"} onClick={() => { props.onOpenAbout?.(); close(); }} />
+                                    <ClassicSubItem label={t("menu_about")} onClick={() => { props.onOpenAbout?.(); close(); }} />
                                 </>
                             )}
                         </>

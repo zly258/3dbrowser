@@ -58,17 +58,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 </div>
 
                 <h1 className="ui-error-title">
-                    {t("error_title") || "程序发生错误"}
+                    {t("error_title")}
                 </h1>
 
                 <p className="ui-error-message">
-                    {t("error_msg") || "界面渲染过程中发生异常，可以尝试恢复界面或重新加载。"}
+                    {t("error_msg")}
                 </p>
 
                 {this.state.error?.message && (
                     <div className="ui-toolpanel-overlay-card">
                         <div className="ui-toolpanel-overlay-title">
-                            {t("error_detail") || "错误详情"}
+                            {t("error_detail")}
                         </div>
                         <div className="ui-toolpanel-caption">
                             {this.state.error.message}
@@ -82,7 +82,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                         className="ui-btn ui-btn-default ui-modal-action-btn"
                         onClick={this.handleReset}
                     >
-                        {t("btn_cancel") || "尝试恢复"}
+                        {t("btn_cancel")}
                     </button>
 
                     <button
@@ -90,7 +90,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                         className="ui-btn ui-btn-primary ui-modal-action-btn"
                         onClick={this.handleReload}
                     >
-                        {t("error_reload") || "重新加载"}
+                        {t("error_reload")}
                     </button>
                 </div>
             </div>
