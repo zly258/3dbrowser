@@ -25,7 +25,6 @@ export const ExportPanel: React.FC<ExportPanelProps> = ({ t, onClose, onExport, 
 
                 {[
                     { id: 'glb', label: 'GLB', desc: t("export_glb") },
-                    { id: 'lmb', label: 'LMB', desc: t("export_lmb") },
                     { id: 'nbim', label: 'NBIM', desc: t("export_nbim") }
                 ].map(opt => (
                     <label key={opt.id} className={`ui-choice-card ${format === opt.id ? 'active' : ''}`}>

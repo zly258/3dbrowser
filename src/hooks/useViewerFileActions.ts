@@ -30,7 +30,7 @@ interface UseViewerFileActionsOptions {
 }
 
 const SUPPORTED_DROP_EXTENSIONS = [
-    ".lmb",
+    
     ".glb",
     ".gltf",
     ".ifc",

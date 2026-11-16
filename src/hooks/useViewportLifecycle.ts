@@ -13,7 +13,7 @@ interface UseViewportLifecycleOptions {
     setErrorState: Dispatch<SetStateAction<ViewerErrorState>>;
 }
 
-const SUPPORTED_DRAG_EXTENSIONS = [".lmb", ".glb", ".gltf", ".ifc", ".nbim", ".fbx", ".obj", ".stl", ".ply", ".3ds", ".dae", ".stp", ".step", ".igs", ".iges"];
+const SUPPORTED_DRAG_EXTENSIONS = [".glb", ".gltf", ".ifc", ".nbim", ".fbx", ".obj", ".stl", ".ply", ".3ds", ".dae", ".stp", ".step", ".igs", ".iges"];
 
 const IGNORED_GLOBAL_ERRORS = [
     "ResizeObserver loop completed",

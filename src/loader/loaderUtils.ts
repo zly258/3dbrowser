@@ -18,7 +18,6 @@ export interface LoadedFileFailure {
 }
 
 const SUPPORTED_LOAD_EXTENSIONS = new Set([
-    "lmb",
     "glb",
     "gltf",
     "fbx",
@@ -186,17 +185,6 @@ async function loadObjectByExtension(
     const { manager, cleanup, resourceResolver } = loaderContext;
 
     try {
-        if (ext === "lmb") {
-            const { LMBLoader } = await import("./lmbLoader");
-            const loader = new LMBLoader();
-            reportStage("parse", 0);
-            return await loader.loadAsync(
-                url,
-                (p) => reportStage("parse", p * 100),
-                { fastMode: (runtimeHints.loadProfile ?? "balanced") === "max-speed" }
-            );
-        }
-
         if (ext === "glb" || ext === "gltf") {
             const { loader, cleanup: cleanupGltf } = await createGltfLoaderRuntime(manager, libPath);
             reportStage("parse", 0);

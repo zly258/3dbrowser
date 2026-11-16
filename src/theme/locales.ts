@@ -101,7 +101,7 @@ const resources: Record<Lang, Record<string, string>> = {
     monitor_mem: "Mem",
     monitor_calls: "Calls",
     selected_count: "Selected",
-    tips_rotate: "LMB: Rotate",
+    tips_rotate: "左键: Rotate",
     tips_pan: "MMB: Pan",
     tips_zoom: "Scroll: Zoom",
     confirm_delete: "Confirm delete",
@@ -178,7 +178,7 @@ const resources: Record<Lang, Record<string, string>> = {
     export_title: "Export Scene",
     export_format: "Format",
     export_glb: "GLB (Standard)",
-    export_lmb: "LMB (Custom Compressed)",
+
     export_nbim: "NBIM (High Performance)",
     export_filename: "File Name",
     export_filename_placeholder: "Enter file name",
@@ -609,7 +609,7 @@ const resources: Record<Lang, Record<string, string>> = {
     export_title: "导出场景",
     export_format: "导出格式",
     export_glb: "GLB (标准通用)",
-    export_lmb: "LMB (自定义压缩)",
+
     export_nbim: "NBIM (高性能分块模型)",
     export_filename: "文件名",
     export_filename_placeholder: "请输入文件名",

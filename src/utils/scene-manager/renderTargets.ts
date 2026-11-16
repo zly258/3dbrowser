@@ -8,7 +8,7 @@ export type OptimizedMappingEntry = {
     originalColor: number;
     /** 合并缓冲中的几何 id（NBIM 路径），按需构建视图 */
     geometryId?: number;
-    /** 原始几何（LMB 路径） */
+    /** 原始几何（普通模型路径） */
     geometry?: THREE.BufferGeometry;
 };
 
@@ -17,7 +17,7 @@ export type RenderTarget = {
     uuid: string;
     name: string;
     object: THREE.Object3D;
-    /** 仅普通 Mesh / LMB 实例持有；NBIM 实例按需解析 */
+    /** 仅普通 Mesh 实例持有；NBIM 实例按需解析 */
     geometry?: THREE.BufferGeometry;
     matrixWorld: THREE.Matrix4;
     box: THREE.Box3;

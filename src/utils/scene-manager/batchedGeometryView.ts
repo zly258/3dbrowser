@@ -10,7 +10,7 @@ import * as THREE from "three";
  *  - 视图的 position/normal 是合并缓冲的 subarray（零拷贝），只有索引需要重定基复制；
  *  - 视图按 geometryId 缓存在 mesh 上，边线构建完可整体释放。
  *
- * LMB 路径（octree 批量网格）仍然持有原始几何的 batchIdToGeometry，这里优先复用。
+ * 通用模型路径（octree 批量网格）仍然持有原始几何的 batchIdToGeometry，这里优先复用。
  */
 
 const VIEW_CACHE_KEY = "__geometryViews";
@@ -83,7 +83,7 @@ export function getBatchedGeometryViewByGeometryId(mesh: THREE.BatchedMesh, geom
     return view;
 }
 
-/** 取某个实例对应的几何：LMB 用原始几何，NBIM 按需从合并缓冲构建视图。 */
+/** 取某个实例对应的几何：普通模型用原始几何，NBIM 按需从合并缓冲构建视图。 */
 export function getBatchedInstanceGeometry(mesh: THREE.BatchedMesh, instanceId: number): THREE.BufferGeometry | null {
     const legacy = mesh.userData?.batchIdToGeometry as Map<number, THREE.BufferGeometry> | undefined;
     if (legacy) {

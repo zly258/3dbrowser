@@ -128,7 +128,7 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
             : collectItems(object);
 
         // 统计口径与 SceneManager.collectObjectOverview 一致：按场景 Mesh 对象计数一次，
-        // InstancedMesh 的多个实例不重复放大“网格数/面数”（否则 140 个 LMB 会虚增 4 倍面数）。
+        // InstancedMesh 的多个实例不重复放大“网格数/面数”（否则大量实例化模型会虚增数倍面数）。
         object.traverse((child: any) => {
             if (!child?.isMesh || !child.geometry) return;
             totalMeshes += 1;

@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import * as THREE from "three";
 import type { SceneManager } from "../utils/scene-manager/SceneManager";
-import { exportGLB, exportLMB } from "../utils/converter";
+import { exportGLB } from "../utils/converter";
 import { sanitizeFileStem, stripFileExtension } from "../viewer/exportNaming";
 import { cleanLoadingStatus } from "../viewer/fileLoading";
 import type { PropertyGroups } from "../viewer/propertyIndex";
@@ -141,8 +141,6 @@ export function useViewerActions({
 
                 if (format === "glb") {
                     blob = await exportGLB(exportGroup);
-                } else if (format === "lmb") {
-                    blob = await exportLMB(exportGroup, (message) => setStatus(cleanLoadingStatus(message)));
                 }
 
                 if (blob) {

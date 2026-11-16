@@ -37,7 +37,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                 ref={fileInputRef}
                 className="ui-visually-hidden"
                 multiple
-                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.nbip,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                accept=".glb,.gltf,.ifc,.nbim,.nbip,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={handleOpenFiles}
             />
 
@@ -46,7 +46,7 @@ export const MenuBar: React.FC<ClassicMenuBarProps> = (props) => {
                 ref={batchConvertInputRef}
                 className="ui-visually-hidden"
                 multiple
-                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                accept=".glb,.gltf,.ifc,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={handleBatchConvert}
             />
 
