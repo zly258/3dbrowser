@@ -100,11 +100,12 @@ async function analyze(file: string) {
 }
 
 async function main() {
-    const files = [
-        "<models>",
-        "<models>",
-        "<models>"
-    ].filter((f) => fs.existsSync(f));
+    // 用法：node scripts/run-nbim-size-diagnose.mjs <文件.nbim> [...]
+    const files = process.argv.slice(2).filter((f) => fs.existsSync(f));
+    if (!files.length) {
+        console.error("用法: run-nbim-size-diagnose.mjs <文件.nbim> [...]");
+        process.exit(1);
+    }
     for (const f of files) await analyze(f);
 }
 

@@ -9,10 +9,12 @@ const outDir = path.join(process.cwd(), "public", "__codecbench");
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
-const sources = [
-    "<models>",
-    "<models>"
-];
+// 用法：node scripts/prepare-codec-bench.mjs <文件.nbim> [...]
+const sources = process.argv.slice(2);
+if (!sources.length) {
+    console.error("用法: prepare-codec-bench.mjs <文件.nbim> [...]");
+    process.exit(1);
+}
 
 const manifest = [];
 for (const file of sources) {
