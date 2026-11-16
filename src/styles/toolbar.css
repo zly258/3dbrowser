@@ -27,6 +27,54 @@
 
 .ui-toolbar input[type="file"] { display: none; }
 
+/* ---------- 三区布局：左（品牌+文件/视图）｜中（样式分段）｜右（工具胶囊） ---------- */
+.ui-toolbar-left,
+.ui-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.ui-toolbar-right { justify-content: flex-end; }
+
+.ui-toolbar-center {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+/* 品牌标题（左上角） */
+.ui-toolbar-brand {
+  flex: 0 0 auto;
+  color: var(--text-main);
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* 顶栏内竖分隔 */
+.ui-toolbar-divider-vertical {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0 4px;
+  background: var(--border-sub);
+}
+
+/* 顶栏中部分段：按内容取宽，不随 center 区拉伸 */
+.ui-toolbar-center .ui-segmented,
+.ui-toolbar-seg {
+  flex: 0 0 auto;
+}
+
 /* ---------- 分组 ---------- */
 .ui-toolbar-group {
   display: inline-flex;
