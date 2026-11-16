@@ -3,6 +3,25 @@
  * NBIM Chunk Parser Worker
  */
 
+import { decodeChunkPayloadV11, chunkCodecFromMagic, type DecodedChunk } from "./scene-core/nbimChunk";
+import { decompressBytes } from "./scene-core/codec";
+
+async function decodeChunkV11Chunk(buffer: ArrayBuffer): Promise<DecodedChunk> {
+  const dv = new DataView(buffer);
+  const codec = chunkCodecFromMagic(dv.getUint32(0, true));
+  if (codec < 0) throw new Error("无效的 NBIM v11 分块");
+  const payloadFormat = dv.getUint32(4, true);
+  const payloadLength = dv.getUint32(8, true);
+  const compressedLength = dv.getUint32(12, true);
+  if (buffer.byteLength < 16 + compressedLength) throw new Error("NBIM v11 分块长度不足");
+  const compressed = new Uint8Array(buffer, 16, compressedLength);
+  const payload = await decompressBytes(compressed, codec);
+  if (payload.byteLength !== payloadLength) {
+    throw new Error(`NBIM v11 解压长度不符: ${payload.byteLength} != ${payloadLength}`);
+  }
+  return decodeChunkPayloadV11(payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) as ArrayBuffer, payloadFormat);
+}
+
 interface GeometryData {
   position: Float32Array;
   /** 归一化 int8，12B/顶点 → 3B/顶点，渲染时由 GPU 还原到 [-1,1] */
@@ -159,17 +178,29 @@ self.onmessage = async function (e: MessageEvent) {
     }
 
     const { buffer, version, originalUuid, bimIdTable } = e.data;
-    if (version !== 8 && version !== 9) {
-      throw new Error(`Unsupported NBIM chunk version: ${version}. Only V8/V9 are supported.`);
+    if (version !== 11) {
+      throw new Error(`Unsupported NBIM chunk version: ${version}. Only v11 is supported.`);
     }
 
-    let result: ParseResult;
-    if (version === 9) {
-      const payload = await decompressV9Payload(buffer as ArrayBuffer);
-      result = parseChunkBinaryV9(payload, originalUuid, bimIdTable || []);
-    } else {
-      result = parseChunkBinaryV8(buffer, originalUuid, bimIdTable || []);
-    }
+    const decoded = await decodeChunkV11Chunk(buffer as ArrayBuffer);
+    const geometries: GeometryData[] = decoded.geometries.map((geometry) => ({
+      position: geometry.position,
+      normal: geometry.normal,
+      index: geometry.index,
+      box: geometry.box
+    }));
+    const instances: InstanceData[] = decoded.instances.map((instance) => ({
+      bimId: (bimIdTable || [])[instance.bimIdIndex] ?? String(instance.bimIdIndex),
+      color: instance.color,
+      matrix: instance.matrix as Float32Array,
+      geoIdx: instance.geoIdx
+    }));
+    let result: ParseResult = {
+      geometries,
+      instances,
+      originalUuid,
+      triangles: computeTriangles(geometries, instances)
+    };
     const minInstanceWorldSize = Number(e.data.minInstanceWorldSize) || 0;
     if (minInstanceWorldSize > 0) {
       result = filterInstancesBySize(result, minInstanceWorldSize);
@@ -354,80 +385,23 @@ function parseChunkBinaryV8(buffer: ArrayBuffer, originalUuid: string, bimIdTabl
   return { geometries, instances, originalUuid, triangles: computeTriangles(geometries, instances) };
 }
 
-const V9_MAGIC = 0x3956424e;
+const V10_MAGIC = 0x3056424e; // bytes 'N','B','V','0'
 
-async function decompressV9Payload(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+async function decompressV10Payload(buffer: ArrayBuffer): Promise<ArrayBuffer> {
   const dv = new DataView(buffer);
-  if (dv.getUint32(0, true) !== V9_MAGIC) throw new Error("无效的 NBIM v9 分块");
+  if (dv.getUint32(0, true) !== V10_MAGIC) throw new Error("无效的 NBIM v10 分块");
   const payloadLength = dv.getUint32(8, true);
   const compressedLength = dv.getUint32(12, true);
+  if (buffer.byteLength < 16 + compressedLength) throw new Error("NBIM v10 分块长度不足");
   if (typeof DecompressionStream === "undefined") {
-    throw new Error("当前环境不支持 DecompressionStream(gzip)，无法读取 v9 分块");
+    throw new Error("当前环境不支持 DecompressionStream(gzip)，无法读取 v10 分块");
   }
   const compressed = buffer.slice(16, 16 + compressedLength);
   const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
   const payload = await new Response(stream).arrayBuffer();
   if (payload.byteLength !== payloadLength) {
-    throw new Error(`NBIM v9 解压长度不符: ${payload.byteLength} != ${payloadLength}`);
+    throw new Error(`NBIM v10 解压长度不符: ${payload.byteLength} != ${payloadLength}`);
   }
   return payload;
 }
 
-function parseChunkBinaryV9(payload: ArrayBuffer, originalUuid: string, bimIdTable: string[]): ParseResult {
-  const dv = new DataView(payload);
-  let offset = 0;
-  const geoCount = dv.getUint32(offset, true); offset += 4;
-  const scaleX = dv.getFloat32(offset, true); offset += 4;
-  const scaleY = dv.getFloat32(offset, true); offset += 4;
-  const scaleZ = dv.getFloat32(offset, true); offset += 4;
-  const offX = dv.getFloat32(offset, true); offset += 4;
-  const offY = dv.getFloat32(offset, true); offset += 4;
-  const offZ = dv.getFloat32(offset, true); offset += 4;
-  const scales = [scaleX, scaleY, scaleZ];
-  const offsets = [offX, offY, offZ];
-
-  const geometries: GeometryData[] = [];
-  for (let i = 0; i < geoCount; i++) {
-    const vertCount = dv.getUint32(offset, true); offset += 4;
-    const indexCount = dv.getUint32(offset, true); offset += 4;
-    const indexType = dv.getUint8(offset); offset += 1;
-
-    const position = new Float32Array(vertCount * 3);
-    for (let v = 0; v < vertCount * 3; v++) {
-      const q = dv.getInt16(offset, true); offset += 2;
-      position[v] = (q + 32768) * scales[v % 3] + offsets[v % 3];
-    }
-    const normal = new Int8Array(payload, offset, vertCount * 3).slice();
-    offset += vertCount * 3;
-
-    let index: Uint32Array | null = null;
-    if (indexCount > 0) {
-      index = new Uint32Array(indexCount);
-      if (indexType === 1) {
-        for (let k = 0; k < indexCount; k++) { index[k] = dv.getUint16(offset, true); offset += 2; }
-      } else {
-        for (let k = 0; k < indexCount; k++) { index[k] = dv.getUint32(offset, true); offset += 4; }
-      }
-    }
-    geometries.push({ position, normal, index });
-  }
-
-  const instanceCount = dv.getUint32(offset, true); offset += 4;
-  const instances: InstanceData[] = [];
-  for (let i = 0; i < instanceCount; i++) {
-    const bimIdIndex = dv.getUint32(offset, true); offset += 4;
-    dv.getUint32(offset, true); offset += 4;
-    const color = dv.getUint32(offset, true); offset += 4;
-    const matrix = new Float32Array(16);
-    for (let k = 0; k < 16; k++) { matrix[k] = dv.getFloat32(offset, true); offset += 4; }
-    const geoIdx = dv.getUint32(offset, true); offset += 4;
-    instances.push({
-      bimId: bimIdTable[bimIdIndex] ?? String(bimIdIndex),
-      color,
-      matrix,
-      geoIdx
-    });
-  }
-
-  return { geometries, instances, originalUuid, triangles: computeTriangles(geometries, instances) };
-}
