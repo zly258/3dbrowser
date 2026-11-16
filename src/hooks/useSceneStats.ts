@@ -15,6 +15,9 @@ export function useSceneStats({ mgrInstance, showStats, setStats }: UseSceneStat
 
         const updateStats = () => {
             if (document.visibilityState !== "visible") return;
+            // 相机运动时跳过：getStats 会遍历整个 contentGroup 估算贴图显存，
+            // 每帧/每秒执行会与渲染抢主线程，表现为旋转时周期性卡顿。
+            if (mgrInstance.isCameraMovingNow?.()) return;
             setStats(mgrInstance.getStats());
         };
 

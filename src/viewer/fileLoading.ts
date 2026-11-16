@@ -70,26 +70,23 @@ export async function loadSceneItems({
         }
     }
 
+    const toFile = async (item: File | string, displayName: string): Promise<File> => {
+        if (typeof item !== "string") return item;
+        const response = await fetch(item);
+        if (!response.ok) throw new Error(`HTTP ${response.status} when fetching ${displayName}`);
+        return new File([await response.blob()], displayName);
+    };
+
     for (const item of nbimItems) {
         if (isStale?.()) return;
         const displayName = typeof item === "string"
             ? (item.split("?")[0].split("#")[0].split("/").pop() || item)
             : item.name;
         try {
-            if (typeof item === "string") {
-                const response = await fetch(item);
-                if (!response.ok) throw new Error(`HTTP ${response.status} when fetching NBIM`);
-                const blob = await response.blob();
-                const fileName = displayName;
-                const file = new File([blob], fileName);
-                await (manager as any).loadNbim(file, (p: number, msg: string) => {
-                    onProgress(p, msg);
-                });
-            } else {
-                await (manager as any).loadNbim(item, (p: number, msg: string) => {
-                    onProgress(p, msg);
-                });
-            }
+            const file = await toFile(item, displayName);
+            await (manager as any).loadNbim(file, (p: number, msg: string) => {
+                onProgress(p, msg);
+            });
         } catch (error) {
             const message = (error as Error)?.message || String(error);
             console.error(`加载 ${displayName} 失败`, error);

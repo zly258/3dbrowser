@@ -10,7 +10,10 @@ import {
 import { deriveInitialRuntimeFromHardware } from "../scene-core/chunkRuntime";
 import { debugLog } from "../scene-core/debugLogger";
 import { stableExplodeDirection } from "../scene-core/explode";
-import { readNbimHeader, readNbimManifest, type NbimManifest, type NbimPropertyDocument, type NbimPropertyNameIndexItem } from "../scene-core/nbimIO";
+import { readNbimHeader, readNbimManifest, buildNbim11File, NBIM11_MAGIC, NBIM11_VERSION, type NbimManifest, type NbimPropertyDocument, type NbimPropertyNameIndexItem, type NbimPropertyDbInfo } from "../scene-core/nbimIO";
+import { NbipDatabase, encodeNbip } from "../scene-core/nbip";
+import { BlockCompressedSource, compressInBlocks } from "../scene-core/nbimBlock";
+import { compressBytes, resolveExportCodec } from "../scene-core/codec";
 import {
     applyCancelBoxSelect,
     applyEndBoxSelect,
@@ -78,16 +81,12 @@ import {
     collectIfcObjectBasicPropertyIndex,
     collectIfcObjectPropertyIndex,
     collectNbimBimProperties,
-    collectNbimPropertyOwners,
     countStructureRenderableNodes,
     createNbimContainerGroup,
     deriveDefaultNbimStem,
-    encodeNbimManifest,
-    groupNbimPropertiesByOwner,
-    prepareNbimExportChunks,
-    resolveNbimPropertyDocuments,
     sanitizeDisplayLabel
 } from "./nbim";
+import { prepareNbimExportChunksV11, readChunkV11 } from "./nbimExportChunks";
 import {
     applyNbimGlobalBounds,
     appendNbimStructure,
@@ -334,6 +333,9 @@ export class SceneManager {
     private logicTimer: any = null;
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
     private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
+    /** v10 分离的属性数据库（按需惰性读取） */
+    private nbipDatabases: NbipDatabase[] = [];
+    private nbipDbByFileId = new Map<string, NbipDatabase>();
     private nbimPropsByOriginalUuid: Map<string, Record<string, any>> = new Map();
     private nbimSearchDocsByUuid: Map<string, NbimPropertyDocument> = new Map();
     private nbimSearchDocsByBimId: Map<string, NbimPropertyDocument> = new Map();
@@ -627,7 +629,7 @@ export class SceneManager {
             powerPreference: "high-performance"
         });
         // 重要：设置初始大小
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制最大像素比为2，平衡性能与清晰度
+        this.renderer.setPixelRatio(this.computeDesiredPixelRatio());
         this.renderer.setSize(width, height, false);
         applyIndustrialRendererSettings(this.renderer, this.settings.bgColor, this.settings.exposure);
         this.renderer.localClippingEnabled = true;
@@ -682,6 +684,10 @@ export class SceneManager {
         this.controls.enableDamping = false;
         this.controls.screenSpacePanning = true;
         this.controls.maxPolarAngle = Math.PI;
+        // 向光标处缩放：正交相机默认以 controls.target（一般是模型包围盒中心，
+        // 大型厂房/双设备模型那里往往是空的）为中心放大，会把视口缩进空白处，
+        // 表现为“越放大模型越消失”。改为朝鼠标所在点缩放，始终放大到用户指的位置。
+        this.controls.zoomToCursor = true;
         this.controls.mouseButtons = {
             LEFT: THREE.MOUSE.ROTATE,
             MIDDLE: THREE.MOUSE.PAN,
@@ -1166,6 +1172,35 @@ export class SceneManager {
     /** 显示样式棱边生成器 */
     private displayEdges = new DisplayEdgeBuilder();
     private displayEdgesBuilt = false;
+    /** 等待按新实例可见性重建合并边线的批量网格（合并到下一帧统一处理） */
+    private pendingEdgeRebuildBatches = new Set<THREE.BatchedMesh>();
+    private edgeRebuildFrameScheduled = false;
+
+    /**
+     * 隐藏/显示实例后，其棱边不会随 setVisibleAt 自动消失（整批次只有一条合并边线），
+     * 这里把受影响的批量网格收集起来，下一帧统一重建，避免逐次同步重建卡住主线程。
+     */
+    private scheduleEdgeRebuild(batches?: Iterable<THREE.BatchedMesh>) {
+        if (!batches || this.displayMode === "shaded") return;
+        let any = false;
+        for (const batch of batches) {
+            if (!batch) continue;
+            this.pendingEdgeRebuildBatches.add(batch);
+            any = true;
+        }
+        if (!any || this.edgeRebuildFrameScheduled) return;
+        this.edgeRebuildFrameScheduled = true;
+        const run = () => {
+            this.edgeRebuildFrameScheduled = false;
+            const pending = this.pendingEdgeRebuildBatches;
+            this.pendingEdgeRebuildBatches = new Set();
+            if (pending.size === 0 || this.disposed || this.displayMode === "shaded") return;
+            this.displayEdges.rebuildForBatches(pending);
+            this.requestRender();
+        };
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+        else setTimeout(run, 0);
+    }
 
     /** 内容变化后需要重建棱边 */
     invalidateDisplayModeCache() {
@@ -1244,7 +1279,9 @@ export class SceneManager {
         if (qualityChanged) {
             const desiredRatio = this.settings.adaptiveQuality
                 ? this.computeDesiredPixelRatio()
-                : Math.min(window.devicePixelRatio || 1, this.settings.maxPixelRatio ?? 2);
+                // 关闭自适应画质=追求原生清晰：不能用 2× 硬上限，否则 devicePixelRatio>2
+                // 的屏幕上绘图缓冲只有物理像素的 2/DPR，浏览器放大后必然发糊（表现为“没开自适应也模糊”）。
+                : (window.devicePixelRatio || 1);
             if (this.applyPixelRatio(desiredRatio)) {
                 const rect = this.canvas.getBoundingClientRect();
                 this.applyCanvasSize(Math.max(1, rect.width), Math.max(1, rect.height));
@@ -1475,6 +1512,11 @@ export class SceneManager {
         this.applyPerformanceMode(mode);
     }
 
+    /** 当前是否处于相机交互中（供统计面板跳过运动期的全场景遍历，避免 1Hz 卡顿）。 */
+    isCameraMovingNow(): boolean {
+        return this.isCameraMoving;
+    }
+
     /** 设置面板用的只读运行信息（驻留/预算/策略） */
     getRenderStrategyInfo() {
         return {
@@ -1501,9 +1543,10 @@ export class SceneManager {
     private updateAdaptiveQuality() {
         if (!this.settings.adaptiveQuality) {
             this.wasCameraMoving = this.isCameraMoving;
-            // 兜底：关闭自适应画质后必须始终满分辨率。
-            // 否则历史遗留的低 DPR 会在缩放/拖动时一直保留，表现为“越缩放越糊”。
-            const maxRatio = Math.min(window.devicePixelRatio || 1, this.settings.maxPixelRatio ?? 2);
+            // 兜底：关闭自适应画质后必须始终原生满分辨率。
+            // 历史遗留的低 DPR 会在缩放/拖动时一直保留，表现为“越缩放越糊”。
+            // 注意不能用 min(devicePixelRatio, 2)：高 DPI（>2）屏会永久降采样发糊。
+            const maxRatio = window.devicePixelRatio || 1;
             if (Math.abs(maxRatio - this.appliedPixelRatio) >= 0.001) {
                 this.applyPixelRatio(maxRatio);
                 const rect = this.canvas.getBoundingClientRect();
@@ -1535,7 +1578,9 @@ export class SceneManager {
     private computeDesiredPixelRatio(): number {
         const deviceRatio = window.devicePixelRatio || 1;
         if (!this.settings.adaptiveQuality) {
-            return Math.min(deviceRatio, 2);
+            // 关闭自适应画质=按显示器原生像素比渲染，保证清晰。
+            // （旧实现硬编码 min(deviceRatio, 2)，在 dpr>2 的屏幕上会降采样后被浏览器放大→发糊。）
+            return deviceRatio;
         }
 
         const minRatio = Math.min(deviceRatio, this.settings.minPixelRatio ?? 0.8);
@@ -1658,33 +1703,19 @@ export class SceneManager {
 
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
             const chunk = chunks[chunkIndex];
-            const buffer = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
-            const dv = new DataView(buffer);
-            let offset = 0;
-            const geoCount = dv.getUint32(offset, true); offset += 4;
-            const geometryFaces: number[] = [];
-
-            for (let i = 0; i < geoCount; i++) {
-                const vertCount = dv.getUint32(offset, true); offset += 4;
-                const indexCount = dv.getUint32(offset, true); offset += 4;
-                offset += vertCount * 12;
-                offset += vertCount * 12;
-                if (indexCount > 0) offset += indexCount * 4;
-                geometryFaces.push(indexCount > 0 ? indexCount / 3 : vertCount / 3);
+            const encoded = await file.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength).arrayBuffer();
+            // v11 分块是「16B 头 + gzip + 量化负载」，直接解码统计。
+            const decoded = await readChunkV11(encoded);
+            const geometryFaces = decoded.geometries.map((geometry) =>
+                geometry.index && geometry.index.length > 0
+                    ? geometry.index.length / 3
+                    : geometry.position.length / 9
+            );
+            meshes += decoded.instances.length;
+            for (const instance of decoded.instances) {
+                faces += geometryFaces[instance.geoIdx] || 0;
             }
-
-            const instanceCount = dv.getUint32(offset, true); offset += 4;
-            meshes += instanceCount;
-            memory += chunk.byteLength / (1024 * 1024);
-
-            for (let i = 0; i < instanceCount; i++) {
-                offset += 4; // bimId / bimIdIndex
-                offset += 4; // typeIndex
-                offset += 4; // color
-                offset += 64; // matrix
-                const geoIdx = dv.getUint32(offset, true); offset += 4;
-                faces += geometryFaces[geoIdx] || 0;
-            }
+            memory += chunk.decodedLength ? chunk.decodedLength / (1024 * 1024) : 0;
 
             if (chunkIndex > 0 && chunkIndex % 8 === 0) {
                 await this.yieldToMainThread();
@@ -2403,6 +2434,9 @@ export class SceneManager {
                 tempSize
             });
 
+            // 每个分块只算一次包围盒对角线：既供 evaluate 计算像素尺寸，也供后续 _lastPixelSize 复用，
+            // 避免此前每块 new THREE.Vector3() + 重复 getSize().length() 造成的持续 GC 抖动。
+            const boxDiag = c.bounds.getSize(tempSize).length();
             const inFrustum = this.frustum.intersectsBox(c.paddedBounds);
             const isClipped = isClippingActive && this.isBoxClipped(c.bounds);
             const evaluation = evaluateChunkVisibility({
@@ -2433,7 +2467,8 @@ export class SceneManager {
                 initialChunkLoadTarget: this.initialChunkLoadTarget,
                 chunkLoadResumeAt: this.chunkLoadResumeAt,
                 chunkMeshCached: this.chunkMeshCache.has(c.id),
-                allowFullChunkLoad: this.allowFullChunkLoad
+                allowFullChunkLoad: this.allowFullChunkLoad,
+                boxDiag
             });
             if (evaluation.shouldSkipSample) {
                 continue;
@@ -2446,7 +2481,6 @@ export class SceneManager {
                 c.lastFocusAt = now;
             }
             c.lastEffectiveVisible = evaluation.effectiveVisible;
-            const boxDiag = c.bounds.getSize(tempSize).length();
             c._lastPixelSize = isOrthographicCamera
                 ? (boxDiag / Math.max(1e-6, viewHeight)) * canvasHeight
                 : (boxDiag / Math.max(1e-3, evaluation.dist)) * perspectiveFocalPx;
@@ -2896,7 +2930,12 @@ export class SceneManager {
         const resolved = resolveSceneChunkOptions(options);
         this.resolvedChunkOptions.chunkReadCacheSize = resolved.chunkReadCacheSize;
         this.resolvedChunkOptions.chunkReadCacheMB = resolved.chunkReadCacheMB;
-        this.coarseLodEnabled = resolved.coarseLod;
+        // 仅在显式传入时覆盖：避免默认挂载时把 URL ?coarseLod / ?renderBudget=auto 冲掉。
+        if (options.coarseLod !== undefined) this.coarseLodEnabled = resolved.coarseLod;
+        if (options.renderBudget !== undefined) {
+            this.renderBudgetMode = resolved.renderBudget === "auto" ? "auto" : "full";
+            this.resolvedChunkOptions.renderBudget = resolved.renderBudget;
+        }
         this.resolvedChunkOptions.chunkPrefetchWindow = resolved.chunkPrefetchWindow;
         this.resolvedChunkOptions.ghostMode = resolved.ghostMode;
         this.resolvedChunkOptions.targetMinFps = resolved.targetMinFps;
@@ -2918,6 +2957,7 @@ export class SceneManager {
             chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
             chunkReadCacheMB: this.resolvedChunkOptions.chunkReadCacheMB,
             coarseLod: this.coarseLodEnabled,
+            renderBudget: this.renderBudgetMode,
             chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
             ghostMode: this.resolvedChunkOptions.ghostMode,
             targetMinFps: this.resolvedChunkOptions.targetMinFps,
@@ -3748,85 +3788,6 @@ export class SceneManager {
         return this.removeObject(uuid);
     }
 
-    // --- NBIM 导入/导出功能 ---
-    private generateChunkBinaryV8(items: any[], bimIdToIndex: Map<string, number>): ArrayBuffer {
-        const uniqueGeos: THREE.BufferGeometry[] = [];
-        const geoMap = new Map<THREE.BufferGeometry, number>();
-
-        items.forEach(item => {
-            if (item.geometry && !geoMap.has(item.geometry)) {
-                geoMap.set(item.geometry, uniqueGeos.length);
-                uniqueGeos.push(item.geometry);
-            }
-        });
-
-        let size = 4;
-        for (const geo of uniqueGeos) {
-            const vertCount = geo.attributes.position.count;
-            const index = geo.index;
-            const indexCount = index ? index.count : 0;
-            size += 4 + 4 + (vertCount * 12) + (vertCount * 12);
-            if (indexCount > 0) size += indexCount * 4;
-        }
-
-        size += 4;
-        size += items.length * (4 + 4 + 4 + 64 + 4);
-
-        const buffer = new ArrayBuffer(size);
-        const dv = new DataView(buffer);
-        let offset = 0;
-
-        dv.setUint32(offset, uniqueGeos.length, true); offset += 4;
-        for (const geo of uniqueGeos) {
-            const pos = geo.getAttribute('position');
-            const norm = geo.getAttribute('normal');
-            const count = pos.count;
-            const index = geo.index;
-            const indexCount = index ? index.count : 0;
-
-            dv.setUint32(offset, count, true); offset += 4;
-            dv.setUint32(offset, indexCount, true); offset += 4;
-
-            for (let i = 0; i < count; i++) {
-                dv.setFloat32(offset, pos.getX(i), true); offset += 4;
-                dv.setFloat32(offset, pos.getY(i), true); offset += 4;
-                dv.setFloat32(offset, pos.getZ(i), true); offset += 4;
-            }
-            for (let i = 0; i < count; i++) {
-                dv.setFloat32(offset, norm.getX(i), true); offset += 4;
-                dv.setFloat32(offset, norm.getY(i), true); offset += 4;
-                dv.setFloat32(offset, norm.getZ(i), true); offset += 4;
-            }
-            if (index && indexCount > 0) {
-                for (let i = 0; i < indexCount; i++) {
-                    dv.setUint32(offset, index.getX(i), true); offset += 4;
-                }
-            }
-        }
-
-        dv.setUint32(offset, items.length, true); offset += 4;
-        for (const item of items) {
-            const treeNodes = this.nodeMap.get(item.uuid);
-            const firstNode = treeNodes?.[0];
-            const bimId = item.bimId || firstNode?.bimId || firstNode?.id || item.uuid;
-            const bimIdIndex = bimIdToIndex.get(bimId) ?? 0;
-            dv.setUint32(offset, bimIdIndex, true); offset += 4;
-            const typeIndex = typeof item.typeIndex === "number" ? item.typeIndex : 0;
-            dv.setUint32(offset, typeIndex, true); offset += 4;
-            dv.setUint32(offset, item.color, true); offset += 4;
-
-            const elements = item.matrix.elements;
-            for (let k = 0; k < 16; k++) {
-                dv.setFloat32(offset, elements[k], true); offset += 4;
-            }
-
-            const geoId = geoMap.get(item.geometry) || 0;
-            dv.setUint32(offset, geoId, true); offset += 4;
-        }
-
-        return buffer;
-    }
-
     private registerPropertyDocuments(options: {
         docs: Record<string, NbimPropertyDocument>;
         propertyNameIndex?: NbimPropertyNameIndexItem[];
@@ -4000,87 +3961,113 @@ export class SceneManager {
         };
         traverseBimIds(this.structureRoot);
 
-        let { bimPropertyDocs, propertyNameIndex } = this.buildExportPropertyDocsFromCache();
-        if (Object.keys(bimPropertyDocs).length === 0) {
-            const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
-            const collected = await collectNbimBimProperties({
-                structureRoot: this.structureRoot,
-                ifcApiByModel,
-                ifcManagerByModel
-            });
-            bimPropertyDocs = collected.bimPropertyDocs;
-            propertyNameIndex = collected.propertyNameIndex;
+        // v11：属性库内嵌进同一个 .nbim 文件（分块 gzip，随机读）。
+        // 属性是惰性读取的，内存里通常只有被选中的少量构件；若场景正好来自唯一一个已加载的
+        // 属性库，直接复用源字节，避免“重新导出把未读过的属性全部丢掉”。
+        const reuseSourcePropertyDb = this.nbipDatabases.length === 1;
+        let bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
+        if (!reuseSourcePropertyDb) {
+            const cached = this.buildExportPropertyDocsFromCache();
+            bimPropertyDocs = cached.bimPropertyDocs;
+            if (Object.keys(bimPropertyDocs).length === 0) {
+                const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
+                const collected = await collectNbimBimProperties({
+                    structureRoot: this.structureRoot,
+                    ifcApiByModel,
+                    ifcManagerByModel
+                });
+                bimPropertyDocs = collected.bimPropertyDocs;
+            }
         }
-        const { chunkBlobs, exportChunks, currentOffset } = await prepareNbimExportChunks({
+        const exportCodec = await resolveExportCodec();
+        const { chunkBlobs, exportChunks } = await prepareNbimExportChunksV11({
             chunks: this.chunks,
             nbimFiles: this.nbimFiles,
             nbimMeta: this.nbimMeta,
             bimIdToIndex,
             hasValidChunkBinaryRange: (chunk) => this.hasValidChunkBinaryRange(chunk),
-            generateChunkBinaryV8: (items, indexMap) => this.generateChunkBinaryV8(items, indexMap)
+            codec: exportCodec
         });
 
-        const manifest = {
-            globalBounds: {
-                min: { x: this.sceneBounds.min.x, y: this.sceneBounds.min.y, z: this.sceneBounds.min.z },
-                max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
-            },
-            chunks: exportChunks,
-            stats: this.originalStats,
-            structureTree: buildExportStructureTree(this.structureRoot),
-            bimIdTable,
-            bimPropertyDocs,
-            propertyNameIndex
-        };
-
-        const manifestBytes = encodeNbimManifest(manifest, this.structureRoot);
-
-        const header = new ArrayBuffer(1024);
-        const dv = new DataView(header);
-        dv.setUint32(0, 0x4D49424E, true); // 文件标识 'NBIM'
-        dv.setUint32(4, 8, true);          // 版本 8
-        dv.setUint32(8, currentOffset, true);
-        dv.setUint32(12, manifestBytes.byteLength, true);
-
-        const blobParts: any[] = [header, ...chunkBlobs, manifestBytes];
-        const finalBlob = new Blob(blobParts, { type: 'application/octet-stream' });
-
-        const url = URL.createObjectURL(finalBlob);
-        const a = document.createElement('a');
-        a.href = url;
         const defaultStem = deriveDefaultNbimStem(this.contentGroup);
         const resolvedName = sanitizeFileStem(stripFileExtension((fileName || "").trim()) || defaultStem);
+
+        let propertyRaw: Uint8Array;
+        let propertyStats: { components: number; rows: number };
+        if (reuseSourcePropertyDb) {
+            const source = this.nbipDatabases[0];
+            propertyRaw = await source.getSourceBytes();
+            propertyStats = source.getStats();
+            debugLog("SceneManager/NBIM", "导出复用源属性库", propertyStats);
+        } else {
+            const encoded = encodeNbip(bimPropertyDocs, resolvedName);
+            propertyRaw = encoded.bytes;
+            propertyStats = encoded.stats;
+        }
+        const propertySection = await compressInBlocks(
+            propertyRaw,
+            undefined,
+            exportCodec,
+            (block) => compressBytes(block, exportCodec, 9)
+        );
+
+        const { file } = await buildNbim11File({
+            chunkBlobs,
+            chunkEntries: exportChunks,
+            propertySection,
+            propertyInfo: {
+                length: propertySection.byteLength,
+                components: propertyStats.components,
+                rows: propertyStats.rows,
+                encoding: "block-gzip"
+            },
+            manifest: {
+                globalBounds: {
+                    min: { x: this.sceneBounds.min.x, y: this.sceneBounds.min.y, z: this.sceneBounds.min.z },
+                    max: { x: this.sceneBounds.max.x, y: this.sceneBounds.max.y, z: this.sceneBounds.max.z }
+                },
+                chunks: exportChunks,
+                stats: this.originalStats,
+                structureTree: buildExportStructureTree(this.structureRoot),
+                bimIdTable
+            },
+            manifestCodec: exportCodec,
+            compressManifest: (bytes) => compressBytes(bytes, exportCodec, 9)
+        });
+
+        const blob = new Blob([file], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
         a.download = `${resolvedName}.nbim`;
         a.click();
         URL.revokeObjectURL(url);
     }
 
+    /**
+     * 加载 NBIM v11 单文件模型（几何 + 属性 + 结构树全在一个 .nbim 里）。
+     */
     async loadNbim(file: File, onProgress?: (p: number, msg: string) => void) {
         // 不再自动清空场景，支持多模型
         const fileId = `nbim_${file.name}_${new Date().getTime()}`;
 
         if (onProgress) onProgress(10, "正在解析 NBIM 文件头...");
         const header = await readNbimHeader(file);
-        const magic = header.magic;
-        if (magic !== 0x4D49424E) throw new Error("不是有效的 NBIM 文件");
-
+        if (header.magic !== NBIM11_MAGIC) throw new Error("不是有效的 NBIM v11 文件（文件标识不匹配）");
         const version = header.version;
-        if (version !== 8 && version !== 9) {
-            throw new Error(`不支持的 NBIM 版本: ${version}，当前支持 V8 / V9`);
+        if (version !== NBIM11_VERSION) {
+            throw new Error(`不支持的 NBIM 版本: ${version}，仅支持 v11（单文件格式）`);
         }
 
         if (onProgress) onProgress(20, "正在读取元数据...");
         const manifest = await readNbimManifest(file, header) as NbimManifest;
-
-        const manifestDocs = (manifest?.bimPropertyDocs && typeof manifest.bimPropertyDocs === "object")
-            ? manifest.bimPropertyDocs as Record<string, NbimPropertyDocument>
-            : null;
-        const manifestPropertyNameIndex = Array.isArray(manifest.propertyNameIndex)
-            ? manifest.propertyNameIndex as NbimPropertyNameIndexItem[]
-            : null;
+        if (onProgress) onProgress(28, "正在读取元数据...");
 
         this.nbimFiles.set(fileId, file);
         this.nbimMeta.set(fileId, { version, bimIdTable: manifest.bimIdTable });
+
+        // v11：属性内嵌在同一文件的独立区段（分块 gzip），按需惰性读取。
+        void this.mountNbipDatabase(fileId, file, manifest.propertyDb);
 
         const boundsState = applyNbimGlobalBounds({
             globalBounds: manifest.globalBounds,
@@ -4102,31 +4089,9 @@ export class SceneManager {
         });
 
         const rootId = modelRoot?.id || fileId;
-        const manifestBimProperties = (manifest?.bimProperties && typeof manifest.bimProperties === "object")
-            ? manifest.bimProperties as Record<string, any>
-            : {};
+        // v10 manifest 不含属性文档；节点映射默认 owner 用 rootId（结构节点自带的 originalUuid 优先）。
+        const defaultOwner = rootId;
 
-        // 新版 NBIM 只带 bimPropertyDocs，旧版只带 bimProperties。defaultOwner 优先从属性键中提取，
-        // 确保属性文档能映射到结构节点；两者都缺失时再回退到结构树基础信息。
-        const docOwners = collectNbimPropertyOwners(manifestDocs, manifestBimProperties);
-        const { defaultOwner: legacyDefaultOwner, grouped } = groupNbimPropertiesByOwner(manifestBimProperties, rootId);
-        const defaultOwner = docOwners.size === 1 ? Array.from(docOwners)[0] : legacyDefaultOwner;
-        grouped.forEach((props, owner) => this.nbimPropsByOriginalUuid.set(owner, props));
-
-        const {
-            docs: propertyDocs,
-            propertyNameIndex,
-            source: propertySource
-        } = resolveNbimPropertyDocuments({
-            manifestDocs,
-            manifestPropertyNameIndex,
-            manifestBimProperties,
-            structureTree: modelRoot,
-            fallbackOwner: defaultOwner
-        });
-        if (propertySource !== "manifest") {
-            debugLog("SceneManager/NBIM", `属性结构来源: ${propertySource}（已自动兼容旧版 NBIM）`);
-        }
         const quickStats = buildNbimQuickStats({
             manifestStats: manifest.stats,
             modelRoot,
@@ -4160,26 +4125,6 @@ export class SceneManager {
             nodeMap: this.nodeMap,
             bimIdToNodeIds: this.bimIdToNodeIds
         });
-
-        const propertyDocCount = Object.keys(propertyDocs).length;
-        if (propertyDocCount > 20000) {
-            // 超大模型：先把属性文档挂起（只应用轻量的属性名索引），避免加载阶段同步索引 20 万+ 文档。
-            // 选中构件时按 owner::bimId 取单条；第一次属性搜索/导出时再一次性建索引。
-            this.nbimPendingDocs = propertyDocs;
-            this.nbimPendingDocsList = null;
-            this.nbimPendingRootId = rootId;
-            if (this.applyPropertyNameIndex(propertyNameIndex)) {
-                this.nbimPropertyNameIndexVersion++;
-            }
-            debugLog("SceneManager/NBIM", "属性索引延迟建立", { docs: propertyDocCount });
-        } else {
-            this.registerPropertyDocuments({
-                docs: propertyDocs,
-                propertyNameIndex,
-                rootId,
-                preferNodeMapping: true
-            });
-        }
 
         // 注册分块
         if (onProgress) onProgress(30, "正在初始化分块...");
@@ -4304,6 +4249,8 @@ export class SceneManager {
             this.precomputedBounds.makeEmpty();
             this.nbimFiles.clear();
             this.nbimMeta.clear();
+            this.nbipDatabases = [];
+            this.nbipDbByFileId.clear();
             this.nbimPropsByOriginalUuid.clear();
             this.nbimSearchDocsByUuid.clear();
             this.nbimSearchDocsByBimId.clear();
@@ -4462,6 +4409,66 @@ export class SceneManager {
             this.structureLabelCache.set(cacheKey, label);
         }
         return label;
+    }
+
+    /**
+     * 挂载内嵌的属性库区段（v11 单文件）。打开失败不影响几何显示，只记录告警。
+     */
+    private async mountNbipDatabase(fileId: string, file: File, info?: NbimPropertyDbInfo) {
+        if (!info || info.length <= 0) {
+            debugLog("SceneManager/NBIM", "文件中没有属性区段，属性明细不可用");
+            return;
+        }
+        try {
+            const sectionSource = await BlockCompressedSource.open(file, info.offset, info.offset + info.length);
+            const db = await NbipDatabase.open(sectionSource, file.name);
+            this.nbipDatabases.push(db);
+            this.nbipDbByFileId.set(fileId, db);
+            debugLog("SceneManager/NBIM", "属性区段已挂载", { stats: db.getStats() });
+            const items = await db.getPropertyNameIndex();
+            if (this.applyPropertyNameIndex(items)) this.nbimPropertyNameIndexVersion++;
+        } catch (error) {
+            console.warn("NBIM 内嵌属性库打开失败:", error);
+        }
+    }
+
+    /**
+     * 确保某构件的属性文档已经载入（v10：从 .nbip 惰性读取单条并注册）。
+     * 供选择流程在构建属性面板前 await。
+     */
+    async ensurePropertyDocument(uuid: string): Promise<NbimPropertyDocument | null> {
+        if (!uuid) return null;
+        const existing = this.getNbimPropertySearchDocument(uuid);
+        if (existing) return existing;
+
+        // 候选主键：结构节点 id、bimId（导出/重载后节点 id 会变，bimId 才是稳定键）
+        const candidates = new Set<string>();
+        candidates.add(uuid);
+        const node = this.nodeMap.get(uuid)?.[0];
+        if (node?.bimId !== undefined && node?.bimId !== null && String(node.bimId) !== "") {
+            candidates.add(String(node.bimId));
+        }
+        const bimId = this.getBimIdByUuid(uuid);
+        if (bimId) candidates.add(String(bimId));
+
+        for (const db of this.nbipDatabases) {
+            for (const candidate of candidates) {
+                try {
+                    const doc = await db.getDocumentByKey(candidate);
+                    if (doc) {
+                        const key = `${doc.owner}::${doc.bimId}`;
+                        this.applyPropertyDocumentEntries([key], { [key]: doc } as Record<string, NbimPropertyDocument>, {
+                            rootId: doc.owner,
+                            preferNodeMapping: true
+                        });
+                        return this.getNbimPropertySearchDocument(uuid) || doc;
+                    }
+                } catch (error) {
+                    console.warn("NBIP 读取属性失败:", error);
+                }
+            }
+        }
+        return null;
     }
 
     getNbimPropertySearchDocument(uuid: string): NbimPropertyDocument | null {
@@ -4663,6 +4670,7 @@ export class SceneManager {
         this.locateIsolationRestoreChanges = [];
         this.locateIsolationActive = false;
         const result = applySetAllVisibility(this.getVisibilityContext(), visible);
+        this.scheduleEdgeRebuild(result.affectedBatchedMeshes);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
         if (result.needsExplodeRefresh) this.refreshExplodeState();
         if (result.needsRender) this.markSceneDirty();
@@ -4674,6 +4682,7 @@ export class SceneManager {
 
     applyVisibilityBatch(changes: SceneVisibilityChange[], options: SceneVisibilityBatchOptions = {}) {
         const result = applyVisibilityBatch(this.getVisibilityContext(), changes, options);
+        this.scheduleEdgeRebuild(result.affectedBatchedMeshes);
         if (result.nextHighlightedUuids) {
             this.highlightObjects(result.nextHighlightedUuids);
         }
@@ -4726,6 +4735,7 @@ export class SceneManager {
             invalidateInteractables: true,
             needsRender: false
         });
+        this.scheduleEdgeRebuild(result.affectedBatchedMeshes);
         if (result.needsBoundsUpdate) this.updateSceneBounds();
         if (result.needsExplodeRefresh) this.refreshExplodeState();
         if (result.needsRender) this.markSceneDirty();
@@ -4856,6 +4866,7 @@ export class SceneManager {
 
     setObjectVisibility(uuid: string, visible: boolean, showParents: boolean = true) {
         const result = applySetObjectVisibility(this.getVisibilityContext(), uuid, visible, showParents);
+        this.scheduleEdgeRebuild(result.affectedBatchedMeshes);
         if (result.nextHighlightedUuids) {
             this.highlightObjects(result.nextHighlightedUuids);
         }

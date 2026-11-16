@@ -87,9 +87,9 @@ export async function resolveChunkMeshForLoad(options: {
     if (chunk.nbimFileId && nbimFiles.has(chunk.nbimFileId) && hasValidChunkBinaryRange(chunk)) {
         const buffer = await readChunkBuffer(chunk);
         const meta = nbimMeta.get(chunk.nbimFileId);
-        const version = meta?.version ?? 8;
-        if (version !== 8 && version !== 9) {
-            throw new Error(`Unsupported NBIM version: ${version}. Only V8/V9 are supported.`);
+        const version = meta?.version ?? 11;
+        if (version !== 11) {
+            throw new Error(`Unsupported NBIM version: ${version}. Only v11 is supported.`);
         }
 
         const workerResult = await runWorkerTask({

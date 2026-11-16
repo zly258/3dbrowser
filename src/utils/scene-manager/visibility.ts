@@ -22,6 +22,8 @@ export interface SceneVisibilityResult {
     needsExplodeRefresh: boolean;
     needsRender: boolean;
     nextHighlightedUuids?: string[];
+    /** 受本次可见性变化影响的批量网格：合并边线需要按新可见性重建 */
+    affectedBatchedMeshes?: Set<THREE.BatchedMesh>;
 }
 
 export interface SceneVisibilityChange {
@@ -53,11 +55,13 @@ function syncStructureNodeVisibility(nodeMap: Map<string, StructureTreeNode[]>, 
 
 function applyOptimizedMappingsVisibility(
     optimizedMapping: Map<string, OptimizedMappingEntry[]>,
-    visible: boolean
+    visible: boolean,
+    affected?: Set<THREE.BatchedMesh>
 ) {
     optimizedMapping.forEach((mappings) => {
         mappings.forEach((mapping) => {
             mapping.mesh.setVisibleAt(mapping.instanceId, visible);
+            if (affected) affected.add(mapping.mesh);
         });
     });
 }
@@ -122,12 +126,14 @@ function syncNodeBranchVisibility(nodeMap: Map<string, StructureTreeNode[]>, nod
 function applyObjectMappingVisibility(
     optimizedMapping: Map<string, OptimizedMappingEntry[]>,
     objectOrNodeId: string,
-    visible: boolean
+    visible: boolean,
+    affected?: Set<THREE.BatchedMesh>
 ) {
     const mappings = optimizedMapping.get(objectOrNodeId);
     if (!mappings) return;
     mappings.forEach((mapping) => {
         mapping.mesh.setVisibleAt(mapping.instanceId, visible);
+        if (affected) affected.add(mapping.mesh);
     });
 }
 
@@ -136,7 +142,8 @@ export function applySetAllVisibility(
     visible: boolean
 ): SceneVisibilityResult {
     syncStructureNodeVisibility(context.nodeMap, context.structureRoot, visible);
-    applyOptimizedMappingsVisibility(context.optimizedMapping, visible);
+    const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
+    applyOptimizedMappingsVisibility(context.optimizedMapping, visible, affectedBatchedMeshes);
 
     context.contentGroup.traverse((object) => {
         applyRenderableVisibility(object, visible);
@@ -145,7 +152,8 @@ export function applySetAllVisibility(
     return {
         needsBoundsUpdate: true,
         needsExplodeRefresh: true,
-        needsRender: true
+        needsRender: true,
+        affectedBatchedMeshes
     };
 }
 
@@ -168,10 +176,12 @@ export function applySetObjectVisibility(
         ? collectHighlightedDescendants(context.highlightedUuids, uuid, object, nodes)
         : [];
 
+    const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
+
     if (!object) {
         if (nodes && nodes.length > 0) {
             const walk = (node: StructureTreeNode) => {
-                applyObjectMappingVisibility(context.optimizedMapping, node.id, visible);
+                applyObjectMappingVisibility(context.optimizedMapping, node.id, visible, affectedBatchedMeshes);
                 node.children?.forEach(walk);
             };
             walk(nodes[0]);
@@ -183,14 +193,15 @@ export function applySetObjectVisibility(
             needsRender: true,
             nextHighlightedUuids: idsToUnhighlight.length > 0
                 ? Array.from(new Set([...context.highlightedUuids].filter((id) => !idsToUnhighlight.includes(id))))
-                : undefined
+                : undefined,
+            affectedBatchedMeshes
         };
     }
 
     object.traverse((child) => {
         if (child.name === "Helpers" || child.name === "Measure") return;
         applyRenderableVisibility(child, visible);
-        applyObjectMappingVisibility(context.optimizedMapping, child.uuid, visible);
+        applyObjectMappingVisibility(context.optimizedMapping, child.uuid, visible, affectedBatchedMeshes);
     });
 
     return {
@@ -199,7 +210,8 @@ export function applySetObjectVisibility(
         needsRender: true,
         nextHighlightedUuids: idsToUnhighlight.length > 0
             ? Array.from(new Set([...context.highlightedUuids].filter((id) => !idsToUnhighlight.includes(id))))
-            : undefined
+            : undefined,
+        affectedBatchedMeshes
     };
 }
 
@@ -218,6 +230,7 @@ export function applyVisibilityBatch(
 
     let highlighted = new Set(context.highlightedUuids);
     let needsRender = false;
+    const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
 
     changes.forEach((change) => {
         const result = applySetObjectVisibility(
@@ -234,13 +247,15 @@ export function applyVisibilityBatch(
             highlighted = new Set(result.nextHighlightedUuids);
         }
         needsRender = needsRender || result.needsRender;
+        result.affectedBatchedMeshes?.forEach((mesh) => affectedBatchedMeshes.add(mesh));
     });
 
     return {
         needsBoundsUpdate: options.recomputeBounds ?? true,
         needsExplodeRefresh: options.refreshExplode ?? false,
         needsRender,
-        nextHighlightedUuids: Array.from(highlighted)
+        nextHighlightedUuids: Array.from(highlighted),
+        affectedBatchedMeshes
     };
 }
 
@@ -249,9 +264,9 @@ export function applyIsolateObjects(
     uuids: string[],
     setObjectVisibility: (uuid: string, visible: boolean, showParents?: boolean) => void
 ): SceneVisibilityResult {
-    applySetAllVisibility(context, false);
-
-    const affectedBatchedMeshes = new Set<THREE.BatchedMesh>();
+    const hideAllResult = applySetAllVisibility(context, false);
+    // 隔离会先全部隐藏再显示目标：所有批量网格的合并边线都要按新可见性重建。
+    const affectedBatchedMeshes = new Set<THREE.BatchedMesh>(hideAllResult.affectedBatchedMeshes ?? []);
 
     uuids.forEach((uuid) => {
         setObjectVisibility(uuid, true);
@@ -290,7 +305,8 @@ export function applyIsolateObjects(
     return {
         needsBoundsUpdate: true,
         needsExplodeRefresh: true,
-        needsRender: true
+        needsRender: true,
+        affectedBatchedMeshes
     };
 }
 

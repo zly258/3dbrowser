@@ -90,6 +90,8 @@ export function useViewerSelection({
         propOnSelect?.(focusUuid, obj);
 
         const target = resolveSelectionTarget(sceneManager, obj, focusUuid);
+        // v11：属性内嵌在同一 .nbim 的独立区段里，选中时先按需读取该构件的属性文档。
+        await sceneManager.ensurePropertyDocument?.(focusUuid);
         const ifcGroups = await fetchIfcGroups(target, ifcPropertyCacheRef.current || new Map());
         const selectedGroups = buildSelectionPropertyGroups({
             sceneManager,

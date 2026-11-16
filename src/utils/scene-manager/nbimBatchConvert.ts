@@ -3,14 +3,16 @@ import { buildOctree, calculateGeometryMemory, collectItems, collectItemsBatched
 import { sanitizeFileStem, stripFileExtension } from "../../viewer/exportNaming";
 import type { StructureTreeNode } from "./types";
 import {
-    buildChunkBinaryV8,
     buildExportStructureTree,
-    buildPropertyNameIndex,
     collectIfcModelReferences,
     collectNbimBimProperties,
-    encodeNbimManifest,
     sanitizeDisplayLabel
 } from "./nbim";
+import { encodeNbip } from "../scene-core/nbip";
+import { buildNbim11File, NBIM11_VERSION } from "../scene-core/nbimIO";
+import { buildChunkPayloadV11, frameChunkV11 } from "./nbimExportChunks";
+import { compressInBlocks } from "../scene-core/nbimBlock";
+import { compressBytes, resolveExportCodec } from "../scene-core/codec";
 
 interface BatchConvertOptions {
     objects: THREE.Object3D[];
@@ -206,30 +208,32 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
     for (const object of objects) ifcGroup.remove(object);
 
     onProgress?.(65, "正在生成几何分块...");
+    const exportCodec = await resolveExportCodec();
     const chunkBlobs: Uint8Array[] = [];
-    let currentOffset = 1024;
-    const exportChunks = chunks.map((chunk, index) => {
-        const buffer = buildChunkBinaryV8(chunk.items, bimIdToIndex, (item: any) => {
+    const exportChunks: any[] = [];
+    for (let index = 0; index < chunks.length; index++) {
+        const chunk = chunks[index];
+        const payload = buildChunkPayloadV11(chunk.items, bimIdToIndex, (item: any) => {
             return uuidToBimId.get(item.uuid) || item.bimId || item.uuid;
         });
-        const bytes = new Uint8Array(buffer);
-        const entry = {
+        const framed = await frameChunkV11(payload, exportCodec);
+        exportChunks.push({
             id: chunk.id,
             bounds: {
                 min: { x: chunk.bounds.min.x, y: chunk.bounds.min.y, z: chunk.bounds.min.z },
                 max: { x: chunk.bounds.max.x, y: chunk.bounds.max.y, z: chunk.bounds.max.z }
             },
             originalUuid: chunk.originalUuid,
-            byteOffset: currentOffset,
-            byteLength: bytes.byteLength
-        };
-        chunkBlobs.push(bytes);
-        currentOffset += bytes.byteLength;
+            byteOffset: 0,
+            byteLength: framed.byteLength,
+            decodedLength: payload.byteLength,
+            encoding: NBIM11_VERSION
+        });
+        chunkBlobs.push(framed);
         if ((index & 63) === 63) {
             onProgress?.(65 + Math.round(((index + 1) / Math.max(1, chunks.length)) * 20), "正在生成几何分块...");
         }
-        return entry;
-    });
+    }
 
     const bounds = modelBounds.isEmpty()
         ? { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } }
@@ -238,38 +242,60 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
             max: { x: modelBounds.max.x, y: modelBounds.max.y, z: modelBounds.max.z }
         };
 
-    onProgress?.(88, "正在写入 NBIM...");
-    const manifest = {
-        globalBounds: bounds,
-        chunks: exportChunks,
+    // 文件主名
+    const firstStem = fileNames.length === 1 ? sanitizeFileStem(stripFileExtension(fileNames[0])) : "";
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const defaultStem = `批量导出_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const modelStem = firstStem || defaultStem;
+
+    onProgress?.(86, "正在生成属性数据库...");
+    const encodedPropertyDb = encodeNbip(bimPropertyDocs, modelStem);
+    const propertySection = await compressInBlocks(
+        encodedPropertyDb.bytes,
+        undefined,
+        exportCodec,
+        (block) => compressBytes(block, exportCodec, 9)
+    );
+
+    onProgress?.(92, "正在写入 NBIM11...");
+    const { file } = await buildNbim11File({
+        chunkBlobs,
+        chunkEntries: exportChunks,
+        propertySection,
+        propertyInfo: {
+            length: propertySection.byteLength,
+            components: encodedPropertyDb.stats.components,
+            rows: encodedPropertyDb.stats.rows,
+            encoding: "block-gzip"
+        },
+        manifest: {
+            globalBounds: bounds,
+            chunks: exportChunks,
+            stats: {
+                meshes: totalMeshes,
+                faces: Math.floor(totalFaces),
+                memory: Number(totalMemory.toFixed(2))
+            },
+            structureTree: buildExportStructureTree(structureRoot),
+            bimIdTable
+        },
+        manifestCodec: exportCodec,
+        compressManifest: (bytes) => compressBytes(bytes, exportCodec, 9)
+    });
+
+    onProgress?.(100, "转换完成");
+    return {
+        fileBlob: new Blob([file], { type: "application/octet-stream" }),
+        fileName: `${modelStem}.nbim`,
         stats: {
             meshes: totalMeshes,
             faces: Math.floor(totalFaces),
             memory: Number(totalMemory.toFixed(2))
         },
-        structureTree: buildExportStructureTree(structureRoot),
-        bimIdTable,
-        bimPropertyDocs,
-        propertyNameIndex: propertyNameIndex.length > 0 ? propertyNameIndex : buildPropertyNameIndex(bimPropertyDocs)
+        chunkCount: chunks.length,
+        propertyStats: encodedPropertyDb.stats
     };
-
-    const manifestBytes = encodeNbimManifest(manifest, structureRoot);
-    const header = new ArrayBuffer(1024);
-    const dv = new DataView(header);
-    dv.setUint32(0, 0x4D49424E, true);
-    dv.setUint32(4, 8, true);
-    dv.setUint32(8, currentOffset, true);
-    dv.setUint32(12, manifestBytes.byteLength, true);
-
-    const blob = new Blob([header, ...chunkBlobs, manifestBytes], { type: "application/octet-stream" });
-    const firstStem = fileNames.length === 1 ? sanitizeFileStem(stripFileExtension(fileNames[0])) : "";
-    const now = new Date();
-    const pad = (value: number) => String(value).padStart(2, "0");
-    const defaultStem = `批量导出_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const fileName = `${firstStem || defaultStem}.nbim`;
-
-    onProgress?.(100, "转换完成");
-    return { blob, fileName, stats: manifest.stats, chunkCount: chunks.length };
 }
 
 export function downloadNbimBlob(blob: Blob, fileName: string) {

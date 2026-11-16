@@ -139,11 +139,13 @@ export class DisplayEdgeBuilder {
 
         const plans: Array<{ edges: Float32Array; matrix: THREE.Matrix4 }> = [];
         let totalVerts = 0;
+        let visibleInstanceCount = 0;
         const matrix = new THREE.Matrix4();
         const visibility = (batch as any).getVisibleAt ? batch as any : null;
 
         for (let instanceId = 0; instanceId < instanceCount; instanceId++) {
             if (visibility && visibility.getVisibleAt(instanceId) === false) continue;
+            visibleInstanceCount++;
             const geometry = getBatchedInstanceGeometry(batch, instanceId);
             if (!geometry) continue;
             const indexCount = geometry.getIndex()?.count || 0;
@@ -156,8 +158,12 @@ export class DisplayEdgeBuilder {
             plans.push({ edges, matrix: matrix.clone() });
         }
         if (plans.length === 0) {
-            batch.userData.__edgeSkipped = true;
             clearBatchedGeometryViews(batch);
+            // 关键区分：如果是因为“实例全部被隐藏”而没有边线，不能标记为跳过，
+            // 否则重新显示该构件时边线永远无法恢复（隐藏选择只隐藏实体面、边线不回来的 bug）。
+            if (visibleInstanceCount > 0) {
+                batch.userData.__edgeSkipped = true;
+            }
             return;
         }
         if (!this.canAllocate(totalVerts * 3 * 4)) {
@@ -186,6 +192,12 @@ export class DisplayEdgeBuilder {
         line.userData.isBatchedEdges = true;
         batch.add(line);
         batch.userData.__displayEdges = line;
+        // 记录“该批次应当有边线”：即使后续因实例全部隐藏而移除边线，
+        // 重新显示时也要能据此把边线重建回来。
+        batch.userData.__displayEdgesWanted = true;
+        // 之前可能因“整批实例都被隐藏/超预算”被标记为跳过；本次成功生成后必须清除，
+        // 否则线框模式下 finalizeDisplayModeAfterEdges 会误把该块实体面重新显示出来。
+        delete (batch.userData as any).__edgeSkipped;
         this.objects.push(line);
         // 边线顶点已经合并进 line.geometry，逐几何视图（索引副本）可以立刻释放。
         clearBatchedGeometryViews(batch);
@@ -231,10 +243,58 @@ export class DisplayEdgeBuilder {
         }
     }
 
+    /**
+     * 实例可见性变化后，重建指定批量网格的合并边线。
+     * 合并边线是“整批次一条 LineSegments”，`setVisibleAt(id,false)` 只隐藏实体面，
+     * 隐藏实例的棱边仍留在合并线里，所以必须按当前可见实例重新生成。
+     * 只处理“本来应该有边线”的批次（曾经生成过），避免给超大/超预算批次额外补线；
+     * 同时必须支持“边线已被整体移除（全部实例都隐藏过）后再恢复”的情况。
+     */
+    rebuildForBatches(batches: Iterable<THREE.BatchedMesh>) {
+        const rebuildTargets: THREE.BatchedMesh[] = [];
+        const staleLines = new Set<THREE.LineSegments>();
+        for (const batch of batches) {
+            const userData = batch.userData as any;
+            const line = userData?.__displayEdges as THREE.LineSegments | undefined;
+            if (line) staleLines.add(line);
+            // 没有边线且从未生成过（或已被判定跳过）的批次不处理
+            if (!line && !userData?.__displayEdgesWanted) continue;
+            if (!line && userData?.__edgeSkipped) continue;
+            rebuildTargets.push(batch);
+        }
+        if (rebuildTargets.length === 0) return;
+
+        // 一次性移除受影响的旧边线，避免对 objects 数组反复 filter（O(n^2)）
+        if (staleLines.size > 0) {
+            this.objects = this.objects.filter((line) => {
+                if (!staleLines.has(line)) return true;
+                const positionArray = line.geometry.getAttribute?.("position")?.array as ArrayLike<number> | undefined;
+                if (positionArray && typeof (positionArray as any).byteLength === "number") {
+                    this.totalBytes = Math.max(0, this.totalBytes - (positionArray as any).byteLength);
+                }
+                const parent = line.parent as any;
+                if (parent?.userData) delete parent.userData.__displayEdges;
+                line.removeFromParent();
+                line.geometry.dispose();
+                return false;
+            });
+        }
+
+        // 按当前实例可见性重新生成（attachToBatch 内部会跳过 getVisibleAt===false 的实例）
+        for (const batch of rebuildTargets) {
+            if (!batch.parent || batch.visible === false) continue;
+            this.attachToBatch(batch);
+        }
+    }
+
     clear() {
         for (const object of this.objects) {
             const parent = object.parent as any;
-            if (parent?.userData) delete parent.userData.__displayEdges;
+            if (parent?.userData) {
+                delete parent.userData.__displayEdges;
+                // 样式/场景整体清空：连“应否有边线”的标记一起复位，避免下次按旧标记重建。
+                delete parent.userData.__displayEdgesWanted;
+            }
             object.removeFromParent();
             object.geometry.dispose();
         }
@@ -248,6 +308,7 @@ export class DisplayEdgeBuilder {
     /** 单个对象被销毁/移除时清理它的边线（分块网格回收） */
     releaseFor(object: THREE.Object3D) {
         const line = (object.userData as any)?.__displayEdges as THREE.LineSegments | undefined;
+        delete (object.userData as any).__displayEdgesWanted;
         if (!line) return;
         delete (object.userData as any).__displayEdges;
         const positionArray = line.geometry.getAttribute?.("position")?.array as ArrayLike<number> | undefined;

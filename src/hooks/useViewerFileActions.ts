@@ -118,7 +118,7 @@ export function useViewerFileActions({
             }
 
             setStatus(`${t("processing")}...`);
-            const { blob, fileName } = await buildNbimBlobFromObjects({
+            const { fileBlob, fileName } = await buildNbimBlobFromObjects({
                 objects: loadedObjects,
                 fileNames: files.map((file) => file.name),
                 onProgress: (p, msg) => {
@@ -127,7 +127,8 @@ export function useViewerFileActions({
                 }
             });
 
-            downloadNbimBlob(blob, fileName);
+            // v11：单个 .nbim 文件（几何 + 属性 + 结构树）
+            downloadNbimBlob(fileBlob, fileName);
             setStatus(t("success"));
             setToast({ message: t("success"), type: "success" });
         } catch (error) {

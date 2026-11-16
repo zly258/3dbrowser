@@ -53,10 +53,30 @@ export function useViewportLifecycle({
             mgrInstance.resize(rect.width, rect.height);
         };
 
+        // 浏览器缩放/跨屏拖动会改变 devicePixelRatio，但 CSS 尺寸可能完全不变，
+        // ResizeObserver 与 window.resize 都不会触发，导致绘图缓冲停留在旧像素比而发糊。
+        // 用 matchMedia('(resolution: Ndppx)') 监听 DPR 变化，并在每次变化后重新 arm。
+        let dppxQuery: MediaQueryList | null = null;
+        const handleDprChange = () => {
+            armDprListener();
+            handleWindowResize();
+        };
+        const armDprListener = () => {
+            if (dppxQuery) {
+                dppxQuery.removeEventListener?.("change", handleDprChange);
+                dppxQuery = null;
+            }
+            const dpr = window.devicePixelRatio || 1;
+            dppxQuery = window.matchMedia(`(resolution: ${dpr}dppx)`);
+            dppxQuery.addEventListener?.("change", handleDprChange);
+        };
+        armDprListener();
+
         window.addEventListener("resize", handleWindowResize);
         return () => {
             observer.disconnect();
             window.removeEventListener("resize", handleWindowResize);
+            dppxQuery?.removeEventListener?.("change", handleDprChange);
         };
     }, [mgrInstance, viewportRef]);
 

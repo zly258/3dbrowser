@@ -71,6 +71,8 @@ export function evaluateChunkVisibility(options: {
     chunkMeshCached: boolean;
     /** 模型整体能装进内存预算时为 true：忽略 4px 小分块剔除，保证全部分块被加载、可拾取。 */
     allowFullChunkLoad?: boolean;
+    /** 调用方已算好的分块包围盒对角线长度，避免每个分块再 new 一个 Vector3。 */
+    boxDiag?: number;
 }) {
     const {
         chunk,
@@ -122,7 +124,7 @@ export function evaluateChunkVisibility(options: {
         };
     }
 
-    const boxSize = chunk.bounds.getSize(new THREE.Vector3()).length();
+    const boxSize = options.boxDiag ?? chunk.bounds.getSize(new THREE.Vector3()).length();
     const pixelSize = (boxSize / viewHeight) * canvasHeight;
     const centerNdc = tempCenterNdc.copy(chunk.center).applyMatrix4(projScreenMatrix);
     const ndcDistance = Math.sqrt(centerNdc.x * centerNdc.x + centerNdc.y * centerNdc.y);
