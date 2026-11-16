@@ -1,4 +1,4 @@
-# @zhangly1403/3dbrowser
+# 3dbrowser
 
 Professional 3D model viewer library for React and Web applications. Built for very large models: a single 2.9 GB NBIM holding 231,353 components and 186 million rendered triangles opens in seconds and keeps the JS heap under ~3 GB.
 
@@ -8,7 +8,7 @@ Professional 3D model viewer library for React and Web applications. Built for v
 - **Multi-format Support**:
   - **BIM**: IFC (using web-ifc)
   - **Standard**: GLB/GLTF, FBX, OBJ
-  - **Custom**: LMB, NBIM
+  - **Custom**: NBIM v11
 - **Advanced Tools**:
   - **Measurement**: Distance, angle, and coordinate measurement tools.
   - **Sectioning**: Real-time clipping planes for internal inspection, with the range recalculated from the current model.
@@ -17,7 +17,7 @@ Professional 3D model viewer library for React and Web applications. Built for v
   - **Display styles**: Realistic (shaded + edges), Shaded, Wireframe — switchable from the toolbar and remembered locally.
   - **Box selection**: Full-screen marquee selection that stays responsive on six-figure component counts.
   - **Instance-level picking**: A single click resolves the exact instance under the cursor, highlights only that instance (with a glow) and lets you customize the highlight colour.
-- **Offline Batch Conversion**: Convert LMB sources to a single NBIM file on the CPU only — no scene, no GPU, no VRAM.
+- **Offline Batch Conversion**: Convert legacy NBIM sources to a single NBIM v11 file on the CPU only — no scene, no GPU, no VRAM.
 - **Modern Tech Stack**: Built with **React 19**, **Three.js**, and **TypeScript**.
 - **Localization**: Built-in support for English and Chinese out of the box.
 
@@ -59,7 +59,7 @@ Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one doc
 - **Priority-driven loading.** Oversized models load the most central/near chunks first up to the memory budget; selection and picking work on every loaded chunk.
 - **Instance-aware picking.** `batchId` → uuid/source maps resolve one specific instance per click, and box selection culls whole chunks by bounding box before touching individual instances.
 - **Lazy property index.** Above 20,000 property documents the index stays out of memory and is resolved on selection; search builds it once, in a single pass.
-- **Headless batch conversion.** LMB → NBIM conversion touches only CPU and disk, so it can run on machines without a usable GPU.
+- **Headless batch conversion.** Legacy NBIM → v11 migration touches only CPU and disk, so it can run on machines without a usable GPU.
 
 ### Known limits
 
@@ -70,23 +70,26 @@ Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one doc
 
 ## Installation
 
-The library is already published on npm as **`@zhangly1403/3dbrowser`** (with build provenance), so you install a released version — no local build required.
+This project is **no longer published to npm**. Use it directly from source:
 
 ```bash
-npm install @zhangly1403/3dbrowser
+git clone https://github.com/zly258/3dbrowser.git
+cd 3dbrowser
+npm install
+npm run dev
 ```
 
 ## Assets Setup
 
-You need to copy the `libs` folder from the package to your project's public directory. This folder contains the required WASM and worker files for decoding IFC and OCC files.
-
-1. Copy `node_modules/@zhangly1403/3dbrowser/dist/libs` to your project's `public/libs` folder.
-2. Specify the `libPath` prop in the component if you placed them in a different location (default is `./libs`).
+The WASM/worker decoders required for IFC and OCC live in this repo's `public/libs`
+folder (web-ifc, occt-import-js, Draco, Basis). When embedding the viewer in another
+host page, copy `public/libs` into that host's static folder and pass the `libPath`
+prop if it is not served at `./libs`.
 
 ## Quick Usage
 
 ```tsx
-import { ThreeViewer } from '@zhangly1403/3dbrowser';
+import { ThreeViewer } from './src';
 
 function App() {
   return (
@@ -131,7 +134,7 @@ function App() {
 For advanced scenarios, you can interact directly with the `SceneManager`:
 
 ```typescript
-import { SceneManager } from '@zhangly1403/3dbrowser';
+import { SceneManager } from './src';
 
 // In onLoad callback of ThreeViewer
 const handleLoad = (manager: SceneManager) => {
@@ -170,7 +173,7 @@ This project is intended for learning and research purposes only. **Commercial u
 
 ---
 
-# @zhangly1403/3dbrowser (中文)
+# 3dbrowser (中文)
 
 专业的 React 3D 模型浏览器组件库，专注于超大模型与易用性。单个 2.9 GB 的 NBIM（23 万构件、1.86 亿渲染三角面）可在数秒内打开，JS 堆稳定控制在约 3 GB 以内。
 
@@ -180,7 +183,7 @@ This project is intended for learning and research purposes only. **Commercial u
 - **多格式支持**:
   - **BIM**: IFC (基于 web-ifc)
   - **标准格式**: GLB/GLTF, FBX, OBJ
-  - **自定义格式**: LMB, NBIM
+  - **自定义格式**: NBIM v11
 - **高级工具**:
   - **测量**: 距离、角度、坐标测量。
   - **剖切**: 实时剖切面，方便查看内部结构；打开面板时按当前模型自动重算范围。
@@ -189,7 +192,7 @@ This project is intended for learning and research purposes only. **Commercial u
   - **显示样式**: 真实（着色 + 边线）、着色、线框，工具栏一键切换并本地记忆。
   - **框选**: 全屏框选，十万级构件下仍保持毫秒级响应。
   - **实例级点选**: 单击只选中并高亮光标命中的那一个实例（带发光效果），高亮颜色可自定义。
-- **离线批量转换**: 纯 CPU 把 LMB 源文件合并转换为单个 NBIM，不进入场景、不占显存。
+- **离线批量转换**: 纯 CPU 把旧版 NBIM 源文件迁移合并为单个 NBIM v11 文件，不进入场景、不占显存。
 - **现代技术栈**: 基于 **React 19**, **Three.js** 和 **TypeScript** 构建。
 - **双语支持**: 内置完善的中英文支持。
 
@@ -223,14 +226,12 @@ This project is intended for learning and research purposes only. **Commercial u
 | 近景帧率 | ~54 fps | 软件渲染 |
 | 全屏框选 33,588 个构件 | ~70 ms | 框选覆盖整个视口 |
 | 拖动时 / 松手后的像素比 | 0.8 → 1.0 | 自适应画质 |
-| NBIM v9 文件体积（同模型） | **589 MB** | 原 v8 为 2.96 GB（−80%） |
-
-> 更完整的测量方法与分步收益见 [docs/benchmark.md](docs/benchmark.md)。
+| NBIM v11 单文件体积（同模型） | **589 MB** | 分块 + 量化压缩 |
 
 ### 性能来源
 
 - **分块 NBIM + `BatchedMesh`**：几何按八叉树切成块，每块一个 `BatchedMesh`，23 万构件只需数百次 draw call，而不是 23 万次。
-- **NBIM v9 量化压缩**：position int16 + 每块 scale/offset、normal int8、索引 u16/u32，分块 payload gzip；v8 旧文件仍可直接打开。
+- **NBIM v11 量化压缩**：position int16 + 每块 scale/offset、normal int8、索引 u16/u32，分块 payload gzip。
 - **法线 int8**：合并缓冲里法线从 12B/顶点降到 3B/顶点，由 GPU 归一化属性还原。
 - **逐实例几何视图按需构建**：拾取只用包围盒；边线/碰撞/面积才构建零拷贝视图，用完立即释放。
 - **内存预算而非“无脑全量”**：`maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` 由 JS 堆上限和单块解码预估值动态推导；预算足够时 1,271 块全量驻留，不足时优先卸载最远分块。
@@ -239,7 +240,7 @@ This project is intended for learning and research purposes only. **Commercial u
 - **按需渲染**：只有相机、加载、选中状态变化时才绘制一帧，空闲时几乎零开销。
 - **实例感知拾取**：`batchId` → uuid/来源的映射让单击能定位到具体实例；框选先用整块包围盒剔除，再落到实例级。
 - **属性索引懒加载**：超过 2 万条属性文档时不常驻内存，选中时按需解析；搜索时一次性单遍构建。
-- **无头批量转换**：LMB → NBIM 仅使用 CPU 与磁盘，可在没有可用 GPU 的机器上运行。
+- **无头批量转换**：旧版 NBIM → v11 迁移仅使用 CPU 与磁盘，可在没有可用 GPU 的机器上运行。
 
 ### 已知边界
 
@@ -252,23 +253,26 @@ This project is intended for learning and research purposes only. **Commercial u
 
 ## 安装
 
-组件库已发布到 npm（包名 **`@zhangly1403/3dbrowser`**，附带构建 provenance），可直接安装发布版本，无需从源码构建。
+本项目**已停止 npm 发布**，请直接从源码使用：
 
 ```bash
-npm install @zhangly1403/3dbrowser
+git clone https://github.com/zly258/3dbrowser.git
+cd 3dbrowser
+npm install
+npm run dev
 ```
 
 ## 静态资源配置
 
-您需要将包中的 `libs` 文件夹复制到您项目的 public 目录下。该文件夹包含了解码 IFC 和 OCC 文件所需的 WASM 和 worker 文件。
-
-1. 复制 `node_modules/@zhangly1403/3dbrowser/dist/libs` 到您项目的 `public/libs` 文件夹。
-2. 如果放置在其他位置，请在组件中指定 `libPath` 属性（默认为 `./libs`）。
+解码 IFC 与 OCC 所需的 WASM/worker 文件位于本仓库的 `public/libs` 文件夹
+（web-ifc、occt-import-js、Draco、Basis）。若要把查看器嵌入其他宿主页面，
+将该 `public/libs` 复制到宿主的静态目录，并按需传入 `libPath` 属性
+（默认路径为 `./libs`）。
 
 ## 快速上手
 
 ```tsx
-import { ThreeViewer } from '@zhangly1403/3dbrowser';
+import { ThreeViewer } from './src';
 
 function App() {
   return (
