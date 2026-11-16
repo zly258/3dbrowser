@@ -144,19 +144,24 @@ const handleLoad = (manager: SceneManager) => {
 
 ## UI Style System
 
-The whole interface follows one light Fluent / industrial-CAD console language. All tokens live in
+The whole interface follows one light Material Design 3 (MD3) CAD-viewer language
+(font stack `Nunito` / `Noto Sans SC` + system CJK fallbacks). All tokens live in
 `src/styles/variables.css`; component styles are hand-written modules imported by
 `src/styles/index.css`.
 
-- **Density**: 12.5px body, 26px controls (22px small), 22px table/property rows, 26px tree rows.
-- **Shell**: 42px top bar + three columns (left `clamp(250px,22vw,320px)`, viewport `flex:1; min-width:0`,
-  right `clamp(320px,27vw,440px)`) + 30px status bar. The page itself never scrolls; only panel bodies do.
-- **Colour**: four background layers (`--bg-app` → `--bg-band` → `--bg-panel`/`--bg-chrome`), three border
-  levels, three text levels (all ≥ 4.5:1 contrast), single accent plus danger/success/warn semantics.
+- **Density**: 12px body text, 26px controls, 11px captions/labels, 24px bottom status bar.
+- **Shell**: 44px top bar + three columns (left `clamp(200px,20vw,264px)`, viewport `flex:1; min-width:0`,
+  right `clamp(240px,25vw,340px)`) + 24px status bar. The page itself never scrolls; only panel bodies do.
+- **Colour**: `#F8FAFC` page over `#FFFFFF` surfaces, `#1E293B` primary / `#475569` secondary text,
+  `#E2E8F0` / `#F1F5F9` borders, single accent `#2563EB` plus danger/success/warn semantics (all ≥ 4.5:1).
+- **Shapes**: pill (999px) buttons, 6px inputs, 12px menus & floating panels, 16px modals & loading card,
+  6px translucent capsule scrollbars; icons are inline SVG with `stroke="currentColor"`.
+- **Buttons**: icon + text pills with true vertical centering (`line-height:1`, SVG `display:block`);
+  primary actions are solid `#2563EB` with white text.
 - **States**: any rule that changes `background` also declares `color`; disabled states use token colours
   (never `opacity`); white text only on accent/danger/tooltip dark backgrounds.
-- **Shapes**: 3px / 4px radii, two shadows, 8px scrollbars, icons are inline SVG with `stroke="currentColor"`.
-- **Dark theme**: only token values change (`.theme-dark`), never component structure.
+- **Dark theme**: only token values change (`.theme-dark`: `#0F172A` page / `#1E293B` surfaces /
+  `#334155` borders), never component structure.
 
 Verify before delivering:
 
@@ -314,18 +319,22 @@ function App() {
 
 ## 界面样式规范
 
-全站共用一套「浅色 Fluent 工业 CAD 控制台」语言：令牌唯一来源 `src/styles/variables.css`，
-组件样式是手写模块文件，由 `src/styles/index.css` 按顺序引入。
+全站共用一套「浅色 MD3 CAD 查看器」语言（字体链 `Nunito` / `Noto Sans SC` + 系统中文回退）：
+令牌唯一来源 `src/styles/variables.css`，组件样式是手写模块文件，由 `src/styles/index.css` 按顺序引入。
 
-- **密度**：正文 12.5px，控件 26px（小号 22px），表格/属性行 22px，树行 26px。
-- **骨架**：顶栏 42px + 三栏（左 `clamp(250px,22vw,320px)`、视口 `flex:1; min-width:0`、
-  右 `clamp(320px,27vw,440px)`）+ 底栏 30px。页面本身不滚动，滚动只发生在面板内部容器。
-- **配色**：背景四层（`--bg-app` → `--bg-band` → `--bg-panel`/`--bg-chrome`）、边框三级、文字三级
-  （对比度均 ≥ 4.5:1）；强调色单一，语义色仅用于 danger / success / warn。
+- **密度**：正文 12px，控件 26px，说明文字/标签 11px，底栏 24px。
+- **骨架**：顶栏 44px + 三栏（左 `clamp(200px,20vw,264px)`、视口 `flex:1; min-width:0`、
+  右 `clamp(240px,25vw,340px)`）+ 底栏 24px。页面本身不滚动，滚动只发生在面板内部容器。
+- **配色**：`#F8FAFC` 页面底 + `#FFFFFF` 表面，主文字 `#1E293B` / 次文字 `#475569`，
+  边框 `#E2E8F0` / `#F1F5F9`，单一强调色 `#2563EB` + danger/success/warn 语义色（对比度均 ≥ 4.5:1）。
+- **形与图标**：按钮一律胶囊（999px），输入 6px，菜单/浮动面板 12px，模态与加载卡 16px，
+  滚动条 6px 半透明胶囊；图标一律内联 SVG（`stroke="currentColor"`）。
+- **按钮**：图标+文字胶囊，真实垂直居中（`line-height:1`，SVG `display:block`）；
+  主操作为 `#2563EB` 实底白字。
 - **状态**：任何改 `background` 的规则必须同时声明 `color`；禁用态用令牌换色（禁止 `opacity`）；
   白字只允许压在 Accent / Danger / Tooltip 深底上。
-- **形与图标**：圆角 3px / 4px，两级阴影，滚动条 8px，图标一律内联 SVG（`stroke="currentColor"`）。
-- **暗色主题**：只替换令牌取值（`.theme-dark`），不改组件结构。
+- **暗色主题**：只替换令牌取值（`.theme-dark`：`#0F172A` 页面 / `#1E293B` 表面 / `#334155` 边框），
+  不改组件结构。
 
 交付前执行：
 
