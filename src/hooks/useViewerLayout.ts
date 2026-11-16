@@ -8,19 +8,16 @@ interface UseViewerLayoutOptions {
     setShowProps: (value: boolean) => void;
 }
 
-/* 三栏尺寸：左 clamp(250px,22vw,320px)，右 clamp(320px,27vw,440px) */
-const LEFT_MIN = 250;
-const LEFT_MAX = 340;
-const RIGHT_MIN = 320;
-const RIGHT_MAX = 460;
+/* 三栏尺寸（对齐 MD3 参考抽屉宽）：左约 224px（200–264），右约 288px（240–340） */
+const LEFT_MIN = 200;
+const LEFT_MAX = 264;
+const LEFT_DEFAULT = 224;
+const RIGHT_MIN = 240;
+const RIGHT_MAX = 340;
+const RIGHT_DEFAULT = 288;
 
 function clampWidth(value: number, min: number, max: number) {
     return Math.round(Math.max(min, Math.min(max, value)));
-}
-
-function initialWidth(ratio: number, min: number, max: number, fallback: number) {
-    if (typeof window === "undefined") return fallback;
-    return clampWidth(window.innerWidth * ratio, min, max);
 }
 
 export function useViewerLayout(options: UseViewerLayoutOptions) {
@@ -34,21 +31,21 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
     // 宽度持久化：ID 用面板级 key，避免与其它布局状态冲突
     const [leftWidth, setLeftWidth] = usePersistentState<number>(
         "viewer_sidebar_left_w",
-        () => initialWidth(0.22, LEFT_MIN, 320, 268),
+        LEFT_DEFAULT,
         {
             parser: (raw) => {
                 const parsed = Number(JSON.parse(raw));
-                return Number.isFinite(parsed) ? clampWidth(parsed, LEFT_MIN, LEFT_MAX) : initialWidth(0.22, LEFT_MIN, 320, 268);
+                return Number.isFinite(parsed) ? clampWidth(parsed, LEFT_MIN, LEFT_MAX) : LEFT_DEFAULT;
             }
         }
     );
     const [rightWidth, setRightWidth] = usePersistentState<number>(
         "viewer_sidebar_right_w",
-        () => initialWidth(0.27, RIGHT_MIN, 440, 344),
+        RIGHT_DEFAULT,
         {
             parser: (raw) => {
                 const parsed = Number(JSON.parse(raw));
-                return Number.isFinite(parsed) ? clampWidth(parsed, RIGHT_MIN, RIGHT_MAX) : initialWidth(0.27, RIGHT_MIN, 440, 344);
+                return Number.isFinite(parsed) ? clampWidth(parsed, RIGHT_MIN, RIGHT_MAX) : RIGHT_DEFAULT;
             }
         }
     );

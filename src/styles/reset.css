@@ -39,18 +39,22 @@ textarea:disabled { cursor: default; }
 
 svg { display: block; flex-shrink: 0; }
 
-/* ---------- 滚动条：8px，令牌轨道 ---------- */
+/* ---------- 滚动条：MD3 细胶囊，6px，半透明 slate，hover 加深 ---------- */
 ::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
 
-::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  margin: 4px;
+}
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
+  background-clip: padding-box;
   border-radius: var(--radius-pill);
-  border: 2px solid var(--scrollbar-track);
+  border: 1.5px solid transparent;
 }
 
-::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
 
 ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
 

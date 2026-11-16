@@ -1,83 +1,93 @@
 /*
  * 设计令牌（唯一来源）
- * 浅色 Fluent / Windows 11 工业 CAD 控制台。
+ * Material Design 3 风格 CAD 查看器（浅色 slate + 单一强调 blue-600）。
  *
  * 规则：
- *   1. 业务样式只允许引用 var(--*)，不得出现裸 #RRGGBB（遮罩、阴影、SVG 描边除外）。
- *   2. 背景四层：--bg-app → --bg-band → --bg-panel / --bg-chrome。
- *   3. 正文 12.5px，控件 26px，表格 22–26px，圆角 3px / 4px / 999px。
- *   4. 暗色主题只替换令牌值，不改组件结构。
+ *   1. 业务样式只允许引用 var(--*)，不得出现裸 #RRGGBB（遮罩、阴影、SVG data-URI 除外）。
+ *   2. 背景四层：--bg-app → --bg-band → --bg-panel / --bg-chrome；毛玻璃用 --bg-glass。
+ *   3. 正文 12px，底栏/chip 11px，控件 26px，圆角 6px / 12px / 16px / 999px（胶囊）。
+ *   4. 暗色主题只替换令牌值，不改组件结构（.theme-dark / [data-theme="dark"]）。
+ *   5. 任何改 background 的规则必须同时声明 color；禁用态用令牌不用 opacity。
  */
 :root {
   color-scheme: light;
 
+  /* ---------- 字体 ---------- */
+  --font-sans: 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: var(--font-sans);
+
   /* ---------- 背景四层 ---------- */
-  --bg-app: #e8ebef;
+  --bg-app: #f8fafc;
   --bg-chrome: #ffffff;
-  --bg-band: #f0f2f5;
+  --bg-band: #f1f5f9;
   --bg-panel: #ffffff;
-  --bg-hover: #e3e8ee;
+  --bg-hover: #f1f5f9;
+  --bg-hover-strong: #e2e8f0;
   --bg-input: #ffffff;
-  --bg-viewport: #eef1f5;
-  --bg-sunken: #f5f7fa;
+  --bg-viewport: #f8fafc;
+  --bg-sunken: #f8fafc;
+  /* 毛玻璃浮层（下拉菜单 / Toast / 搜索浮层） */
+  --bg-glass: rgba(255, 255, 255, 0.95);
 
   /* ---------- 边框三级 ---------- */
-  --border-main: #cdd3da;
-  --border-sub: #e2e6eb;
-  --border-strong: #b3bac3;
-  --border-hover: #c7ccd3;
+  --border-main: #e2e8f0;
+  --border-sub: #f1f5f9;
+  --border-strong: #cbd5e1;
+  --border-hover: #cbd5e1;
 
   /* ---------- 文字三级 ---------- */
-  --text-main: #14181d;
-  --text-sec: #333940;
-  --text-muted: #5c636c;
+  --text-main: #1e293b;
+  --text-sec: #475569;
+  /* slate-500 加深一档，保证在 slate-50/100 底上仍 ≥ 4.5:1 */
+  --text-muted: #5b6472;
 
   /* ---------- 强调与语义 ---------- */
-  --accent: #0b5fa5;
-  --accent-hover: #094e88;
-  --accent-active: #083f6d;
-  --accent-soft: #e3eef9;
-  --accent-line: #8fbde6;
-  --accent-focus: rgba(11, 95, 165, 0.22);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-active: #1e40af;
+  --accent-soft: #eff6ff;
+  --accent-line: #bfdbfe;
+  --accent-focus: rgba(37, 99, 235, 0.25);
   --accent-contrast: #ffffff;
-  /* 实底强调（承载白字）：浅色主题与 accent 一致 */
-  --accent-solid: #0b5fa5;
-  --accent-solid-hover: #094e88;
-  --accent-solid-active: #083f6d;
+  /* 实底强调（承载白字）：主按钮 / 开启态 */
+  --accent-solid: #2563eb;
+  --accent-solid-hover: #1d4ed8;
+  --accent-solid-active: #1e40af;
   --danger: #b3261e;
   --danger-hover: #8f1d17;
   --danger-soft: #fbeceb;
-  --danger-line: #e6b8b2;
-  --success: #0b6b3a;
-  --success-soft: #edf8ee;
-  --success-line: #b7ddb7;
-  --warn: #8a5b00;
-  --warn-soft: #fdf6e7;
-  --warn-line: #e8d4a8;
-  --info: #0b5fa5;
+  --danger-line: #f2b8b5;
+  --success: #15803d;
+  --success-soft: #f0fdf4;
+  --success-line: #bbf7d0;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --warn-line: #fde68a;
+  --info: #2563eb;
   --switch-thumb: #ffffff;
 
   /* ---------- 形 ---------- */
-  --radius-xs: 2px;
-  --radius: 3px;
-  --radius-lg: 4px;
+  --radius-xs: 4px;
+  --radius: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.08);
-  --shadow-overlay: 0 6px 24px rgba(0, 0, 0, 0.18);
-  --shadow-panel: 0 10px 28px rgba(15, 23, 42, 0.14), 0 1px 3px rgba(15, 23, 42, 0.08);
-  --scrim: rgba(0, 0, 0, 0.34);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-overlay: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.08);
+  --shadow-panel: 0 12px 28px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --scrim: rgba(15, 23, 42, 0.32);
 
   /* ---------- 字 ---------- */
-  --font-sans: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
-  --font-mono: var(--font-sans);
-  --font-size-base: 12.5px;
-  --font-size-body: 12.5px;
+  --font-size-base: 12px;
+  --font-size-body: 12px;
   --font-size-secondary: 12px;
-  --font-size-label: 11.5px;
+  --font-size-label: 11px;
   --font-size-title: 13px;
   --font-size-large: 15px;
   --font-size-page: 16px;
-  --line-height: 1.45;
+  --font-size-caption: 11px;
+  --line-height: 1.5;
 
   /* ---------- 尺寸阶梯 ---------- */
   --control-h: 26px;
@@ -85,23 +95,23 @@
   --control-h-md: 26px;
   --control-h-lg: 26px;
   --control-h-xs: 22px;
-  --header-h: 42px;
-  --toolbar-btn-h: 34px;
-  --toolbar-h: 32px;
-  --footer-h: 30px;
-  --modal-head-h: 38px;
+  --header-h: 44px;
+  --toolbar-btn-h: 26px;
+  --toolbar-h: 44px;
+  --footer-h: 24px;
+  --modal-head-h: 40px;
   --tree-row-h: 26px;
-  --prop-row-h: 22px;
+  --prop-row-h: 24px;
   --prop-label-width: 96px;
-  --icon-size: 13px;
-  --icon-size-sm: 11px;
+  --icon-size: 14px;
+  --icon-size-sm: 12px;
   --icon-btn-size: 26px;
   --icon-btn-size-sm: 22px;
-  --icon-btn-radius: var(--radius);
+  --icon-btn-radius: var(--radius-pill);
   --slider-track-height: 4px;
-  --slider-thumb-size: 13px;
+  --slider-thumb-size: 14px;
   --slider-thumb-border: 2px;
-  --scrollbar-size: 8px;
+  --scrollbar-size: 6px;
 
   /* ---------- 间距 ---------- */
   --space-1: 4px;
@@ -111,24 +121,24 @@
   --space-5: 16px;
 
   /* ---------- 侧栏 ---------- */
-  --sidebar-left-w: clamp(250px, 22vw, 320px);
-  --sidebar-left-min: 250px;
-  --sidebar-left-max: 340px;
-  --sidebar-right-w: clamp(320px, 27vw, 440px);
-  --sidebar-right-min: 320px;
-  --sidebar-right-max: 460px;
+  --sidebar-left-w: clamp(200px, 20vw, 264px);
+  --sidebar-left-min: 200px;
+  --sidebar-left-max: 264px;
+  --sidebar-right-w: clamp(240px, 25vw, 340px);
+  --sidebar-right-min: 240px;
+  --sidebar-right-max: 340px;
 
   /* 表单标签列宽（各面板可局部覆盖） */
   --panel-label-width: 96px;
 
-  /* ---------- 滚动条 ---------- */
-  --scrollbar-track: #f2f4f7;
-  --scrollbar-thumb: #b6bdc7;
-  --scrollbar-thumb-hover: #8f97a3;
+  /* ---------- 滚动条（MD3 细胶囊，半透明 slate） ---------- */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(148, 163, 184, 0.48);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.8);
 
   /* ---------- 搜索命中高亮 ---------- */
   --search-hit-bg: #fef08a;
-  --search-hit-text: #14181d;
+  --search-hit-text: #1e293b;
 
   /* ---------- 层级阶梯（统一顺序，勿再写裸数字） ---------- */
   --z-panel: 200;
@@ -150,17 +160,16 @@
   --bg-secondary: var(--bg-chrome);
   --bg-tertiary: var(--bg-band);
   --bg-elevated: var(--bg-chrome);
-  --bg-header: var(--bg-band);
+  --bg-header: var(--bg-chrome);
   --bg-canvas: var(--bg-viewport);
   --bg-active: var(--bg-hover);
   --bg-selected: var(--accent-soft);
   --bg-soft: var(--accent-soft);
   --bg-soft-strong: var(--accent-soft);
-  --bg-glass: var(--bg-chrome);
   --bg-card: var(--bg-chrome);
   --bg-subtle: var(--bg-band);
   --bg-sunken-2: var(--bg-sunken);
-  --blur-overlay: none;
+  --blur-overlay: 8px;
   --border-color: var(--border-main);
   --border-light: var(--border-sub);
   --border-hover-strong: var(--border-hover);
@@ -195,7 +204,7 @@
   --surface-container-highest: var(--bg-hover);
   --surface-canvas: var(--bg-viewport);
   --surface-overlay: var(--bg-panel);
-  --surface-glass: var(--bg-panel);
+  --surface-glass: var(--bg-glass);
   --surface-hover: var(--bg-hover);
   --surface-active: var(--bg-hover);
   --surface-selected: var(--accent-soft);
@@ -208,14 +217,14 @@
   --on-surface-variant: var(--text-sec);
   --on-surface-muted: var(--text-muted);
   --on-surface-disabled: var(--text-muted);
-  --radius-sm: var(--radius);
+  --radius-sm: var(--radius-xs);
   --radius-md: var(--radius);
-  --radius-xl: var(--radius-lg);
+  --radius-xl-lg: var(--radius-xl);
   --radius-small: var(--radius-xs);
   --radius-medium: var(--radius);
   --radius-large: var(--radius-lg);
   --radius-full: var(--radius-pill);
-  --icon-button-radius: var(--radius);
+  --icon-button-radius: var(--radius-pill);
   --icon-button-size: var(--icon-btn-size);
   --icon-button-gap: var(--space-1);
   --icon-btn-border: var(--border-main);
@@ -244,7 +253,7 @@
 }
 
 /* ============================================================
- * 暗色主题：仅替换令牌值
+ * 暗色主题：MD3 Dark（slate-900 底 / slate-800 表面 / slate-700 边框）
  * 层次：视口/应用底最深 → 面板/顶栏 → 工具条带 → 悬停，逐层提亮，
  * 并保留可见的 1px 边框，避免“整片纯黑、结构看不出来”。
  * ============================================================ */
@@ -252,60 +261,62 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg-app: #171b21;
-  --bg-chrome: #1e242b;
-  --bg-band: #262d36;
-  --bg-panel: #1e242b;
-  --bg-hover: #2f3742;
-  --bg-input: #1a1f26;
-  --bg-viewport: #12171c;
-  --bg-sunken: #222930;
+  --bg-app: #0f172a;
+  --bg-chrome: #1e293b;
+  --bg-band: #243146;
+  --bg-panel: #1e293b;
+  --bg-hover: #2b3a54;
+  --bg-hover-strong: #354763;
+  --bg-input: #182338;
+  --bg-viewport: #0b1220;
+  --bg-sunken: #1b2740;
+  --bg-glass: rgba(30, 41, 59, 0.95);
 
-  --border-main: #3f4a56;
-  --border-sub: #2d353f;
-  --border-strong: #566373;
-  --border-hover: #4d5865;
+  --border-main: #334155;
+  --border-sub: #263650;
+  --border-strong: #475569;
+  --border-hover: #3e4e68;
 
-  --text-main: #f5f8fa;
-  --text-sec: #d2dae2;
-  --text-muted: #a7b2bd;
+  --text-main: #f1f5f9;
+  --text-sec: #cbd5e1;
+  --text-muted: #94a3b8;
 
-  /* 文本/图标/描边用的强调色（亮蓝，深底上对比度 ≥ 6:1） */
-  --accent: #6fb3e6;
-  --accent-hover: #8cc6f0;
-  --accent-active: #4f9cd6;
-  --accent-soft: #1d4262;
-  --accent-line: #4a86b8;
-  --accent-focus: rgba(111, 179, 230, 0.35);
+  /* 文本/图标/描边用的强调色（blue-400，深底上对比度 ≥ 4.5:1） */
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+  --accent-active: #3b82f6;
+  --accent-soft: #1c3557;
+  --accent-line: #2c5586;
+  --accent-focus: rgba(96, 165, 250, 0.35);
   --accent-contrast: #ffffff;
-  /* 实底强调（承载白字）：保持足够深，白字对比度 ≥ 4.6:1 */
-  --accent-solid: #1c6ba3;
-  --accent-solid-hover: #2279b8;
-  --accent-solid-active: #15547f;
-  --danger: #f0756b;
-  --danger-hover: #ff8c82;
-  --danger-soft: #3d2320;
-  --danger-line: #74403b;
-  --success: #5cc084;
-  --success-soft: #1c3125;
-  --success-line: #33644a;
-  --warn: #e6bb63;
-  --warn-soft: #362c1a;
-  --warn-line: #64502a;
-  --info: #6fb3e6;
-  --switch-thumb: #eef2f6;
+  /* 实底强调（承载白字）：保持 blue-600 深度，白字对比度 ≥ 5:1 */
+  --accent-solid: #2563eb;
+  --accent-solid-hover: #1d4ed8;
+  --accent-solid-active: #1e40af;
+  --danger: #f87171;
+  --danger-hover: #fca5a5;
+  --danger-soft: #3b1a1a;
+  --danger-line: #6b2b2b;
+  --success: #4ade80;
+  --success-soft: #12301f;
+  --success-line: #2e5c3f;
+  --warn: #fbbf24;
+  --warn-soft: #33270f;
+  --warn-line: #5c4a1f;
+  --info: #60a5fa;
+  --switch-thumb: #e2e8f0;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.6);
-  --shadow-overlay: 0 10px 32px rgba(0, 0, 0, 0.7);
-  --shadow-panel: 0 14px 34px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(0, 0, 0, 0.6);
-  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --shadow-panel: 0 12px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.45);
+  --scrim: rgba(2, 6, 23, 0.6);
 
-  --scrollbar-track: #262d36;
-  --scrollbar-thumb: #55606b;
-  --scrollbar-thumb-hover: #6b7784;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(71, 85, 105, 0.6);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.85);
 
-  --search-hit-bg: #6b5300;
-  --search-hit-text: #fff3c4;
+  --search-hit-bg: #713f12;
+  --search-hit-text: #fef9c3;
 }
 
 /* ============================================================

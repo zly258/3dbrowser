@@ -1,6 +1,6 @@
 /*
- * 页面骨架：顶栏 42px + 三栏工作区 + 底栏 30px，页面本身永不滚动。
- * 三栏尺寸：左 clamp(250px,22vw,320px) / 视口 flex:1 min-width:0 / 右 clamp(320px,27vw,440px)
+ * 页面骨架：顶栏 44px（h-11） + 三栏工作区 + 底栏 24px（h-6），页面本身永不滚动。
+ * 三栏尺寸：左 clamp(200px,20vw,264px)（约 224px）/ 视口 flex:1 min-width:0 / 右 clamp(240px,25vw,340px)（约 288px）
  */
 
 .ui-app-shell,
@@ -68,19 +68,19 @@
   border-left: 1px solid var(--border-main);
 }
 
-/* 侧栏头：26px 紧凑条，--bg-band 底 */
+/* 侧栏头：32px 白底条，12px semibold 标题（与参考图层/属性头一致） */
 .ui-sidebar-header {
   flex: 0 0 auto;
-  height: var(--toolbar-h);
-  min-height: var(--toolbar-h);
-  padding: 0 4px 0 10px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 4px 0 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   color: var(--text-main);
-  background: var(--bg-band);
-  border-bottom: 1px solid var(--border-main);
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border-sub);
   font-size: var(--font-size-secondary);
   font-weight: 600;
   letter-spacing: 0;

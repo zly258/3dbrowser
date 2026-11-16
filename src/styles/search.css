@@ -228,8 +228,8 @@
   min-width: 0;
   overflow: hidden;
   background: var(--bg-chrome);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-lg);
 }
 
 .ui-selection-box-header {
@@ -305,8 +305,8 @@
   min-width: 0;
   overflow: hidden;
   background: var(--bg-chrome);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-lg);
 }
 
 /* 结果区填满剩余高度，避免面板底部留大片空白 */
@@ -318,8 +318,8 @@
   min-width: 0;
   overflow: hidden;
   background: var(--bg-chrome);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-lg);
 }
 
 .ui-clash-results-section .ui-clash-section-content {
@@ -664,7 +664,7 @@
   width: min(320px, 100%);
   padding: 12px;
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-main);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-overlay);
 }

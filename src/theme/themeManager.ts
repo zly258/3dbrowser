@@ -24,12 +24,12 @@ export const THEME_PRESETS: ThemePreset[] = [
     key: "indigo",
     labelZh: "经典蓝",
     labelEn: "Classic",
-    primary: "#0b5fa5",
-    primaryHover: "#094e88",
-    primaryActive: "#083f6d",
-    primaryContainer: "#e3eef9",
-    primaryLine: "#8fbde6",
-    swatch: "#0b5fa5"
+    primary: "#2563eb",
+    primaryHover: "#1d4ed8",
+    primaryActive: "#1e40af",
+    primaryContainer: "#eff6ff",
+    primaryLine: "#bfdbfe",
+    swatch: "#2563eb"
   },
   {
     key: "sky",
@@ -248,7 +248,7 @@ export function applyTheme(type: ThemeType, customColor?: string, mode?: ThemeMo
   const accent = isDark ? lighten(preset.primary, 0.45) : preset.primary;
   const accentHover = isDark ? lighten(preset.primary, 0.58) : preset.primaryHover;
   const accentActive = isDark ? lighten(preset.primary, 0.32) : preset.primaryActive;
-  const accentSoft = isDark ? mix(preset.primary, "#1e242b", 0.2) : preset.primaryContainer;
+  const accentSoft = isDark ? mix(preset.primary, "#1e293b", 0.2) : preset.primaryContainer;
   const accentLine = isDark ? lighten(preset.primary, 0.28) : preset.primaryLine;
   const accentFocus = isDark ? rgbaOf(accent, 0.4) : rgbaOf(preset.primary, 0.22);
 

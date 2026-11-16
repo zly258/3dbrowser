@@ -16,44 +16,45 @@ export interface ThemeColors {
     shadow: string;
 }
 
+/* 与 src/styles/variables.css 的 MD3 令牌保持一致（仅作 CSS 变量读取失败时的回退） */
 export const themes: { light: ThemeColors; dark: ThemeColors } = {
     light: {
-        bg: "#e8ebef",
+        bg: "#f8fafc",
         panelBg: "#ffffff",
-        headerBg: "#f0f2f5",
-        border: "#cdd3da",
-        text: "#14181d",
-        textLight: "#14181d",
-        textMuted: "#5c636c",
-        accent: "#0b5fa5",
-        highlight: "#e3eef9",
-        itemHover: "#e3e8ee",
-        success: "#0b6b3a",
-        warning: "#8a5b00",
+        headerBg: "#ffffff",
+        border: "#e2e8f0",
+        text: "#1e293b",
+        textLight: "#1e293b",
+        textMuted: "#5b6472",
+        accent: "#2563eb",
+        highlight: "#eff6ff",
+        itemHover: "#f1f5f9",
+        success: "#15803d",
+        warning: "#b45309",
         danger: "#b3261e",
-        canvasBg: "#eef1f5",
-        shadow: "0 1px 2px rgba(0, 0, 0, 0.08)"
+        canvasBg: "#f8fafc",
+        shadow: "0 1px 2px rgba(15, 23, 42, 0.06)"
     },
     dark: {
-        bg: "#0e1114",
-        panelBg: "#181d23",
-        headerBg: "#21272f",
-        border: "#39434e",
-        text: "#f1f4f7",
+        bg: "#0f172a",
+        panelBg: "#1e293b",
+        headerBg: "#1e293b",
+        border: "#334155",
+        text: "#f1f5f9",
         textLight: "#ffffff",
-        textMuted: "#98a3af",
-        accent: "#6fb3e6",
-        highlight: "#17364e",
-        itemHover: "#2b333c",
-        success: "#58b97d",
-        warning: "#e0b45c",
-        danger: "#ef6a60",
-        canvasBg: "#12171c",
-        shadow: "0 1px 2px rgba(0, 0, 0, 0.6)"
+        textMuted: "#94a3b8",
+        accent: "#60a5fa",
+        highlight: "#1c3557",
+        itemHover: "#2b3a54",
+        success: "#4ade80",
+        warning: "#fbbf24",
+        danger: "#f87171",
+        canvasBg: "#0b1220",
+        shadow: "0 1px 2px rgba(0, 0, 0, 0.5)"
     }
 };
 
-export const DEFAULT_FONT = '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif';
+export const DEFAULT_FONT = "'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif";
 
 export const colors = themes.light;
 
@@ -105,4 +106,3 @@ export function resolveThemeColors(): ThemeColors {
         shadow: vars.shadow || fallback.shadow
     };
 }
-

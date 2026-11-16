@@ -1,7 +1,8 @@
 /*
- * 顶栏（应用标题栏 + 工具条）
- * 高 42px，按钮 26px，纯文本 + 内联 SVG，无渐变无阴影堆叠。
- * z-index 50（顶栏层）。
+ * 顶栏（应用标题栏 + 工具条）— Material Design 3 语言
+ * 高 44px（h-11），白色 + 底部 1px 边框；按钮为「图标 + 文字」胶囊（rounded-full），
+ * 写法约定：inline-flex items-center justify-center + line-height:1 + SVG block shrink-0，
+ * 图标与文字真正垂直居中。z-index 50（顶栏层）。
  */
 
 .ui-toolbar {
@@ -14,12 +15,13 @@
   flex: 0 0 auto;
   height: var(--header-h);
   min-height: var(--header-h);
-  padding: 0 5px;
+  padding: 0 12px;
   gap: 2px;
   overflow: visible;
   white-space: nowrap;
   background: var(--bg-chrome);
-  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-main);
   box-shadow: none;
 }
 
@@ -32,36 +34,36 @@
   /* 允许分组收缩，分组内按钮才能省略文字而不是被父级静默裁掉 */
   flex: 0 1 auto;
   min-width: 0;
-  gap: 1px;
+  gap: 2px;
   padding: 0;
   background: transparent;
   border: 0;
 }
 
 .ui-toolbar-group + .ui-toolbar-group {
-  margin-left: 3px;
-  padding-left: 5px;
+  margin-left: 4px;
+  padding-left: 8px;
   border-left: 1px solid var(--border-sub);
 }
 
-/* ---------- 工具按钮：图标在上、文字在下 ---------- */
+/* ---------- 工具按钮：图标 + 文字水平胶囊 ---------- */
 .ui-toolbar-btn {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 5px;
   flex: 0 1 auto;
   height: var(--toolbar-btn-h);
   min-height: var(--toolbar-btn-h);
   min-width: 0;
-  padding: 2px 7px;
-  color: var(--text-main);
-  background: var(--bg-chrome);
+  padding: 0 10px;
+  color: var(--text-sec);
+  background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius);
-  font-size: var(--font-size-label);
-  font-weight: 400;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-base);
+  font-weight: 500;
   line-height: 1;
   text-align: center;
   white-space: nowrap;
@@ -70,6 +72,8 @@
 }
 
 .ui-toolbar-btn svg {
+  display: block;
+  flex-shrink: 0;
   width: var(--icon-size);
   height: var(--icon-size);
   color: currentColor;
@@ -87,44 +91,46 @@
 }
 
 .ui-toolbar-btn-label {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
-  max-width: 88px;
+  max-width: 96px;
   min-height: 0;
+  height: 1em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--font-size-label);
-  font-weight: 400;
+  font-size: var(--font-size-base);
+  font-weight: 500;
   line-height: 1;
   color: currentColor;
 }
 
-/* hover：浅灰底 + 深色字 */
+/* hover：浅灰胶囊 + 深色字 */
 .ui-toolbar-btn:hover:not(:disabled):not(.active) {
   background: var(--bg-hover);
-  border-color: var(--border-main);
+  border-color: transparent;
   color: var(--text-main);
 }
 
 .ui-toolbar-btn:active:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
+  background: var(--bg-hover-strong);
+  border-color: transparent;
   color: var(--text-main);
 }
 
-/* 开关型开启态：实底强调色 + 白字（深底白字，符合状态契约） */
+/* 开关型开启态：浅蓝底 + 蓝字（MD3 选中胶囊，与分段控件一致） */
 .ui-toolbar-btn.active {
-  background: var(--accent-solid);
-  border-color: var(--accent-solid);
-  color: var(--accent-contrast);
-  font-weight: 400;
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .ui-toolbar-btn.active:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
-  border-color: var(--accent-solid-hover);
-  color: var(--accent-contrast);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 
 .ui-toolbar-btn.active svg { color: currentColor; }
@@ -148,28 +154,31 @@
   overflow: visible;
 }
 
-/* ---------- 下拉菜单：4px 圆角 + overlay 阴影 ---------- */
+/* ---------- 下拉菜单：毛玻璃 + 大圆角 + 阴影 ---------- */
 .ui-toolbar-menu,
 .ui-dropdown-menu,
 .ui-context-menu {
   position: absolute;
   z-index: 200;
-  min-width: 158px;
+  min-width: 168px;
   max-width: min(280px, calc(100vw - 24px));
   width: max-content;
   max-height: var(--toolbar-menu-max-height);
   overflow-x: hidden;
   overflow-y: auto;
   padding: 4px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
+  color: var(--text-main);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-sub);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-overlay);
   animation: dropdownIn 100ms ease-out;
 }
 
 .ui-toolbar-menu {
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
 }
 
@@ -178,22 +187,23 @@
 
 .ui-dropdown-menu { position: absolute; }
 
+/* ---------- 菜单项：12px 大圆角 ---------- */
 .ui-toolbar-menu-item,
 .ui-context-menu-item,
 .ui-menu-subitem {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
-  height: var(--control-h);
-  min-height: var(--control-h);
-  padding: 0 8px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
   color: var(--text-main);
   background: transparent;
   border: 0;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-lg);
   font-size: var(--font-size-base);
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1;
   text-align: left;
   white-space: nowrap;
@@ -241,11 +251,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .ui-toolbar-menu-check {
   margin-left: auto;
-  flex: 0 0 13px;
+  flex: 0 0 14px;
+  color: var(--accent);
 }
 
 .ui-toolbar-menu-icon svg {
@@ -260,15 +272,15 @@
 .ui-toolbar-menu-divider,
 .ui-context-menu-divider {
   height: 1px;
-  margin: 3px 4px;
+  margin: 4px 6px;
   background: var(--border-sub);
 }
 
-/* 窄屏：收起工具栏按钮文字，只保留图标，避免顶栏内容溢出。
+/* 窄屏：收起工具栏按钮文字，只保留图标胶囊，避免顶栏内容溢出。
    注意只作用于应用工具栏，不要影响 MenuBar（.ui-menubar 内的同名标签）。 */
 @media (max-width: 1180px) {
   .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn-label { display: none; }
-  .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn { padding: 0 5px; height: var(--control-h); min-height: var(--control-h); }
+  .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn { padding: 0 7px; width: auto; min-width: 26px; }
 }
 
 /* ---------- 经典菜单栏（MenuBar）：横向文字菜单，保持行内布局 ---------- */
@@ -283,7 +295,7 @@
 }
 
 .ui-menubar-btn {
-  /* 菜单栏按钮是纯文字横向菜单项，需覆盖工具栏的“图标上/文字下”纵向布局 */
+  /* 菜单栏按钮是纯文字横向菜单项，与工具栏胶囊同一布局 */
   flex-direction: row;
   gap: 0;
   padding: 0 8px;
@@ -294,7 +306,7 @@
 .ui-menubar-btn .ui-toolbar-btn-label { font-size: var(--font-size-base); }
 
 .ui-menubar-dropdown {
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   z-index: 200;
 }
@@ -303,7 +315,7 @@
 .ui-menu-subitem-main {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   width: 100%;
 }
@@ -312,16 +324,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 13px;
-  height: 13px;
-  flex: 0 0 13px;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
   color: var(--accent);
 }
 
 .ui-menu-check-mark {
   display: block;
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   color: var(--accent);
 }
 
@@ -357,7 +369,7 @@
   gap: 5px;
   height: auto;
   min-height: 0;
-  padding: 7px 8px;
+  padding: 7px 10px;
   cursor: default;
 }
 
@@ -373,4 +385,3 @@
 }
 
 .ui-context-menu-slider-input { width: 100%; }
-

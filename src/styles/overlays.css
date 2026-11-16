@@ -22,9 +22,10 @@
   flex-direction: column;
   max-height: 80vh;
   overflow: hidden;
+  color: var(--text-main);
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-overlay);
 }
 
@@ -230,7 +231,7 @@
 }
 
 /* ============================================================
- * Toast：顶部居中，白底 + 1px 边框 + 轻投影；类型色只作用于文字与边框
+ * Toast：毛玻璃胶囊（rounded-full）+ 1px 边框 + 阴影；类型色只作用于文字
  * ============================================================ */
 .ui-toast {
   position: fixed;
@@ -242,12 +243,14 @@
   gap: var(--space-2);
   min-height: 30px;
   max-width: min(92vw, 480px);
-  padding: 4px 4px 4px 10px;
+  padding: 4px 6px 4px 12px;
   color: var(--text-main);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-overlay);
   transform: translateX(-50%);
   animation: toastIn 160ms ease-out;
   pointer-events: auto;
@@ -302,10 +305,10 @@
   position: absolute;
   z-index: 1200;
   max-width: 260px;
-  padding: 4px 7px;
+  padding: 4px 8px;
   color: var(--bg-chrome);
   background: var(--text-main);
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
   font-size: var(--font-size-label);
@@ -379,9 +382,9 @@
 
 .cad-loading-track {
   position: relative;
-  height: var(--slider-track-height);
+  height: 6px;
   overflow: hidden;
-  background: var(--border-sub);
+  background: var(--bg-band);
   border-radius: var(--radius-pill);
 }
 
@@ -414,13 +417,14 @@
   animation: skeletonSweep 1.2s ease-in-out infinite;
 }
 
-/* 进度浮层：头（spinner + 标题 + 百分比）→ 进度条 → 备注 */
+/* 进度浮层：居中白卡 + 16px 大圆角 + 细进度条（blue-600） */
 .cad-loading-card {
-  width: min(92vw, 380px);
-  padding: 12px;
+  width: min(92vw, 360px);
+  padding: 14px 16px;
+  color: var(--text-main);
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-overlay);
 }
 
@@ -438,13 +442,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-main);
-  font-size: var(--font-size-title);
+  font-size: var(--font-size-secondary);
   font-weight: 600;
 }
 
 .cad-loading-pct {
   flex: 0 0 auto;
-  color: var(--text-sec);
+  color: var(--accent);
   font-size: var(--font-size-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -465,7 +469,7 @@
 }
 
 /* ============================================================
- * 加载遮罩：三件套承载容器
+ * 加载遮罩：三件套承载容器（浅色毛玻璃 + 细模糊）
  * ============================================================ */
 .ui-loading-overlay {
   position: absolute;
@@ -476,6 +480,8 @@
   justify-content: center;
   padding: 14px;
   background: var(--scrim);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
 /* ============================================================
@@ -498,9 +504,10 @@
   width: min(460px, 100%);
   max-height: calc(100vh - 48px);
   overflow: hidden;
+  color: var(--text-main);
   background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-overlay);
 }
 
@@ -512,11 +519,11 @@
   justify-content: space-between;
   gap: var(--space-2);
   min-height: var(--modal-head-h);
-  padding: 0 6px 0 10px;
+  padding: 0 6px 0 12px;
   color: var(--text-main);
   background: var(--bg-band);
-  border-bottom: 1px solid var(--border-main);
-  font-size: var(--font-size-title);
+  border-bottom: 1px solid var(--border-sub);
+  font-size: var(--font-size-secondary);
   font-weight: 600;
 }
 
@@ -539,7 +546,7 @@
   color: var(--text-muted);
   background: transparent;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }

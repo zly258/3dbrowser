@@ -26,20 +26,20 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-const Z_LADDER = new Set([0, 6, 20, 25, 50, 60, 200, 1200, 8800, 8900, 9000, 10050, 10060, 100000, 100001]);
+const Z_LADDER = new Set([0, 6, 10, 20, 25, 50, 60, 100, 200, 250, 400, 500, 1000, 1200, 8800, 8900, 9000, 10050, 10060, 100000, 100001]);
 const FS_LADDER = new Set([10.5, 11, 11.5, 12, 12.5, 13, 13.5, 15, 16, 18, 21, 22, 56]);
 const RADIUS_LADDER = new Set([
-  '0', '2px', '3px', '4px', '10px', '50%', '999px',
-  'var(--radius)', 'var(--radius-lg)', 'var(--radius-xs)', 'var(--radius-pill)'
+  '0', '2px', '3px', '4px', '6px', '8px', '10px', '12px', '16px', '50%', '999px',
+  'var(--radius)', 'var(--radius-lg)', 'var(--radius-xl)', 'var(--radius-xs)', 'var(--radius-sm)', 'var(--radius-md)', 'var(--radius-pill)'
 ]);
 
 const DERIVED_HEX = new Set([
-  /* 令牌真值（SVG / 内联 / 图表等无法用 var() 的位置） */
-  '#e8ebef', '#ffffff', '#f0f2f5', '#e3e8ee', '#eef1f5', '#f5f7fa',
-  '#cdd3da', '#e2e6eb', '#b3bac3', '#c7ccd3', '#14181d', '#333940', '#5c636c',
-  '#0b5fa5', '#094e88', '#083f6d', '#e3eef9', '#8fbde6',
-  '#b3261e', '#8f1d17', '#fbeceb', '#e6b8b2', '#0b6b3a', '#edf8ee', '#b7ddb7',
-  '#8a5b00', '#fdf6e7', '#e8d4a8',
+  /* 令牌真值（SVG / 内联 / 图表等无法用 var() 的位置）— MD3 浅色 slate + blue-600 */
+  '#f8fafc', '#ffffff', '#f1f5f9', '#e2e8f0', '#cbd5e1',
+  '#1e293b', '#475569', '#5b6472',
+  '#2563eb', '#1d4ed8', '#1e40af', '#eff6ff', '#bfdbfe',
+  '#b3261e', '#8f1d17', '#fbeceb', '#f2b8b5', '#15803d', '#f0fdf4', '#bbf7d0',
+  '#b45309', '#fffbeb', '#fde68a',
   /* 派生语义色 */
   '#fef08a', '#fff8e1', '#f5f7fa', '#f2f4f7', '#b6bdc7', '#8f97a3',
   /* 主题色卡渐变（装饰性 conic-gradient） */
@@ -47,23 +47,34 @@ const DERIVED_HEX = new Set([
 ]);
 
 const CONTRAST_PAIRS = [
-  ['text-main on white', '#14181d', '#ffffff'],
-  ['text-sec on white', '#333940', '#ffffff'],
-  ['text-muted on white', '#5c636c', '#ffffff'],
-  ['text-muted on bg-band', '#5c636c', '#f0f2f5'],
-  ['text-muted on bg-app', '#5c636c', '#e8ebef'],
-  ['text-muted on bg-viewport', '#5c636c', '#eef1f5'],
-  ['text-sec on bg-band', '#333940', '#f0f2f5'],
-  ['accent on white', '#0b5fa5', '#ffffff'],
-  ['white on accent', '#ffffff', '#0b5fa5'],
-  ['white on accent-hover', '#ffffff', '#094e88'],
-  ['accent on accent-soft', '#0b5fa5', '#e3eef9'],
+  ['text-main on white', '#1e293b', '#ffffff'],
+  ['text-sec on white', '#475569', '#ffffff'],
+  ['text-muted on white', '#5b6472', '#ffffff'],
+  ['text-muted on bg-band', '#5b6472', '#f1f5f9'],
+  ['text-muted on bg-app', '#5b6472', '#f8fafc'],
+  ['text-muted on bg-viewport', '#5b6472', '#f8fafc'],
+  ['text-sec on bg-band', '#475569', '#f1f5f9'],
+  ['accent on white', '#2563eb', '#ffffff'],
+  ['white on accent', '#ffffff', '#2563eb'],
+  ['white on accent-hover', '#ffffff', '#1d4ed8'],
+  ['accent on accent-soft', '#2563eb', '#eff6ff'],
   ['danger on white', '#b3261e', '#ffffff'],
   ['danger on danger-soft', '#b3261e', '#fbeceb'],
-  ['success on white', '#0b6b3a', '#ffffff'],
-  ['warn on white', '#8a5b00', '#ffffff'],
-  ['warn on warn-soft', '#8a5b00', '#fdf6e7'],
-  ['text-muted on white (11.5px)', '#5c636c', '#ffffff'],
+  ['success on white', '#15803d', '#ffffff'],
+  ['success on success-soft', '#15803d', '#f0fdf4'],
+  ['warn on white', '#b45309', '#ffffff'],
+  ['warn on warn-soft', '#b45309', '#fffbeb'],
+  ['text-muted on white (11px)', '#5b6472', '#ffffff'],
+  /* 暗色主题 */
+  ['dark: text-main on bg-app', '#f1f5f9', '#0f172a'],
+  ['dark: text-sec on bg-panel', '#cbd5e1', '#1e293b'],
+  ['dark: text-muted on bg-panel', '#94a3b8', '#1e293b'],
+  ['dark: text-muted on bg-band', '#94a3b8', '#243146'],
+  ['dark: accent on accent-soft', '#60a5fa', '#1c3557'],
+  ['dark: white on accent-solid', '#ffffff', '#2563eb'],
+  ['dark: danger on danger-soft', '#f87171', '#3b1a1a'],
+  ['dark: success on success-soft', '#4ade80', '#12301f'],
+  ['dark: warn on warn-soft', '#fbbf24', '#33270f'],
 ];
 
 const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{1F000}-\u{1F02F}]/u;
@@ -189,9 +200,9 @@ for (const [file, text] of cssTexts) {
     /* U3 白字压浅底 */
     const color = pick('color').toLowerCase();
     const bg = (pick('background') || pick('background-color')).toLowerCase();
-    const isWhiteText = /#fff\b|#ffffff|var\(--bg-chrome\)|var\(--accent-contrast\)/.test(color);
-    const lightBg = /var\(--bg-(app|band|panel|chrome|hover|input|sunken)\)|var\(--accent-soft\)|#e8ebef|#f0f2f5|#ffffff|#fff\b/.test(bg);
-    const darkBg = /var\(--accent|var\(--danger|var\(--text-main|#0b5fa5|#094e88|#b3261e/.test(bg);
+    const isWhiteText = /#fff\b|#ffffff|var\(--bg-chrome\)|var\(--accent-contrast\)|var\(--switch-thumb\)/.test(color);
+    const lightBg = /var\(--bg-(app|band|panel|chrome|hover|input|sunken)\)|var\(--accent-soft\)|#e8ebef|#f0f2f5|#e2e8f0|#f8fafc|#f1f5f9|#ffffff|#fff\b/.test(bg);
+    const darkBg = /var\(--accent|var\(--danger|var\(--text-main|#2563eb|#1d4ed8|#1e40af|#b3261e/.test(bg);
     if (isWhiteText && lightBg && !darkBg && color !== 'var(--accent-contrast)') {
       add('error', 'U3', `src/styles/${file}`, line,
         `白字压浅底（${rule.selector}: color ${color} / background ${bg}）`,

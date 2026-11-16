@@ -1,6 +1,6 @@
 /*
- * 底栏 30px：状态 / 进度 / 坐标 / 统计 / 语言。
- * 页面本身不滚动，底栏 flex:0 0 auto。
+ * 底栏 24px（h-6）：状态 / 进度 / 坐标 / 统计 / 语言，11px 字。
+ * 白底 + 顶部 1px 边框（与参考 footer 一致），页面本身不滚动，底栏 flex:0 0 auto。
  */
 
 .ui-statusbar {
@@ -12,10 +12,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: 0 8px;
+  padding: 0 12px;
   overflow: hidden;
   color: var(--text-muted);
-  background: var(--bg-band);
+  background: var(--bg-chrome);
   border-top: 1px solid var(--border-main);
   font-size: var(--font-size-label);
   line-height: 1;
@@ -170,19 +170,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 22px;
-  min-height: 22px;
+  height: 20px;
+  min-height: 20px;
   padding: 0 6px;
   color: var(--text-sec);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
 }
 
 .ui-statusbar-btn:hover {
   color: var(--text-main);
   background: var(--bg-hover);
-  border-color: var(--border-sub);
+  border-color: transparent;
 }
 
 .ui-statusbar-btn-compact { padding: 0 4px; }
@@ -192,15 +192,15 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  height: 22px;
-  min-height: 22px;
-  padding: 0 7px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 8px;
   color: var(--text-sec);
-  background: var(--bg-chrome);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
+  background: var(--bg-band);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
   font-size: var(--font-size-label);
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1;
   letter-spacing: 0;
   cursor: pointer;
@@ -209,20 +209,20 @@
 
 .ui-statusbar-tag:hover {
   color: var(--text-main);
-  background: var(--bg-hover);
-  border-color: var(--border-hover);
+  background: var(--bg-hover-strong);
+  border-color: transparent;
 }
 
 .ui-statusbar-tag:active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: var(--accent-line);
+  border-color: transparent;
 }
 
 .ui-statusbar-tag.active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: var(--accent-line);
+  border-color: transparent;
 }
 
 .ui-statusbar-tag-compact {
