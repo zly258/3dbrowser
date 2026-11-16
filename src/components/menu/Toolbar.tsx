@@ -132,7 +132,7 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 ref={fileInputRef}
                 className="ui-visually-hidden"
                 multiple
-                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
+                accept=".lmb,.lmbz,.glb,.gltf,.ifc,.nbim,.nbip,.fbx,.obj,.stl,.ply,.3ds,.dae,.stp,.step,.igs,.iges"
                 onChange={props.handleOpenFiles}
             />
 

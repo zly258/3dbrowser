@@ -9,10 +9,12 @@
   z-index: 50;
   display: flex;
   align-items: center;
+  /* 工具组靠左排列 */
+  justify-content: flex-start;
   flex: 0 0 auto;
   height: var(--header-h);
   min-height: var(--header-h);
-  padding: 0 8px;
+  padding: 0 5px;
   gap: 2px;
   overflow: visible;
   white-space: nowrap;
@@ -30,35 +32,35 @@
   /* 允许分组收缩，分组内按钮才能省略文字而不是被父级静默裁掉 */
   flex: 0 1 auto;
   min-width: 0;
-  gap: 2px;
+  gap: 1px;
   padding: 0;
   background: transparent;
   border: 0;
 }
 
 .ui-toolbar-group + .ui-toolbar-group {
-  margin-left: 5px;
-  padding-left: 6px;
+  margin-left: 3px;
+  padding-left: 5px;
   border-left: 1px solid var(--border-sub);
 }
 
-/* ---------- 工具按钮：26px，图标 + 文本 ---------- */
+/* ---------- 工具按钮：图标在上、文字在下 ---------- */
 .ui-toolbar-btn {
   display: inline-flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 1px;
   flex: 0 1 auto;
-  height: var(--control-h);
-  min-height: var(--control-h);
+  height: var(--toolbar-btn-h);
+  min-height: var(--toolbar-btn-h);
   min-width: 0;
-  padding: 0 9px;
+  padding: 2px 7px;
   color: var(--text-main);
   background: var(--bg-chrome);
   border: 1px solid transparent;
   border-radius: var(--radius);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-label);
   font-weight: 400;
   line-height: 1;
   text-align: center;
@@ -87,12 +89,12 @@
 .ui-toolbar-btn-label {
   display: inline-block;
   min-width: 0;
-  max-width: 120px;
+  max-width: 88px;
   min-height: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-label);
   font-weight: 400;
   line-height: 1;
   color: currentColor;
@@ -265,14 +267,14 @@
 /* 窄屏：收起工具栏按钮文字，只保留图标，避免顶栏内容溢出。
    注意只作用于应用工具栏，不要影响 MenuBar（.ui-menubar 内的同名标签）。 */
 @media (max-width: 1180px) {
-  .ui-toolbar .ui-toolbar-btn-label { display: none; }
-  .ui-toolbar-btn { padding: 0 7px; }
+  .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn-label { display: none; }
+  .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn { padding: 0 5px; height: var(--control-h); min-height: var(--control-h); }
 }
 
-/* ---------- 经典菜单栏（MenuBar）---------- */
+/* ---------- 经典菜单栏（MenuBar）：横向文字菜单，保持行内布局 ---------- */
 .ui-menubar {
   gap: 1px;
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .ui-menubar-item {
@@ -281,6 +283,9 @@
 }
 
 .ui-menubar-btn {
+  /* 菜单栏按钮是纯文字横向菜单项，需覆盖工具栏的“图标上/文字下”纵向布局 */
+  flex-direction: row;
+  gap: 0;
   padding: 0 8px;
   height: var(--control-h);
   min-height: var(--control-h);

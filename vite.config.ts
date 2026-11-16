@@ -24,8 +24,15 @@ export default defineConfig(({ mode }) => {
         jsxRuntime: 'automatic'
       })],
       assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.mtl', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.lmb', '**/*.lmbz', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges', '**/*.hdr', '**/*.exr', '**/*.ktx2'],
+      // Worker 里按需加载 brotli 解码器（动态 import）会产生代码分割，IIFE 格式不支持，
+      // 因此 worker 输出为 ES module（现代浏览器均支持）。
+      worker: {
+        format: 'es'
+      },
       optimizeDeps: {
-        exclude: ['web-ifc', 'occt-import-js']
+        // brotli-dec-wasm 不能预打包：它的 wasm 通过 new URL(..., import.meta.url) 定位，
+        // 预打包后 URL 会指向被 MIME 判错的产物，导致 WebAssembly.instantiate 失败。
+        exclude: ['web-ifc', 'occt-import-js', 'brotli-dec-wasm', 'brotli-wasm']
       },
       build: isPages ? {
         target: 'esnext',

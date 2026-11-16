@@ -47,10 +47,18 @@
     "ui:audit": "node scripts/ui-audit.mjs",
     "ui:audit:strict": "node scripts/ui-audit.mjs --strict",
     "ui:coverage": "node scripts/class-coverage.cjs",
+    "test:nbim": "node scripts/run-nbim11-selftest.mjs",
+    "migrate:nbim": "node scripts/run-nbim-legacy-to-v11.mjs",
+    "verify:nbim-geom": "node scripts/run-nbim-geom-verify.mjs",
     "prepare": "husky",
-    "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose"
+    "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose",
+    "test:fixtures": "node scripts/nbim-fixture.mjs --check",
+    "stats:nbim": "node scripts/nbim-stats.mjs",
+    "convert:lmb": "node scripts/run-lmb-batch-convert.mjs"
   },
   "dependencies": {
+    "brotli-dec-wasm": "^2.3.2",
+    "brotli-wasm": "^3.0.1",
     "occt-import-js": "^0.0.23",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -58,8 +66,8 @@
     "web-ifc": "^0.0.74"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.0",
-    "@commitlint/config-conventional": "^20.5.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",

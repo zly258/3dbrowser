@@ -7,5 +7,5 @@
     "outDir": "dist",
     "allowImportingTsExtensions": false
   },
-  "include": ["src/index.ts", "src/ThreeViewer.tsx", "src/loader/loaderUtils.ts", "src/theme/locales.ts", "src/theme/styles.ts"]
+  "include": ["src/index.ts", "src/ThreeViewer.tsx", "src/loader/loaderUtils.ts", "src/theme/locales.ts", "src/theme/styles.ts", "src/vite-env.d.ts"]
 }

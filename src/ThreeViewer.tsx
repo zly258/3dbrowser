@@ -89,10 +89,15 @@ export const ThreeViewer = ({
  }: ThreeViewerProps) => {
     const effectiveChunkOptions = useMemo<SceneChunkOptions>(() => ({
         chunkReadCacheSize: chunkOptions?.chunkReadCacheSize ?? 128,
+        chunkReadCacheMB: chunkOptions?.chunkReadCacheMB,
         chunkPrefetchWindow: chunkOptions?.chunkPrefetchWindow ?? 0,
         targetMinFps: chunkOptions?.targetMinFps ?? 20,
         ghostMode: chunkOptions?.ghostMode,
         loadProfile: chunkOptions?.loadProfile ?? "max-speed",
+        // 性能安全阀：默认保持关闭（undefined→full/false），但可通过 chunkOptions 显式开启，
+        // 大模型卡顿时无需改代码即可启用“只画预算内分块 + 远景线框代理”/远景粗 LOD。
+        coarseLod: chunkOptions?.coarseLod,
+        renderBudget: chunkOptions?.renderBudget,
         deferIfcProperties: chunkOptions?.deferIfcProperties ?? true,
         preferWorkerOctree: chunkOptions?.preferWorkerOctree ?? true,
         fastGeometrySanitize: chunkOptions?.fastGeometrySanitize ?? true
@@ -856,10 +861,9 @@ export const ThreeViewer = ({
             ...sceneSettings,
             ...newSettings
         };
+        // 只更新状态：下方 [sceneSettings] effect 会统一调用一次 manager.updateSettings，
+        // 此处不再直接调用，避免同一次设置变更把材质/渲染器状态重复应用两遍。
         setSceneSettings(merged);
-        if (sceneMgr.current) {
-            sceneMgr.current.updateSettings(merged);
-        }
     };
 
 
