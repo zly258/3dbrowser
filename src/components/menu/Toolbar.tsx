@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ImageButton } from "../common/ImageButton";
+import { SegmentedControl } from "../common";
 import { ToolbarProps } from "./types";
+import type { DisplayMode } from "../../utils/scene-manager/displayMode";
 import { cx, isMenuHidden } from "./utils";
 import {
     IconFile,
     IconMaximize,
+    IconEye,
     IconRuler,
+    IconTarget,
     IconScissors,
     IconSettings,
     IconInfo,
@@ -13,11 +17,9 @@ import {
     IconBox,
     IconList,
     IconCamera,
-    IconEye,
     IconSearch,
     IconSelectAll,
-    IconTarget,
-    IconLayers,
+    IconWrench,
     IconImage,
     IconExplode,
     IconViewTop,
@@ -30,14 +32,16 @@ import {
     IconViewSE,
     IconViewNE,
     IconViewNW,
-    IconSolid,
-    IconRealistic,
-    IconWireframe,
     IconOpenFile,
     IconExportScene,
     IconClear
 } from "../../theme/Icons";
 
+/**
+ * 顶栏（MD3 语言）：左「品牌 + 文件/视图」｜中「显示样式分段」｜右「显示开关 + 工具 + 搜索/设置/关于」。
+ * 长尾工具（测量/框选/剖切/视点/截图/碰撞/爆炸）收进「工具」下拉，
+ * 激活态在菜单内用对勾标记，同时底栏模式托盘展示可清除的模式胶囊。
+ */
 export const Toolbar: React.FC<ToolbarProps> = (props) => {
     const {
         t,
@@ -125,6 +129,17 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
         props.setActiveTool?.(props.activeTool === tool ? "none" : tool);
     };
 
+    /* 工具下拉内的长尾工具：激活态用对勾标记 */
+    const toolMenuItem = (icon: React.ReactNode, label: string, tool: NonNullable<ToolbarProps["activeTool"]>) =>
+        menuItem(icon, label, () => { setToggleTool(tool); closeMenu(); }, props.activeTool === tool);
+
+    /* 显示样式分段（真实/着色/线框），对齐参考中部分段切换 */
+    const displayModeOptions = [
+        { value: "realistic", label: t("dm_realistic") || "真实" },
+        { value: "shaded", label: t("dm_solid") || "着色" },
+        { value: "wireframe", label: t("dm_wireframe") || "线框" }
+    ];
+
     return (
         <div ref={toolbarRef} className="ui-toolbar">
             <input
@@ -145,8 +160,12 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 onChange={props.handleBatchConvert}
             />
 
-            {!hidden("file") && (
-                <div className="ui-toolbar-group">
+            {/* ---------- 左：品牌 + 文件 + 视图 ---------- */}
+            <div className="ui-toolbar-left">
+                <span className="ui-toolbar-brand">3D Browser</span>
+                <div className="ui-toolbar-divider-vertical" aria-hidden="true" />
+
+                {!hidden("file") && (
                     <div className="ui-toolbar-menu-anchor">
                         <ImageButton
                             icon={<IconFile />}
@@ -200,219 +219,147 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                             </>
                         ))}
                     </div>
+                )}
+
+                {!hidden("view") && (
+                    <div className="ui-toolbar-menu-anchor">
+                        <ImageButton
+                            icon={<IconEye />}
+                            label={t("tb_view") || "视图"}
+                            active={openMenu === "views"}
+                            onClick={() => toggleMenu("views")}
+                            theme={theme}
+                        />
+
+                        {renderDropdown("views", (
+                            <>
+                                {!hidden("fit_view") && menuItem(<IconMaximize />, t("tb_fit") || "充满视图", () => {
+                                    props.sceneMgr?.restoreView();
+                                    closeMenu();
+                                })}
+
+                                {!hidden("fit_view") && menuDivider()}
+
+                                {menuItem(<IconViewFront />, t("view_front") || "前视图", () => { props.handleView?.("front"); closeMenu(); })}
+                                {menuItem(<IconViewBack />, t("view_back") || "后视图", () => { props.handleView?.("back"); closeMenu(); })}
+                                {menuItem(<IconViewTop />, t("view_top") || "顶视图", () => { props.handleView?.("top"); closeMenu(); })}
+                                {menuItem(<IconViewBottom />, t("view_bottom") || "底视图", () => { props.handleView?.("bottom"); closeMenu(); })}
+                                {menuItem(<IconViewLeft />, t("view_left") || "左视图", () => { props.handleView?.("left"); closeMenu(); })}
+                                {menuItem(<IconViewRight />, t("view_right") || "右视图", () => { props.handleView?.("right"); closeMenu(); })}
+                                {menuDivider()}
+                                {menuItem(<IconViewSE />, t("view_se") || "东南", () => { props.handleView?.("se"); closeMenu(); })}
+                                {menuItem(<IconViewSW />, t("view_sw") || "西南", () => { props.handleView?.("sw"); closeMenu(); })}
+                                {menuItem(<IconViewNE />, t("view_ne") || "东北", () => { props.handleView?.("ne"); closeMenu(); })}
+                                {menuItem(<IconViewNW />, t("view_nw") || "西北", () => { props.handleView?.("nw"); closeMenu(); })}
+                            </>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* ---------- 中：显示样式分段（真实 / 着色 / 线框） ---------- */}
+            {!hidden("wireframe") && (
+                <div className="ui-toolbar-center">
+                    <SegmentedControl
+                        className="ui-toolbar-seg"
+                        options={displayModeOptions}
+                        value={props.displayMode ?? "shaded"}
+                        onChange={(value) => props.handleDisplayModeChange?.(value as DisplayMode)}
+                    />
                 </div>
             )}
 
-            {!hidden("view") && (
-                <div className="ui-toolbar-group">
-                    {!hidden("fit_view") && (
-                        <ImageButton
-                            icon={<IconMaximize />}
-                            label={t("tb_fit") || "充满"}
-                            onClick={() => props.sceneMgr?.restoreView()}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("views") && (
-                        <div className="ui-toolbar-menu-anchor">
+            {/* ---------- 右：显示开关 + 工具 + 搜索 + 设置/关于 ---------- */}
+            <div className="ui-toolbar-right">
+                {!hidden("interface") && (
+                    <>
+                        {!hidden("outline") && (
                             <ImageButton
-                                icon={<IconEye />}
-                                label={t("tb_view") || "视图"}
-                                active={openMenu === "views"}
-                                onClick={() => toggleMenu("views")}
+                                icon={<IconBox />}
+                                label={t("tb_model") || "模型"}
+                                active={props.showOutline}
+                                onClick={() => props.setShowOutline?.(!props.showOutline)}
                                 theme={theme}
                             />
+                        )}
 
-                            {renderDropdown("views", (
-                                <>
-                                    {menuItem(<IconViewFront />, t("view_front") || "前视图", () => { props.handleView?.("front"); closeMenu(); })}
-                                    {menuItem(<IconViewBack />, t("view_back") || "后视图", () => { props.handleView?.("back"); closeMenu(); })}
-                                    {menuItem(<IconViewTop />, t("view_top") || "顶视图", () => { props.handleView?.("top"); closeMenu(); })}
-                                    {menuItem(<IconViewBottom />, t("view_bottom") || "底视图", () => { props.handleView?.("bottom"); closeMenu(); })}
-                                    {menuItem(<IconViewLeft />, t("view_left") || "左视图", () => { props.handleView?.("left"); closeMenu(); })}
-                                    {menuItem(<IconViewRight />, t("view_right") || "右视图", () => { props.handleView?.("right"); closeMenu(); })}
-                                    {menuDivider()}
-                                    {menuItem(<IconViewSE />, t("view_se") || "东南", () => { props.handleView?.("se"); closeMenu(); })}
-                                    {menuItem(<IconViewSW />, t("view_sw") || "西南", () => { props.handleView?.("sw"); closeMenu(); })}
-                                    {menuItem(<IconViewNE />, t("view_ne") || "东北", () => { props.handleView?.("ne"); closeMenu(); })}
-                                    {menuItem(<IconViewNW />, t("view_nw") || "西北", () => { props.handleView?.("nw"); closeMenu(); })}
-                                </>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {!hidden("interface") && (
-                <div className="ui-toolbar-group">
-                    {!hidden("wireframe") && (
-                        <div className="ui-toolbar-menu-anchor">
+                        {!hidden("props") && (
                             <ImageButton
-                                icon={<IconLayers />}
-                                label={t("display_mode") || "样式"}
-                                active={openMenu === "displayMode"}
-                                onClick={() => toggleMenu("displayMode")}
+                                icon={<IconList />}
+                                label={t("tb_props") || "属性"}
+                                active={props.showProps}
+                                onClick={() => props.setShowProps?.(!props.showProps)}
                                 theme={theme}
                             />
+                        )}
 
-                            {renderDropdown("displayMode", (
-                                <>
-                                    {menuItem(<IconRealistic />, t("dm_realistic") || "真实", () => {
-                                        props.handleDisplayModeChange?.("realistic");
-                                        closeMenu();
-                                    }, props.displayMode === "realistic")}
+                        {!hidden("pick") && (
+                            <ImageButton
+                                icon={<IconMousePointer />}
+                                label={t("tb_pick") || "选择"}
+                                active={props.pickEnabled}
+                                onClick={() => props.setPickEnabled?.(!props.pickEnabled)}
+                                theme={theme}
+                            />
+                        )}
 
-                                    {menuItem(<IconSolid />, t("dm_solid") || "着色", () => {
-                                        props.handleDisplayModeChange?.("shaded");
-                                        closeMenu();
-                                    }, props.displayMode === "shaded")}
+                        <div className="ui-toolbar-divider-vertical" aria-hidden="true" />
+                    </>
+                )}
 
-                                    {menuItem(<IconWireframe />, t("dm_wireframe") || "线框", () => {
-                                        props.handleDisplayModeChange?.("wireframe");
-                                        closeMenu();
-                                    }, props.displayMode === "wireframe")}
-                                </>
-                            ))}
-                        </div>
-                    )}
-
-                    {!hidden("outline") && (
+                {!hidden("tool") && (
+                    <div className="ui-toolbar-menu-anchor">
                         <ImageButton
-                            icon={<IconBox />}
-                            label={t("tb_model") || "模型"}
-                            active={props.showOutline}
-                            onClick={() => props.setShowOutline?.(!props.showOutline)}
+                            icon={<IconWrench />}
+                            label={t("tb_tools") || "工具"}
+                            active={openMenu === "tools" || props.activeTool !== "none" && props.activeTool !== "search" && props.activeTool !== "settings"}
+                            onClick={() => toggleMenu("tools")}
                             theme={theme}
                         />
-                    )}
 
-                    {!hidden("props") && (
-                        <ImageButton
-                            icon={<IconList />}
-                            label={t("tb_props") || "属性"}
-                            active={props.showProps}
-                            onClick={() => props.setShowProps?.(!props.showProps)}
-                            theme={theme}
-                        />
-                    )}
+                        {renderDropdown("tools", (
+                            <>
+                                {!hidden("measure") && toolMenuItem(<IconRuler />, t("tb_measure") || "测量", "measure")}
+                                {!hidden("boxSelect") && toolMenuItem(<IconSelectAll />, t("tb_boxSelect") || "框选", "boxSelect")}
+                                {!hidden("clip") && toolMenuItem(<IconScissors />, t("tb_clip") || "剖切", "clip")}
+                                {!hidden("viewpoint") && toolMenuItem(<IconCamera />, t("viewpoint_default_name") || "视点", "viewpoint")}
+                                {!hidden("screenshot") && toolMenuItem(<IconImage />, t("tb_screenshot") || "截图", "screenshot")}
+                                {!hidden("clash") && toolMenuItem(<IconTarget />, t("tb_clash") || "碰撞", "clash")}
+                                {!hidden("explode") && toolMenuItem(<IconExplode />, t("tb_explode") || "爆炸", "explode")}
+                            </>
+                        ))}
+                    </div>
+                )}
 
-                    {!hidden("pick") && (
-                        <ImageButton
-                            icon={<IconMousePointer />}
-                            label={t("tb_pick") || "选择"}
-                            active={props.pickEnabled}
-                            onClick={() => props.setPickEnabled?.(!props.pickEnabled)}
-                            theme={theme}
-                        />
-                    )}
-                </div>
-            )}
+                {!hidden("search") && (
+                    <ImageButton
+                        icon={<IconSearch />}
+                        label={t("tb_search") || "搜索"}
+                        active={props.activeTool === "search"}
+                        onClick={() => setToggleTool("search")}
+                        theme={theme}
+                    />
+                )}
 
-            {!hidden("tool") && (
-                <div className="ui-toolbar-group">
-                    {!hidden("measure") && (
-                        <ImageButton
-                            icon={<IconRuler />}
-                            label={t("tb_measure") || "测量"}
-                            active={props.activeTool === "measure"}
-                            onClick={() => setToggleTool("measure")}
-                            theme={theme}
-                        />
-                    )}
+                {!hidden("settings") && (
+                    <ImageButton
+                        icon={<IconSettings />}
+                        label={t("tb_settings") || "设置"}
+                        active={props.activeTool === "settings"}
+                        onClick={() => setToggleTool("settings")}
+                        theme={theme}
+                    />
+                )}
 
-                    {!hidden("boxSelect") && (
-                        <ImageButton
-                            icon={<IconSelectAll />}
-                            label={t("tb_boxSelect") || "框选"}
-                            active={props.activeTool === "boxSelect"}
-                            onClick={() => setToggleTool("boxSelect")}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("clip") && (
-                        <ImageButton
-                            icon={<IconScissors />}
-                            label={t("tb_clip") || "剖切"}
-                            active={props.activeTool === "clip"}
-                            onClick={() => setToggleTool("clip")}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("viewpoint") && (
-                        <ImageButton
-                            icon={<IconCamera />}
-                            label={t("viewpoint_default_name") || "视点"}
-                            active={props.activeTool === "viewpoint"}
-                            onClick={() => setToggleTool("viewpoint")}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("screenshot") && (
-                        <ImageButton
-                            icon={<IconImage />}
-                            label={t("tb_screenshot") || "截图"}
-                            active={props.activeTool === "screenshot"}
-                            onClick={() => props.openScreenshotPanel?.()}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("search") && (
-                        <ImageButton
-                            icon={<IconSearch />}
-                            label={t("tb_search") || "搜索"}
-                            active={props.activeTool === "search"}
-                            onClick={() => setToggleTool("search")}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("clash") && (
-                        <ImageButton
-                            icon={<IconTarget />}
-                            label={t("tb_clash") || "碰撞"}
-                            active={props.activeTool === "clash"}
-                            onClick={() => setToggleTool("clash")}
-                            theme={theme}
-                        />
-                    )}
-
-                    {!hidden("explode") && (
-                        <ImageButton
-                            icon={<IconExplode />}
-                            label={t("tb_explode") || "爆炸"}
-                            active={props.activeTool === "explode"}
-                            onClick={() => setToggleTool("explode")}
-                            theme={theme}
-                        />
-                    )}
-                </div>
-            )}
-
-            {!hidden("about") && (
-                <div className="ui-toolbar-group">
-                    {!hidden("settings") && (
-                        <ImageButton
-                            icon={<IconSettings />}
-                            label={t("tb_settings") || "设置"}
-                            active={props.activeTool === "settings"}
-                            onClick={() => setToggleTool("settings")}
-                            theme={theme}
-                        />
-                    )}
-
+                {!hidden("about") && (
                     <ImageButton
                         icon={<IconInfo />}
                         label={t("tb_about") || "关于"}
                         onClick={() => props.onOpenAbout?.()}
                         theme={theme}
                     />
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
