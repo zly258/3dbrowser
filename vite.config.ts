@@ -1,11 +1,19 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, '..');
+
+// 本机杀软会拦截系统 Temp 下 esbuild 临时目录的删除（Access is denied），
+// 把构建临时目录固定到项目内 .tmpbuild 绕过（.gitignore 已忽略该目录）。
+const buildTempDir = resolve(__dirname, '.tmpbuild', 'esbuild');
+mkdirSync(buildTempDir, { recursive: true });
+process.env.TMPDIR = buildTempDir;
+process.env.TEMP = buildTempDir;
+process.env.TMP = buildTempDir;
 
 const packageJson = JSON.parse(
   readFileSync(resolve(__dirname, 'package.json'), 'utf-8')
@@ -23,7 +31,7 @@ export default defineConfig(({ mode }) => {
       plugins: [react({
         jsxRuntime: 'automatic'
       })],
-      assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.mtl', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.lmb', '**/*.lmbz', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges', '**/*.hdr', '**/*.exr', '**/*.ktx2'],
+      assetsInclude: ['**/*.wasm', '**/*.glb', '**/*.gltf', '**/*.fbx', '**/*.obj', '**/*.mtl', '**/*.stl', '**/*.ifc', '**/*.nbim', '**/*.stp', '**/*.step', '**/*.igs', '**/*.iges', '**/*.hdr', '**/*.exr', '**/*.ktx2'],
       // Worker 里按需加载 brotli 解码器（动态 import）会产生代码分割，IIFE 格式不支持，
       // 因此 worker 输出为 ES module（现代浏览器均支持）。
       worker: {
@@ -69,7 +77,6 @@ export default defineConfig(({ mode }) => {
               if (id.includes('src/loader/')) {
                 if (id.includes('ifcLoader')) return 'ifcLoader';
                 if (id.includes('occtLoader')) return 'occtLoader';
-                if (id.includes('lmbLoader')) return 'lmbLoader';
               }
               if (id.includes('src/utils/')) {
                 return 'utils';
