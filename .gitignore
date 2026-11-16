@@ -32,3 +32,6 @@ build/
 server/
 # 构建临时目录（绕过杀软对系统 Temp 的拦截）
 .tmpbuild/
+
+# 文档仅本地保留，不发布到远程
+/docs/
