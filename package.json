@@ -1,14 +1,14 @@
 {
-  "name": "@zhangly1403/3dbrowser",
-  "private": false,
+  "name": "3dbrowser",
+  "private": true,
   "version": "2.0.0",
-  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, GLB, and more.",
+  "description": "A high-performance 3D model browser based on Three.js, supporting IFC, GLB, and NBIM v11.",
   "keywords": [
     "threejs",
     "bim",
     "ifc",
     "3d-viewer",
-    "browser"
+    "nbim"
   ],
   "license": "CC-BY-NC-4.0",
   "author": "zhangly1403@qq.com",
@@ -20,25 +20,7 @@
   "bugs": {
     "url": "https://github.com/zly258/3dbrowser/issues"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "type": "module",
-  "main": "./dist/3dbrowser.umd.js",
-  "module": "./dist/3dbrowser.es.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/3dbrowser.es.js",
-      "require": "./dist/3dbrowser.umd.js"
-    }
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && node scripts/post-build.js",
@@ -54,7 +36,8 @@
     "commitlint": "commitlint --from=HEAD~1 --to=HEAD --verbose",
     "test:fixtures": "node scripts/nbim-fixture.mjs --check",
     "stats:nbim": "node scripts/nbim-stats.mjs",
-    "convert:lmb": "node scripts/run-lmb-batch-convert.mjs"
+    "convert:nbim": "node scripts/run-nbim-batch-convert.mjs",
+    "unpublish:npm": "node scripts/npm-unpublish-history.mjs"
   },
   "dependencies": {
     "brotli-dec-wasm": "^2.3.2",
