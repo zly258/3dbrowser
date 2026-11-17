@@ -86,7 +86,10 @@ function legacyBimPropertiesToDocs(bimProperties: Record<string, any>) {
 
 async function main() {
     const input = process.argv[2];
-    if (!input) throw new Error("用法: npm run migrate:nbim -- <旧文件.nbim> [输出目录]");
+    if (!input) {
+        console.error("用法: npm run migrate:nbim -- <旧文件.nbim> [输出目录]");
+        process.exit(1);
+    }
     const outDir = process.argv[3] || path.join(path.dirname(input), "_v11");
     fs.mkdirSync(outDir, { recursive: true });
 

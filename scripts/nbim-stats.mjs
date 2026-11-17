@@ -2,7 +2,7 @@
  * 读取 NBIM v11 文件的属性区段统计（构件数 / 属性行数 / 字符串数 / 各段体积），
  * 用于生成 docs/stats-nbim11.md 中的数据。只读，不修改文件。
  *
- * 用法：node scripts/run-nbim-stats.mjs <文件1.nbim> [文件2.nbim ...]
+ * 用法：node scripts/nbim-stats.mjs <文件1.nbim> [文件2.nbim ...]
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -71,7 +71,7 @@ function readStats(file) {
 
 const files = process.argv.slice(2);
 if (!files.length) {
-    console.error("用法: node scripts/run-nbim-stats.mjs <文件.nbim> [...]");
+    console.error("用法: npm run stats:nbim -- <文件.nbim> [...]");
     process.exit(1);
 }
 const rows = [];

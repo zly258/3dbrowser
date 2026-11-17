@@ -1,6 +1,6 @@
 /**
  * NBIM v11 单文件 + NBIP 属性库自测（Node，无需浏览器）。
- * 通过 scripts/run-nbim11-selftest.mjs 用 esbuild 打包后运行。
+ * 通过 scripts/run.mjs 用 esbuild 打包后运行（npm run test:nbim）。
  */
 import * as THREE from "three";
 import { buildNbimBlobFromObjects } from "../src/utils/scene-manager/nbimBatchConvert";

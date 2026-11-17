@@ -5,8 +5,8 @@
  * **不含任何真实模型内容、客户信息或文件路径**，可安全提交与公开分发。
  *
  * 用法：
- *   node scripts/run-nbim-fixture.mjs                 # 生成全部夹具到 docs/testing/fixtures/
- *   node scripts/run-nbim-fixture.mjs --check         # 只校验现有夹具（不重写）
+ *   node scripts/nbim-fixture.mjs                 # 生成全部夹具到 docs/testing/fixtures/
+ *   node scripts/nbim-fixture.mjs --check         # 只校验现有夹具（不重写）
  */
 import fs from "node:fs";
 import path from "node:path";

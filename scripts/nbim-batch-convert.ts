@@ -8,7 +8,8 @@
  *  2) **增量 NBIP 写入**（NbipWriter）：只保留去重字符串 + 数值型记录，不持有解析后的 JSON。
  *  3) 分块/属性/manifest 全部 brotli 编码（Node zlib 原生），浏览器侧用 wasm 解码。
  *
- * 用法：node scripts/run-nbim-batch-convert.mjs <源目录> <目标目录> [--limit N] [--filter 关键字]
+ * 用法：npm run convert:nbim -- <源目录> <目标目录> [--limit N] [--filter 关键字] [--verify-only]
+ *       （等价：node scripts/run.mjs nbim-batch-convert <源目录> <目标目录> ...）
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -368,6 +369,16 @@ async function main() {
     const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : Infinity;
     const filterIdx = args.indexOf("--filter");
     const filter = filterIdx >= 0 ? args[filterIdx + 1] : "";
+
+    if (!srcDir || !dstDir) {
+        console.error("用法: npm run convert:nbim -- <源目录> <目标目录> [--limit N] [--filter 关键字] [--verify-only]");
+        console.error("  源目录：包含旧版 NBIM(v8/v9) 文件的目录；目标目录：输出 v11 单文件");
+        process.exit(1);
+    }
+    if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
+        console.error(`源目录不存在或不是目录: ${srcDir}`);
+        process.exit(1);
+    }
 
     const files = fs.readdirSync(srcDir)
         .filter((n) => n.toLowerCase().endsWith(".nbim"))

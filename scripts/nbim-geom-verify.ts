@@ -76,7 +76,10 @@ function decodedNormalToFloat(normal: Int8Array) {
 
 async function main() {
     const input = process.argv[2];
-    if (!input) throw new Error("用法: node run-nbim-geom-verify.mjs <旧文件.nbim>");
+    if (!input) {
+        console.error("用法: npm run verify:nbim-geom -- <旧文件.nbim>");
+        process.exit(1);
+    }
     const buf = fs.readFileSync(input);
     const version = buf.readUInt32LE(4);
     const manifestOffset = buf.readUInt32LE(8);
