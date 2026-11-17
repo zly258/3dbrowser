@@ -27,7 +27,7 @@
 
 .ui-toolbar input[type="file"] { display: none; }
 
-/* ---------- 两组均靠左：左（模型开关 + 品牌 + 文件 + 充满）｜工具组（选择/工具/搜索/设置/关于/属性） ---------- */
+/* ---------- 布局：左（模型开关 + 品牌 + 文件 + 充满）｜工具组（选择/工具/搜索/设置/关于）｜右边缘（属性开关） ---------- */
 .ui-toolbar-left,
 .ui-toolbar-tools {
   display: flex;
@@ -35,6 +35,15 @@
   gap: 2px;
   flex: 0 0 auto;
   min-width: 0;
+}
+
+/* 右边缘：属性面板开关固定右上角（margin-left:auto 把它推到最右） */
+.ui-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 /* 品牌标题（左上角） */

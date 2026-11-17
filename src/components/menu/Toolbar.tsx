@@ -294,8 +294,11 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                         theme={theme}
                     />
                 )}
+            </div>
 
-                {!hidden("interface") && !hidden("props") && (
+            {/* ---------- 右边缘：属性面板开关（固定右上角） ---------- */}
+            {!hidden("interface") && !hidden("props") && (
+                <div className="ui-toolbar-end">
                     <ImageButton
                         icon={<IconList />}
                         className="ui-toolbar-btn-icononly"
@@ -305,8 +308,8 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                         aria-label={t("tb_props")}
                         theme={theme}
                     />
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
