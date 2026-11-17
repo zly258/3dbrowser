@@ -18,6 +18,11 @@
  *   28 u32 reserved
  */
 export const NBIM11_MAGIC = 0x314d424e; // bytes 'N','B','M','1'
+/**
+ * 旧版 NBIM（v8/v9 及更早）的文件标识：小端读出为 'N','B','I','M'。
+ * 仅用于识别旧文件并给出明确提示（本版本已不再支持读取旧格式）。
+ */
+export const NBIM_LEGACY_MAGIC = 0x4d49424e; // bytes 'N','B','I','M'
 export const NBIM11_VERSION = 11;
 export const NBIM11_HEADER_BYTES = 1024;
 export const NBIM11_FLAG_MANIFEST_GZIP = 1;

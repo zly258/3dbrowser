@@ -10,7 +10,7 @@ import {
 import { deriveInitialRuntimeFromHardware } from "../scene-core/chunkRuntime";
 import { debugLog } from "../scene-core/debugLogger";
 import { stableExplodeDirection } from "../scene-core/explode";
-import { readNbimHeader, readNbimManifest, buildNbim11File, NBIM11_MAGIC, NBIM11_VERSION, type NbimManifest, type NbimPropertyDocument, type NbimPropertyNameIndexItem, type NbimPropertyDbInfo } from "../scene-core/nbimIO";
+import { readNbimHeader, readNbimManifest, buildNbim11File, NBIM11_MAGIC, NBIM_LEGACY_MAGIC, NBIM11_VERSION, type NbimManifest, type NbimPropertyDocument, type NbimPropertyNameIndexItem, type NbimPropertyDbInfo } from "../scene-core/nbimIO";
 import { NbipDatabase, encodeNbip } from "../scene-core/nbip";
 import { BlockCompressedSource, compressInBlocks } from "../scene-core/nbimBlock";
 import { compressBytes, resolveExportCodec } from "../scene-core/codec";
@@ -3952,6 +3952,11 @@ export class SceneManager {
 
         if (onProgress) onProgress(10, "正在解析 NBIM 文件头...");
         const header = await readNbimHeader(file);
+        // 旧版（v8/v9）文件标识为 'NBIM'，与 v11 的 'NBM1' 不同；先单独识别，
+        // 避免把一个正常的历史文件误报成“文件损坏”。
+        if (header.magic === NBIM_LEGACY_MAGIC) {
+            throw new Error("这是旧版 NBIM（v8/v9）文件，当前版本已不再支持旧格式，请改用 v11 单文件（.nbim）");
+        }
         if (header.magic !== NBIM11_MAGIC) throw new Error("不是有效的 NBIM v11 文件（文件标识不匹配）");
         const version = header.version;
         if (version !== NBIM11_VERSION) {
