@@ -232,7 +232,7 @@ src/
   styles/         hand-written CSS modules driven by tokens in variables.css
   theme/          icon set, locale dictionaries, theme manager
 scripts/          build helper, UI audit, coverage check, NBIM self-test & stats
-docs/             format spec, statistics, testing fixtures (local only)
+docs/             format spec, statistics, regression checklist (local only)
 public/libs/      WASM/worker decoders (web-ifc, occt-import-js, Draco, Basis)
 ```
 
@@ -240,7 +240,6 @@ public/libs/      WASM/worker decoders (web-ifc, occt-import-js, Draco, Basis)
 
 ```bash
 node scripts/run.mjs nbim11-selftest      # NBIM v11 round-trip self-test (28 checks)
-node scripts/nbim-fixture.mjs --check     # verify test fixtures match their generator
 node scripts/nbim-stats.mjs <file.nbim>   # read-only container statistics
 node scripts/ui-audit.mjs --strict        # design tokens, contrast, radius/z-index/font ladders
 node scripts/class-coverage.cjs           # every className used in TSX has a style rule
@@ -271,7 +270,6 @@ node scripts/class-coverage.cjs
 ## Testing
 
 - **Self-test** — `node scripts/run.mjs nbim11-selftest` runs 28 checks covering NBIP round-trip, the single-file end-to-end path, 5,000-component scale, index delta encoding, and string-pool edge cases (multi-byte, empty, very long, prefix sharing).
-- **Fixtures** — synthetic models in `docs/testing/fixtures` are generated programmatically and contain no real model content; `--check` verifies they still match the generator.
 - **Regression checklist** — manual pass over load / tree / select / highlight / box select / properties / browsing / delete / multi-model, in `docs/testing/regression-checklist.md`.
 
 ---

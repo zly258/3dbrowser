@@ -39,3 +39,28 @@ server/
 # 隐私扫描脚本仅本地保留，不进入提交历史
 /scripts/scan-history-privacy.py
 /scripts/.privacy-patterns.local
+
+# 模型文件：体积大且多为客户数据，一律不进版本库
+*.nbim
+*.glb
+*.gltf
+*.ifc
+*.fbx
+*.obj
+*.mtl
+*.stl
+*.ply
+*.3ds
+*.dae
+*.stp
+*.step
+*.igs
+*.iges
+*.hdr
+*.exr
+*.ktx2
+# 模型常用附带资源
+/textures/
+/samples/
+/models/
+/test-models/

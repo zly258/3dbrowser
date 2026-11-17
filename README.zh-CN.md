@@ -232,7 +232,7 @@ src/
   styles/         手写 CSS 模块，令牌集中在 variables.css
   theme/          图标集、双语字典、主题管理
 scripts/          构建收尾、UI 审计、覆盖率检查、NBIM 自测与统计
-docs/             格式规范、统计数据、测试夹具（仅本地保留）
+docs/             格式规范、统计数据、回归清单（仅本地保留）
 public/libs/      WASM / worker 解码器（web-ifc、occt-import-js、Draco、Basis）
 ```
 
@@ -240,7 +240,6 @@ public/libs/      WASM / worker 解码器（web-ifc、occt-import-js、Draco、B
 
 ```bash
 node scripts/run.mjs nbim11-selftest      # NBIM v11 往返自测（28 项）
-node scripts/nbim-fixture.mjs --check     # 校验测试夹具与生成逻辑一致
 node scripts/nbim-stats.mjs <文件.nbim>    # 只读容器统计
 node scripts/ui-audit.mjs --strict        # 设计令牌、对比度、圆角/z-index/字号阶梯
 node scripts/class-coverage.cjs           # TSX 中每个 className 都有样式规则
@@ -271,7 +270,6 @@ node scripts/class-coverage.cjs
 ## 测试
 
 - **自测** —— `node scripts/run.mjs nbim11-selftest`，28 项，覆盖 NBIP 往返、单文件端到端、5,000 构件规模、索引 delta 编码、字符串池边界（多字节 / 空串 / 超长 / 前缀共享）。
-- **夹具** —— `docs/testing/fixtures` 中的合成模型由脚本程序化生成，不含任何真实模型内容；`--check` 校验它们仍与生成逻辑一致。
 - **回归清单** —— 覆盖加载 / 结构树 / 单选 / 高亮 / 框选 / 属性 / 浏览 / 删除 / 多模型，见 `docs/testing/regression-checklist.md`。
 
 ---

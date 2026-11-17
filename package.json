@@ -30,7 +30,6 @@
     "ui:audit:strict": "node scripts/ui-audit.mjs --strict",
     "ui:coverage": "node scripts/class-coverage.cjs",
     "test:nbim": "node scripts/run.mjs nbim11-selftest",
-    "test:fixtures": "node scripts/nbim-fixture.mjs --check",
     "stats:nbim": "node scripts/nbim-stats.mjs"
   },
   "dependencies": {
