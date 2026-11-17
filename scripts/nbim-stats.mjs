@@ -71,7 +71,7 @@ function readStats(file) {
 
 const files = process.argv.slice(2);
 if (!files.length) {
-    console.error("用法: npm run stats:nbim -- <文件.nbim> [...]");
+    console.error("用法: node scripts/nbim-stats.mjs <文件.nbim> [...]");
     process.exit(1);
 }
 const rows = [];

@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ImageButton } from "../common/ImageButton";
-import { SegmentedControl } from "../common";
 import { ToolbarProps } from "./types";
-import type { DisplayMode } from "../../utils/scene-manager/displayMode";
 import { cx, isMenuHidden } from "./utils";
 import {
     IconFile,
@@ -123,14 +121,6 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
     const toolMenuItem = (icon: React.ReactNode, label: string, tool: NonNullable<ToolbarProps["activeTool"]>) =>
         menuItem(icon, label, () => { setToggleTool(tool); closeMenu(); }, props.activeTool === tool);
 
-    /* 显示样式分段（着色/真实），对齐参考中部分段切换。
-       线框模式已移除：超大模型切线框会大面积只剩骨架且切换极慢，
-       「真实」模式用 CAD 式棱边（圆柱竖棱、球经纬线、梁柱硬边）满足轮廓查看需求。 */
-    const displayModeOptions = [
-        { value: "shaded", label: t("dm_solid") },
-        { value: "realistic", label: t("dm_realistic") }
-    ];
-
     return (
         <div ref={toolbarRef} className="ui-toolbar">
             <input
@@ -235,20 +225,9 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                 )}
             </div>
 
-            {/* ---------- 中：显示样式分段（真实 / 着色 / 线框） ---------- */}
-            {!hidden("wireframe") && (
-                <div className="ui-toolbar-center">
-                    <SegmentedControl
-                        className="ui-toolbar-seg"
-                        options={displayModeOptions}
-                        value={props.displayMode ?? "shaded"}
-                        onChange={(value) => props.handleDisplayModeChange?.(value as DisplayMode)}
-                    />
-                </div>
-            )}
-
-            {/* ---------- 右：选择 + 工具 + 搜索 + 设置/关于 + 属性开关 ---------- */}
-            <div className="ui-toolbar-right">
+            {/* ---------- 工具组：选择 + 工具 + 搜索 + 设置/关于 + 属性开关（紧随左侧组靠左排列） ---------- */}
+            <div className="ui-toolbar-divider-vertical" aria-hidden="true" />
+            <div className="ui-toolbar-tools">
                 {!hidden("interface") && !hidden("pick") && (
                     <>
                         <ImageButton

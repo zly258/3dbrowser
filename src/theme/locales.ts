@@ -155,12 +155,6 @@ const resources: Record<Lang, Record<string, string>> = {
     tb_boxSelect: "Box Select",
     tb_boxSelect_hint: "Drag to select objects",
     op_screenshot: "Screenshot",
-    // 渲染样式
-    display_mode: "DisplayMode",
-    dm_realistic: "Realistic",
-    dm_solid: "Solid",
-    dm_transparent: "Transparent",
-    dm_hidden: "Hidden Line",
     // 剖切
     clip_title: "Sectioning Tool",
     clip_enable: "Enable Clipping",
@@ -626,12 +620,6 @@ const resources: Record<Lang, Record<string, string>> = {
     tb_boxSelect: "框选",
     tb_boxSelect_hint: "拖拽选择对象",
     op_screenshot: "场景截图",
-    // 渲染样式
-    display_mode: "样式",
-    dm_realistic: "真实",
-    dm_solid: "着色",
-    dm_transparent: "透明",
-    dm_hidden: "消隐",
     // 剖切
     clip_title: "剖切面板",
     clip_enable: "开启剖切",
@@ -794,7 +782,7 @@ const resources: Record<Lang, Record<string, string>> = {
     st_highlight_color: "高亮颜色",
     st_highlight_box: "高亮/定位包围盒",
     st_highlight_box_hint: "开启后，高亮和定位都会显示包围盒；关闭后只保留颜色高亮和视图定位。",
-    st_appearance: "外观",
+    st_appearance: "外观设置",
     st_group_theme: "主题与语言",
     st_group_layout: "布局",
     st_group_interaction: "交互",

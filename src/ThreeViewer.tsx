@@ -187,9 +187,11 @@ export const ThreeViewer = ({
     
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
-    // 显示样式：realistic-真实（着色+CAD 棱边）, shaded-着色（仅实体）
-    // 线框模式已移除；旧存档里的 "wireframe" 由 normalizeDisplayMode 归一化为 realistic
-    const [displayMode, setDisplayMode] = usePersistentState<DisplayMode>('3dbrowser_displayMode', 'shaded', {
+    // 显示样式：realistic-真实（着色 + CAD 棱边）, shaded-着色（仅实体）。
+    // 顶栏的样式切换已移除，这里只读取本地偏好并应用（默认 shaded）；
+    // 旧存档里的 "wireframe" 由 normalizeDisplayMode 归一化为 realistic。
+    // 如需改成固定显示「真实」，把下面的默认值改为 'realistic' 即可。
+    const [displayMode] = usePersistentState<DisplayMode>('3dbrowser_displayMode', 'shaded', {
         parser: (raw) => normalizeDisplayMode(JSON.parse(raw))
     });
     
@@ -1118,12 +1120,9 @@ export const ThreeViewer = ({
 
     const handleView = (v: any) => { sceneMgr.current?.setView(v); };
 
-    const handleDisplayModeChange = (mode: DisplayMode) => {
-        setDisplayMode(mode);
-        sceneMgr.current?.setDisplayMode(mode);
-    };
-
-    // 模型加载完成/切换样式后，把当前样式重新套用到全部内容（含分块加载的网格）
+    // 显示样式不再由顶栏切换（分段控件已移除）。样式仍从本地偏好读取并应用，
+    // 因此已有存档会照旧生效；如需改固定样式，改下面 usePersistentState 的默认值即可。
+    // 模型加载完成/样式变化后，把当前样式重新套用到全部内容（含分块加载的网格）
     useEffect(() => {
         if (!mgrInstance) return;
         mgrInstance.setDisplayMode(displayMode);
@@ -1154,8 +1153,6 @@ export const ThreeViewer = ({
                  handleView={handleView}
                  handleClear={handleClear}
                  openScreenshotPanel={() => setActiveTool('screenshot')}
-                 handleDisplayModeChange={handleDisplayModeChange}
-                 displayMode={displayMode}
                  pickEnabled={pickEnabled}
                  setPickEnabled={setPickEnabled}
                  activeTool={activeTool}

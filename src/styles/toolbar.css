@@ -27,31 +27,14 @@
 
 .ui-toolbar input[type="file"] { display: none; }
 
-/* ---------- 三区布局：左（品牌+文件/视图）｜中（样式分段）｜右（工具胶囊） ---------- */
+/* ---------- 两组均靠左：左（模型开关 + 品牌 + 文件 + 充满）｜工具组（选择/工具/搜索/设置/关于/属性） ---------- */
 .ui-toolbar-left,
-.ui-toolbar-right {
+.ui-toolbar-tools {
   display: flex;
   align-items: center;
   gap: 2px;
   flex: 0 0 auto;
   min-width: 0;
-}
-
-.ui-toolbar-right { justify-content: flex-end; }
-
-.ui-toolbar-center {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  gap: 8px;
-}
-
-/* 顶栏中部分段：按内容取宽，不随 center 区拉伸 */
-.ui-toolbar-center .ui-segmented,
-.ui-toolbar-seg {
-  flex: 0 0 auto;
 }
 
 /* 品牌标题（左上角） */
@@ -86,12 +69,12 @@
 .ui-tools-dock {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--footer-h) + 12px);
+  bottom: calc(var(--footer-h) + 8px);
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
+  gap: 1px;
+  padding: 3px;
   color: var(--text-sec);
   background: var(--bg-glass);
   -webkit-backdrop-filter: blur(10px);
@@ -112,16 +95,17 @@
   backdrop-filter: none;
 }
 
-/* 坞内按钮：仅图标时为正方形胶囊；带文字时为「上图标下文字」的竖排胶囊 */
+/* 坞内按钮：仅图标时为方形胶囊；带文字时为「上图标下文字」的竖排胶囊。
+   尺寸对齐顶栏按钮高（--toolbar-btn-h），比顶栏更紧凑。 */
 .ui-tools-dock-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 2px;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 6px;
+  gap: 1px;
+  min-width: var(--toolbar-btn-h);
+  height: var(--toolbar-btn-h);
+  padding: 0 5px;
   color: var(--text-sec);
   background: transparent;
   border: 0;
@@ -145,7 +129,8 @@
   outline-offset: 1px;
 }
 
-/* 图标 + 文字：上图标下文字，按钮变高、文字 11px */
+/* 图标：必须显式压到令牌尺寸，否则 SVG 会按 width/height 属性渲染成 24px
+   （顶栏有 .ui-toolbar-btn svg 覆盖，坞内是独立结构，漏了这层就明显偏大）。 */
 .ui-tools-dock-icon {
   display: inline-flex;
   align-items: center;
@@ -153,21 +138,29 @@
   line-height: 1;
 }
 
-.ui-tools-dock-icon svg { display: block; flex-shrink: 0; }
+.ui-tools-dock-icon svg {
+  display: block;
+  flex-shrink: 0;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: currentColor;
+  stroke-width: 1.8;
+}
 
-.ui-tools-dock-with-labels { gap: 4px; padding: 5px 6px; }
+/* 图标 + 文字：上图标下文字（图标 14px / 文字 11px），按钮更矮更窄 */
+.ui-tools-dock-with-labels { gap: 2px; padding: 3px 4px; }
 
 .ui-tools-dock-btn.with-label {
   height: auto;
-  min-width: 52px;
-  padding: 5px 6px 4px;
-  gap: 3px;
+  min-width: 34px;
+  padding: 3px 5px 2px;
+  gap: 1px;
   border-radius: var(--radius-lg);
 }
 
 .ui-tools-dock-label {
   font-size: var(--font-size-caption);
-  line-height: 1.1;
+  line-height: 1.05;
   white-space: nowrap;
   color: inherit;
 }
@@ -175,22 +168,22 @@
 .ui-tools-dock-divider {
   flex: 0 0 1px;
   width: 1px;
-  height: 18px;
-  margin: 0 4px;
+  height: 16px;
+  margin: 0 3px;
   background: var(--border-main);
   align-self: center;
 }
 
-.ui-tools-dock-with-labels .ui-tools-dock-divider { height: 30px; }
+.ui-tools-dock-with-labels .ui-tools-dock-divider { height: 26px; }
 
 .ui-tools-dock-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 2px;
-  width: 24px;
-  height: 24px;
+  gap: 1px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   color: var(--text-muted);
   background: transparent;
@@ -203,8 +196,8 @@
 .ui-tools-dock-toggle.with-label {
   width: auto;
   height: auto;
-  min-width: 44px;
-  padding: 5px 6px 4px;
+  min-width: 30px;
+  padding: 3px 5px 2px;
   border-radius: var(--radius-lg);
 }
 
@@ -215,13 +208,18 @@
 
 .ui-tools-dock-toggle svg { display: block; flex-shrink: 0; }
 
+.ui-tools-dock-toggle .ui-tools-dock-icon svg {
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
+}
+
 /* 收起态：单个圆形浮动按钮 */
 .ui-tools-dock-fab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   color: var(--accent-contrast);
   background: var(--accent-solid);

@@ -14,10 +14,10 @@ Professional 3D model viewer library for React and Web applications. Built for v
   - **Sectioning**: Real-time clipping planes for internal inspection, with the range recalculated from the current model.
   - **Scene Tree**: Interactive hierarchical view of the model structure.
   - **Properties**: Detailed metadata viewer for selected components.
-  - **Display styles**: Realistic (shaded + CAD-style edges: hard edges on beams, vertical seams and end rings on cylinders) and Shaded — switchable from the toolbar and remembered locally..
+  - **Display styles**: Shaded (solid only) and Realistic (shaded + CAD-style edges: hard edges on beams, vertical seams and end rings on cylinders). The style is fixed to the locally remembered preference — there is no toolbar toggle..
   - **Box selection**: Full-screen marquee selection that stays responsive on six-figure component counts.
   - **Instance-level picking**: A single click resolves the exact instance under the cursor, highlights only that instance (with a glow) and lets you customize the highlight colour.
-- **Offline Batch Conversion**: Convert legacy NBIM sources to a single NBIM v11 file on the CPU only — no scene, no GPU, no VRAM.
+- **Offline Batch Conversion**: Merge raw source files (IFC / GLB / FBX / OBJ / …) into a single NBIM v11 file on the CPU only — no GPU, no VRAM.
 - **Modern Tech Stack**: Built with **React 19**, **Three.js**, and **TypeScript**.
 - **Localization**: Built-in support for English and Chinese out of the box.
 
@@ -59,24 +59,23 @@ Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one doc
 - **Priority-driven loading.** Oversized models load the most central/near chunks first up to the memory budget; selection and picking work on every loaded chunk.
 - **Instance-aware picking.** `batchId` → uuid/source maps resolve one specific instance per click, and box selection culls whole chunks by bounding box before touching individual instances.
 - **Lazy property index.** Above 20,000 property documents the index stays out of memory and is resolved on selection; search builds it once, in a single pass.
-- **Headless batch conversion.** Legacy NBIM → v11 migration touches only CPU and disk, so it can run on machines without a usable GPU.
 
 ### Known limits
 
-- **NBIM is the fast path.** Raw multi-file sources must be merged once (the built-in batch converter downloads a single `.nbim`), otherwise the loader spends its time on conversion instead of streaming.
+- **NBIM is the fast path.** Source models must be exported as a single NBIM v11 file (`.nbim`); the viewer reads v11 only and rejects older NBIM versions with an explicit message.
 - **Huge models are streamed, not all-resident.** A 2.9 GB / 1,271-chunk NBIM keeps roughly 400 chunks resident in a 4 GB JS heap (measured ~1.9 GB decoded geometry, ~3.4–3.5 GB total heap). Distant/unvisited chunks stay as ghost wireframe until they enter the budget; loading all 1,271 at once would need ~9 GB and risks OOM.
 - **First property search may take a moment** when the model carries more than 20,000 property documents, because the search index is built on first use.
 - **Software-rendered FPS is a floor, not a target.** The numbers above were measured without a GPU; GPU-backed browsers are considerably faster.
 
 ## Installation
 
-This project is **no longer published to npm**. Use it directly from source:
+Use it directly from source (Node ≥ 20). Dependencies are pinned by `package-lock.json`:
 
 ```bash
 git clone https://github.com/zly258/3dbrowser.git
 cd 3dbrowser
-npm install
-npm run dev
+# install dependencies with your package manager, following package-lock.json
+node node_modules/vite/bin/vite.js      # dev server → http://localhost:5173
 ```
 
 ## Assets Setup
@@ -168,8 +167,8 @@ The whole interface follows one light Material Design 3 (MD3) CAD-viewer languag
 Verify before delivering:
 
 ```bash
-npm run ui:audit:strict   # tokens, contrast, z-index/radius/font ladder, emoji, bare hex
-npm run ui:coverage       # every className used in TSX has a style rule
+node scripts/ui-audit.mjs --strict   # tokens, contrast, z-index/radius/font ladder, emoji, bare hex
+node scripts/class-coverage.cjs      # every className used in TSX has a style rule
 ```
 
 ## License
@@ -196,10 +195,10 @@ This project is intended for learning and research purposes only. **Commercial u
   - **剖切**: 实时剖切面，方便查看内部结构；打开面板时按当前模型自动重算范围。
   - **场景树**: 交互式构件树状结构视图。
   - **属性面板**: 选中构件的详细属性查看。
-  - **显示样式**: 真实（着色 + CAD 式棱边：梁柱硬边、圆柱竖棱与端部圆环）、着色，工具栏一键切换并本地记忆（线框模式已移除）。
+  - **显示样式**: 着色（仅实体）与真实（着色 + CAD 式棱边：梁柱硬边、圆柱竖棱与端部圆环）。样式取本地偏好，**顶栏不再提供切换**（线框模式已移除）。
   - **框选**: 全屏框选，十万级构件下仍保持毫秒级响应。
   - **实例级点选**: 单击只选中并高亮光标命中的那一个实例（带发光效果），高亮颜色可自定义。
-- **离线批量转换**: 纯 CPU 把旧版 NBIM 源文件迁移合并为单个 NBIM v11 文件，不进入场景、不占显存。
+- **离线批量转换**: 纯 CPU 把原始源文件（IFC / GLB / FBX / OBJ 等）合并导出为单个 NBIM v11 文件，不占显存。
 - **现代技术栈**: 基于 **React 19**, **Three.js** 和 **TypeScript** 构建。
 - **双语支持**: 内置完善的中英文支持。
 
@@ -247,11 +246,11 @@ This project is intended for learning and research purposes only. **Commercial u
 - **按需渲染**：只有相机、加载、选中状态变化时才绘制一帧，空闲时几乎零开销。
 - **实例感知拾取**：`batchId` → uuid/来源的映射让单击能定位到具体实例；框选先用整块包围盒剔除，再落到实例级。
 - **属性索引懒加载**：超过 2 万条属性文档时不常驻内存，选中时按需解析；搜索时一次性单遍构建。
-- **无头批量转换**：旧版 NBIM → v11 迁移仅使用 CPU 与磁盘，可在没有可用 GPU 的机器上运行。
+- **无头批量转换**：原始源文件合并导出为 NBIM v11 仅使用 CPU 与磁盘，可在没有可用 GPU 的机器上运行。
 
 ### 已知边界
 
-- **NBIM 才是快路径**：原始多文件格式建议先用内置批量转换合并成单个 `.nbim`，否则加载阶段的时间会花在转换上，而不是流式渲染。
+- **NBIM 才是快路径**：原始源文件建议先用内置批量转换合并成单个 `.nbim`，否则加载阶段的时间会花在转换上，而不是流式渲染；本版本只读 v11，旧版本 NBIM 会被明确拒绝。
 - **预算不足时极远分块会被跳过**：投影小于约 4 px 的分块不参与解码；同时打开多个相距很远的模型时，远处那个在放大前可能几乎空白。
 - **LOD/线框代理默认关闭**：默认全量几何；只有显式配置 `renderStrategy=adaptive` 或 `renderBudget=auto` 时才会省略极小构件或显示线框代理。
 - **驻留策略**：内存允许时全量驻留，放大/平移不会因“离开视口”卸载；只有堆超过高水位或确实装不下时才从最远分块开始卸载。
@@ -260,13 +259,13 @@ This project is intended for learning and research purposes only. **Commercial u
 
 ## 安装
 
-本项目**已停止 npm 发布**，请直接从源码使用：
+请直接从源码使用（Node ≥ 20），依赖由 `package-lock.json` 锁定：
 
 ```bash
 git clone https://github.com/zly258/3dbrowser.git
 cd 3dbrowser
-npm install
-npm run dev
+# 用惯用的包管理器按 package-lock.json 安装依赖
+node node_modules/vite/bin/vite.js      # 启动开发服务器 → http://localhost:5173
 ```
 
 ## 静态资源配置
@@ -343,8 +342,8 @@ function App() {
 交付前执行：
 
 ```bash
-npm run ui:audit:strict   # 令牌、对比度、z-index/圆角/字号阶梯、emoji、裸色值
-npm run ui:coverage       # TSX 中使用的每个 className 都有对应样式
+node scripts/ui-audit.mjs --strict   # 令牌、对比度、z-index/圆角/字号阶梯、emoji、裸色值
+node scripts/class-coverage.cjs      # TSX 中使用的每个 className 都有对应样式
 ```
 
 ## 许可证

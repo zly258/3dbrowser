@@ -23,19 +23,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && npx tsc -p tsconfig.lib.json --skipLibCheck && node scripts/post-build.js",
+    "build": "vite build && node node_modules/typescript/bin/tsc -p tsconfig.lib.json --skipLibCheck && node scripts/post-build.js",
     "build:pages": "vite build --mode pages",
     "preview": "vite preview",
     "ui:audit": "node scripts/ui-audit.mjs",
     "ui:audit:strict": "node scripts/ui-audit.mjs --strict",
     "ui:coverage": "node scripts/class-coverage.cjs",
     "test:nbim": "node scripts/run.mjs nbim11-selftest",
-    "migrate:nbim": "node scripts/run.mjs nbim-legacy-to-v11",
-    "verify:nbim-geom": "node scripts/run.mjs nbim-geom-verify",
     "test:fixtures": "node scripts/nbim-fixture.mjs --check",
-    "stats:nbim": "node scripts/nbim-stats.mjs",
-    "convert:nbim": "node scripts/run.mjs nbim-batch-convert",
-    "unpublish:npm": "node scripts/npm-unpublish-history.mjs"
+    "stats:nbim": "node scripts/nbim-stats.mjs"
   },
   "dependencies": {
     "brotli-dec-wasm": "^2.3.2",

@@ -2,16 +2,15 @@
 /**
  * 统一的 TS 工具脚本运行器。
  *
- * 背景：scripts 下有一批用 TypeScript 写的离线工具（批量转换、迁移、几何校验、自测），
+ * 背景：scripts 下有少量用 TypeScript 写的离线工具（当前为 NBIM v11 自测），
  * 它们不能直接被 node 执行，需要先用 esbuild 打包。此前每个脚本都配了一份
  * 20 行的 run-xxx.mjs 样板，内容除了入口名完全相同；这里合并为一个通用运行器。
  *
  * 用法：
  *   node scripts/run.mjs <脚本名> [参数...]
  *   node scripts/run.mjs nbim11-selftest
- *   node scripts/run.mjs nbim-batch-convert <源目录> <目标目录> [--limit N] [--filter 关键字]
  *
- * 也可省略 .ts 后缀；入口不存在时给出可用列表。
+ * 也可省略 .ts 后缀；不带参数会列出可用脚本，入口不存在时报错并给出列表。
  *
  * 注意：会在导入前还原 process.argv，使被运行的脚本看到的仍是
  * argv[1]=脚本路径、argv[2..]=用户参数，从而与直接运行 run-xxx.mjs 时完全一致
