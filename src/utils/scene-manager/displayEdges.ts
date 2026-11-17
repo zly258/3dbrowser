@@ -5,10 +5,26 @@ import { clearBatchedGeometryViews, getBatchedInstanceGeometry } from "./batched
  * 构件边线生成器：只为“真实的几何棱边”生成线，不显示三角形网格线。
  *  - 普通 Mesh：对几何体做 EdgesGeometry(阈值角) 后作为子节点挂载；
  *  - BatchedMesh：按实例读取几何体与实例矩阵，把棱边顶点变换到批量网格局部空间后合并成一条 LineSegments。
- * 用于「真实（着色 + 边线）」与「线框（仅边线）」。
+ * 用于「真实（着色 + 边线）」显示样式。
  */
 
-const EDGE_ANGLE = 30;
+/**
+ * 棱边夹角阈值（度）：
+ *  - 硬边（梁柱、板的直角）无论阈值多少都会保留；
+ *  - 圆柱侧面的竖棱与相邻侧面夹角很小（24 段≈15°、64 段≈5.6°、128 段≈2.8°），
+ *    阈值过大会被整根丢掉，圆柱只剩上下两个圆环、球则完全无线
+ *    （实测 @30°：圆柱竖棱 0 条、球 0 条）；这正是“圆柱线框不对”的根因。
+ *  2° 可让 12~128 段的圆柱都拿到竖棱与圆环，并保留梁柱硬边。
+ */
+const EDGE_ANGLE = 2;
+/**
+ * 单个几何体的棱边段数上限：
+ * 高密度曲面（球、圆环）在 2° 下会生成近千段线，视觉上接近网格线框而非 CAD 轮廓；
+ * 超过上限就退回只保留硬边，让球面保持光滑着色（CAD 里球/曲面本就只画轮廓）。
+ */
+const EDGE_MAX_SEGMENTS_PER_GEOMETRY = 400;
+/** 段数超限时的回退阈值（度）：只保留接近直角的硬边（梁、柱、板的棱） */
+const EDGE_HARD_ANGLE = 25;
 /** 单个批量网格的边线顶点预算，超出部分不再生成（避免超大场景内存暴涨） */
 const MAX_EDGE_VERTS_PER_BATCH = 6000000;
 /**
@@ -84,8 +100,16 @@ export class DisplayEdgeBuilder {
         const cached = this.geometryEdgeCache.get(geometry.uuid);
         if (cached) return cached;
         try {
-            const edgesGeometry = new THREE.EdgesGeometry(geometry, EDGE_ANGLE);
-            const attribute = edgesGeometry.getAttribute("position");
+            // 先按精细阈值取边（能画出圆柱竖棱、球的经纬线）；
+            // 段数过多（高密度曲面）时退回大阈值，只保留梁柱硬边，
+            // 避免把球面画成密网格。
+            let edgesGeometry = new THREE.EdgesGeometry(geometry, EDGE_ANGLE);
+            let attribute = edgesGeometry.getAttribute("position");
+            if (attribute && attribute.count / 2 > EDGE_MAX_SEGMENTS_PER_GEOMETRY) {
+                edgesGeometry.dispose();
+                edgesGeometry = new THREE.EdgesGeometry(geometry, EDGE_HARD_ANGLE);
+                attribute = edgesGeometry.getAttribute("position");
+            }
             if (!attribute) {
                 edgesGeometry.dispose();
                 return null;

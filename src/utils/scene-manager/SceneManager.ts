@@ -367,13 +367,11 @@ export class SceneManager {
     private maxConcurrentChunkLoads = 128; // 提高并发
     private maxChunkLoadsPerFrame = 64;   // 提高并发
     private maxLoadedChunks = 512;        // 最大已加载分块数，超过则卸载最远的
-    /** 着色模式下的常驻上限；切到真实/线框时临时下调，切回时恢复 */
+    /** 着色模式下的常驻上限；切到真实时临时下调，切回时恢复 */
     private shadedMaxLoadedChunks = 0;
     /** 最近一次预算计算里的固定开销（属性/结构树/JS 基线），用于样式切换时估算 */
     private lastBaseUsedMB = 650;
-    /** 切到真实/线框时，分帧卸载的定时器 */
-    private edgeTransitionTimer: number | null = null;
-    /** 切真实/线框后逐帧补边线的队列（避免一次性生成上百块边线卡死主线程） */
+    /** 切真实后逐帧补边线的队列（避免一次性生成上百块边线卡死主线程） */
     private edgeBuildQueue: THREE.Object3D[] = [];
     private edgeBuildTimer: number | null = null;
     private edgeBuildGeneration = 0;
@@ -858,81 +856,45 @@ export class SceneManager {
     }
 
     /**
-    /**
      * 设置显示样式：
-     *  - realistic 真实：着色 + 构件棱边
+     *  - realistic 真实：着色 + 构件棱边（CAD 式轮廓）
      *  - shaded    着色：仅着色
-     *  - wireframe 线框：仅棱边
+     *
+     * 线框模式已移除（实体面隐藏 + 压缩常驻块会让超大模型只剩骨架，
+     * 且切换需卸载常驻块与逐实例重算棱边，代价过高）。
      */
     setDisplayMode(mode: DisplayMode) {
         this.displayMode = normalizeDisplayMode(mode);
-        // 线框需要“先有棱边再隐藏实体”：边线是逐帧补的，先按着色显示，
-        // 等边线生成完再真正切到线框，避免切换瞬间模型大面积消失。
-        applyDisplayMode(this.contentGroup, this.displayMode === "wireframe" ? "shaded" : this.displayMode);
-        // 真实模式边线适当减弱；线框模式保持清晰。
-        this.displayEdges.setBaseOpacity(this.displayMode === "wireframe" ? 0.9 : 0.48);
+        applyDisplayMode(this.contentGroup, this.displayMode);
+        // 真实模式边线；着色模式不描边。
+        this.displayEdges.setBaseOpacity(0.62);
         // 未加载分块的 ghost 线框：着色模式压淡，避免整个模型看起来像“被拆成骨架”。
         this.ghostMaterial.opacity = this.displayMode === "shaded" ? 0.1 : 0.3;
 
         if (this.displayMode === "shaded") {
             // 切回着色时释放所有边线（全模型边线可达 1GB+），并恢复常驻分块上限。
-            this.cancelEdgeModeTransition();
             this.cancelProgressiveEdgeBuild();
             if (this.displayEdges.getStats().count > 0) this.displayEdges.clear();
             this.displayEdgesBuilt = false;
             if (this.shadedMaxLoadedChunks > 0) this.maxLoadedChunks = this.shadedMaxLoadedChunks;
             this.markSceneDirty({ needsCulling: true });
         } else {
-            const isWireframe = this.displayMode === "wireframe";
             // 大模型真实样式只给最近的一小批分块描边：远处棱边本来就看不清，
             // 少做一批能明显缩短样式切换和后续旋转的开销；小模型保持原范围。
             const isLargeModel = this.chunks.length > 400;
-            const realisticEdgeLimit = isLargeModel ? 24 : 40;
-            // 真实样式：保留全部实体，只给近处分块补边线；
-            // 线框样式：实体被隐藏，必须把所有可驻留分块都补上边线。
-            this.displayEdges.setByteBudget(isWireframe
-                ? this.computeEdgeModeByteBudgetMB()
-                : Math.max(96, Math.min(isLargeModel ? 160 : 240, this.computeEdgeModeByteBudgetMB() * 0.4)));
+            this.displayEdges.setByteBudget(
+                Math.max(96, Math.min(isLargeModel ? 160 : 240, this.computeEdgeModeByteBudgetMB() * 0.4))
+            );
 
-            if (isWireframe) {
-                const edgeCap = this.computeEdgeModeChunkCap();
-                if (edgeCap < this.maxLoadedChunks) {
-                    this.maxLoadedChunks = edgeCap;
-                    this.beginEdgeModeTransition(edgeCap);
-                } else {
-                    this.startProgressiveEdgeBuild();
-                }
-            } else {
-                this.cancelEdgeModeTransition();
-                if (this.shadedMaxLoadedChunks > 0) this.maxLoadedChunks = this.shadedMaxLoadedChunks;
-                this.startProgressiveEdgeBuild();
-                this.markSceneDirty({ needsCulling: true });
-            }
+            // 真实样式保留全部实体，只补棱边；不再需要压缩常驻块数。
+            if (this.shadedMaxLoadedChunks > 0) this.maxLoadedChunks = this.shadedMaxLoadedChunks;
+            this.startProgressiveEdgeBuild();
+            this.markSceneDirty({ needsCulling: true });
         }
         this.requestRender();
     }
 
-    /** 真实/线框模式下，按“几何 + 边线”双份成本估算可常驻分块数 */
-    private computeEdgeModeChunkCap() {
-        const baseCap = this.shadedMaxLoadedChunks || this.maxLoadedChunks || 256;
-        const perfMemory = (performance as any)?.memory;
-        const heapLimitMB = perfMemory?.jsHeapSizeLimit
-            ? perfMemory.jsHeapSizeLimit / 1048576
-            : 4096;
-        // 用预算时记录的固定开销，而不是瞬时 usedHeap（切线框时边线正在分配，
-        // 用瞬时值会把上限越算越小，最终把模型裁到只剩几十块）。
-        const baseUsedMB = Math.max(0, this.lastBaseUsedMB || 650);
-        const cacheMB = getChunkReadCacheBytes(this.chunkReadCache) / 1048576;
-        const budgetMB = Math.max(384, heapLimitMB * 0.78 - baseUsedMB - Math.min(128, cacheMB));
-        // 实测：几何实际 ≈ 估算 × 0.63，边线 ≈ 估算 × 1.0 → 每块总成本 ≈ 估算 × 1.63
-        const perChunkMB = Math.max(1.0, this.getAverageChunkFootprintMB() * 1.63);
-        // 保护性上限：边线生成本身是同步重活，块数过多会先卡死再 OOM。
-        // 大模型线框只保留近处约 200 块细节，其余分块显示框线（后续再做渐进生成）。
-        const EDGE_DETAIL_CAP = 200;
-        return Math.max(48, Math.min(baseCap, EDGE_DETAIL_CAP, Math.floor(budgetMB / perChunkMB)));
-    }
-
-    /** 真实/线框模式可用的边线总字节预算（MB） */
+    /** 真实模式可用的边线总字节预算（MB） */
     private computeEdgeModeByteBudgetMB() {
         const perfMemory = (performance as any)?.memory;
         const heapLimitMB = perfMemory?.jsHeapSizeLimit ? perfMemory.jsHeapSizeLimit / 1048576 : 4096;
@@ -950,7 +912,6 @@ export class SceneManager {
         if (!proxy) return;
         const totalChunks = this.chunks.length;
         const active = this.renderBudgetMode !== "full"
-            && this.displayMode !== "wireframe"
             && totalChunks > this.renderBudgetChunkMax;
         if (!active) {
             proxy.clear();
@@ -1026,30 +987,6 @@ export class SceneManager {
         return Math.max(0.015, Math.min(0.6, onePixelWorld * 1.35));
     }
 
-    /** 同步卸载最远的分块，直到已加载数不超过 cap（切换显示样式前调用） */
-    private trimLoadedChunksForMode(cap: number) {
-        if (!Number.isFinite(cap) || cap <= 0) return;
-        if (this.chunkLoadedCount <= cap) return;
-        const cameraPos = this.camera.position;
-        const centerOf = (chunk: any) => {
-            if (!chunk.center && chunk.bounds) chunk.center = chunk.bounds.getCenter(new THREE.Vector3());
-            return chunk.center || cameraPos;
-        };
-        const loaded = this.chunks.filter((chunk: any) => chunk?.loaded && chunk?.mesh);
-        loaded.sort((a: any, b: any) => centerOf(b).distanceToSquared(cameraPos) - centerOf(a).distanceToSquared(cameraPos));
-        for (const chunk of loaded) {
-            if (this.chunkLoadedCount <= cap) break;
-            this.unloadChunk(chunk);
-        }
-    }
-
-    private cancelEdgeModeTransition() {
-        if (this.edgeTransitionTimer !== null) {
-            window.clearTimeout(this.edgeTransitionTimer);
-            this.edgeTransitionTimer = null;
-        }
-    }
-
     private cancelProgressiveEdgeBuild() {
         this.edgeBuildGeneration++;
         if (this.edgeBuildTimer !== null) {
@@ -1060,9 +997,7 @@ export class SceneManager {
     }
 
     /**
-     * 边线全部补完后：
-     *  - 线框模式真正隐藏实体面（超大、无法描边的分块保留实体兜底，避免消失）
-     *  - 真实模式恢复实体面
+     * 边线全部补完后：确保实体面可见（超大、无法描边的分块本来也保留实体）。
      */
     private finalizeDisplayModeAfterEdges() {
         for (const chunk of this.chunks) {
@@ -1082,7 +1017,7 @@ export class SceneManager {
     }
 
     /**
-     * 逐帧补边线：每帧最多 8ms，避免切换真实/线框时一次性对上百个分块做
+     * 逐帧补边线：每帧最多 8ms，避免一次性对上百个分块做
      * EdgesGeometry 把主线程卡死（全模型切换曾出现数十秒无响应）。
      */
     private startProgressiveEdgeBuild() {
@@ -1093,16 +1028,13 @@ export class SceneManager {
         this.displayEdges.clear();
         this.displayEdgesBuilt = false;
 
-        const isWireframe = this.displayMode === "wireframe";
+        // 真实样式：只给屏幕占比最大的近处分块补边线，远处保持纯着色。
         const realisticEdgeLimit = this.chunks.length > 400 ? 24 : 40;
-        let loaded = this.chunks.filter((chunk: any) => chunk?.loaded && chunk?.mesh);
-        if (!isWireframe) {
-            // 真实样式：只给屏幕占比最大的近处分块补边线，远处保持纯着色。
-            loaded = loaded
-                .filter((chunk: any) => Number(chunk?._lastPixelSize) > 8)
-                .sort((a: any, b: any) => Number(b._lastPixelSize) - Number(a._lastPixelSize))
-                .slice(0, realisticEdgeLimit);
-        }
+        const loaded = this.chunks
+            .filter((chunk: any) => chunk?.loaded && chunk?.mesh)
+            .filter((chunk: any) => Number(chunk?._lastPixelSize) > 8)
+            .sort((a: any, b: any) => Number(b._lastPixelSize) - Number(a._lastPixelSize))
+            .slice(0, realisticEdgeLimit);
         // 排序后 reverse，配合 pop() 从“最值得”的分块开始。
         this.edgeBuildQueue = loaded.map((chunk: any) => chunk.mesh as THREE.Object3D).reverse();
 
@@ -1130,39 +1062,6 @@ export class SceneManager {
             }
         };
         this.edgeBuildTimer = window.setTimeout(step, 16);
-    }
-
-    /**
-     * 切到真实/线框：分帧把常驻块数降到 targetCap，再统一生成边线。
-     * 一次性卸载几百块会产生 >1GB 瞬时垃圾，GC 跟不上就会把堆冲到 4.5GB+；
-     * 每帧只卸 48 块，给 GC 留出回收窗口。
-     */
-    private beginEdgeModeTransition(targetCap: number) {
-        this.cancelEdgeModeTransition();
-        const started = performance.now();
-        const step = () => {
-            this.edgeTransitionTimer = null;
-            if (this.disposed || this.displayMode === "shaded") return;
-
-            const loaded = this.chunkLoadedCount;
-            if (loaded > targetCap + 8) {
-                this.maxLoadedChunks = Math.max(targetCap, loaded - 48);
-                this.markSceneDirty({ needsCulling: true });
-                this.checkCullingAndLoad();
-                if (performance.now() - started < 20000) {
-                    this.edgeTransitionTimer = window.setTimeout(step, 160);
-                    return;
-                }
-                // 兜底：超时后同步一次卸干净
-                this.maxLoadedChunks = targetCap;
-                this.trimLoadedChunksForMode(targetCap);
-            }
-
-            this.maxLoadedChunks = targetCap;
-            this.startProgressiveEdgeBuild();
-            this.requestRender();
-        };
-        this.edgeTransitionTimer = window.setTimeout(step, 200);
     }
 
     getDisplayMode(): DisplayMode {
