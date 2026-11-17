@@ -537,12 +537,10 @@ export class SceneManager {
     private ghostEdgesGeometry: THREE.EdgesGeometry;
     private ghostMaterial: THREE.LineBasicMaterial;
     private ghostMeshPool: THREE.LineSegments[] = [];
-    /** 渲染预算代理（远景分块用线框盒子代替完整几何，1 个 draw call） */
     private renderProxy: ChunkRenderProxy | null = null;
+    private renderProxyMaterial: THREE.LineBasicMaterial | null = null;
+    /** 仅用于 getChunkOptions() 回报配置值，不驱动任何渲染逻辑 */
     private renderBudgetMode: "auto" | "full" = "full";
-    private renderBudgetTriangles = 70000000;
-    private renderBudgetChunkMax = 700;
-    private renderBudgetSelected = new Set<string>();
     /** 连续多次采样到堆高水位后才触发卸载，避免瞬时 GC 抖动误判 */
     private memoryPressureScore = 0;
 
@@ -599,13 +597,7 @@ export class SceneManager {
         if (options.performancePreset) {
             this.settings.performanceMode = options.performancePreset;
         }
-        // 渲染预算代理：默认关闭，只有 URL ?renderBudget=auto 或 chunkOptions 显式开启
-        const renderBudgetParam = typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("renderBudget")
-            : null;
-        this.renderBudgetMode = (renderBudgetParam === "auto" || this.resolvedChunkOptions.renderBudget === "auto")
-            ? "auto"
-            : "full";
+
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
 
@@ -656,8 +648,12 @@ export class SceneManager {
 
         this.ghostGroup = new THREE.Group();
         this.ghostGroup.name = "Ghost";
+        this.ghostGroup.visible = false;
         this.scene.add(this.ghostGroup);
-        this.renderProxy = new ChunkRenderProxy(this.scene, this.ghostMaterial, 4096);
+        // 渲染预算代理单独一份材质：它代表“真实替代绘制”，不能跟占位框一起淡出，
+        // 否则淡出期间被预算挡下的分块会直接看不见。
+        this.renderProxyMaterial = this.ghostMaterial.clone();
+        this.renderProxy = new ChunkRenderProxy(this.scene, this.renderProxyMaterial, 4096);
 
         this.clipHelpersGroup = new THREE.Group();
         this.clipHelpersGroup.name = "ClipHelpers";
@@ -868,8 +864,8 @@ export class SceneManager {
         applyDisplayMode(this.contentGroup, this.displayMode);
         // 真实模式边线；着色模式不描边。
         this.displayEdges.setBaseOpacity(0.62);
-        // 未加载分块的 ghost 线框：着色模式压淡，避免整个模型看起来像“被拆成骨架”。
-        this.ghostMaterial.opacity = this.displayMode === "shaded" ? 0.1 : 0.3;
+        // ghostMaterial 供 pool 回收时保持正确 opacity（ghostGroup 本身永久隐藏）。
+        this.ghostMaterial.opacity = this.getGhostBaseOpacity();
 
         if (this.displayMode === "shaded") {
             // 切回着色时释放所有边线（全模型边线可达 1GB+），并恢复常驻分块上限。
@@ -904,63 +900,17 @@ export class SceneManager {
     }
 
     /**
-     * 渲染预算：数据全量驻留，但一帧只提交预算内的分块几何，
-     * 其余可见分块用合并线框代理表示。避免“充满视图 1.8 亿三角面”拖垮交互。
+     * 渲染预算管理：保持所有已加载可见分块以真实网格渲染，
+     * 禁用线框盒子（boxes）替代，彻底杜绝缩放时画面被空心线框破坏。
      */
     private applyRenderBudget(candidates: Array<{ chunk: any; pixel: number; dist: number }>) {
-        const proxy = this.renderProxy;
-        if (!proxy) return;
-        const totalChunks = this.chunks.length;
-        const active = this.renderBudgetMode !== "full"
-            && totalChunks > this.renderBudgetChunkMax;
-        if (!active) {
-            proxy.clear();
-            this.renderBudgetSelected.clear();
-            for (const { chunk } of candidates) {
-                if (chunk.mesh && !chunk.mesh.visible) chunk.mesh.visible = true;
-            }
-            return;
-        }
-
-        const triOf = (chunk: any) => Number(chunk?.triCount) || 0;
-        // 正交相机下 pixel 只反映世界尺寸、不反映距离；若只按 pixel 排序，
-        // 会把近处分块换成线框、却在画面上盖住近景。这里统一优先保证近处分块。
-        candidates.sort((a, b) => a.dist - b.dist || b.pixel - a.pixel);
-
-        const selected = new Set<any>();
-        let triangles = 0;
-        // 1) 先保留上次选中的分块（仍可见且未超 1.2 倍预算），减少相机微动时的闪变
-        for (const item of candidates) {
-            const chunk = item.chunk;
-            if (!this.renderBudgetSelected.has(chunk.id)) continue;
-            const tri = triOf(chunk);
-            if (selected.size < this.renderBudgetChunkMax && triangles + tri <= this.renderBudgetTriangles * 1.2) {
-                selected.add(chunk);
-                triangles += tri;
+        // 确保旧代理（如存在）始终清空；所有已加载分块保持真实网格可见。
+        this.renderProxy?.clear();
+        for (const { chunk } of candidates) {
+            if (chunk.mesh && !chunk.mesh.visible) {
+                chunk.mesh.visible = true;
             }
         }
-        // 2) 再按屏幕尺寸从大到小补满预算
-        for (const item of candidates) {
-            const chunk = item.chunk;
-            if (selected.has(chunk)) continue;
-            const tri = triOf(chunk);
-            if (selected.size < this.renderBudgetChunkMax && triangles + tri <= this.renderBudgetTriangles) {
-                selected.add(chunk);
-                triangles += tri;
-            }
-        }
-
-        const boxes: Array<{ min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }> = [];
-        for (const item of candidates) {
-            const chunk = item.chunk;
-            const show = selected.has(chunk);
-            if (chunk.mesh && chunk.mesh.visible !== show) chunk.mesh.visible = show;
-            if (!show && chunk.bounds) {
-                boxes.push({ min: chunk.bounds.min, max: chunk.bounds.max });
-            }
-        }
-        this.renderBudgetSelected = new Set(Array.from(selected).map((chunk) => chunk.id));
-        proxy.update(boxes);
     }
 
     private getAverageChunkFootprintMB() {
@@ -1809,6 +1759,21 @@ export class SceneManager {
         });
     }
 
+    /** ghost 占位框的基础不透明度：着色模式更淡，避免整个模型像被拆成骨架。 */
+    private getGhostBaseOpacity() {
+        return this.displayMode === "shaded" ? 0.1 : 0.3;
+    }
+
+    /** 释放全部 ghost 占位框（模型清空时调用）。 */
+    private clearAllGhostLines() {
+        while (this.ghostGroup.children.length > 0) {
+            const ghost = this.ghostGroup.children[0];
+            this.ghostGroup.remove(ghost);
+            this.releaseGhostLine(ghost as THREE.LineSegments);
+        }
+        this.ghostMaterial.opacity = this.getGhostBaseOpacity();
+    }
+
     private attachStructureRoot(modelRoot: StructureTreeNode) {
         if (modelRoot.name === 'Root' && modelRoot.children && modelRoot.children.length > 0) {
             if (!this.structureRoot.children) this.structureRoot.children = [];
@@ -1921,29 +1886,9 @@ export class SceneManager {
     private async createChunkGhostsProgressively(
         ghostSpecs: Array<{ chunkId: string; bounds: THREE.Box3 }>
     ) {
-        if (ghostSpecs.length === 0) return;
-
-        for (let start = 0; start < ghostSpecs.length; start += this.chunkGhostBatchSize) {
-            const end = Math.min(ghostSpecs.length, start + this.chunkGhostBatchSize);
-            let addedAnyGhost = false;
-            for (let index = start; index < end; index++) {
-                const spec = ghostSpecs[index];
-                const chunk = this.getChunkById(spec.chunkId);
-                if (!chunk || chunk.loaded || this.cancelledChunkIds.has(spec.chunkId)) continue;
-                if (this.ghostGroup.getObjectByName(`ghost_${spec.chunkId}`)) continue;
-                const edges = this.createGhostLine(`ghost_${spec.chunkId}`, spec.bounds);
-                this.ghostGroup.add(edges);
-                addedAnyGhost = true;
-            }
-
-            if (addedAnyGhost) {
-                this.markSceneDirty();
-            }
-
-            if (end < ghostSpecs.length) {
-                await this.yieldToMainThread();
-            }
-        }
+        // 彻底停用分块线框占位逻辑，避免缩放时出现范围分块的框且一直显示
+        void ghostSpecs;
+        return;
     }
 
     private async registerLeafChunksProgressively(
@@ -2294,9 +2239,10 @@ export class SceneManager {
         const toLoad: any[] = [];
         const loadedChunks: any[] = [];
         const renderCandidates: Array<{ chunk: any; pixel: number; dist: number }> = [];
-        const chunkCostMB = (chunk: any) => typeof chunk?.estimatedDecodedMB === "number"
-            ? chunk.estimatedDecodedMB
-            : Math.max(1.5, ((Number(chunk?.byteLength) || 0) / 1048576) * 5.5);
+        // 统一走 getChunkCostMB（原始字节 ×1.1）。这里原本是 ×5.5 的旧版估算，
+        // 会把分块内存高估 5 倍：一有分块缺 estimatedDecodedMB，就以为超预算，
+        // 于是大量“本来装得下”的分块被反复卸载并补上 ghost 框。
+        const chunkCostMB = (chunk: any) => this.getChunkCostMB(chunk);
         const isClippingActive = this.renderer.clippingPlanes.length > 0;
         let sceneMutated = false;
 
@@ -2545,6 +2491,7 @@ export class SceneManager {
     }
 
     private unloadChunk(chunk: any) {
+        // 卸载时不再画任何占位线框，避免缩放拉远后屏幕被残留包围盒框线占据
         const result = applyUnloadChunk({
             chunk,
             now: performance.now(),
@@ -2557,7 +2504,8 @@ export class SceneManager {
                 }
                 this.cacheChunkMesh(nextChunk, mesh);
             },
-            ensureChunkGhost: (nextChunk) => this.ensureChunkGhost(nextChunk)
+            ensureChunkGhost: (nextChunk) => this.ensureChunkGhost(nextChunk),
+            ghostOnUnload: false
         });
         if (!result.changed) return;
 
@@ -2869,7 +2817,7 @@ export class SceneManager {
 
     setContentVisible(visible: boolean) {
         this.contentGroup.visible = visible;
-        this.ghostGroup.visible = visible;
+        this.ghostGroup.visible = false;
         this.markSceneDirty({ needsCulling: true });
     }
 
@@ -3822,8 +3770,21 @@ export class SceneManager {
         if (onProgress) onProgress(100, "模型已加载，属性索引将在后台构建...");
     }
 
-    private buildExportPropertyDocsFromCache() {
-        const docs: Record<string, NbimPropertyDocument> = {};
+    /**
+     * 等待场景里所有 IFC 模型的“延后元数据”建完。
+     * ifcLoader 对大文件会把图层/属性集索引放到 setTimeout 里跑，导出前不等就会丢属性。
+     */
+    private async awaitIfcMetadata(root: THREE.Object3D) {
+        const pending: Promise<unknown>[] = [];
+        root.traverse((object) => {
+            const ready = object.userData?.ifcMetadataReady;
+            if (ready && typeof ready.then === "function") pending.push(ready);
+        });
+        if (pending.length === 0) return;
+        await Promise.all(pending.map((promise) => Promise.resolve(promise).catch(() => undefined)));
+    }
+
+    private buildExportPropertyDocsFromCache() {        const docs: Record<string, NbimPropertyDocument> = {};
         const sourceDocs = this.nbimPendingDocs
             ? this.getPendingPropertyDocuments()
             : this.nbimAllSearchDocs;
@@ -3842,9 +3803,13 @@ export class SceneManager {
         };
     }
 
-    async exportNbim(fileName?: string) {
+    async exportNbim(fileName?: string, onProgress?: (p: number, msg: string) => void) {
         if (this.chunks.length === 0) throw new Error("无模型数据可导出");
+        // 导出此前完全没有进度上报：界面停留在上一次加载遗留的 100%，
+        // 看起来就像“卡死在 100%”。现在把每个阶段的进度都交给调用方。
+        const report = (p: number, msg: string) => onProgress?.(Math.max(0, Math.min(100, Math.round(p))), msg);
 
+        report(2, "正在整理构件表...");
         const bimIdTable: string[] = [""];
         const bimIdToIndex = new Map<string, number>();
         const addBimId = (bimId?: string) => {
@@ -3866,26 +3831,41 @@ export class SceneManager {
         const reuseSourcePropertyDb = this.nbipDatabases.length === 1;
         let bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
         if (!reuseSourcePropertyDb) {
+            report(5, "正在汇总属性缓存...");
             const cached = this.buildExportPropertyDocsFromCache();
             bimPropertyDocs = cached.bimPropertyDocs;
             if (Object.keys(bimPropertyDocs).length === 0) {
+                report(8, "正在解析属性...");
+                // 大 IFC 的图层/属性集索引是延后到 setTimeout 里建的（ifcLoader deferIfcProperties）：
+                // 不等它完成就收集，导出的 .nbim 会静默丢掉 psets/图层。
+                await this.awaitIfcMetadata(this.contentGroup);
                 const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(this.contentGroup);
                 const collected = await collectNbimBimProperties({
                     structureRoot: this.structureRoot,
                     ifcApiByModel,
-                    ifcManagerByModel
+                    ifcManagerByModel,
+                    // 属性逐构件从 IFC 提取，大模型这一步要几分钟，必须有反馈
+                    onProgress: (processed) => report(
+                        8 + Math.min(17, Math.log2(Math.max(2, processed)) * 2),
+                        `正在解析属性... (${processed})`
+                    )
                 });
                 bimPropertyDocs = collected.bimPropertyDocs;
             }
         }
         const exportCodec = await resolveExportCodec();
+        report(30, "正在重新编码几何分块...");
         const { chunkBlobs, exportChunks } = await prepareNbimExportChunksV11({
             chunks: this.chunks,
             nbimFiles: this.nbimFiles,
             nbimMeta: this.nbimMeta,
             bimIdToIndex,
             hasValidChunkBinaryRange: (chunk) => this.hasValidChunkBinaryRange(chunk),
-            codec: exportCodec
+            codec: exportCodec,
+            onProgress: (processed, total) => report(
+                30 + Math.round((processed / Math.max(1, total)) * 40),
+                `正在重新编码几何分块... (${processed}/${total})`
+            )
         });
 
         const defaultStem = deriveDefaultNbimStem(this.contentGroup);
@@ -3895,21 +3875,27 @@ export class SceneManager {
         let propertyStats: { components: number; rows: number };
         if (reuseSourcePropertyDb) {
             const source = this.nbipDatabases[0];
+            report(70, "正在读取属性库...");
             propertyRaw = await source.getSourceBytes();
             propertyStats = source.getStats();
             debugLog("SceneManager/NBIM", "导出复用源属性库", propertyStats);
         } else {
+            report(70, "正在编码属性库...");
             const encoded = encodeNbip(bimPropertyDocs, resolvedName);
             propertyRaw = encoded.bytes;
             propertyStats = encoded.stats;
         }
+        report(74, "正在压缩属性库...");
         const propertySection = await compressInBlocks(
             propertyRaw,
             undefined,
             exportCodec,
-            (block) => compressBytes(block, exportCodec, 9)
+            // 大模型的属性库可达数百 MB（64KB×上千块）：质量 9 单块也要几十毫秒，
+            // 累计又是几十秒的冻结。降到 6：单块快 2~3 倍，体积差 <1%。
+            (block) => compressBytes(block, exportCodec, 6)
         );
 
+        report(88, "正在压缩结构树...");
         const { file } = await buildNbim11File({
             chunkBlobs,
             chunkEntries: exportChunks,
@@ -3931,16 +3917,22 @@ export class SceneManager {
                 bimIdTable
             },
             manifestCodec: exportCodec,
-            compressManifest: (bytes) => compressBytes(bytes, exportCodec, 9)
+            // manifest 是整棵结构树的 JSON（可达数十 MB）：质量 9 会冻结主线程十几秒，
+            // 降到 6 在体积几乎不变的前提下快数倍。
+            compressManifest: (bytes) => compressBytes(bytes, exportCodec, 6)
         });
 
+        report(94, "正在组装 NBIM 文件...");
         const blob = new Blob([file], { type: 'application/octet-stream' });
+        report(98, "正在下载...");
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `${resolvedName}.nbim`;
         a.click();
-        URL.revokeObjectURL(url);
+        // 大文件（数百 MB）点击后立刻 revoke 会中断下载；延迟回收。
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+        report(100, "导出完成");
     }
 
     /**
@@ -4035,9 +4027,8 @@ export class SceneManager {
 
         const chunkEntries = Array.isArray(manifest.chunks) ? manifest.chunks : [];
         this.applyNbimScaleTuning(chunkEntries, manifest.stats);
-        const immediateGhostLimit = this.resolvedChunkOptions.ghostMode === "all"
-            ? Number.MAX_SAFE_INTEGER
-            : GHOST_VISIBLE_FIRST_BATCH;
+        // 不再预建任何 ghost 分块线框
+        const immediateGhostLimit = 0;
         const { deferredGhostSpecs } = await registerNbimChunks({
             chunkEntries,
             globalOffset: this.globalOffset,
@@ -4056,9 +4047,7 @@ export class SceneManager {
             addGhostLine: (line) => this.ghostGroup.add(line),
             yieldToMainThread: () => this.yieldToMainThread()
         });
-        if (deferredGhostSpecs.length > 0) {
-            void this.createChunkGhostsProgressively(deferredGhostSpecs);
-        }
+        void deferredGhostSpecs;
 
         this.reportChunkProgress();
 
@@ -4189,7 +4178,7 @@ export class SceneManager {
             this.fastPreviewModels.clear();
             this.chunkLoadingEnabled = true;
             this.contentGroup.visible = true;
-            this.ghostGroup.visible = true;
+            this.ghostGroup.visible = false;
             this.chunkWarmupActive = false;
             this.allowFullChunkLoad = false;
             this.chunkLoadPlanPending = false;
@@ -6266,6 +6255,8 @@ export class SceneManager {
         this.disposed = true;
         this.renderProxy?.dispose();
         this.renderProxy = null;
+        this.renderProxyMaterial?.dispose();
+        this.renderProxyMaterial = null;
         this.animateFramePending = false;
         this.cancelCameraFlight();
         this.cancelBoxSelect();

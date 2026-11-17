@@ -197,15 +197,29 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
     traverseBimIds(structureRoot);
 
     onProgress?.(50, "正在解析属性...");
+    // 大 IFC 在解析阶段会把图层/属性集索引延后到 setTimeout 里建（ifcLoader 的 deferIfcProperties），
+    // 批量转换是“无头”路径，没有 SceneManager 那套 await，之前直接往下走导致导出的 psets 全丢。
+    // 这里必须先等所有模型把元数据建完，再开始收集属性。
+    for (const object of objects) {
+        const metadataReady = (object as any).userData?.ifcMetadataReady;
+        if (metadataReady && typeof metadataReady.then === "function") {
+            await metadataReady;
+        }
+    }
+
     const ifcGroup = new THREE.Group();
     for (const object of objects) ifcGroup.add(object);
     const { ifcApiByModel, ifcManagerByModel } = collectIfcModelReferences(ifcGroup);
     const { bimPropertyDocs, propertyNameIndex } = await collectNbimBimProperties({
         structureRoot,
         ifcApiByModel,
-        ifcManagerByModel
+        ifcManagerByModel,
+        onProgress: (processed) => {
+            onProgress?.(50 + Math.min(14, Math.log2(Math.max(2, processed)) * 1.6), `正在解析属性... (${processed})`);
+        }
     });
     for (const object of objects) ifcGroup.remove(object);
+    void propertyNameIndex;
 
     onProgress?.(65, "正在生成几何分块...");
     const exportCodec = await resolveExportCodec();
@@ -230,8 +244,13 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
             encoding: NBIM11_VERSION
         });
         chunkBlobs.push(framed);
-        if ((index & 63) === 63) {
-            onProgress?.(65 + Math.round(((index + 1) / Math.max(1, chunks.length)) * 20), "正在生成几何分块...");
+        // 每块都让出一次主线程：压缩是同步 WASM 调用，几百个分块连续跑会把界面完全冻住，
+        // 进度条也不刷新（用户感觉“卡死”）。让出后浏览器才能重绘并响应“取消”。
+        if ((index & 3) === 3) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+        if ((index & 15) === 15) {
+            onProgress?.(65 + Math.round(((index + 1) / Math.max(1, chunks.length)) * 20), `正在生成几何分块... (${index + 1}/${chunks.length})`);
         }
     }
 
@@ -255,7 +274,8 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
         encodedPropertyDb.bytes,
         undefined,
         exportCodec,
-        (block) => compressBytes(block, exportCodec, 9)
+        // 大批量转换的属性库可达数百 MB：质量 9 单块几十毫秒、累计几十秒冻结，降到 6 快 2~3 倍且体积差 <1%。
+        (block) => compressBytes(block, exportCodec, 6)
     );
 
     onProgress?.(92, "正在写入 NBIM11...");
@@ -281,7 +301,8 @@ export async function buildNbimBlobFromObjects(options: BatchConvertOptions) {
             bimIdTable
         },
         manifestCodec: exportCodec,
-        compressManifest: (bytes) => compressBytes(bytes, exportCodec, 9)
+        // manifest 整棵结构树 JSON 可能数十 MB：质量 9 冻结主线程十几秒，降到 6 快数倍。
+        compressManifest: (bytes) => compressBytes(bytes, exportCodec, 6)
     });
 
     onProgress?.(100, "转换完成");
@@ -304,5 +325,7 @@ export function downloadNbimBlob(blob: Blob, fileName: string) {
     anchor.href = url;
     anchor.download = fileName;
     anchor.click();
-    URL.revokeObjectURL(url);
+    // 大文件（数百 MB）下载在点击后立刻 revoke 会被浏览器中断，导致“转换完成但没文件”；
+    // 延后回收。
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
 }

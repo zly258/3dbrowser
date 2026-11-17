@@ -303,7 +303,9 @@ async function collectItemsBatched(
     }
 
     options.onProgress?.(Math.min(start + batch.length, renderables.length), renderables.length);
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // 用 setTimeout 而不是 requestAnimationFrame：后台标签页/最小化窗口里 rAF 完全不触发，
+    // 批量转换切到别的窗口就会永久卡住（用户看到的就是“卡在某个百分比不动”）。
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 
   return items;

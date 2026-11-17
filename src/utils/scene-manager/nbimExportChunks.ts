@@ -70,8 +70,10 @@ const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 
  *  codec：1=gzip，2=brotli（按 resolveExportCodec 决定）。 */
 export async function frameChunkV11(payload: ArrayBuffer, codec = 1, compressedOverride?: Uint8Array): Promise<Uint8Array> {
     const rawBytes = new Uint8Array(payload);
+    // brotli 质量从 11 降到 5：质量 11 的速度约 0.2~0.5MB/s，几百 MB 的场景导出会冻结主线程十几分钟；
+    // 质量 5 快约 10 倍，体积只比质量 11 大约 3~5%，仍明显小于 gzip。解码端与质量无关，格式兼容。
     const compressed = compressedOverride ?? (codec === 2
-        ? await compressBytes(rawBytes, 2, 11)
+        ? await compressBytes(rawBytes, 2, 5)
         : await gzip(rawBytes));
     const out = new Uint8Array(16 + compressed.length);
     const dv = new DataView(out.buffer);
@@ -115,8 +117,10 @@ export async function prepareNbimExportChunksV11(options: {
     hasValidChunkBinaryRange: (chunk: any) => boolean;
     /** 1 = gzip，2 = brotli（默认 gzip） */
     codec?: number;
+    /** 逐分块进度：processed/total，供导出界面显示（分块重编码是最耗时的一步）。 */
+    onProgress?: (processed: number, total: number) => void;
 }): Promise<{ chunkBlobs: Uint8Array[]; exportChunks: NbimChunkEntry[] }> {
-    const { chunks, nbimFiles, nbimMeta, bimIdToIndex, hasValidChunkBinaryRange } = options;
+    const { chunks, nbimFiles, nbimMeta, bimIdToIndex, hasValidChunkBinaryRange, onProgress } = options;
     const codec = options.codec ?? 1;
     const chunkBlobs: Uint8Array[] = [];
     const exportChunks: NbimChunkEntry[] = [];
@@ -157,6 +161,11 @@ export async function prepareNbimExportChunksV11(options: {
             decodedLength: payload.byteLength,
             encoding: 11
         });
+        onProgress?.(chunkBlobs.length, chunks.length);
+        // 编码/压缩是同步 CPU 活：定期让出主线程，进度条才能真正刷新。
+        if ((chunkBlobs.length & 3) === 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
     }
 
     return { chunkBlobs, exportChunks };

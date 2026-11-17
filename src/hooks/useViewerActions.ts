@@ -104,18 +104,27 @@ export function useViewerActions({
                 return;
             }
 
+            // 先重置进度再进入导出：否则界面会沿用上一次加载残留的 100%，
+            // 看起来就像“卡死在 100% 不动”。
             setLoading(true);
+            setProgress(0);
             setStatus(`${t("processing")}...`);
             setActiveTool("none");
             window.setTimeout(async () => {
                 try {
-                    await sceneMgrRef.current?.exportNbim(resolvedStem);
+                    await sceneMgrRef.current?.exportNbim(resolvedStem, (p, msg) => {
+                        setProgress(p);
+                        if (msg) setStatus(msg);
+                    });
+                    setProgress(100);
                     setToast({ message: t("success"), type: "success" });
                 } catch (error) {
                     console.error(error);
+                    setProgress(0);
                     setToast({ message: `${t("failed")}: ${(error as Error).message}`, type: "error" });
                 } finally {
                     setLoading(false);
+                    setProgress(0);
                 }
             }, 100);
             return;
@@ -127,21 +136,27 @@ export function useViewerActions({
             return;
         }
 
-        const exportGroup = new THREE.Group();
-        modelsToExport.forEach((model: THREE.Object3D) => exportGroup.add(model.clone()));
+        if (format !== "glb") {
+            setToast({ message: `${t("unsupported_format")} (.${format})`, type: "info" });
+            return;
+        }
 
+        // 克隆整场景是同步的重活：先亮出进度条，再在下一帧做克隆，
+        // 避免用户点“导出”后界面无任何反馈地停顿数秒。
         setLoading(true);
         setProgress(0);
         setStatus(`${t("processing")}...`);
         setActiveTool("none");
 
         window.setTimeout(async () => {
+            let exportGroup: THREE.Group | null = null;
             try {
-                let blob: Blob | null = null;
+                setProgress(5);
+                exportGroup = new THREE.Group();
+                modelsToExport.forEach((model: THREE.Object3D) => exportGroup!.add(model.clone()));
 
-                if (format === "glb") {
-                    blob = await exportGLB(exportGroup);
-                }
+                let blob: Blob | null = await exportGLB(exportGroup);
+                setProgress(90);
 
                 if (blob) {
                     const url = URL.createObjectURL(blob);
@@ -149,13 +164,20 @@ export function useViewerActions({
                     anchor.href = url;
                     anchor.download = resolvedFileName;
                     anchor.click();
-                    URL.revokeObjectURL(url);
+                    // 立即回收会中断大文件下载
+                    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+                    setProgress(100);
                     setToast({ message: t("success"), type: "success" });
+                } else {
+                    setToast({ message: `${t("failed")}: ${format}`, type: "error" });
                 }
             } catch (error) {
                 console.error(error);
                 setToast({ message: `${t("failed")}: ${(error as Error).message}`, type: "error" });
             } finally {
+                // 清空临时组节点引用，注意不可销毁几何/材质，因为 Object3D.clone() 共享了原场景资源
+                exportGroup?.clear();
+                exportGroup = null;
                 setLoading(false);
                 setProgress(0);
             }
@@ -193,6 +215,7 @@ export function useViewerActions({
                     console.error("清空场景失败:", error);
                 } finally {
                     setLoading(false);
+                    setProgress(0);
                 }
             }
         });

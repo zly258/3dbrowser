@@ -8,9 +8,10 @@ export interface SceneChunkOptions {
     chunkReadCacheMB?: number;
     /** 远景粗 LOD：按实例世界尺寸剔除小构件（默认关闭，低内存机器可开启）。 */
     coarseLod?: boolean;
-    /** 渲染预算：auto=大模型只绘制预算内的分块，其余用线框代理；full=全部绘制（旧行为） */
+    /** 渲染预算模式 */
     renderBudget?: "auto" | "full";
     chunkPrefetchWindow?: number;
+    /** 分块占位模式（兼容保留字段） */
     ghostMode?: GhostMode;
     targetMinFps?: number;
     loadProfile?: LoadProfile;
@@ -29,7 +30,6 @@ export interface ResolvedSceneChunkOptions {
     chunkReadCacheMB: number;
     coarseLod: boolean;
     renderBudget: "auto" | "full";
-    /** 默认 full：远景显示真实几何；auto 才使用线框代理 */
     chunkPrefetchWindow: number;
     ghostMode: GhostMode;
     targetMinFps: number;

@@ -8,6 +8,7 @@ import type { LoadedFileFailure } from "../loader/loaderUtils";
 import { loadModelFiles } from "../loader/loaderUtils";
 import { cleanLoadingStatus, formatFailures } from "../viewer/fileLoading";
 import { buildNbimBlobFromObjects, downloadNbimBlob } from "../utils/scene-manager/nbimBatchConvert";
+import { releaseIfcRuntime } from "../loader/ifcRelease";
 import type { ViewerTool } from "./useViewerTools";
 
 interface UseViewerFileActionsOptions {
@@ -88,65 +89,103 @@ export function useViewerFileActions({
         setProgress(0);
         setActiveTool("none");
 
-        let loadedObjects: any[] = [];
+        const failures: LoadedFileFailure[] = [];
+        let successCount = 0;
+        const totalFiles = files.length;
+        const runtimeHints = (manager as any)?.getChunkOptions?.() || {};
+
         try {
-            const failures: LoadedFileFailure[] = [];
-            const runtimeHints = (manager as any)?.getChunkOptions?.() || {};
-            loadedObjects = await loadModelFiles(
-                files,
-                (p, msg) => {
-                    setProgress(Math.min(60, Math.round(p * 0.6)));
-                    if (msg) setStatus(cleanLoadingStatus(msg));
-                },
-                t,
-                sceneSettings,
-                libPath,
-                {
-                    loadProfile: runtimeHints.loadProfile ?? "max-speed",
-                    deferIfcProperties: runtimeHints.deferIfcProperties ?? true,
-                    fastGeometrySanitize: runtimeHints.fastGeometrySanitize ?? true,
-                    onFileFailure: (failure) => failures.push(failure)
-                }
-            );
+            // 逐个文件依次进行无头转换：每处理完一个文件立即释放内存与 WASM 句柄，
+            // 避免多个大 IFC 同时驻留内存引发 OOM 或主线程在组装/下载时卡死在 100%。
+            for (let i = 0; i < totalFiles; i++) {
+                const file = files[i];
+                const fileBase = (i / totalFiles) * 100;
+                const fileWeight = 100 / totalFiles;
+                let singleObjects: any[] = [];
 
-            if (failures.length > 0) {
+                try {
+                    singleObjects = await loadModelFiles(
+                        [file],
+                        (p, msg) => {
+                            const cur = Math.round(fileBase + (p * 0.45 / 100) * fileWeight);
+                            setProgress(Math.min(99, cur));
+                            if (msg) setStatus(`[${i + 1}/${totalFiles}] ${cleanLoadingStatus(msg)}`);
+                        },
+                        t,
+                        sceneSettings,
+                        libPath,
+                        {
+                            loadProfile: runtimeHints.loadProfile ?? "max-speed",
+                            deferIfcProperties: runtimeHints.deferIfcProperties ?? true,
+                            fastGeometrySanitize: runtimeHints.fastGeometrySanitize ?? true,
+                            onFileFailure: (failure) => failures.push(failure)
+                        }
+                    );
+
+                    if (singleObjects.length === 0) {
+                        failures.push({ fileName: file.name, message: t("load_parse_failed") });
+                        continue;
+                    }
+
+                    const { fileBlob, fileName } = await buildNbimBlobFromObjects({
+                        objects: singleObjects,
+                        fileNames: [file.name],
+                        onProgress: (p, msg) => {
+                            const cur = Math.round(fileBase + ((45 + p * 0.55) / 100) * fileWeight);
+                            setProgress(Math.min(99, cur));
+                            if (msg) setStatus(`[${i + 1}/${totalFiles}] ${msg}`);
+                        }
+                    });
+
+                    // 转换完当前文件立即触发下载
+                    downloadNbimBlob(fileBlob, fileName);
+                    successCount++;
+                } catch (err) {
+                    console.error(`[ThreeViewer] 批量转换文件 ${file.name} 失败:`, err);
+                    failures.push({ fileName: file.name, message: (err as Error)?.message || String(err) });
+                } finally {
+                    // 立即释放当前文件的几何与 WASM 内存
+                    for (const object of singleObjects) {
+                        object.traverse((child: any) => {
+                            if (child?.isMesh) {
+                                child.geometry?.dispose?.();
+                                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                                materials.forEach((material: any) => material?.dispose?.());
+                            }
+                        });
+                        releaseIfcRuntime(object);
+                    }
+                    singleObjects = [];
+                    // 让出主线程，供浏览器垃圾回收并响应 UI
+                    await new Promise<void>((resolve) => setTimeout(resolve, 60));
+                }
+            }
+
+            if (failures.length > 0 && successCount === 0) {
+                setStatus(t("failed"));
                 setToast({ message: formatFailures(failures, t("failed")), type: "error" });
-                return;
+            } else if (failures.length > 0) {
+                setProgress(100);
+                setStatus(t("success"));
+                setToast({
+                    message: `${t("success")} (${successCount}/${totalFiles}), ${failures.length} 个失败`,
+                    type: "info"
+                });
+            } else {
+                setProgress(100);
+                setStatus(t("success"));
+                setToast({ message: t("success"), type: "success" });
             }
-            if (loadedObjects.length === 0) {
-                throw new Error(t("load_parse_failed"));
-            }
-
-            setStatus(`${t("processing")}...`);
-            const { fileBlob, fileName } = await buildNbimBlobFromObjects({
-                objects: loadedObjects,
-                fileNames: files.map((file) => file.name),
-                onProgress: (p, msg) => {
-                    setProgress(60 + Math.round(p * 0.4));
-                    if (msg) setStatus(msg);
-                }
-            });
-
-            // v11：单个 .nbim 文件（几何 + 属性 + 结构树）
-            downloadNbimBlob(fileBlob, fileName);
-            setStatus(t("success"));
-            setToast({ message: t("success"), type: "success" });
         } catch (error) {
-            console.error("[ThreeViewer] handleBatchConvert error:", error);
+            console.error("[ThreeViewer] handleBatchConvert 总体异常:", error);
             setStatus(t("failed"));
             setToast({ message: `${t("failed")}: ${(error as Error).message}`, type: "error" });
         } finally {
-            // 批量转换是“无头”的：不进入场景、不占 GPU，结束后释放临时几何。
-            for (const object of loadedObjects) {
-                object.traverse((child: any) => {
-                    if (child?.isMesh) {
-                        child.geometry?.dispose?.();
-                        const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        materials.forEach((material: any) => material?.dispose?.());
-                    }
-                });
-            }
-            setLoading(false);
+            // 延时清除遮罩与进度，避免闪烁或卡在 100%
+            window.setTimeout(() => {
+                setLoading(false);
+                setProgress(0);
+            }, 350);
         }
     }, [
         libPath,

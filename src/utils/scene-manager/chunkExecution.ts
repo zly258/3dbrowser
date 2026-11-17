@@ -7,8 +7,10 @@ export function applyUnloadChunk(options: {
     unregisterOptimizedMeshMapping: (mesh: THREE.BatchedMesh) => void;
     cacheChunkMesh: (chunk: any, mesh: THREE.BatchedMesh) => void;
     ensureChunkGhost: (chunk: any) => void;
+    /** 卸载时默认不补占位线框，避免缩放或视口移动时场景凭空冒出大批方块 */
+    ghostOnUnload?: boolean;
 }) {
-    const { chunk, now, unregisterOptimizedMeshMapping, cacheChunkMesh, ensureChunkGhost } = options;
+    const { chunk, now, unregisterOptimizedMeshMapping, cacheChunkMesh, ensureChunkGhost, ghostOnUnload = false } = options;
     if (!chunk.loaded || !chunk.mesh) {
         return {
             changed: false,
@@ -23,7 +25,7 @@ export function applyUnloadChunk(options: {
         mesh.parent.remove(mesh);
     }
     cacheChunkMesh(chunk, mesh);
-    ensureChunkGhost(chunk);
+    if (ghostOnUnload) ensureChunkGhost(chunk);
 
     chunk.mesh = null;
     chunk.loaded = false;

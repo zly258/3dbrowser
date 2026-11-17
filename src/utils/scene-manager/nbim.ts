@@ -375,11 +375,14 @@ export async function collectNbimBimProperties(options: {
     structureRoot: StructureTreeNode;
     ifcApiByModel: Map<string, IfcApiRef>;
     ifcManagerByModel: Map<string, IfcManagerRef>;
+    /** 可选进度回调：processed 为已解析的带属性节点数（无 total，总量需先遍历一遍）。 */
+    onProgress?: (processed: number) => void;
 }) {
-    const { structureRoot, ifcApiByModel, ifcManagerByModel } = options;
+    const { structureRoot, ifcApiByModel, ifcManagerByModel, onProgress } = options;
     const bimProperties: Record<string, any> = {};
     const bimPropertyDocs: Record<string, NbimPropertyDocument> = {};
     const stack: StructureTreeNode[] = [structureRoot];
+    let processedDocs = 0;
 
     while (stack.length > 0) {
         const node = stack.pop()!;
@@ -407,6 +410,13 @@ export async function collectNbimBimProperties(options: {
                     name: String(node.name || ""),
                     rows
                 };
+                processedDocs++;
+                // 每 64 个节点报一次并让出一次宏任务：属性提取是纯微任务链，
+                // 浏览器没有机会重绘，界面会看起来“冻住”。这里既报进度也真正让出主线程。
+                if (onProgress && (processedDocs & 63) === 0) onProgress(processedDocs);
+                if ((processedDocs & 127) === 0) {
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+                }
             }
         }
 
