@@ -1,5 +1,7 @@
 # 3dbrowser
 
+> **English documentation → [README.md](README.md)**
+
 面向超大模型的浏览器端 3D / BIM 查看器。单个 **2.9 GB** 的 NBIM 文件（231,353 个构件、1.86 亿渲染三角面）可在数秒内于单个标签页打开，JS 堆稳定控制在约 3 GB 以内。
 
 React 19 · Three.js · TypeScript · NBIM v11

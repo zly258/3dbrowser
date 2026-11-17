@@ -1,5 +1,7 @@
 # 3dbrowser
 
+> **中文文档 → [README.zh-CN.md](README.zh-CN.md)**
+
 A browser-based 3D/BIM model viewer built for models that are too large for ordinary web viewers. One 2.9 GB NBIM file — 231,353 components, 186 million rendered triangles — opens in seconds in a single tab and keeps the JS heap under ~3 GB.
 
 React 19 · Three.js · TypeScript · NBIM v11
