@@ -1,36 +1,62 @@
 # 3dbrowser
 
-Professional 3D model viewer library for React and Web applications. Built for very large models: a single 2.9 GB NBIM holding 231,353 components and 186 million rendered triangles opens in seconds and keeps the JS heap under ~3 GB.
+A browser-based 3D/BIM model viewer built for models that are too large for ordinary web viewers. One 2.9 GB NBIM file — 231,353 components, 186 million rendered triangles — opens in seconds in a single tab and keeps the JS heap under ~3 GB.
 
-## Key Features
+React 19 · Three.js · TypeScript · NBIM v11
 
-- **High-Performance Rendering**: Powered by **NBIM** and **BatchedMesh**, measured on 231,353 components / 186 million rendered triangles in a single browser tab.
-- **Multi-format Support**:
-  - **BIM**: IFC (using web-ifc)
-  - **Standard**: GLB/GLTF, FBX, OBJ
-  - **Custom**: NBIM v11
-- **Advanced Tools**:
-  - **Measurement**: Distance, angle, and coordinate measurement tools.
-  - **Sectioning**: Real-time clipping planes for internal inspection, with the range recalculated from the current model.
-  - **Scene Tree**: Interactive hierarchical view of the model structure.
-  - **Properties**: Detailed metadata viewer for selected components.
-  - **Display styles**: Shaded (solid only) and Realistic (shaded + CAD-style edges: hard edges on beams, vertical seams and end rings on cylinders). The style is fixed to the locally remembered preference — there is no toolbar toggle..
-  - **Box selection**: Full-screen marquee selection that stays responsive on six-figure component counts.
-  - **Instance-level picking**: A single click resolves the exact instance under the cursor, highlights only that instance (with a glow) and lets you customize the highlight colour.
-- **Offline Batch Conversion**: Merge raw source files (IFC / GLB / FBX / OBJ / …) into a single NBIM v11 file on the CPU only — no GPU, no VRAM.
-- **Modern Tech Stack**: Built with **React 19**, **Three.js**, and **TypeScript**.
-- **Localization**: Built-in support for English and Chinese out of the box.
+---
 
-## Measured Scale & Performance
+## What it is
 
-The numbers below come from real production models. File names, paths, customer and project details have been removed; only aggregate geometry counts and timings are kept.
+`3dbrowser` is a React component library and application for inspecting large BIM/3D models in the browser. It reads a custom single-file container (**NBIM v11**) that packs geometry, properties and the structure tree into one file, and streams it in octree chunks so the first frame appears long before the last chunk has arrived.
 
-All timings were measured in **headless Chrome with software (SwiftShader) rendering** — a deliberately pessimistic baseline. A real GPU is faster.
+It is not a general-purpose glTF viewer with BIM bolted on: the memory model, picking, box selection and property search are all designed around six-figure component counts.
+
+---
+
+## Features
+
+**Formats**
+
+| Category | Formats |
+| --- | --- |
+| BIM | IFC (via `web-ifc`) |
+| Standard | GLB / GLTF, FBX, OBJ, STL, PLY, 3DS, DAE |
+| CAD | STEP / STP, IGES / IGS (via `occt-import-js`) |
+| Native | **NBIM v11** (`.nbim`) |
+
+**Viewing and inspection**
+
+- **Measurement** — distance, angle and point coordinates.
+- **Sectioning** — real-time clipping planes, with the range recalculated from the current model.
+- **Scene tree** — hierarchical structure with search, visibility toggles and locate-to-view.
+- **Properties** — per-component metadata, resolved on demand.
+- **Display styles** — *Shaded* (solid only) and *Realistic* (shaded + CAD-style edges: hard edges on beams, vertical seams and end rings on cylinders). The style is read from the locally remembered preference; there is no toolbar toggle.
+- **Box selection** — full-screen marquee that stays responsive at six-figure component counts.
+- **Instance-level picking** — one click resolves the exact instance under the cursor, highlights only that instance with a glow, and the highlight colour is configurable.
+- **Clash detection, explode view, viewpoints, screenshots** — available from the tool menu.
+
+**Interface**
+
+- Material Design 3 language: 44px top bar, three-column shell, 24px status bar, pill buttons, frosted dropdowns.
+- **Tools dock** — the tool strip can live in the top bar or as a bottom-centred capsule dock, rendered icon-only or icon-over-text.
+- Light and dark themes driven by the same token set.
+- Chinese and English, switchable at runtime.
+
+**Offline conversion**
+
+- Raw sources (IFC / GLB / FBX / OBJ / …) can be merged into a single NBIM v11 file on the CPU — no GPU, no VRAM required.
+
+---
+
+## Measured scale
+
+Numbers below come from real production models. File names, paths, customer and project details have been removed; only aggregate geometry counts and timings are kept. All timings were measured in **headless Chrome with software (SwiftShader) rendering** — a deliberately pessimistic baseline. A real GPU is faster.
 
 ### Model scale
 
 | Metric | Model A (multi-file steel structure) |
-| --- | --- |
+| --- | ---: |
 | Source files | 140 |
 | Component nodes | 231,353 |
 | Unique triangles | 52,506,466 |
@@ -38,7 +64,7 @@ All timings were measured in **headless Chrome with software (SwiftShader) rende
 | Rendered instances | 968,683 |
 | Rendered triangles | 186,284,229 |
 
-Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one document.
+Merged into one NBIM, Model A becomes a **2.9 GB** single file opened as one document.
 
 ### Runtime
 
@@ -51,25 +77,46 @@ Model A merged into one NBIM becomes a **2.9 GB** single file, opened as one doc
 | Full-screen box select, 33,588 components | ~70 ms | marquee covering the whole viewport |
 | Device pixel ratio while dragging → after release | 0.8 → 1.0 | adaptive quality |
 
-### Why it holds up
+### Compression (NBIM v11)
+
+| Model | Source | NBIM v11 | Ratio | Chunks | Components |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 1162 MB | **22.3 MB** | 49.6× | 464 | 146,407 |
+| B | 912 MB | **17.6 MB** | 49.4× | 319 | 114,909 |
+| C | 633 MB | **9.8 MB** | 61.4× | 108 | 78,822 |
+| F | 34 MB | **0.43 MB** | 78.3× | 8 | 2,424 |
+
+A batch of 305 files (15.28 GB) converted to **0.303 GB** — **50.5×** overall.
+
+---
+
+## Why it holds up
 
 - **Chunked NBIM + `BatchedMesh`.** Geometry is split into octree chunks and drawn as one `BatchedMesh` per chunk, so 231k components cost a few hundred draw calls instead of 231k.
-- **Budget-aware residency.** `maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` are derived from the JS heap limit, the *actual* decoded geometry from `manifest.stats.memory`, and a measured ~4× BatchedMesh footprint factor. When the whole model fits it is loaded completely; when it does not, chunks are loaded by screen centrality/distance until the memory budget is reached, and far/stale chunks are recycled as the camera moves.
+- **Budget-aware residency.** `maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` are derived from the JS heap limit, the *actual* decoded geometry from `manifest.stats.memory`, and a measured ~4× BatchedMesh footprint factor. When the whole model fits it loads completely; when it does not, chunks load by screen centrality/distance until the memory budget is reached, and far/stale chunks are recycled as the camera moves.
+- **Quantised geometry.** Position int16 with per-chunk scale/offset, normals int8 (restored by GPU normalisation), indices u16/u32, and gzip/brotli-compressed chunk payloads.
 - **On-demand rendering.** A frame is drawn only when something changed (camera, loading, selection), so an idle viewer costs almost nothing.
-- **Priority-driven loading.** Oversized models load the most central/near chunks first up to the memory budget; selection and picking work on every loaded chunk.
+- **Priority-driven loading.** Oversized models load the most central/near chunks first; selection and picking work on every loaded chunk.
 - **Instance-aware picking.** `batchId` → uuid/source maps resolve one specific instance per click, and box selection culls whole chunks by bounding box before touching individual instances.
 - **Lazy property index.** Above 20,000 property documents the index stays out of memory and is resolved on selection; search builds it once, in a single pass.
+- **Per-instance geometry views on demand.** Picking uses bounding boxes only; edges/collision/area build a zero-copy view and release it immediately.
 
-### Known limits
+---
 
-- **NBIM is the fast path.** Source models must be exported as a single NBIM v11 file (`.nbim`); the viewer reads v11 only and rejects older NBIM versions with an explicit message.
-- **Huge models are streamed, not all-resident.** A 2.9 GB / 1,271-chunk NBIM keeps roughly 400 chunks resident in a 4 GB JS heap (measured ~1.9 GB decoded geometry, ~3.4–3.5 GB total heap). Distant/unvisited chunks stay as ghost wireframe until they enter the budget; loading all 1,271 at once would need ~9 GB and risks OOM.
-- **First property search may take a moment** when the model carries more than 20,000 property documents, because the search index is built on first use.
+## Known limits
+
+- **NBIM is the fast path.** Source models should be exported as a single NBIM v11 file. Raw multi-file sources spend their load time in conversion rather than streaming.
+- **v11 only.** Older NBIM files (v8/v9) are rejected with an explicit message: *"This is a legacy NBIM (v8/v9) file; the current version no longer supports the old format — use a v11 single file (.nbim)."*
+- **Huge models are streamed, not all-resident.** A 2.9 GB / 1,271-chunk NBIM keeps roughly 400 chunks resident in a 4 GB JS heap (~1.9 GB decoded geometry, ~3.4–3.5 GB total heap). Loading all 1,271 at once would need ~9 GB and risks OOM. Distant/unvisited chunks stay as ghost wireframe until they enter the budget.
+- **First property search may take a moment** on models carrying more than 20,000 property documents, because the index is built on first use.
 - **Software-rendered FPS is a floor, not a target.** The numbers above were measured without a GPU; GPU-backed browsers are considerably faster.
+- **Realistic edges are depth-capped.** On very large models only the nearest chunks get edges; distant edges are not visible at typical zoom levels anyway.
 
-## Installation
+---
 
-Use it directly from source (Node ≥ 20). Dependencies are pinned by `package-lock.json`:
+## Getting started
+
+Requirements: **Node.js ≥ 20**, a modern browser with WebGL2.
 
 ```bash
 git clone https://github.com/zly258/3dbrowser.git
@@ -78,14 +125,19 @@ cd 3dbrowser
 node node_modules/vite/bin/vite.js      # dev server → http://localhost:5173
 ```
 
-## Assets Setup
+Production build:
 
-The WASM/worker decoders required for IFC and OCC live in this repo's `public/libs`
-folder (web-ifc, occt-import-js, Draco, Basis). When embedding the viewer in another
-host page, copy `public/libs` into that host's static folder and pass the `libPath`
-prop if it is not served at `./libs`.
+```bash
+node node_modules/vite/bin/vite.js build
+node node_modules/typescript/bin/tsc -p tsconfig.lib.json --skipLibCheck
+node scripts/post-build.js
+```
 
-## Quick Usage
+### Assets
+
+The WASM and worker decoders for IFC and OCC live in `public/libs` (web-ifc, occt-import-js, Draco, Basis). When embedding the viewer in another host page, copy `public/libs` into that host's static folder and pass `libPath` if it is not served at `./libs`.
+
+### Using the component
 
 ```tsx
 import { ThreeViewer } from './src';
@@ -97,10 +149,8 @@ function App() {
         libPath="/libs"
         defaultTheme="dark"
         defaultLang="en"
-        showStats={true}
-        initialFiles={[
-          "https://example.com/models/building.glb"
-        ]}
+        showStats
+        initialFiles={['https://example.com/models/building.glb']}
         onSelect={(uuid, object) => console.log('Selected:', uuid, object)}
       />
     </div>
@@ -108,247 +158,128 @@ function App() {
 }
 ```
 
-## API Reference
+---
 
-### ThreeViewer Props
+## API reference
+
+### `ThreeViewer` props
 
 | Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `libPath` | `string` | `'./libs'` | Path to the folder containing WASM/Worker files (relative to window.location) |
-| `allowDragOpen` | `boolean` | `true` | Allow opening files via drag and drop |
-| `hiddenMenus` | `string[]` | `[]` | List of menu IDs to hide. Available IDs: `file`, `open_file`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`. |
-| `defaultTheme` | `'dark' \| 'light'` | `'light'` | Default UI theme (used when no saved preference; dark mode also sets the dark viewport color) |
+| --- | --- | --- | --- |
+| `libPath` | `string` | `'./libs'` | Path to the folder containing WASM/worker files (relative to `window.location`) |
+| `allowDragOpen` | `boolean` | `true` | Allow opening files by drag and drop |
+| `hiddenMenus` | `string[]` | `[]` | Menu/tool IDs to hide. See below |
+| `defaultTheme` | `'light' \| 'dark'` | `'light'` | Default appearance when no local preference is saved (dark also sets the viewport colour) |
 | `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
-| `showStats` | `boolean` | `true` | Show performance statistics panel |
-| `showOutline` | `boolean` | `true` | Show scene structure outline panel |
-| `showProperties` | `boolean` | `true` | Show object properties panel |
-| `initialSettings` | `Partial<SceneSettings>` | - | Initial scene settings (lighting, bg, etc.) |
-| `initialFiles` | `string \| File \| (string \| File)[]` | - | URLs or **files** to load on mount (single files or multi-file lists; no folder/directory picker) |
-| `onSelect` | `(uuid: string, object: any) => void` | - | Callback when an object is selected |
-| `onLoad` | `(manager: SceneManager) => void` | - | Callback when the scene manager is initialized |
-| `hideDeleteModel` | `boolean` | `false` | Hide delete model button |
+| `showStats` | `boolean` | `true` | Show the performance statistics panel |
+| `showOutline` | `boolean` | `true` | Show the scene structure panel |
+| `showProperties` | `boolean` | `true` | Show the object properties panel |
+| `initialSettings` | `Partial<SceneSettings>` | — | Initial scene settings (lighting, background, …) |
+| `initialFiles` | `string \| File \| (string \| File)[]` | — | URLs or files loaded on mount (single file or list; no folder picker) |
+| `onSelect` | `(uuid: string, object: any) => void` | — | Called when an object is selected |
+| `onLoad` | `(manager: SceneManager) => void` | — | Called once the scene manager is ready |
+| `hideDeleteModel` | `boolean` | `false` | Hide the delete-model button |
+| `performancePreset` | `PerformancePreset` | `'quality'` | Rendering/memory preset |
+| `chunkOptions` | `SceneChunkOptions` | — | Chunk cache size, memory cap, concurrency |
 
-### SceneManager
+`hiddenMenus` accepts: `file`, `open_file`, `open_url`, `export`, `batch_convert`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `pick`, `tool`, `measure`, `boxSelect`, `clip`, `viewpoint`, `screenshot`, `search`, `clash`, `explode`, `settings`, `about`, `stats`, `sun`.
 
-For advanced scenarios, you can interact directly with the `SceneManager`:
+### `SceneManager`
 
-```typescript
-import { SceneManager } from './src';
+For advanced scenarios, interact with the manager directly through `onLoad`:
 
-// In onLoad callback of ThreeViewer
+```ts
+import type { SceneManager } from './src';
+
 const handleLoad = (manager: SceneManager) => {
+  manager.fitView();                  // frame the visible content
+  manager.setView('front');           // front / back / top / bottom / left / right / se / sw / ne / nw
   manager.loadNbim('path/to/model.nbim');
 };
 ```
 
-## UI Style System
+Other useful members: `removeModel`, `clear`, `exportNbim`, `getCameraState`, `getMemoryReport`, `fitViewToObject`, `collectBoundsForUuids`, `applyVisibilityBatch`, `getNbimProperties`, `getNbimIfcPropertyGroups`.
 
-The whole interface follows one light Material Design 3 (MD3) CAD-viewer language
-(font stack `Nunito` / `Noto Sans SC` + system CJK fallbacks). All tokens live in
-`src/styles/variables.css`; component styles are hand-written modules imported by
-`src/styles/index.css`.
+---
 
-- **Density**: 12px body text, 26px controls, 11px captions/labels, 24px bottom status bar.
-- **Shell**: 44px top bar + three columns (left `clamp(200px,20vw,264px)`, viewport `flex:1; min-width:0`,
-  right `clamp(240px,25vw,340px)`) + 24px status bar. The page itself never scrolls; only panel bodies do.
-- **Colour**: `#F8FAFC` page over `#FFFFFF` surfaces, `#1E293B` primary / `#475569` secondary text,
-  `#E2E8F0` / `#F1F5F9` borders, single accent `#2563EB` plus danger/success/warn semantics (all ≥ 4.5:1).
-- **Shapes**: pill (999px) buttons, 6px inputs, 12px menus & floating panels, 16px modals & loading card,
-  6px translucent capsule scrollbars; icons are inline SVG with `stroke="currentColor"`.
-- **Tools dock**: the tool strip can live in the top bar or as a bottom-centred frosted capsule dock,
-  rendered either icon-only or icon-over-text (`Settings → Appearance → Layout`).
-- **Buttons**: icon + text pills with true vertical centering (`line-height:1`, SVG `display:block`);
-  primary actions are solid `#2563EB` with white text.
-- **States**: any rule that changes `background` also declares `color`; disabled states use token colours
-  (never `opacity`); white text only on accent/danger/tooltip dark backgrounds.
-- **Dark theme**: only token values change (`.theme-dark`: `#0F172A` page / `#1E293B` surfaces /
-  `#334155` borders), never component structure.
+## NBIM v11 container
+
+One file, 1024-byte header, then chunk payloads, then a property section, then the manifest.
+
+| Field | Value |
+| --- | --- |
+| Magic | `NBM1` (`0x314d424e`) |
+| Version | `11` |
+| Header | 1024 bytes |
+| Flags | bit 0 manifest gzip · bit 1 property block · bit 2 manifest brotli |
+
+Geometry is quantised per chunk (position int16 with per-chunk scale/offset, normals int8, indices u16/u32). Properties are stored as a deduplicated string pool plus columnar records, split into 64 KB blocks, so a single component's properties can be read without loading the whole property section.
+
+The full specification lives in `docs/nbim11-format.md`, and measured statistics in `docs/stats-nbim11.md`.
+
+---
+
+## Repository layout
+
+```
+src/
+  components/     React UI (toolbar, panels, tree, properties, view cube, tools dock)
+  hooks/          viewer state, file loading, selection, search, viewpoints
+  loader/         IFC / OCC loaders and resource resolution
+  utils/
+    scene-core/   NBIM v11 read/write, NBIP property database, chunk codecs
+    scene-manager/ scene, chunks, picking, box select, edges, clipping, measurement
+  styles/         hand-written CSS modules driven by tokens in variables.css
+  theme/          icon set, locale dictionaries, theme manager
+scripts/          build helper, UI audit, coverage check, NBIM self-test & stats
+docs/             format spec, statistics, testing fixtures (local only)
+public/libs/      WASM/worker decoders (web-ifc, occt-import-js, Draco, Basis)
+```
+
+### Scripts
+
+```bash
+node scripts/run.mjs nbim11-selftest      # NBIM v11 round-trip self-test (28 checks)
+node scripts/nbim-fixture.mjs --check     # verify test fixtures match their generator
+node scripts/nbim-stats.mjs <file.nbim>   # read-only container statistics
+node scripts/ui-audit.mjs --strict        # design tokens, contrast, radius/z-index/font ladders
+node scripts/class-coverage.cjs           # every className used in TSX has a style rule
+```
+
+---
+
+## UI style system
+
+One light Material Design 3 CAD-viewer language, font stack `Nunito` / `Noto Sans SC` plus system CJK fallbacks. All tokens live in `src/styles/variables.css`; component styles are hand-written modules imported by `src/styles/index.css`.
+
+- **Density**: 12px body, 26px controls, 11px captions, 24px status bar.
+- **Shell**: 44px top bar + three columns (left `clamp(200px,20vw,264px)`, viewport `flex:1; min-width:0`, right `clamp(240px,25vw,340px)`) + 24px status bar. The page never scrolls; only panel bodies do.
+- **Colour**: `#F8FAFC` page over `#FFFFFF` surfaces, `#1E293B` primary / `#475569` secondary text, `#E2E8F0` / `#F1F5F9` borders, single accent `#2563EB` plus danger/success/warn semantics — all ≥ 4.5:1.
+- **Shapes**: pill (999px) buttons, 6px inputs, 12px menus and floating panels, 16px modals and loading card, 6px translucent capsule scrollbars.
+- **States**: any rule that changes `background` also declares `color`; disabled states use token colours (never `opacity`); white text only on accent/danger/tooltip dark backgrounds.
+- **Dark theme**: only token values change (`.theme-dark`), never component structure.
 
 Verify before delivering:
 
 ```bash
-node scripts/ui-audit.mjs --strict   # tokens, contrast, z-index/radius/font ladder, emoji, bare hex
-node scripts/class-coverage.cjs      # every className used in TSX has a style rule
+node scripts/ui-audit.mjs --strict
+node scripts/class-coverage.cjs
 ```
-
-## License
-
-### Free for Non-Commercial Use (Commercial Use Prohibited)
-
-This project is intended for learning and research purposes only. **Commercial use of any kind is strictly prohibited**. For commercial licensing or enterprise support, please contact the author at `zhangly1403@qq.com`.
 
 ---
 
-# 3dbrowser (中文)
+## Testing
 
-专业的 React 3D 模型浏览器组件库，专注于超大模型与易用性。单个 2.9 GB 的 NBIM（23 万构件、1.86 亿渲染三角面）可在数秒内打开，JS 堆稳定控制在约 3 GB 以内。
+- **Self-test** — `node scripts/run.mjs nbim11-selftest` runs 28 checks covering NBIP round-trip, the single-file end-to-end path, 5,000-component scale, index delta encoding, and string-pool edge cases (multi-byte, empty, very long, prefix sharing).
+- **Fixtures** — synthetic models in `docs/testing/fixtures` are generated programmatically and contain no real model content; `--check` verifies they still match the generator.
+- **Regression checklist** — manual pass over load / tree / select / highlight / box select / properties / browsing / delete / multi-model, in `docs/testing/regression-checklist.md`.
 
-## 特色功能
+---
 
-- **高性能渲染**: 基于 **NBIM** 和 **BatchedMesh** 技术，实测单页可承载 231,353 个构件、1.86 亿渲染三角面。
-- **多格式支持**:
-  - **BIM**: IFC (基于 web-ifc)
-  - **标准格式**: GLB/GLTF, FBX, OBJ
-  - **自定义格式**: NBIM v11
-- **高级工具**:
-  - **测量**: 距离、角度、坐标测量。
-  - **剖切**: 实时剖切面，方便查看内部结构；打开面板时按当前模型自动重算范围。
-  - **场景树**: 交互式构件树状结构视图。
-  - **属性面板**: 选中构件的详细属性查看。
-  - **显示样式**: 着色（仅实体）与真实（着色 + CAD 式棱边：梁柱硬边、圆柱竖棱与端部圆环）。样式取本地偏好，**顶栏不再提供切换**（线框模式已移除）。
-  - **框选**: 全屏框选，十万级构件下仍保持毫秒级响应。
-  - **实例级点选**: 单击只选中并高亮光标命中的那一个实例（带发光效果），高亮颜色可自定义。
-- **离线批量转换**: 纯 CPU 把原始源文件（IFC / GLB / FBX / OBJ 等）合并导出为单个 NBIM v11 文件，不占显存。
-- **现代技术栈**: 基于 **React 19**, **Three.js** 和 **TypeScript** 构建。
-- **双语支持**: 内置完善的中英文支持。
+## License
 
-## 实测规模与性能
+### Free for non-commercial use — commercial use prohibited
 
-下列数据来自真实生产模型，已做脱敏处理：隐去文件名、路径、客户与项目信息，仅保留汇总的几何量与耗时。
+This project is for learning and research. **Commercial use of any kind is strictly prohibited.** For commercial licensing or enterprise support, contact `zhangly1403@qq.com`.
 
-所有耗时均在 **headless Chrome + 软件渲染（SwiftShader）** 下测得，属于偏保守的下限；真实 GPU 环境会更快。
-
-### 模型规模
-
-| 指标 | 模型 A（多文件钢结构工程） |
-| --- | --- |
-| 源文件数 | 140 |
-| 构件节点数 | 231,353 |
-| 唯一三角面 | 52,506,466 |
-| 实例数 | 737,330 |
-| 实际渲染实例 | 968,683 |
-| 实际渲染三角面 | 186,284,229 |
-
-模型 A 合并为单个 NBIM 后是 **2.9 GB** 的单文件，作为一个文档打开。
-
-### 运行表现
-
-| 指标 | 实测结果 | 说明 |
-| --- | --- | --- |
-| 首屏可交互（2.9 GB NBIM） | 3.0 – 4.5 s | 渐进式：分块未全部到齐即可操作 |
-| 全景环绕时的 JS 堆（全量 1,271 块） | **2.4 – 2.6 GB** | 默认全量几何，4 GB 堆可用 |
-| 全模型充满视图绘制 | **1.86 亿面 / 1,271 draw call** | 默认不省略任何构件 |
-| 全景帧率 | ~26 fps | 软件渲染 |
-| 近景帧率 | ~54 fps | 软件渲染 |
-| 全屏框选 33,588 个构件 | ~70 ms | 框选覆盖整个视口 |
-| 拖动时 / 松手后的像素比 | 0.8 → 1.0 | 自适应画质 |
-| NBIM v11 单文件体积（同模型） | **589 MB** | 分块 + 量化压缩 |
-
-### 性能来源
-
-- **分块 NBIM + `BatchedMesh`**：几何按八叉树切成块，每块一个 `BatchedMesh`，23 万构件只需数百次 draw call，而不是 23 万次。
-- **NBIM v11 量化压缩**：position int16 + 每块 scale/offset、normal int8、索引 u16/u32，分块 payload gzip。
-- **法线 int8**：合并缓冲里法线从 12B/顶点降到 3B/顶点，由 GPU 归一化属性还原。
-- **逐实例几何视图按需构建**：拾取只用包围盒；边线/碰撞/面积才构建零拷贝视图，用完立即释放。
-- **内存预算而非“无脑全量”**：`maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` 由 JS 堆上限和单块解码预估值动态推导；预算足够时 1,271 块全量驻留，不足时优先卸载最远分块。
-- **默认全量几何，不牺牲显示**：默认不剔除任何小构件；只有显式加 `?coarseLod=1` 才启用按屏幕分辨率的远景 LOD（充满视图 1.86 亿面 → 4,700 万面、堆 2.5GB → 1.1GB）。
-- **可选渲染预算代理**：`chunkOptions.renderBudget = "auto"`（或 URL）时，超出 7000 万面的远景分块用合并线框代理（1 draw call）；默认关闭。
-- **按需渲染**：只有相机、加载、选中状态变化时才绘制一帧，空闲时几乎零开销。
-- **实例感知拾取**：`batchId` → uuid/来源的映射让单击能定位到具体实例；框选先用整块包围盒剔除，再落到实例级。
-- **属性索引懒加载**：超过 2 万条属性文档时不常驻内存，选中时按需解析；搜索时一次性单遍构建。
-- **无头批量转换**：原始源文件合并导出为 NBIM v11 仅使用 CPU 与磁盘，可在没有可用 GPU 的机器上运行。
-
-### 已知边界
-
-- **NBIM 才是快路径**：原始源文件建议先用内置批量转换合并成单个 `.nbim`，否则加载阶段的时间会花在转换上，而不是流式渲染；本版本只读 v11，旧版本 NBIM 会被明确拒绝。
-- **预算不足时极远分块会被跳过**：投影小于约 4 px 的分块不参与解码；同时打开多个相距很远的模型时，远处那个在放大前可能几乎空白。
-- **LOD/线框代理默认关闭**：默认全量几何；只有显式配置 `renderStrategy=adaptive` 或 `renderBudget=auto` 时才会省略极小构件或显示线框代理。
-- **驻留策略**：内存允许时全量驻留，放大/平移不会因“离开视口”卸载；只有堆超过高水位或确实装不下时才从最远分块开始卸载。
-- **首次属性搜索可能稍慢**：模型属性文档超过 2 万条时，搜索索引在首次使用时构建。
-- **软件渲染帧率是下限而非目标**：上述帧率均在没有 GPU 的环境测得，真实 GPU 浏览器会明显更快。
-
-## 安装
-
-请直接从源码使用（Node ≥ 20），依赖由 `package-lock.json` 锁定：
-
-```bash
-git clone https://github.com/zly258/3dbrowser.git
-cd 3dbrowser
-# 用惯用的包管理器按 package-lock.json 安装依赖
-node node_modules/vite/bin/vite.js      # 启动开发服务器 → http://localhost:5173
-```
-
-## 静态资源配置
-
-解码 IFC 与 OCC 所需的 WASM/worker 文件位于本仓库的 `public/libs` 文件夹
-（web-ifc、occt-import-js、Draco、Basis）。若要把查看器嵌入其他宿主页面，
-将该 `public/libs` 复制到宿主的静态目录，并按需传入 `libPath` 属性
-（默认路径为 `./libs`）。
-
-## 快速上手
-
-```tsx
-import { ThreeViewer } from './src';
-
-function App() {
-  return (
-    <div style={{ width: '100vw', height: '100vh' }}>
-      <ThreeViewer
-        libPath="/libs"
-        defaultTheme="dark"
-        defaultLang="zh"
-        showStats={true}
-        initialFiles={[
-          "https://example.com/models/building.glb"
-        ]}
-        onSelect={(uuid, object) => console.log('选中对象:', uuid, object)}
-      />
-    </div>
-  );
-}
-```
-
-## 参数说明
-
-### ThreeViewer Props
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|---------|-------------|
-| `libPath` | `string` | `'./libs'` | 包含 WASM/Worker 文件的文件夹路径（相对于 window.location） |
-| `allowDragOpen` | `boolean` | `true` | 是否允许通过拖拽打开文件 |
-| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 ID 列表。可用 ID: `file`, `open_file`, `export`, `clear`, `view`, `fit_view`, `views`, `interface`, `outline`, `props`, `stats`, `pick`, `tool`, `measure`, `clip`, `viewpoint`, `sun`, `about`。 |
-| `defaultTheme` | `'dark' \| 'light'` | `'light'` | 默认界面主题（无本地偏好时生效；暗色模式会同步深色视口底色） |
-| `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
-| `showStats` | `boolean` | `true` | 是否显示性能统计面板 |
-| `showOutline` | `boolean` | `true` | 是否显示场景大纲面板 |
-| `showProperties` | `boolean` | `true` | 是否显示对象属性面板 |
-| `initialSettings` | `Partial<SceneSettings>` | - | 初始场景设置（光照、背景等） |
-| `initialFiles` | `string \| File \| (string \| File)[]` | - | 组件挂载时自动加载的 **单个文件或文件列表**（URL 或 `File`；不支持整目录选择） |
-| `onSelect` | `(uuid: string, object: any) => void` | - | 对象选中时的回调函数 |
-| `onLoad` | `(manager: SceneManager) => void` | - | 场景管理器初始化完成后的回调函数 |
-| `hideDeleteModel` | `boolean` | `false` | 隐藏删除模型按钮 |
-
-## 界面样式规范
-
-全站共用一套「浅色 MD3 CAD 查看器」语言（字体链 `Nunito` / `Noto Sans SC` + 系统中文回退）：
-令牌唯一来源 `src/styles/variables.css`，组件样式是手写模块文件，由 `src/styles/index.css` 按顺序引入。
-
-- **密度**：正文 12px，控件 26px，说明文字/标签 11px，底栏 24px。
-- **骨架**：顶栏 44px + 三栏（左 `clamp(200px,20vw,264px)`、视口 `flex:1; min-width:0`、
-  右 `clamp(240px,25vw,340px)`）+ 底栏 24px。页面本身不滚动，滚动只发生在面板内部容器。
-- **配色**：`#F8FAFC` 页面底 + `#FFFFFF` 表面，主文字 `#1E293B` / 次文字 `#475569`，
-  边框 `#E2E8F0` / `#F1F5F9`，单一强调色 `#2563EB` + danger/success/warn 语义色（对比度均 ≥ 4.5:1）。
-- **形与图标**：按钮一律胶囊（999px），输入 6px，菜单/浮动面板 12px，模态与加载卡 16px，
-  滚动条 6px 半透明胶囊；图标一律内联 SVG（`stroke="currentColor"`）。
-- **工具坞**：工具条可放在顶栏或作为底部居中毛玻璃胶囊坞，并支持「仅图标」与「上图标下文字」两种呈现
-  （设置 → 外观 → 布局）。
-- **按钮**：图标+文字胶囊，真实垂直居中（`line-height:1`，SVG `display:block`）；
-  主操作为 `#2563EB` 实底白字。
-- **状态**：任何改 `background` 的规则必须同时声明 `color`；禁用态用令牌换色（禁止 `opacity`）；
-  白字只允许压在 Accent / Danger / Tooltip 深底上。
-- **暗色主题**：只替换令牌取值（`.theme-dark`：`#0F172A` 页面 / `#1E293B` 表面 / `#334155` 边框），
-  不改组件结构。
-
-交付前执行：
-
-```bash
-node scripts/ui-audit.mjs --strict   # 令牌、对比度、z-index/圆角/字号阶梯、emoji、裸色值
-node scripts/class-coverage.cjs      # TSX 中使用的每个 className 都有对应样式
-```
-
-## 许可证
-
-### 非商业用途免费（禁止用于商业目的）
-
-本项目仅供学习和研究使用，**禁止用于任何商业目的**。如需商业授权或企业级支持，请联系作者：`zhangly1403@qq.com`。
-
+Chinese documentation: [README.zh-CN.md](README.zh-CN.md)

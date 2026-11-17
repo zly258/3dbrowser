@@ -60,7 +60,7 @@ const distPkg = {
 
 fs.writeFileSync(path.join(distDir, 'package.json'), JSON.stringify(distPkg, null, 2));
 
-for (const file of ['README.md', 'LICENSE']) {
+for (const file of ['README.md', 'README.zh-CN.md', 'LICENSE']) {
   const filePath = path.join(rootDir, file);
   if (!fs.existsSync(filePath)) continue;
   console.log(`Copying ${file}...`);
