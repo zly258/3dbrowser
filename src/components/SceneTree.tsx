@@ -186,6 +186,7 @@ const TreeRowItem = React.memo(({
     isLocated, 
     searchQuery, 
     clashBadge, 
+    t,
     onSelect, 
     onToggleNode, 
     onToggleVisibility, 
@@ -227,13 +228,13 @@ const TreeRowItem = React.memo(({
             <Checkbox
                 checked={node.visible}
                 onChange={(val: boolean) => onToggleVisibility(node.uuid, val)}
-                ariaLabel={`${node.visible === false ? "显示" : "隐藏"} ${node.name}`}
+                ariaLabel={`${node.visible === false ? t("node_show") : t("node_hide")} ${node.name}`}
                 style={{ marginRight: 4, padding: 0, flexShrink: 0 }}
             />
 
             <div
                 className={`ui-tree-label${node.visible === false ? " is-off" : ""}`}
-                title={node.rawName && node.rawName !== node.name ? `${node.name}（原始名：${node.rawName}）` : node.name}
+                title={node.rawName && node.rawName !== node.name ? `${node.name}（${t("tree_raw_name")}：${node.rawName}）` : node.name}
             >
                 {searchQuery && node.name.toLowerCase().includes(searchQuery.toLowerCase()) ? (
                     <span>
@@ -603,7 +604,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                         className="ui-input ui-input-compact"
                     />
                     {searchInput && (
-                        <button className="ui-search-clear" aria-label="清空搜索" onClick={() => setSearchInput("")}>
+                        <button className="ui-search-clear" aria-label={t("search_clear_query")} onClick={() => setSearchInput("")}>
                             <IconClose width={14} height={14} />
                         </button>
                     )}
@@ -643,6 +644,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 isLocated={node.uuid === locatedUuid}
                                 searchQuery={searchQuery}
                                 clashBadge={getClashBadge(node.uuid)}
+                                t={t}
                                 onSelect={(n: any) => {
                                     selectionSourceRef.current = "tree";
                                     setActiveTreeUuid(n.uuid);

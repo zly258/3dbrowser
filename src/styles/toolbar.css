@@ -112,25 +112,64 @@
   backdrop-filter: none;
 }
 
-/* 坞内按钮：正方形图标胶囊（title 提供文字提示） */
-.ui-tools-dock .ui-toolbar-btn.ui-tools-dock-btn {
-  width: 30px;
+/* 坞内按钮：仅图标时为正方形胶囊；带文字时为「上图标下文字」的竖排胶囊 */
+.ui-tools-dock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
   min-width: 30px;
   height: 30px;
-  padding: 0;
+  padding: 0 6px;
   color: var(--text-sec);
   background: transparent;
+  border: 0;
   border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
-.ui-tools-dock .ui-toolbar-btn.ui-tools-dock-btn:hover:not(:disabled):not(.active) {
+.ui-tools-dock-btn:hover:not(:disabled):not(.active) {
   background: var(--bg-hover);
   color: var(--text-main);
 }
 
-.ui-tools-dock .ui-toolbar-btn.ui-tools-dock-btn.active {
+.ui-tools-dock-btn.active {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.ui-tools-dock-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 图标 + 文字：上图标下文字，按钮变高、文字 11px */
+.ui-tools-dock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.ui-tools-dock-icon svg { display: block; flex-shrink: 0; }
+
+.ui-tools-dock-with-labels { gap: 4px; padding: 5px 6px; }
+
+.ui-tools-dock-btn.with-label {
+  height: auto;
+  min-width: 52px;
+  padding: 5px 6px 4px;
+  gap: 3px;
+  border-radius: var(--radius-lg);
+}
+
+.ui-tools-dock-label {
+  font-size: var(--font-size-caption);
+  line-height: 1.1;
+  white-space: nowrap;
+  color: inherit;
 }
 
 .ui-tools-dock-divider {
@@ -139,12 +178,17 @@
   height: 18px;
   margin: 0 4px;
   background: var(--border-main);
+  align-self: center;
 }
+
+.ui-tools-dock-with-labels .ui-tools-dock-divider { height: 30px; }
 
 .ui-tools-dock-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 2px;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -154,6 +198,14 @@
   border-radius: var(--radius-pill);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
+}
+
+.ui-tools-dock-toggle.with-label {
+  width: auto;
+  height: auto;
+  min-width: 44px;
+  padding: 5px 6px 4px;
+  border-radius: var(--radius-lg);
 }
 
 .ui-tools-dock-toggle:hover {

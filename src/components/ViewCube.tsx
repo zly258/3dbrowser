@@ -641,7 +641,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
             className="ui-viewcube ui-viewcube-clean"
             role="button"
             tabIndex={0}
-            aria-label={lang === "zh" ? "视图立方：点击或回车切换视图" : "View cube: click or press Enter to change view"}
+            aria-label={t("viewcube_aria")}
             style={{
                 width: `${cubeSize}px`,
                 height: `${cubeSize}px`

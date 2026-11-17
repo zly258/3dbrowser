@@ -52,6 +52,8 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
   setShowStats,
   toolsDock,
   setToolsDock,
+  toolsDockLabels,
+  setToolsDockLabels,
   theme,
   getRuntimeInfo
 }) => {
@@ -180,6 +182,18 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                       ]}
                       value={toolsDock}
                       onChange={(v) => setToolsDock(v as "top" | "bottom")}
+                    />
+                  </Row>
+
+                  {/* 工具坞样式：仅图标 / 上图标下文字（仅底部工具坞生效） */}
+                  <Row label={t("st_tools_dock_style")} labelWidth="112px">
+                    <SegmentedControl
+                      options={[
+                        { value: "icon", label: t("st_tools_dock_icon") },
+                        { value: "label", label: t("st_tools_dock_label") }
+                      ]}
+                      value={toolsDockLabels ? "label" : "icon"}
+                      onChange={(v) => setToolsDockLabels(v === "label")}
                     />
                   </Row>
 
@@ -336,7 +350,7 @@ export const SettingsPanel: React.FC<SettingsModalProps> = ({
                   <Row label={t("st_residency")} labelWidth="112px" stretch>
                     <span className="ui-toolpanel-caption ui-toolpanel-caption-muted">
                       {runtime
-                        ? `${runtime.loaded}/${runtime.total} · ${(runtime.estimatedResidentMB / 1024).toFixed(2)}GB / ${(runtime.residentBudgetMB / 1024).toFixed(2)}GB${runtime.memoryPressure ? (isZh ? ' · 内存压力' : ' · Pressure') : ''}`
+                        ? `${runtime.loaded}/${runtime.total} · ${(runtime.estimatedResidentMB / 1024).toFixed(2)}GB / ${(runtime.residentBudgetMB / 1024).toFixed(2)}GB${runtime.memoryPressure ? t("st_memory_pressure") : ''}`
                         : '—'}
                     </span>
                   </Row>
@@ -390,6 +404,9 @@ interface SettingsModalProps {
   /** 工具栏位置：top = 顶栏「工具」下拉；bottom = 底部居中工具坞 */
   toolsDock: "top" | "bottom";
   setToolsDock: (v: "top" | "bottom") => void;
+  /** 底部工具坞是否显示文字标签（上图标下文字） */
+  toolsDockLabels: boolean;
+  setToolsDockLabels: (v: boolean) => void;
   theme?: any;
   getRuntimeInfo?: () => {
     loaded: number;

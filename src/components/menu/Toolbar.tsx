@@ -123,11 +123,12 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
     const toolMenuItem = (icon: React.ReactNode, label: string, tool: NonNullable<ToolbarProps["activeTool"]>) =>
         menuItem(icon, label, () => { setToggleTool(tool); closeMenu(); }, props.activeTool === tool);
 
-    /* 显示样式分段（真实/着色/线框），对齐参考中部分段切换 */
+    /* 显示样式分段（着色/真实），对齐参考中部分段切换。
+       线框模式已移除：超大模型切线框会大面积只剩骨架且切换极慢，
+       「真实」模式用 CAD 式棱边（圆柱竖棱、球经纬线、梁柱硬边）满足轮廓查看需求。 */
     const displayModeOptions = [
-        { value: "realistic", label: t("dm_realistic") },
         { value: "shaded", label: t("dm_solid") },
-        { value: "wireframe", label: t("dm_wireframe") }
+        { value: "realistic", label: t("dm_realistic") }
     ];
 
     return (

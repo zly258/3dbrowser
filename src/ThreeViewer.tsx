@@ -187,7 +187,8 @@ export const ThreeViewer = ({
     
     // Viewport coords
     const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
-    // 显示样式：realistic-真实（着色+边线）, shaded-着色, wireframe-线框
+    // 显示样式：realistic-真实（着色+CAD 棱边）, shaded-着色（仅实体）
+    // 线框模式已移除；旧存档里的 "wireframe" 由 normalizeDisplayMode 归一化为 realistic
     const [displayMode, setDisplayMode] = usePersistentState<DisplayMode>('3dbrowser_displayMode', 'shaded', {
         parser: (raw) => normalizeDisplayMode(JSON.parse(raw))
     });
@@ -248,9 +249,10 @@ export const ThreeViewer = ({
         parser: (raw) => raw === 'true'
     });
 
-    // 工具栏位置（顶栏 / 底部居中工具坞）与工具坞收起状态
+    // 工具栏位置（顶栏 / 底部居中工具坞）与工具坞收起状态、是否显示文字标签
     const [toolsDock, setToolsDock] = usePersistentState<'top' | 'bottom'>('viewer_tools_dock', 'top');
     const [toolsDockCollapsed, setToolsDockCollapsed] = usePersistentState<boolean>('viewer_tools_dock_collapsed', false);
+    const [toolsDockLabels, setToolsDockLabels] = usePersistentState<boolean>('viewer_tools_dock_labels', true);
 
     const [sceneSettings, setSceneSettings] = usePersistentState<SceneSettings>('3dbrowser_sceneSettings', () => {
         // 外观模式优先级：initialSettings.themeMode > defaultTheme > light
@@ -1182,6 +1184,7 @@ export const ThreeViewer = ({
                      hiddenMenus={hiddenMenus}
                      collapsed={toolsDockCollapsed}
                      onToggleCollapsed={() => setToolsDockCollapsed((v) => !v)}
+                     showLabels={toolsDockLabels}
                  />
              )}
 
@@ -1626,6 +1629,7 @@ export const ThreeViewer = ({
                    currentLang={lang} setLang={setLang}
                    showStats={showStats} setShowStats={setShowStats}
                    toolsDock={toolsDock} setToolsDock={setToolsDock}
+                   toolsDockLabels={toolsDockLabels} setToolsDockLabels={setToolsDockLabels}
                    theme={theme}
                    getRuntimeInfo={() => sceneMgr.current?.getRenderStrategyInfo()}
                 />

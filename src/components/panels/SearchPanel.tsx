@@ -48,22 +48,20 @@ interface SearchPanelProps {
 const operatorOptions: Array<{
   value: SearchOperator;
   labelKey: string;
-  fallback: string;
 }> = [
-  { value: "equals", labelKey: "search_op_equals", fallback: "等于" },
-  { value: "contains", labelKey: "search_op_contains", fallback: "包含" },
+  { value: "equals", labelKey: "search_op_equals" },
+  { value: "contains", labelKey: "search_op_contains" },
   {
     value: "notContains",
     labelKey: "search_op_not_contains",
-    fallback: "不包含",
   },
-  { value: "startsWith", labelKey: "search_op_starts_with", fallback: "开头" },
-  { value: "endsWith", labelKey: "search_op_ends_with", fallback: "结尾" },
+  { value: "startsWith", labelKey: "search_op_starts_with" },
+  { value: "endsWith", labelKey: "search_op_ends_with" },
 ];
 
 const connectorOptions = [
-  { value: "AND", labelKey: "search_connector_and", fallback: "且" },
-  { value: "OR", labelKey: "search_connector_or", fallback: "或" },
+  { value: "AND", labelKey: "search_connector_and" },
+  { value: "OR", labelKey: "search_connector_or" },
 ];
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
@@ -178,8 +176,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   value={condition.connector || "AND"}
                   options={connectorOptions.map((item) => ({
                     value: item.value,
-                    label: t(item.labelKey) || item.fallback,
+                    label: t(item.labelKey),
                   }))}
+                  t={t}
                   onChange={(value) =>
                     updateCondition(condition.id, {
                       connector: value as SearchConnector,
@@ -203,6 +202,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               searchable={true}
               searchPlaceholder={t("search_field_filter")}
               emptyText={t("search_no_fields")}
+              t={t}
               className="ui-input-compact ui-search-field-input"
             />
 
@@ -210,8 +210,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               value={condition.operator}
               options={operatorOptions.map((item) => ({
                 value: item.value,
-                label: t(item.labelKey) || item.fallback,
+                label: t(item.labelKey),
               }))}
+              t={t}
               onChange={(value) =>
                 updateCondition(condition.id, {
                   operator: value as SearchOperator,
@@ -298,6 +299,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                     value: String(size),
                     label: `${size} / ${t("page_size_unit")}`
                   }))}
+                  t={t}
                   className="ui-input-compact ui-search-page-size"
                 />
                 <Button

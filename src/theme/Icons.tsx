@@ -456,21 +456,8 @@ export const IconRealistic = (props: any) => createIcon(
   props
 );
 
-// 线框：仅边线
-export const IconWireframe = (props: any) => createIcon(
-  <>
-    <polygon points="12,3 21,8 21,16 12,21 3,16 3,8" fill="none" />
-    <line x1="12" y1="13" x2="12" y2="21" />
-    <line x1="12" y1="3" x2="12" y2="13" />
-    <line x1="3" y1="8" x2="12" y2="13" />
-    <line x1="21" y1="8" x2="12" y2="13" />
-    <line x1="3" y1="8" x2="3" y2="16" strokeDasharray="2 2" />
-    <line x1="21" y1="8" x2="21" y2="16" strokeDasharray="2 2" />
-    <line x1="3" y1="16" x2="12" y2="21" strokeDasharray="2 2" />
-    <line x1="21" y1="16" x2="12" y2="21" strokeDasharray="2 2" />
-  </>,
-  props
-);
+// 线框样式图标已随「线框模式」移除；保留位置说明，避免误引用。
+
 
 // File operation icons
 export const IconOpenFile = (props: any) => createIcon(
