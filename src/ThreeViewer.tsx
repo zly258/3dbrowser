@@ -54,6 +54,7 @@ export interface ThreeViewerProps {
     allowDragOpen?: boolean;
     hiddenMenus?: string[];
     libPath?: string;
+    /** 默认界面语言（无本地偏好时生效，默认英文） */
     defaultLang?: Lang;
     /** 默认外观模式（无本地偏好时生效） */
     defaultTheme?: "light" | "dark";
@@ -106,15 +107,21 @@ export const ThreeViewer = ({
 
     
 
-    // 语言状态 - 从localStorage恢复
+    // 语言状态 - 从localStorage恢复（默认英文）
     const [lang, setLang] = usePersistentState<Lang>(
         '3dbrowser_lang',
-        () => defaultLang || 'zh',
+        () => defaultLang || 'en',
         {
             serializer: (value) => value,
-            parser: (raw) => (raw === 'zh' || raw === 'en') ? raw : 'zh'
+            parser: (raw) => (raw === 'zh' || raw === 'en') ? raw : 'en'
         }
     );
+
+    // 让 <html lang> 跟随界面语言（无障碍与浏览器翻译依赖它；
+    // index.html 里写的是静态值，不随运行时切换更新）
+    useEffect(() => {
+        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    }, [lang]);
 
     // 监听外部语言切换 - 仅在外部 defaultLang 发生变化时更新
     const prevDefaultLangRef = useRef<Lang | undefined>(defaultLang);

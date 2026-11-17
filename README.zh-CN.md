@@ -170,7 +170,7 @@ function App() {
 | `allowDragOpen` | `boolean` | `true` | 是否允许拖拽打开文件 |
 | `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 / 工具 ID，见下表 |
 | `defaultTheme` | `'light' \| 'dark'` | `'light'` | 无本地偏好时的默认外观（暗色会同步深色视口底色） |
-| `defaultLang` | `'zh' \| 'en'` | `'zh'` | 默认界面语言 |
+| `defaultLang` | `'zh' \| 'en'` | `'en'` | 默认界面语言 |
 | `showStats` | `boolean` | `true` | 显示性能统计面板 |
 | `showOutline` | `boolean` | `true` | 显示场景结构面板 |
 | `showProperties` | `boolean` | `true` | 显示对象属性面板 |

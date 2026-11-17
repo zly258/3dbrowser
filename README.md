@@ -170,7 +170,7 @@ function App() {
 | `allowDragOpen` | `boolean` | `true` | Allow opening files by drag and drop |
 | `hiddenMenus` | `string[]` | `[]` | Menu/tool IDs to hide. See below |
 | `defaultTheme` | `'light' \| 'dark'` | `'light'` | Default appearance when no local preference is saved (dark also sets the viewport colour) |
-| `defaultLang` | `'zh' \| 'en'` | `'zh'` | Default UI language |
+| `defaultLang` | `'zh' \| 'en'` | `'en'` | Default UI language |
 | `showStats` | `boolean` | `true` | Show the performance statistics panel |
 | `showOutline` | `boolean` | `true` | Show the scene structure panel |
 | `showProperties` | `boolean` | `true` | Show the object properties panel |
