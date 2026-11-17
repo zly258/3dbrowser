@@ -14,7 +14,7 @@ Professional 3D model viewer library for React and Web applications. Built for v
   - **Sectioning**: Real-time clipping planes for internal inspection, with the range recalculated from the current model.
   - **Scene Tree**: Interactive hierarchical view of the model structure.
   - **Properties**: Detailed metadata viewer for selected components.
-  - **Display styles**: Realistic (shaded + edges), Shaded, Wireframe — switchable from the toolbar and remembered locally.
+  - **Display styles**: Realistic (shaded + CAD-style edges: hard edges on beams, vertical seams and end rings on cylinders) and Shaded — switchable from the toolbar and remembered locally..
   - **Box selection**: Full-screen marquee selection that stays responsive on six-figure component counts.
   - **Instance-level picking**: A single click resolves the exact instance under the cursor, highlights only that instance (with a glow) and lets you customize the highlight colour.
 - **Offline Batch Conversion**: Convert legacy NBIM sources to a single NBIM v11 file on the CPU only — no scene, no GPU, no VRAM.
@@ -156,6 +156,8 @@ The whole interface follows one light Material Design 3 (MD3) CAD-viewer languag
   `#E2E8F0` / `#F1F5F9` borders, single accent `#2563EB` plus danger/success/warn semantics (all ≥ 4.5:1).
 - **Shapes**: pill (999px) buttons, 6px inputs, 12px menus & floating panels, 16px modals & loading card,
   6px translucent capsule scrollbars; icons are inline SVG with `stroke="currentColor"`.
+- **Tools dock**: the tool strip can live in the top bar or as a bottom-centred frosted capsule dock,
+  rendered either icon-only or icon-over-text (`Settings → Appearance → Layout`).
 - **Buttons**: icon + text pills with true vertical centering (`line-height:1`, SVG `display:block`);
   primary actions are solid `#2563EB` with white text.
 - **States**: any rule that changes `background` also declares `color`; disabled states use token colours
@@ -194,7 +196,7 @@ This project is intended for learning and research purposes only. **Commercial u
   - **剖切**: 实时剖切面，方便查看内部结构；打开面板时按当前模型自动重算范围。
   - **场景树**: 交互式构件树状结构视图。
   - **属性面板**: 选中构件的详细属性查看。
-  - **显示样式**: 真实（着色 + 边线）、着色、线框，工具栏一键切换并本地记忆。
+  - **显示样式**: 真实（着色 + CAD 式棱边：梁柱硬边、圆柱竖棱与端部圆环）、着色，工具栏一键切换并本地记忆（线框模式已移除）。
   - **框选**: 全屏框选，十万级构件下仍保持毫秒级响应。
   - **实例级点选**: 单击只选中并高亮光标命中的那一个实例（带发光效果），高亮颜色可自定义。
 - **离线批量转换**: 纯 CPU 把旧版 NBIM 源文件迁移合并为单个 NBIM v11 文件，不进入场景、不占显存。
@@ -329,6 +331,8 @@ function App() {
   边框 `#E2E8F0` / `#F1F5F9`，单一强调色 `#2563EB` + danger/success/warn 语义色（对比度均 ≥ 4.5:1）。
 - **形与图标**：按钮一律胶囊（999px），输入 6px，菜单/浮动面板 12px，模态与加载卡 16px，
   滚动条 6px 半透明胶囊；图标一律内联 SVG（`stroke="currentColor"`）。
+- **工具坞**：工具条可放在顶栏或作为底部居中毛玻璃胶囊坞，并支持「仅图标」与「上图标下文字」两种呈现
+  （设置 → 外观 → 布局）。
 - **按钮**：图标+文字胶囊，真实垂直居中（`line-height:1`，SVG `display:block`）；
   主操作为 `#2563EB` 实底白字。
 - **状态**：任何改 `background` 的规则必须同时声明 `color`；禁用态用令牌换色（禁止 `opacity`）；
