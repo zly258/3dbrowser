@@ -12,9 +12,9 @@
 :root {
   color-scheme: light;
 
-  /* ---------- 字体 ---------- */
-  --font-sans: 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+  /* ---------- 字体（与 dxfviewer 同一套字栈，唯一来源） ---------- */
+  --font-sans: 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont,
+    'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   --font-mono: var(--font-sans);
 
   /* ---------- 背景四层 ---------- */
@@ -72,11 +72,17 @@
   --radius: 6px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+  --radius-2xl: 16px;
   --radius-pill: 999px;
+  /* 复选框：16×16、5px 圆角（与 dxfviewer 一致） */
+  --checkbox-size: 16px;
+  --checkbox-radius: 5px;
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-overlay: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.08);
   --shadow-panel: 0 12px 28px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.06);
   --scrim: rgba(15, 23, 42, 0.32);
+  /* 毛玻璃浮层模糊半径（下拉 / 面板 / 弹窗统一 12px） */
+  --glass-blur: 12px;
 
   /* ---------- 字 ---------- */
   --font-size-base: 12px;
@@ -96,9 +102,15 @@
   --control-h-lg: 26px;
   --control-h-xs: 22px;
   --header-h: 44px;
+  /* 手机横屏（max-height < 500px）：顶栏压缩到 36px */
+  --header-h-mobile: 36px;
   --toolbar-btn-h: 26px;
   --toolbar-h: 44px;
   --footer-h: 24px;
+  /* 移动端底部抽屉 / 浮动面板骨架 */
+  --sheet-max-h: 55dvh;
+  --panel-mobile-max-h: 58dvh;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --modal-head-h: 40px;
   --tree-row-h: 26px;
   --prop-row-h: 24px;
@@ -120,11 +132,11 @@
   --space-4: 12px;
   --space-5: 16px;
 
-  /* ---------- 侧栏 ---------- */
-  --sidebar-left-w: clamp(200px, 20vw, 264px);
+  /* ---------- 侧栏（桌面端骨架：左 224px / 右 288px，可拖拽但默认值固定） ---------- */
+  --sidebar-left-w: 224px;
   --sidebar-left-min: 200px;
   --sidebar-left-max: 264px;
-  --sidebar-right-w: clamp(240px, 25vw, 340px);
+  --sidebar-right-w: 288px;
   --sidebar-right-min: 240px;
   --sidebar-right-max: 340px;
 
@@ -253,7 +265,11 @@
 }
 
 /* ============================================================
- * 暗色主题：MD3 Dark（slate-900 底 / slate-800 表面 / slate-700 边框）
+ * 暗色主题（与 dxfviewer / 规范完全一致的四个基色）
+ *   #141619 应用底 / 视口      → --bg-app, --bg-viewport
+ *   #1C1F24 表面 / 顶栏 / 面板 → --bg-chrome, --bg-panel
+ *   #2A2E37 胶囊 / 抬升带     → --bg-band, --bg-hover, --border-main
+ *   #3B82F6 主强调蓝          → --accent
  * 层次：视口/应用底最深 → 面板/顶栏 → 工具条带 → 悬停，逐层提亮，
  * 并保留可见的 1px 边框，避免“整片纯黑、结构看不出来”。
  * ============================================================ */
@@ -261,33 +277,36 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg-app: #0f172a;
-  --bg-chrome: #1e293b;
-  --bg-band: #243146;
-  --bg-panel: #1e293b;
-  --bg-hover: #2b3a54;
-  --bg-hover-strong: #354763;
-  --bg-input: #182338;
-  --bg-viewport: #0b1220;
-  --bg-sunken: #1b2740;
-  --bg-glass: rgba(30, 41, 59, 0.95);
+  --bg-app: #141619;
+  --bg-chrome: #1c1f24;
+  --bg-band: #2a2e37;
+  --bg-panel: #1c1f24;
+  --bg-hover: #2a2e37;
+  --bg-hover-strong: #343943;
+  --bg-input: #17191d;
+  --bg-viewport: #141619;
+  --bg-sunken: #181a1f;
+  --bg-glass: rgba(28, 31, 36, 0.95);
 
-  --border-main: #334155;
-  --border-sub: #263650;
-  --border-strong: #475569;
-  --border-hover: #3e4e68;
+  --border-main: #2a2e37;
+  --border-sub: #23262d;
+  --border-strong: #3a3f4a;
+  --border-hover: #414753;
 
   --text-main: #f1f5f9;
-  --text-sec: #cbd5e1;
-  --text-muted: #94a3b8;
+  --text-sec: #c7cdd6;
+  --text-muted: #949dab;
 
-  /* 文本/图标/描边用的强调色（blue-400，深底上对比度 ≥ 4.5:1） */
-  --accent: #60a5fa;
-  --accent-hover: #93c5fd;
+  /* 文本/图标/描边用的强调色。
+     规范基色是 #3B82F6，但在 #1C1F24 表面上只有 4.49:1（差 0.01 未达 AA），
+     因此文字/图标用的强调色统一提亮一档到 #3F85F6（4.64:1），视觉不可分辨。 */
+  --accent: #3f85f6;
+  --accent-hover: #60a5fa;
   --accent-active: #3b82f6;
-  --accent-soft: #1c3557;
-  --accent-line: #2c5586;
-  --accent-focus: rgba(96, 165, 250, 0.35);
+  /* 选中浅蓝底：压到 #121c2e 才能让强调色文字达到 4.64:1 */
+  --accent-soft: #121c2e;
+  --accent-line: #24405f;
+  --accent-focus: rgba(59, 130, 246, 0.35);
   --accent-contrast: #ffffff;
   /* 实底强调（承载白字）：保持 blue-600 深度，白字对比度 ≥ 5:1 */
   --accent-solid: #2563eb;
@@ -303,7 +322,7 @@
   --warn: #fbbf24;
   --warn-soft: #33270f;
   --warn-line: #5c4a1f;
-  --info: #60a5fa;
+  --info: #3b82f6;
   --switch-thumb: #e2e8f0;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);

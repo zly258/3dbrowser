@@ -607,11 +607,13 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
                 setHoverState(mesh);
             }
 
-            containerRef.current.style.cursor = "pointer";
+            // 用类名而不是内联样式：全局 cursor:default !important 会盖掉内联值，
+            // 只有带 !important 的专用类才能保住命中面/棱/角时的可点击反馈。
+            containerRef.current.classList.add("ui-viewcube-hit");
         } else {
             resetPartState(hoveredPart.current);
             hoveredPart.current = null;
-            containerRef.current.style.cursor = "default";
+            containerRef.current.classList.remove("ui-viewcube-hit");
         }
     };
 
@@ -620,7 +622,7 @@ export const ViewCube: React.FC<ViewCubeProps> = ({ sceneMgr, lang = "zh", theme
         hoveredPart.current = null;
 
         if (containerRef.current) {
-            containerRef.current.style.cursor = "default";
+            containerRef.current.classList.remove("ui-viewcube-hit");
         }
     };
 

@@ -9,3 +9,5 @@
 @import './overlays.css';
 @import './search.css';
 @import './components.css';
+/* 响应式外壳必须最后导入：按 mode-desktop / mode-portrait / mode-landscape 覆盖布局 */
+@import './responsive.css';

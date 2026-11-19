@@ -23,9 +23,11 @@
   max-height: 80vh;
   overflow: hidden;
   color: var(--text-main);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius-xl);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-overlay);
 }
 
@@ -35,8 +37,8 @@
   align-items: center;
   gap: var(--space-3);
   padding: 0 10px;
-  background: var(--bg-panel);
-  border-color: var(--border-main);
+  background: transparent;
+  border-color: var(--border-sub);
 }
 
 .ui-modal-header {
@@ -62,7 +64,7 @@
   min-height: 0;
   padding: 10px;
   overflow-y: auto;
-  background: var(--bg-panel);
+  background: transparent;
 }
 
 .ui-modal-body-scroll { overflow-y: auto; }
@@ -107,7 +109,7 @@
   padding: 10px 12px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
 }
 
 .ui-about-app-name {
@@ -127,9 +129,9 @@
 .ui-about-meta-card,
 .ui-about-license-card {
   overflow: hidden;
-  background: var(--bg-chrome);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-lg);
 }
 
 .ui-about-meta-row {
@@ -309,7 +311,7 @@
   color: var(--bg-chrome);
   background: var(--text-main);
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   font-size: var(--font-size-label);
   line-height: 1.35;
@@ -417,14 +419,16 @@
   animation: skeletonSweep 1.2s ease-in-out infinite;
 }
 
-/* 进度浮层：居中白卡 + 16px 大圆角 + 细进度条（blue-600） */
+/* 进度浮层：居中毛玻璃卡 + rounded-2xl（16px）+ 细进度条（blue-600） */
 .cad-loading-card {
   width: min(92vw, 360px);
   padding: 14px 16px;
   color: var(--text-main);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius-xl);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-overlay);
 }
 
@@ -505,9 +509,11 @@
   max-height: calc(100vh - 48px);
   overflow: hidden;
   color: var(--text-main);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius-xl);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-overlay);
 }
 

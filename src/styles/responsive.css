@@ -1,0 +1,484 @@
+/*
+ * 三端响应式外壳（PC 桌面 / 移动竖屏 / 移动横屏）
+ * 设计令牌全部来自 variables.css；只做布局与浮层外观，不引入裸色值。
+ * 三端通过根容器 .ui-app-shell 上的 mode-* 类切换（useViewportMode），
+ * 切换时不重载、保留 WebGL/相机/选择状态。
+ *   desktop    >= 768px（且非横屏手机）
+ *   portrait   < 768px
+ *   landscape  宽 < 900px 且高 < 500px
+ */
+
+/* ============================================================
+ * 根容器：移动端用 100dvh，避免地址栏伸缩导致的视口跳动
+ * ============================================================ */
+.mode-portrait,
+.mode-landscape {
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+.mode-portrait .ui-main-layout,
+.mode-landscape .ui-main-layout {
+  position: relative;
+  min-height: 0;
+}
+
+/* 移动端不给页面留横向滚动 */
+.mode-portrait,
+.mode-landscape { overflow: hidden; }
+
+/* ============================================================
+ * PC 桌面（>= 768px）：默认三栏，左侧 224 / 右侧 288
+ * ============================================================ */
+.mode-desktop .ui-sidebar-left,
+.mode-desktop .ui-sidebar-right {
+  position: relative;
+}
+
+/* ============================================================
+ * 移动竖屏（< 768px）：收敛顶栏 + 底部上滑抽屉 + 居中浮动面板
+ * ============================================================ */
+.mode-portrait .ui-toolbar {
+  padding: 0 6px;
+  gap: 0;
+}
+
+.mode-portrait .ui-toolbar-left,
+.mode-portrait .ui-toolbar-tools,
+.mode-portrait .ui-toolbar-end {
+  gap: 0;
+}
+
+/* 品牌名让位给工具：窄屏截断，仍保留可读前缀 */
+.mode-portrait .ui-toolbar-brand {
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-secondary);
+}
+
+/* 次要按钮收敛：只留图标，收紧内边距（文字由 title / aria-label 承担） */
+.mode-portrait .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn-label {
+  display: none;
+}
+
+.mode-portrait .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn {
+  padding: 0 6px;
+  min-width: var(--toolbar-btn-h);
+}
+
+.mode-portrait .ui-toolbar-divider-vertical {
+  margin: 0 2px;
+}
+
+/* 超窄屏（≤ 360px）：隐藏品牌字标，优先保证全部工具按钮可见 */
+@media (max-width: 360px) {
+  .mode-portrait .ui-toolbar-brand { display: none; }
+  .mode-portrait .ui-toolbar { padding: 0 4px; }
+  .mode-portrait .ui-toolbar-divider-vertical { margin: 0 1px; }
+}
+
+/* 竖屏隐藏底栏（进度/状态由视口内加载卡承担），把高度让给抽屉与工具坞 */
+.mode-portrait .ui-statusbar {
+  display: none !important;
+}
+
+/* ---------- 底部工具坞：限制宽度 + 横向平滑触控滑动（隐藏滚动条） ---------- */
+.mode-portrait .ui-tools-dock:not(.ui-tools-dock-collapsed) {
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + var(--safe-bottom));
+  max-width: calc(100vw - 24px);
+  transform: none;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-behavior: smooth;
+}
+
+.mode-portrait .ui-tools-dock:not(.ui-tools-dock-collapsed)::-webkit-scrollbar {
+  display: none;
+}
+
+.mode-portrait .ui-tools-dock-btn,
+.mode-portrait .ui-tools-dock-toggle {
+  flex: 0 0 auto;
+}
+
+/* ---------- 左侧 SceneTree / 右侧 PropertiesPanel → 底部上滑抽屉 ---------- */
+.mode-portrait .ui-sidebar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  z-index: 400;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  /* 高度跟随内容（规范是 max-h-[55dvh]，不是固定 55dvh）：
+     空树时抽屉只占一条搜索栏，模型加载后最多长到 55dvh 并内部滚动。 */
+  height: auto !important;
+  min-height: 0;
+  max-height: var(--sheet-max-h);
+  margin: 0;
+  padding-bottom: var(--safe-bottom);
+  border: 0;
+  border-top: 1px solid var(--border-main);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-panel);
+  animation: sheetUp 200ms ease-out;
+}
+
+/* 抽屉顶部拖拽指示条（纯视觉，不新增交互） */
+.mode-portrait .ui-sidebar::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  pointer-events: none;
+}
+
+/* 竖屏两个抽屉互斥渲染（见 ThreeViewer），同一层级即可 */
+.mode-portrait .ui-sidebar-left { z-index: 400; }
+.mode-portrait .ui-sidebar-right { z-index: 400; }
+
+.mode-portrait .ui-sidebar-header {
+  height: 36px;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 8px 0 14px;
+  background: transparent;
+  border-bottom: 1px solid var(--border-sub);
+}
+
+.mode-portrait .ui-sidebar-content {
+  background: transparent;
+}
+
+.mode-portrait .ui-sidebar-resize { display: none; }
+
+/* 抽屉打开时，视口内的视图立方与空态卡都要让开底部区域 */
+.mode-portrait .ui-viewcube {
+  top: 8px;
+  right: 8px;
+  transform: scale(0.66);
+  transform-origin: top right;
+}
+
+.mode-portrait .ui-viewport-empty {
+  align-items: flex-start;
+  justify-content: center;
+  padding: 96px 16px 16px;
+}
+
+.mode-portrait .ui-viewport-empty-card {
+  padding: 16px 18px;
+}
+
+/* 抽屉打开时收起底部工具坞，避免被抽屉压住（:has 不可用时仅表现为重叠，不致命） */
+.ui-app-shell.mode-portrait:has(.ui-sidebar) .ui-tools-dock {
+  display: none;
+}
+
+/* ---------- 浮动面板：移动端居中贴底（或贴顶安全区），限宽限高 ---------- */
+/* 面板层必须高于底部抽屉（400），否则抽屉会盖住浮动面板 */
+.mode-portrait .ui-panel-layer { z-index: 500; }
+.mode-landscape .ui-panel-layer { z-index: 400; }
+
+.mode-portrait .ui-panel {
+  position: fixed !important;
+  left: 50% !important;
+  top: auto !important;
+  bottom: calc(12px + var(--safe-bottom)) !important;
+  transform: translateX(-50%) !important;
+  width: calc(100vw - 24px) !important;
+  min-width: 0 !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: var(--panel-mobile-max-h) !important;
+  height: auto !important;
+  border-radius: var(--radius-xl);
+  z-index: 500;
+}
+
+/* 模态面板（确认 / 关于）在竖屏仍居中，但限宽限高 */
+.mode-portrait .ui-panel-modal {
+  top: 50% !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  width: calc(100vw - 32px) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: var(--panel-mobile-max-h) !important;
+  z-index: 10060;
+}
+
+/* 移动端不允许拖拽面板（位置由 CSS 接管），把手显示为默认 */
+.mode-portrait .ui-panel-header { cursor: default !important; }
+.mode-portrait .ui-panel-resize-handle { display: none !important; }
+
+/* 面板正文在移动端更紧凑 */
+.mode-portrait .ui-toolpanel-body { padding: 8px; gap: var(--space-2); }
+
+/* ---------- 设置面板：竖屏把左侧分类栏改为顶部横向可滑动标签 ---------- */
+.mode-portrait .ui-settings-layout {
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+}
+
+.mode-portrait .ui-settings-nav {
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 4px;
+  padding: 0 0 6px;
+  border-right: 0;
+  border-bottom: 1px solid var(--border-main);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mode-portrait .ui-settings-nav::-webkit-scrollbar { display: none; }
+
+.mode-portrait .ui-settings-nav-item {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0 12px;
+}
+
+.mode-portrait .ui-settings-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 设置表单在窄屏改为“标签 + 控件”上下两行，避免控件被挤到只剩几十像素 */
+.mode-portrait .ui-settings-panel-body .ui-form-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  min-height: 0;
+  padding: 2px 0;
+}
+
+.mode-portrait .ui-settings-panel-body .ui-form-value {
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.mode-portrait .ui-settings-panel-body .ui-form-value .ui-select-custom,
+.mode-portrait .ui-settings-panel-body .ui-form-value .ui-input:not(.ui-select-selector) {
+  min-width: 0;
+  width: 100%;
+}
+
+.mode-portrait .ui-settings-panel-body .ui-segmented {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 28px;
+}
+
+/* 浮层（下拉 / 右键菜单 / Toast）不超出安全宽度 */
+.mode-portrait .ui-toolbar-menu,
+.mode-portrait .ui-dropdown-menu {
+  max-width: calc(100vw - 16px);
+}
+
+.mode-portrait .ui-context-menu {
+  max-width: calc(100vw - 16px);
+}
+
+/* 搜索结果里的多列条件在竖屏折行 */
+.mode-portrait .ui-search-condition-row {
+  grid-template-columns: 40px minmax(0, 1fr) 76px minmax(0, 1fr) 22px;
+  gap: 4px;
+}
+
+/* 视口内的坐标浮签让开底部抽屉 */
+.mode-portrait .ui-viewport-hint {
+  left: 8px;
+  bottom: calc(var(--footer-h) + 12px);
+  max-width: calc(100vw - 24px);
+}
+
+/* ============================================================
+ * 移动横屏（宽 < 900px 且 高 < 500px）：
+ * 顶栏 36px；左右侧栏与浮动面板为离边 8px 的半透明圆角悬浮卡
+ * ============================================================ */
+.mode-landscape .ui-toolbar {
+  height: var(--header-h-mobile);
+  min-height: var(--header-h-mobile);
+  padding: 0 8px;
+  gap: 0;
+}
+
+.mode-landscape .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn-label {
+  display: none;
+}
+
+.mode-landscape .ui-toolbar:not(.ui-menubar) .ui-toolbar-btn {
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  padding: 0 6px;
+  min-width: var(--control-h-sm);
+}
+
+.mode-landscape .ui-toolbar-brand {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-caption);
+}
+
+.mode-landscape .ui-toolbar-divider-vertical {
+  height: 12px;
+  min-height: 12px;
+  margin: 0 2px;
+}
+
+.mode-landscape .ui-statusbar {
+  height: 20px;
+  min-height: 20px;
+  max-height: 20px;
+  flex-basis: 20px;
+  padding: 0 8px;
+}
+
+.mode-landscape .ui-tips,
+.mode-landscape .ui-stats-group,
+.mode-landscape .ui-statusbar-coords {
+  display: none !important;
+}
+
+/* 左右半透明毛玻璃悬浮卡：离边 8px、16px 圆角、限高 */
+.mode-landscape .ui-sidebar {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  z-index: 250;
+  display: flex;
+  width: 192px !important;
+  min-width: 0 !important;
+  max-width: 192px !important;
+  max-height: calc(100dvh - var(--header-h-mobile) - 16px);
+  padding: 8px 8px 8px 10px;
+  overflow: hidden;
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-panel);
+}
+
+.mode-landscape .ui-sidebar-left { left: 8px; }
+
+.mode-landscape .ui-sidebar-right {
+  right: 8px;
+  width: 216px !important;
+  max-width: 216px !important;
+}
+
+.mode-landscape .ui-sidebar-header {
+  height: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  padding: 0 2px 0 6px;
+  gap: 4px;
+  background: transparent;
+  border-bottom: 1px solid var(--border-sub);
+  font-size: var(--font-size-caption);
+}
+
+.mode-landscape .ui-sidebar-header > span {
+  flex: 1 1 auto;
+  min-width: 56px;
+  font-size: var(--font-size-caption);
+}
+
+.mode-landscape .ui-sidebar-close {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+}
+
+.mode-landscape .ui-sidebar-content { background: transparent; }
+
+.mode-landscape .ui-sidebar-resize { display: none; }
+
+/* 横屏浮动面板：贴边 8px、限高 calc(100dvh - 52px) */
+.mode-landscape .ui-panel {
+  position: fixed !important;
+  max-width: calc(100vw - 16px) !important;
+  max-height: calc(100dvh - 52px) !important;
+  height: auto !important;
+  border-radius: var(--radius-xl);
+  border-color: var(--border-sub);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.mode-landscape .ui-panel-modal {
+  max-height: calc(100dvh - 52px) !important;
+}
+
+.mode-landscape .ui-panel-header { cursor: default !important; }
+.mode-landscape .ui-panel-resize-handle { display: none !important; }
+
+.mode-landscape .ui-toolpanel-body { padding: 7px; gap: 5px; }
+
+/* 横屏底部工具坞上移，避让 20px 状态栏 */
+.mode-landscape .ui-tools-dock {
+  bottom: 26px;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mode-landscape .ui-tools-dock::-webkit-scrollbar { display: none; }
+
+/* ============================================================
+ * 抽屉进场动画
+ * ============================================================ */
+@keyframes sheetUp {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-portrait .ui-sidebar { animation: none; }
+}
+
+/* ============================================================
+ * 触屏设备：加大最小命中区域，避免误触
+ * ============================================================ */
+@media (pointer: coarse) {
+  .ui-toolbar-btn,
+  .ui-tools-dock-btn,
+  .ui-tools-dock-toggle,
+  .ui-sidebar-close,
+  .ui-panel-close,
+  .ui-statusbar-tag {
+    min-height: 26px;
+  }
+
+  .ui-segmented-item,
+  .ui-select-item,
+  .ui-toolbar-menu-item,
+  .ui-context-menu-item {
+    min-height: 30px;
+  }
+}

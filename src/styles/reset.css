@@ -1,4 +1,5 @@
-/* 基础重置：紧凑工程软件基线，页面本身不滚动，滚动只发生在面板内部容器。 */
+/* 基础重置：紧凑工程软件基线，页面本身不滚动，滚动只发生在面板内部容器。
+ * 与 dxfviewer 保持同一套令牌：全局字栈 / 等宽数字 / 默认光标 / 细胶囊滚动条。 */
 
 *,
 *::before,
@@ -22,20 +23,120 @@ body {
   background: var(--bg-app);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
   text-rendering: optimizeLegibility;
 }
 
 button,
 input,
 select,
-textarea { font: inherit; color: inherit; }
+textarea {
+  font: inherit;
+  color: inherit;
+  font-family: var(--font-sans);
+}
 
-button { cursor: pointer; }
+/* ---------- 全局光标锁定（与 dxfviewer 一致：工程软件里不用手型指针） ---------- */
+#root,
+#root *,
+#root *::before,
+#root *::after,
+.ui-app-shell,
+.ui-app-shell *,
+.ui-app-shell *::before,
+.ui-app-shell *::after {
+  cursor: default !important;
+}
 
-button:disabled,
-input:disabled,
-select:disabled,
-textarea:disabled { cursor: default; }
+/* 文本输入恢复文本光标（否则无法判断可编辑区域） */
+#root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+#root textarea,
+#root [contenteditable="true"],
+.ui-app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+.ui-app-shell textarea,
+.ui-app-shell [contenteditable="true"] {
+  cursor: text !important;
+}
+
+/* 功能性光标必须保留，否则拖拽/缩放失去可发现性与手感 */
+#root .ui-sidebar-resize-left,
+#root .ui-sidebar-resize-right,
+.ui-app-shell .ui-sidebar-resize-left,
+.ui-app-shell .ui-sidebar-resize-right { cursor: col-resize !important; }
+
+#root .ui-panel-resize-e,
+#root .ui-panel-resize-w,
+.ui-app-shell .ui-panel-resize-e,
+.ui-app-shell .ui-panel-resize-w { cursor: ew-resize !important; }
+
+#root .ui-panel-resize-n,
+#root .ui-panel-resize-s,
+.ui-app-shell .ui-panel-resize-n,
+.ui-app-shell .ui-panel-resize-s { cursor: ns-resize !important; }
+
+#root .ui-panel-resize-ne,
+#root .ui-panel-resize-sw,
+.ui-app-shell .ui-panel-resize-ne,
+.ui-app-shell .ui-panel-resize-sw { cursor: nesw-resize !important; }
+
+#root .ui-panel-resize-nw,
+#root .ui-panel-resize-se,
+.ui-app-shell .ui-panel-resize-nw,
+.ui-app-shell .ui-panel-resize-se { cursor: nwse-resize !important; }
+
+#root .ui-cursor-grabbing,
+.ui-app-shell .ui-cursor-grabbing { cursor: grabbing !important; }
+
+#root .ui-cursor-grab,
+.ui-app-shell .ui-cursor-grab { cursor: grab !important; }
+
+#root .ui-cursor-move,
+.ui-app-shell .ui-cursor-move { cursor: move !important; }
+
+/* 可拖拽浮动面板的标题栏：唯一靠光标表达“可拖动”的地方，必须保留 */
+#root .ui-panel-header:not(.ui-panel-header-static),
+.ui-app-shell .ui-panel-header:not(.ui-panel-header-static) { cursor: move !important; }
+
+/* 画布本体：抓取手势（旋转/平移由内部逻辑维护 body 光标） */
+.ui-viewport-canvas { cursor: default !important; }
+
+/* ---------- 文本可选中（覆盖外壳的 user-select: none） ----------
+   外壳为了拖拽体验全局禁用了选中，但输入框/文本域/属性值必须能选中复制，
+   否则用户无法从属性面板复制字段值。 */
+#root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+#root textarea,
+#root [contenteditable="true"],
+.ui-app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+.ui-app-shell textarea,
+.ui-app-shell [contenteditable="true"],
+.ui-app-shell .ui-select-text,
+.ui-app-shell .ui-prop-value,
+.ui-app-shell .ui-prop-key,
+.ui-app-shell .ui-about-meta-value,
+.ui-app-shell .ui-modal-message,
+.ui-app-shell .ui-error-message,
+.ui-app-shell .ui-about-license-content {
+  user-select: text !important;
+}
+
+/* ---------- 数字：等宽数字（坐标 / 测量读数 / 滑块数值 / 统计） ---------- */
+input[type="number"],
+input[type="number"].ui-input,
+.ui-input-number input[type="number"],
+.ui-statusbar-coords,
+.ui-statusbar-metric,
+.ui-slider-value,
+.ui-slider-value-strong,
+.ui-measure-item-value,
+.ui-clip-axis-value,
+.ui-clip-range-hint-value,
+.ui-data-value,
+.ui-result-item-secondary-value,
+.cad-loading-pct,
+.mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
 
 svg { display: block; flex-shrink: 0; }
 
@@ -48,7 +149,7 @@ svg { display: block; flex-shrink: 0; }
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background-color: var(--scrollbar-thumb);
   background-clip: padding-box;
   border-radius: var(--radius-pill);
   border: 1.5px solid transparent;
@@ -59,6 +160,17 @@ svg { display: block; flex-shrink: 0; }
 ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
 
 * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
+
+/* 横向触控滑动（工具坞等）：隐藏滚动条但保留滑动 */
+.ui-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.ui-scroll-x::-webkit-scrollbar { display: none; }
 
 /* ---------- 数字输入：隐藏原生步进器，等宽数字 ---------- */
 input[type="number"],
@@ -80,21 +192,21 @@ input[type="number"].ui-input::-webkit-outer-spin-button,
   margin: 0;
 }
 
-/* ---------- 复选框：13×13 方框，隐藏原生 input ---------- */
+/* ---------- 复选框：16×16 方框、5px 圆角，隐藏原生 input ---------- */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   display: inline-grid;
   place-content: center;
-  flex: 0 0 13px;
-  width: 13px;
-  height: 13px;
-  min-width: 13px;
-  min-height: 13px;
+  flex: 0 0 var(--checkbox-size);
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  min-width: var(--checkbox-size);
+  min-height: var(--checkbox-size);
   margin: 0;
   padding: 0;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xs);
+  border-radius: var(--checkbox-radius);
   background: var(--bg-input);
   cursor: pointer;
   vertical-align: middle;
@@ -103,20 +215,20 @@ input[type="checkbox"] {
 
 input[type="checkbox"]::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   transform: scale(0);
   transform-origin: center;
   transition: transform 90ms ease-in-out;
-  background: var(--bg-chrome);
+  background: var(--accent-contrast);
   clip-path: polygon(14% 44%, 0 60%, 38% 100%, 100% 20%, 84% 6%, 36% 72%);
 }
 
 input[type="checkbox"]:hover:not(:disabled) { border-color: var(--accent); }
 
 input[type="checkbox"]:checked {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
 }
 
 input[type="checkbox"]:checked::before { transform: scale(1); }
@@ -137,47 +249,76 @@ input[type="checkbox"].ui-checkbox-native {
   pointer-events: none;
 }
 
-/* ---------- 滑块 ---------- */
+/* ---------- 原生 select：统一去掉系统外观（禁止出现原生下拉箭头） ---------- */
+select,
+select.ui-input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
+}
+
+select::-ms-expand { display: none; }
+
+/* ---------- 滑块：4px 圆角轨道 + 14px #2563EB 圆拇指 ---------- */
 input[type="range"] {
-  height: 18px;
+  height: 16px;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
   accent-color: var(--accent);
-  cursor: pointer;
+  background: transparent;
+  cursor: default;
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
   height: var(--slider-track-height);
-  border-radius: var(--radius-pill);
-  background: var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--border-main);
 }
 
 input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
   width: var(--slider-thumb-size);
   height: var(--slider-thumb-size);
   margin-top: calc((var(--slider-track-height) - var(--slider-thumb-size)) / 2);
-  border: var(--slider-thumb-border) solid var(--bg-chrome);
+  border: 0;
   border-radius: 50%;
   background: var(--accent);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px var(--accent-focus);
 }
 
 input[type="range"]::-moz-range-track {
   height: var(--slider-track-height);
-  border-radius: var(--radius-pill);
-  background: var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--border-main);
 }
 
 input[type="range"]::-moz-range-thumb {
   width: var(--slider-thumb-size);
   height: var(--slider-thumb-size);
-  border: var(--slider-thumb-border) solid var(--bg-chrome);
+  border: 0;
   border-radius: 50%;
   background: var(--accent);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
 }
+
+input[type="range"]:disabled::-webkit-slider-thumb { background: var(--border-strong); }
 
 /* ---------- 焦点可见 ---------- */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+button:focus { outline: none; }
 
 /* ---------- 文本选中 ---------- */
 ::selection {

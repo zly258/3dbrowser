@@ -37,6 +37,76 @@
   box-shadow: none;
 }
 
+/* 视图立方命中面/棱/角：唯一豁免全局 cursor 锁定的交互控件。
+   必须带 #root 前缀——全局锁是 `#root *`（ID 级）!important，
+   仅靠类选择器压不住，会比出 “悬停无反馈”。 */
+#root .ui-viewcube.ui-viewcube-hit,
+#root .ui-viewcube.ui-viewcube-hit *,
+.ui-app-shell .ui-viewcube.ui-viewcube-hit,
+.ui-app-shell .ui-viewcube.ui-viewcube-hit * {
+  cursor: pointer !important;
+}
+
+/* ---------- 空视口引导：没有任何模型时的卡片（纯视觉，不承载交互） ---------- */
+.ui-viewport-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.ui-viewport-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: min(380px, calc(100vw - 48px));
+  padding: 20px 22px;
+  text-align: center;
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.ui-viewport-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-pill);
+}
+
+.ui-viewport-empty-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.7;
+}
+
+.ui-viewport-empty-title {
+  color: var(--text-main);
+  font-size: var(--font-size-title);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ui-viewport-empty-hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- 视口内轻量提示条：白色胶囊浮签 ---------- */
 .ui-viewport-hint {
   position: absolute;

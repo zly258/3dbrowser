@@ -86,8 +86,8 @@
   padding: 3px;
   color: var(--text-sec);
   background: var(--bg-glass);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border-sub);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-overlay);
@@ -248,12 +248,23 @@
 
 .ui-tools-dock-fab svg { display: block; flex-shrink: 0; }
 
-/* 窄屏：工具坞横向可滚，避免溢出视口 */
-@media (max-width: 720px) {
+/* 窄屏：工具坞横向可滚，避免溢出视口（隐藏滚动条，保留触控滑动） */
+@media (max-width: 768px) {
   .ui-tools-dock:not(.ui-tools-dock-collapsed) {
     max-width: calc(100vw - 24px);
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scroll-behavior: smooth;
   }
+
+  .ui-tools-dock:not(.ui-tools-dock-collapsed)::-webkit-scrollbar { display: none; }
+
+  .ui-tools-dock-btn,
+  .ui-tools-dock-toggle { flex: 0 0 auto; }
 }
 
 
@@ -384,7 +395,7 @@
   overflow: visible;
 }
 
-/* ---------- 下拉菜单：毛玻璃 + 大圆角 + 阴影 ---------- */
+/* ---------- 下拉菜单：毛玻璃 + rounded-2xl（16px）+ 阴影 ---------- */
 .ui-toolbar-menu,
 .ui-dropdown-menu,
 .ui-context-menu {
@@ -399,10 +410,10 @@
   padding: 4px;
   color: var(--text-main);
   background: var(--bg-glass);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border-sub);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-overlay);
   animation: dropdownIn 100ms ease-out;
 }

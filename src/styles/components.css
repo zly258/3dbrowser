@@ -283,16 +283,14 @@ textarea.ui-input {
   resize: vertical;
 }
 
-/* ---------- 原生 select ---------- */
+/* ---------- 原生 select：去掉系统外观与箭头（全站统一用自定义下拉） ---------- */
 .ui-select,
 select.ui-input {
   appearance: none;
   -webkit-appearance: none;
+  -moz-appearance: none;
   padding-right: 22px;
-  background-color: var(--bg-input);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20'%3E%3Cpath fill='%2364748b' d='M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
+  background-image: none;
 }
 
 /* ---------- 自定义下拉 ---------- */
@@ -392,10 +390,10 @@ select.ui-input {
   padding: 4px;
   color: var(--text-main);
   background: var(--bg-glass);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border-sub);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-overlay);
   animation: dropdownIn 100ms ease-out;
 }
@@ -526,15 +524,15 @@ input[type="color"].ui-color-picker-input {
 }
 
 /* ============================================================
- * 复选框：13px 自定义方框
+ * 复选框：16×16px 自定义方框、5px 圆角
  * ============================================================ */
 .ui-checkbox,
 .ui-checkbox-label {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 20px;
+  gap: 6px;
+  min-height: 22px;
   color: var(--text-main);
   font-size: var(--font-size-secondary);
   font-weight: 400;
@@ -555,14 +553,14 @@ input[type="color"].ui-color-picker-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 13px;
-  width: 13px;
-  height: 13px;
-  min-width: 13px;
-  min-height: 13px;
+  flex: 0 0 var(--checkbox-size);
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  min-width: var(--checkbox-size);
+  min-height: var(--checkbox-size);
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xs);
+  border-radius: var(--checkbox-radius);
   color: var(--accent-contrast);
   transition: background-color 120ms ease, border-color 120ms ease;
 }
@@ -576,8 +574,8 @@ input[type="color"].ui-color-picker-input {
 }
 
 .ui-checkbox-icon {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   stroke-width: 3;
   color: var(--accent-contrast);
   fill: none;
@@ -694,7 +692,7 @@ input[type="color"].ui-color-picker-input {
   top: 50%;
   margin-top: calc(var(--slider-track-height) / -2);
   height: var(--slider-track-height);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--border-sub);
 }
 
@@ -704,7 +702,7 @@ input[type="color"].ui-color-picker-input {
   top: 50%;
   margin-top: calc(var(--slider-track-height) / -2);
   height: var(--slider-track-height);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--accent);
   pointer-events: none;
 }
@@ -824,15 +822,15 @@ input[type="color"].ui-color-picker-input {
 }
 
 .ui-tree-node .ui-checkbox {
-  flex: 0 0 13px;
-  width: 13px;
-  min-width: 13px;
-  margin: 0 5px 0 0;
+  flex: 0 0 var(--checkbox-size);
+  width: var(--checkbox-size);
+  min-width: var(--checkbox-size);
+  margin: 0 6px 0 0;
   padding: 0;
   min-height: 0;
 }
 
-.ui-tree-node .ui-checkbox-box { flex: 0 0 13px; }
+.ui-tree-node .ui-checkbox-box { flex: 0 0 var(--checkbox-size); }
 
 .ui-tree-node .ui-tree-label,
 .ui-tree-node .ui-node-label,

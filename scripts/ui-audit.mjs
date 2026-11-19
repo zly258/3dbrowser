@@ -26,11 +26,12 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-const Z_LADDER = new Set([0, 6, 10, 20, 25, 50, 60, 100, 200, 250, 400, 500, 1000, 1200, 8800, 8900, 9000, 10050, 10060, 100000, 100001]);
-const FS_LADDER = new Set([10.5, 11, 11.5, 12, 12.5, 13, 13.5, 15, 16, 18, 21, 22, 56]);
+const Z_LADDER = new Set([0, 6, 10, 20, 25, 50, 60, 100, 200, 250, 400, 500, 1000, 1200, 8800, 8900, 9000, 10050, 10060, 100000, 100001]);const FS_LADDER = new Set([10.5, 11, 11.5, 12, 12.5, 13, 13.5, 15, 16, 18, 21, 22, 56]);
 const RADIUS_LADDER = new Set([
-  '0', '2px', '3px', '4px', '6px', '8px', '10px', '12px', '16px', '50%', '999px',
-  'var(--radius)', 'var(--radius-lg)', 'var(--radius-xl)', 'var(--radius-xs)', 'var(--radius-sm)', 'var(--radius-md)', 'var(--radius-pill)'
+  '0', '2px', '3px', '4px', '5px', '6px', '8px', '10px', '12px', '16px', '50%', '999px',
+  'var(--radius)', 'var(--radius-lg)', 'var(--radius-xl)', 'var(--radius-2xl)',
+  'var(--radius-xs)', 'var(--radius-sm)', 'var(--radius-md)', 'var(--radius-pill)',
+  'var(--checkbox-radius)', 'var(--radius-xl)var(--radius-xl)00'
 ]);
 
 const DERIVED_HEX = new Set([
@@ -66,11 +67,12 @@ const CONTRAST_PAIRS = [
   ['warn on warn-soft', '#b45309', '#fffbeb'],
   ['text-muted on white (11px)', '#5b6472', '#ffffff'],
   /* 暗色主题 */
-  ['dark: text-main on bg-app', '#f1f5f9', '#0f172a'],
-  ['dark: text-sec on bg-panel', '#cbd5e1', '#1e293b'],
-  ['dark: text-muted on bg-panel', '#94a3b8', '#1e293b'],
-  ['dark: text-muted on bg-band', '#94a3b8', '#243146'],
-  ['dark: accent on accent-soft', '#60a5fa', '#1c3557'],
+  ['dark: text-main on bg-app', '#f1f5f9', '#141619'],
+  ['dark: text-sec on bg-panel', '#c7cdd6', '#1c1f24'],
+  ['dark: text-muted on bg-panel', '#949dab', '#1c1f24'],
+  ['dark: text-muted on bg-band', '#949dab', '#2a2e37'],
+  ['dark: accent on bg-panel', '#3f85f6', '#1c1f24'],
+  ['dark: accent on accent-soft', '#3f85f6', '#121c2e'],
   ['dark: white on accent-solid', '#ffffff', '#2563eb'],
   ['dark: danger on danger-soft', '#f87171', '#3b1a1a'],
   ['dark: success on success-soft', '#4ade80', '#12301f'],

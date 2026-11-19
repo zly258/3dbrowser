@@ -1,6 +1,6 @@
 /*
  * 浮动面板（工具面板）与面板内通用布局 — MD3 卡片语言
- * 头 40px，内容面 --bg-panel，12px 大圆角（模态 16px），overlay 阴影。
+ * 头 40px，毛玻璃内容面（blur 12px），rounded-2xl（16px），overlay 阴影。
  * z-index 200（面板层），模态面板 10050 由遮罩层承担。
  */
 
@@ -17,9 +17,11 @@
   max-height: calc(100% - 16px);
   overflow: hidden;
   color: var(--text-main);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius-lg);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-panel);
   transform: translate(0, 0);
   backface-visibility: hidden;
@@ -27,9 +29,11 @@
 
 .ui-panel-modal {
   z-index: var(--z-modal);
-  border-radius: var(--radius-xl);
-  border-color: var(--border-main);
-  background: var(--bg-panel);
+  border-radius: var(--radius-2xl);
+  border-color: var(--border-sub);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--shadow-overlay);
   animation: dialogIn 120ms ease-out;
 }
@@ -44,7 +48,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--bg-panel);
+  background: transparent;
   border-bottom: 1px solid var(--border-sub);
   cursor: move;
   user-select: none;
@@ -74,7 +78,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-panel);
+  background: transparent;
 }
 
 /* ---------- 缩放把手 ---------- */
@@ -114,7 +118,7 @@
   padding: 8px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--bg-panel);
+  background: transparent;
   scrollbar-gutter: stable;
 }
 
@@ -249,10 +253,10 @@
   font-weight: 600;
 }
 
-/* ---------- 分区卡片 ---------- */
+/* ---------- 分区卡片（卡片浅底 #F8FAFC） ---------- */
 .ui-panel-section {
   padding: 8px;
-  background: var(--bg-panel);
+  background: var(--bg-sunken);
   border: 1px solid var(--border-sub);
   border-radius: var(--radius-lg);
 }
@@ -1033,7 +1037,7 @@
 
 .ui-clip-axis-row {
   display: grid;
-  grid-template-columns: 13px 16px minmax(0, 1fr) 66px;
+  grid-template-columns: var(--checkbox-size) 16px minmax(0, 1fr) 66px;
   align-items: center;
   gap: var(--space-2);
   min-height: 26px;

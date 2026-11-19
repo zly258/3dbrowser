@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#F8FAFC">
     <title>3D Browser</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
     <style>
@@ -15,8 +16,9 @@
             --text-main: #1E293B;
             --text-muted: #475569;
             --accent: #2563EB;
+            --danger: #B3261E;
             --radius-card: 16px;
-            --font-sans: "Nunito", "Noto Sans SC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+            --font-sans: "Nunito", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei UI", sans-serif;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; }
@@ -53,7 +55,7 @@
             flex-direction: column;
             align-items: center;
             gap: 10px;
-            width: min(280px, calc(100vw - 32px));
+            width: min(340px, calc(100vw - 32px));
             padding: 18px 16px;
             background: var(--bg-panel);
             border: 1px solid var(--border-strong);
@@ -78,20 +80,141 @@
             letter-spacing: 0;
             text-align: center;
         }
+        .boot-error {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+            text-align: left;
+        }
+        .boot-error-visible { display: flex; }
+        .boot-error-title {
+            color: var(--danger);
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .boot-error-detail {
+            max-height: 120px;
+            overflow: auto;
+            padding: 6px 8px;
+            background: #F8FAFC;
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 11px;
+            line-height: 1.5;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .boot-error-actions { display: flex; justify-content: flex-end; }
+        .boot-error-btn {
+            height: 26px;
+            padding: 0 12px;
+            color: #FFFFFF;
+            background: var(--accent);
+            border: 0;
+            border-radius: 999px;
+            font: inherit;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .boot-noscript {
+            padding: 16px;
+            color: var(--text-main);
+            font-size: 12px;
+            text-align: center;
+        }
         @media (prefers-reduced-motion: reduce) {
             .spinner { animation-duration: 1.6s; }
         }
     </style>
+    <script>
+        /* 启动兜底（必须在模块脚本之前注册）：
+           静态资源过期 / 模块 404 / 初始化异常时给出可诊断的提示，
+           而不是永远停在 “Starting…” 的浅灰空白页。 */
+        (function () {
+            var state = { mounted: false, reported: false, message: "" };
+
+            function render() {
+                var box = document.getElementById("boot-error");
+                if (!box) return;
+                var detail = document.getElementById("boot-error-detail");
+                var spinner = document.getElementById("boot-spinner");
+                var text = document.getElementById("boot-text");
+                if (spinner) spinner.style.display = "none";
+                if (text) text.textContent = "3D Browser could not start";
+                if (detail) detail.textContent = state.message || "Unknown error";
+                box.classList.add("boot-error-visible");
+            }
+
+            window.__3DBOOT__ = {
+                markMounted: function () { state.mounted = true; },
+                fail: function (message) {
+                    if (state.mounted || state.reported) return;
+                    state.reported = true;
+                    state.message = String(message || "Unknown error");
+                    if (document.readyState !== "loading") render();
+                }
+            };
+
+            window.addEventListener("error", function (event) {
+                var target = event && event.target;
+                if (target && target !== window && (target.tagName === "SCRIPT" || target.tagName === "LINK")) {
+                    window.__3DBOOT__.fail("Failed to load " + (target.src || target.href || "resource"));
+                    return;
+                }
+                if (event && event.message) {
+                    window.__3DBOOT__.fail(event.message);
+                }
+            }, true);
+
+            window.addEventListener("unhandledrejection", function (event) {
+                var reason = event && event.reason;
+                window.__3DBOOT__.fail((reason && (reason.message || reason)) || "Unhandled promise rejection");
+            });
+
+            document.addEventListener("DOMContentLoaded", function () {
+                var reloadBtn = document.getElementById("boot-error-reload");
+                if (reloadBtn) {
+                    reloadBtn.addEventListener("click", function () {
+                        window.location.reload();
+                    });
+                }
+                if (state.reported) render();
+            });
+
+            // 看门狗：模块长时间没有挂载时提示，而不是无限转圈
+            setTimeout(function () {
+                if (!state.mounted) {
+                    window.__3DBOOT__.fail(
+                        "The application did not finish starting. The deployed bundle may be stale — reload the page. " +
+                        "If it keeps happening, open the browser console for details."
+                    );
+                }
+            }, 20000);
+        })();
+    </script>
 </head>
 <body>
     <div id="root">
         <div class="loading-container">
             <div class="loading-card">
-                <div class="spinner"></div>
-                <div class="loading-text">Starting…</div>
+                <div class="spinner" id="boot-spinner"></div>
+                <div class="loading-text" id="boot-text">Starting…</div>
+                <div class="boot-error" id="boot-error" role="alert">
+                    <div class="boot-error-title">Failed to start</div>
+                    <div class="boot-error-detail" id="boot-error-detail"></div>
+                    <div class="boot-error-actions">
+                        <button type="button" class="boot-error-btn" id="boot-error-reload">Reload</button>
+                    </div>
+                </div>
+                <noscript>
+                    <div class="boot-noscript">This viewer needs JavaScript enabled.</div>
+                </noscript>
             </div>
         </div>
     </div>
+
     <script type="module" src="./main.tsx"></script>
 </body>
 </html>

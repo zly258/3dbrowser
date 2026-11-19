@@ -42,6 +42,7 @@ import { usePropertySearch } from "./hooks/usePropertySearch";
 import { useClashCheck } from "./hooks/useClashCheck";
 import { useClashSummary } from "./hooks/useClashSummary";
 import { useFocusInView } from "./hooks/useFocusInView";
+import { useViewportMode } from "./hooks/useViewportMode";
 
 const IS_DEV = typeof window !== "undefined" && (
     window.location.hostname === "localhost" ||
@@ -133,6 +134,11 @@ export const ThreeViewer = ({
     }, [defaultLang, setLang]);
 
     const t = useCallback((key: string) => getTranslation(lang, key), [lang]);
+
+    // 三端模式：桌面 / 移动竖屏 / 移动横屏。只切换布局类，不重建视口，
+    // 因此在手机旋转时 WebGL 上下文、相机与选择状态都保持不变。
+    const viewportMode = useViewportMode();
+    const isMobileSheet = viewportMode === "portrait";
 
     // 全站禁用原生右键菜单与常见鼠标手势（保留应用内自定义右键逻辑）
     useEffect(() => {
@@ -257,6 +263,18 @@ export const ThreeViewer = ({
         serializer: (value) => String(value),
         parser: (raw) => raw === 'true'
     });
+
+    // 移动竖屏：结构树与属性面板都转成底部上滑抽屉，同一时刻只保留一个，
+    // 否则两个抽屉会叠在一起互相遮挡。桌面/横屏行为保持不变。
+    const setOutlineVisible = useCallback((next: boolean) => {
+        setShowOutline(next);
+        if (next && isMobileSheet) setShowProps(false);
+    }, [isMobileSheet, setShowOutline, setShowProps]);
+
+    const setPropsVisible = useCallback((next: boolean) => {
+        setShowProps(next);
+        if (next && isMobileSheet) setShowOutline(false);
+    }, [isMobileSheet, setShowOutline, setShowProps]);
 
     // 工具栏位置（顶栏 / 底部居中工具坞）与工具坞收起状态、是否显示文字标签
     const [toolsDock, setToolsDock] = usePersistentState<'top' | 'bottom'>('viewer_tools_dock', 'top');
@@ -1145,7 +1163,7 @@ export const ThreeViewer = ({
     return (
         <ErrorBoundary t={t} theme={theme}>
             <div
-                className={`ui-container ui-app-shell font-medium`}
+                className={`ui-container ui-app-shell font-medium mode-${viewportMode}`}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
             >
@@ -1165,9 +1183,9 @@ export const ThreeViewer = ({
                  activeTool={activeTool}
                  setActiveTool={setActiveTool}
                  showOutline={showOutline}
-                 setShowOutline={setShowOutline}
-                 showProps={showProps}
-                 setShowProps={setShowProps}
+                 setShowOutline={setOutlineVisible}
+                 showProps={showProps && (!isMobileSheet || !showOutline)}
+                 setShowProps={setPropsVisible}
                  showStats={showStats}
                  setShowStats={setShowStats}
                  sceneMgr={sceneMgr.current}
@@ -1202,7 +1220,7 @@ export const ThreeViewer = ({
                             <span title={t("interface_outline")}>{t("interface_outline")}</span>
                             <button 
                                 className="ui-sidebar-close"
-                                onClick={() => setShowOutline(false)} 
+                                onClick={() => setOutlineVisible(false)} 
                                 title={t("panel_close")}
                                 aria-label={t("panel_close")}
                             >
@@ -1258,6 +1276,19 @@ export const ThreeViewer = ({
 
                     
                     <ViewCube sceneMgr={mgrInstance} theme={theme} lang={lang} />
+
+                    {/* 空视口引导：没有任何模型时避免整片浅灰被误判为白屏 */}
+                    {!hasModels && !loading && (
+                        <div className="ui-viewport-empty" aria-hidden="true">
+                            <div className="ui-viewport-empty-card">
+                                <span className="ui-viewport-empty-icon">
+                                    <IconBox width={22} height={22} />
+                                </span>
+                                <span className="ui-viewport-empty-title">{t("viewport_empty_title")}</span>
+                                <span className="ui-viewport-empty-hint">{t("viewport_empty_hint")}</span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* 右键菜单 */}
                     {contextMenu.visible && (
@@ -1476,14 +1507,14 @@ export const ThreeViewer = ({
                     </div>
                 </div>
 
-                {/* Right Sidebar: Properties */}
-                {showProps && (
+                {/* Right Sidebar: Properties（竖屏下与结构树抽屉互斥，结构树优先） */}
+                {showProps && (!isMobileSheet || !showOutline) && (
                     <div className="ui-sidebar ui-sidebar-right" style={{ width: `${rightWidth}px` }}>
                         <div className="ui-sidebar-header">
                             <span title={t("interface_props")}>{t("interface_props")}</span>
                             <button
                                 className="ui-sidebar-close"
-                                onClick={() => setShowProps(false)} 
+                                onClick={() => setPropsVisible(false)} 
                                 title={t("panel_close")}
                                 aria-label={t("panel_close")}
                             >

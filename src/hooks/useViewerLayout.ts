@@ -124,10 +124,13 @@ export function useViewerLayout(options: UseViewerLayoutOptions) {
         };
     }, [flushPendingWidths]);
 
-    // 窗口变小时重新钳制，避免“右侧栏 428px 把视口压到 350px”这类问题
+    // 窗口变小时重新钳制，避免“右侧栏 428px 把视口压到 350px”这类问题。
+    // 注意：窄窗口（移动端抽屉/悬浮卡接管布局）不参与钳制，
+    // 否则一次手机访问就会把持久化的桌面宽度永久压到最小值。
     useEffect(() => {
         const handleResize = () => {
             const width = window.innerWidth;
+            if (width < 768) return;
             const maxLeft = Math.min(LEFT_MAX, Math.max(LEFT_MIN, Math.floor(width * 0.28)));
             const maxRight = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, Math.floor(width * 0.32)));
             setLeftWidth((value) => clampWidth(value, LEFT_MIN, maxLeft));
