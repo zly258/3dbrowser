@@ -114,6 +114,7 @@ import {
     applyClearMeasurementPreview,
     applyFinalizeMeasurement,
     applyHighlightMeasurement,
+    applyMeasureLabelScreenSize,
     applyPickMeasurement,
     applyUpdateMeasureHover,
     applyUpdateMeasurePreview
@@ -1070,6 +1071,15 @@ export class SceneManager {
     }
 
     private renderFrame() {
+        // 测量标签固定屏幕像素尺寸：正交相机下 sprite.scale 会随 zoom 放大，
+        // 每帧按当前投影矩阵与视口高度反算一次（标签数量极少，开销可忽略）。
+        if (this.measureRecords.size > 0) {
+            applyMeasureLabelScreenSize({
+                canvas: this.canvas,
+                camera: this.camera,
+                measureRecords: this.measureRecords
+            });
+        }
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -5987,11 +5997,27 @@ export class SceneManager {
         );
     }
 
+    /** 释放一条测量的几何 / 材质 / 标签贴图（共享的 dotTexture 不能释放） */
+    private disposeMeasuredGroup(group: THREE.Object3D) {
+        group.traverse((child) => {
+            const node = child as THREE.Mesh & { material?: any; geometry?: THREE.BufferGeometry };
+            node.geometry?.dispose?.();
+            const material = node.material;
+            if (!material) return;
+            const list: any[] = Array.isArray(material) ? material : [material];
+            list.forEach((item) => {
+                if (item?.map && item.map !== this.dotTexture) item.map.dispose?.();
+                item?.dispose?.();
+            });
+        });
+    }
+
     removeMeasurement(id: string) {
         if (this.measureRecords.has(id)) {
             const record = this.measureRecords.get(id);
             if (record) {
                 this.measureGroup.remove(record.group);
+                this.disposeMeasuredGroup(record.group);
                 this.measureRecords.delete(id);
                 if (this.onMeasureUpdate) {
                     this.onMeasureUpdate(Array.from(this.measureRecords.values()));
@@ -6004,6 +6030,7 @@ export class SceneManager {
     clearAllMeasurements() {
         this.measureRecords.forEach(record => {
             this.measureGroup.remove(record.group);
+            this.disposeMeasuredGroup(record.group);
         });
         this.measureRecords.clear();
         this.clearMeasurementPreview();

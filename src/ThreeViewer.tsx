@@ -1194,6 +1194,7 @@ export const ThreeViewer = ({
                  onOpenAbout={() => { setActiveTool('none'); setIsAboutOpen(true); }}
                  hasModels={hasModels}
                  toolsDock={toolsDock}
+                 loadingProgress={loading ? progress : null}
              />
 
              {/* 底部居中工具坞：设置「工具栏位置 = 底部居中」时启用，顶栏不再重复显示工具 */}

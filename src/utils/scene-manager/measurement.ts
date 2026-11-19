@@ -55,62 +55,148 @@ function createLine(points: THREE.Vector3[], parent: THREE.Object3D) {
     parent.add(line);
 }
 
-function createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
+/** 测量标注在屏幕上的固定高度（CSS px）。与相机 zoom 无关。 */
+export const MEASURE_LABEL_HEIGHT_PX = 22;
+
+/** 测量线 / 端点 / 标签边框共用色（保持与 3D 线段一致） */
+const MEASURE_COLOR = 0xff0000;
+const MEASURE_COLOR_HIGHLIGHT = 0x00e676;
+const MEASURE_BORDER = "#ff0000";
+const MEASURE_BORDER_HIGHLIGHT = "#00e676";
+
+/**
+ * 绘制标签贴图。
+ * 画布按约 4 倍于最终显示尺寸绘制，再由 sprite 降采样，保证在高 DPI 与缩放下都清晰。
+ */
+function buildLabelCanvas(text: string, highlighted: boolean): HTMLCanvasElement | null {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
-    if (!context) return new THREE.Sprite();
+    if (!context) return null;
 
-    const fontSize = 48;
-    const padding = 24;
-    context.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
-    const textWidth = context.measureText(text).width;
+    const fontSize = 56;
+    const paddingX = 22;
+    const paddingY = 18;
+    const border = 3;
+    const font = `600 ${fontSize}px 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', sans-serif`;
 
-    canvas.width = textWidth + padding * 2;
-    canvas.height = fontSize + padding;
+    context.font = font;
+    const textWidth = Math.ceil(context.measureText(text).width);
 
-    context.shadowColor = "rgba(0, 0, 0, 0.5)";
-    context.shadowBlur = 10;
-    context.fillStyle = "rgba(30, 30, 30, 0.9)";
+    canvas.width = Math.max(1, Math.ceil(textWidth + paddingX * 2));
+    canvas.height = Math.max(1, Math.ceil(fontSize + paddingY));
 
-    const radius = 8;
-    const roundedContext = context as CanvasRenderingContext2D & {
-        roundRect?: (x: number, y: number, w: number, h: number, r: number) => void;
-    };
-    if (roundedContext.roundRect) {
-        roundedContext.roundRect(5, 5, canvas.width - 10, canvas.height - 10, radius);
-    } else {
-        context.rect(5, 5, canvas.width - 10, canvas.height - 10);
-    }
-    context.fill();
-
-    context.shadowBlur = 0;
-    context.strokeStyle = "#ff0000";
-    context.lineWidth = 2;
-    context.stroke();
-
-    context.font = `Bold ${fontSize}px "Segoe UI", Arial, sans-serif`;
-    context.fillStyle = "#ffffff";
+    // 重设尺寸会清空上下文状态，需重新设置字体
+    context.font = font;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(text, canvas.width / 2, canvas.height / 2);
 
+    const w = canvas.width;
+    const h = canvas.height;
+    const inset = border / 2 + 1;
+    const radius = 12;
+
+    // 底色胶囊
+    context.beginPath();
+    const rounded = context as CanvasRenderingContext2D & {
+        roundRect?: (x: number, y: number, w: number, h: number, r: number) => void;
+    };
+    if (rounded.roundRect) {
+        rounded.roundRect(inset, inset, w - inset * 2, h - inset * 2, radius);
+    } else {
+        context.rect(inset, inset, w - inset * 2, h - inset * 2);
+    }
+    context.fillStyle = "rgba(24, 27, 33, 0.86)";
+    context.fill();
+    context.lineWidth = border;
+    context.strokeStyle = highlighted ? MEASURE_BORDER_HIGHLIGHT : MEASURE_BORDER;
+    context.stroke();
+
+    // 读数（等宽数字）
+    context.fillStyle = "#ffffff";
+    context.font = font;
+    context.fillText(text, w / 2, h / 2 + 1);
+    return canvas;
+}
+
+/** 为标签 sprite 生成贴图（保留旧贴图的释放） */
+function applyLabelTexture(sprite: THREE.Sprite, text: string, highlighted: boolean) {
+    const canvas = buildLabelCanvas(text, highlighted);
+    if (!canvas) return;
+    const material = sprite.material as THREE.SpriteMaterial;
+    const previous = material.map;
     const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    material.map = texture;
+    material.color.set(0xffffff);
+    material.needsUpdate = true;
+    if (previous) previous.dispose();
+    sprite.userData = {
+        ...(sprite.userData || {}),
+        type: "label",
+        text,
+        highlighted,
+        aspect: canvas.width / canvas.height
+    };
+}
 
+function createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
     const material = new THREE.SpriteMaterial({
-        map: texture,
         depthTest: false,
-        sizeAttenuation: false
+        sizeAttenuation: false,
+        transparent: true
     });
 
     const sprite = new THREE.Sprite(material);
     sprite.position.copy(position);
-    const baseScale = 0.5;
-    sprite.scale.set(baseScale * (canvas.width / canvas.height), baseScale, 1);
     sprite.renderOrder = 1001;
-    sprite.userData = { type: "label" };
+    applyLabelTexture(sprite, text, false);
+    // 初始 scale 只是占位；每帧由 applyMeasureLabelScreenSize 按视口反算，保证固定像素尺寸
+    const aspect = (sprite.userData?.aspect as number) || 1;
+    sprite.scale.set(0.1 * aspect, 0.1, 1);
     return sprite;
+}
+
+/**
+ * 把测量标签的尺寸固定为屏幕像素尺寸。
+ *
+ * 视口用的是正交相机，而 Three.js 的 `sizeAttenuation:false` 只对透视相机生效，
+ * 正交下 sprite.scale 是世界单位、会随 camera.zoom 线性放大。
+ * 因此这里按当前投影矩阵反算 scale：正交下投影 P11 已含 zoom，
+ * 标签 NDC 高度 = P11 * scale.y，故 scale.y = 2 * 目标像素 / (P11 * 视口高度)。
+ */
+export function applyMeasureLabelScreenSize(
+    context: Pick<SceneManagerMeasurementContext, "canvas" | "camera" | "measureRecords">,
+    targetHeightPx: number = MEASURE_LABEL_HEIGHT_PX
+): boolean {
+    if (context.measureRecords.size === 0) return false;
+
+    const canvas = context.canvas;
+    const heightPx = canvas.clientHeight || canvas.height;
+    const projection = (context.camera as THREE.Camera).projectionMatrix;
+    const p11 = projection?.elements?.[5];
+    if (!heightPx || !Number.isFinite(p11) || p11 <= 0) return false;
+
+    const scaleY = (2 * targetHeightPx) / (p11 * heightPx);
+    if (!Number.isFinite(scaleY) || scaleY <= 0) return false;
+
+    let changed = false;
+    context.measureRecords.forEach((record) => {
+        record.group.traverse((child) => {
+            if (!(child instanceof THREE.Sprite)) return;
+            if (child.userData?.type !== "label") return;
+            const aspect = (child.userData.aspect as number) || 1;
+            const nextX = scaleY * aspect;
+            if (Math.abs(child.scale.x - nextX) > 1e-6 || Math.abs(child.scale.y - scaleY) > 1e-6) {
+                child.scale.set(nextX, scaleY, 1);
+                changed = true;
+            }
+        });
+    });
+    return changed;
 }
 
 function clearPreviewVisuals(context: SceneManagerMeasurementContext, state: MeasurementState) {
@@ -253,14 +339,26 @@ export function applyFinalizeMeasurement(
         labelPosition.copy(p1).add(p2).multiplyScalar(0.5);
     } else if (state.measureType === "angle") {
         const [p1, center, p2] = state.currentMeasurePoints;
-        const v1 = p1.clone().sub(center).normalize();
-        const v2 = p2.clone().sub(center).normalize();
+        const arm1 = p1.clone().sub(center);
+        const arm2 = p2.clone().sub(center);
+        const v1 = arm1.clone().normalize();
+        const v2 = arm2.clone().normalize();
         const angle = v1.angleTo(v2) * (180 / Math.PI);
 
         displayValue = `${angle.toFixed(2)}°`;
         value = displayValue;
         createLine(state.currentMeasurePoints, group);
-        labelPosition.copy(center);
+
+        // 让标签沿角平分线外移，避免压在顶点上遮住夹角本身
+        const bisector = v1.clone().add(v2);
+        if (bisector.lengthSq() < 1e-8) {
+            // 接近 180° 时角平分线退化，退回到垂线方向
+            bisector.copy(v1).cross(new THREE.Vector3(0, 0, 1));
+            if (bisector.lengthSq() < 1e-8) bisector.copy(v1);
+        }
+        const armLength = Math.min(arm1.length(), arm2.length());
+        const offset = Math.max(1e-6, armLength * 0.22);
+        labelPosition.copy(center).addScaledVector(bisector.normalize(), offset);
     } else {
         const [point] = state.currentMeasurePoints;
         displayValue = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`;
@@ -277,6 +375,9 @@ export function applyFinalizeMeasurement(
         group,
         modelUuid: state.currentMeasureModelUuid || undefined
     });
+
+    // 新建后立即校准一次，避免首帧出现错误尺寸（后续每帧由 renderFrame 维持）
+    applyMeasureLabelScreenSize(context);
 
     const cleared = applyClearMeasurementPreview(
         {
@@ -347,7 +448,7 @@ export function applyHighlightMeasurement(
 ): MeasurementResult {
     context.measureRecords.forEach((record, recordId) => {
         const isHighlighted = recordId === id;
-        const color = isHighlighted ? 0x00ff00 : 0xff0000;
+        const color = isHighlighted ? MEASURE_COLOR_HIGHLIGHT : MEASURE_COLOR;
 
         record.group.traverse((child) => {
             if (child instanceof THREE.Line || child instanceof THREE.LineLoop) {
@@ -355,7 +456,18 @@ export function applyHighlightMeasurement(
             } else if (child instanceof THREE.Points) {
                 (child.material as THREE.PointsMaterial).color.set(color);
             } else if (child instanceof THREE.Sprite) {
-                (child.material as THREE.SpriteMaterial).color.set(isHighlighted ? 0x00ff00 : 0xffffff);
+                // 标签只换边框颜色，不再把整块贴图乘成绿色（会把底色与文字一起染绿）
+                if (child.userData?.type === "label") {
+                    const text = String(child.userData.text ?? "");
+                    const wasHighlighted = child.userData.highlighted === true;
+                    if (text && wasHighlighted !== isHighlighted) {
+                        applyLabelTexture(child, text, isHighlighted);
+                    }
+                } else {
+                    (child.material as THREE.SpriteMaterial).color.set(
+                        isHighlighted ? MEASURE_COLOR_HIGHLIGHT : 0xffffff
+                    );
+                }
             } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
                 child.material.color.set(color);
             } else if (child instanceof THREE.Box3Helper) {
@@ -363,6 +475,9 @@ export function applyHighlightMeasurement(
             }
         });
     });
+
+    // 重建贴图后需要重新校准屏幕尺寸
+    applyMeasureLabelScreenSize(context);
 
     return {
         state: context.state,

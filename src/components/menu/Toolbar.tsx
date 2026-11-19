@@ -310,6 +310,20 @@ export const Toolbar: React.FC<ToolbarProps> = (props) => {
                     />
                 </div>
             )}
+
+            {/* ---------- 顶栏底边细进度条：打开文件时始终可见 ---------- */}
+            {typeof props.loadingProgress === "number" && (
+                <div
+                    className="ui-toolbar-progress"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(props.loadingProgress)}
+                    aria-label={t("loading_resources")}
+                >
+                    <i style={{ width: `${Math.max(0, Math.min(100, props.loadingProgress))}%` }} />
+                </div>
+            )}
         </div>
     );
 };

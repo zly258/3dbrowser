@@ -53,4 +53,6 @@ export interface ToolbarProps extends BaseMenuProps {
     openScreenshotPanel?: () => void;
     /** 工具栏位置：top = 顶栏「工具」下拉（默认）；bottom = 底部居中工具坞 */
     toolsDock?: "top" | "bottom";
+    /** 文件解析/加载进度（0–100）；有数值时在顶栏底边显示细进度条，null/undefined 表示不在加载 */
+    loadingProgress?: number | null;
 }

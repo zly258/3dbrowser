@@ -386,15 +386,16 @@
   position: relative;
   height: 6px;
   overflow: hidden;
-  background: var(--bg-band);
-  border-radius: var(--radius-pill);
+  background: var(--border-main);
+  border-radius: var(--radius-xs);
 }
 
 .cad-loading-track > i {
   display: block;
   height: 100%;
+  min-width: 4px;
   background: var(--accent);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   transition: width 150ms linear;
 }
 
