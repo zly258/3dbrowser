@@ -1,6 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FloatingPanel } from "./FloatingPanel";
 import { Button } from "../common";
+import { IconCopy } from "../../theme/Icons";
+
 const Icons = {
   Trash: () => (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -13,6 +15,39 @@ const Icons = {
     </svg>
   ),
 };
+
+/** 复制到剪贴板；非安全上下文回退到 execCommand */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // 忽略，走回退
+  }
+  try {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "true");
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+const CopiedMark = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
 
 interface MeasurePanelProps {
   t: any;
@@ -62,7 +97,28 @@ const MeasureItem: React.FC<{
   isHighlighted: boolean;
   onHighlight: () => void;
   onDelete: () => void;
-}> = ({ item, isHighlighted, onHighlight, onDelete }) => {
+  copyLabel: string;
+  copiedLabel: string;
+}> = ({ item, isHighlighted, onHighlight, onDelete, copyLabel, copiedLabel }) => {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  }, []);
+
+  const handleCopy = useCallback(async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    const ok = await copyText(String(item.val ?? ""));
+    if (!ok) return;
+    setCopied(true);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      setCopied(false);
+    }, 1200);
+  }, [item.val]);
+
   return (
     <div
       onClick={onHighlight}
@@ -71,15 +127,25 @@ const MeasureItem: React.FC<{
       <span className="ui-measure-item-value">
         {item.val}
       </span>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        className="ui-btn ui-btn-icon-sm ui-btn-ghost ui-measure-item-delete"
-      >
-        <Icons.Close />
-      </button>
+      <div className="ui-measure-item-actions">
+        <button
+          onClick={handleCopy}
+          className={`ui-btn ui-btn-icon-sm ui-btn-ghost ui-measure-item-copy${copied ? " is-copied" : ""}`}
+          title={copied ? copiedLabel : copyLabel}
+          aria-label={copied ? copiedLabel : copyLabel}
+        >
+          {copied ? <span className="ui-measure-item-copied-mark" aria-hidden="true"><CopiedMark /></span> : <IconCopy size={12} />}
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="ui-btn ui-btn-icon-sm ui-btn-ghost ui-measure-item-delete"
+        >
+          <Icons.Close />
+        </button>
+      </div>
     </div>
   );
 };
@@ -94,6 +160,13 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
   measureHistory, onDelete, onClear, onClose,
   highlightedId, onHighlight
 }) => {
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  // 测量被清空/关闭时收起二次确认，避免残留
+  useEffect(() => {
+    if (measureHistory.length === 0) setConfirmClear(false);
+  }, [measureHistory.length]);
+
   const groupedHistory = useMemo(() => {
     const groups: Record<string, any[]> = {
       'dist': [],
@@ -168,9 +241,9 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
             </button>
           </div>
           <ClearButton
-            onClick={onClear}
+            onClick={() => setConfirmClear(true)}
             disabled={measureHistory.length === 0}
-            title={t("search_clear")}
+            title={t("measure_clear")}
           />
         </div>
 
@@ -178,6 +251,26 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
           <span>{getInstructionText()}</span>
           {measureType !== 'none' && <span className="ui-toolpanel-caption-muted">{t("esc_exit")}</span>}
         </div>
+
+        {confirmClear && measureHistory.length > 0 && (
+          <div className="ui-measure-confirm" role="alertdialog" aria-label={t("measure_clear_confirm")}>
+            <div className="ui-measure-confirm-text">{t("measure_clear_confirm")}</div>
+            <div className="ui-measure-confirm-actions">
+              <Button variant="default" onClick={() => setConfirmClear(false)}>
+                {t("btn_cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setConfirmClear(false);
+                  onClear();
+                }}
+              >
+                {t("measure_clear")}
+              </Button>
+            </div>
+          </div>
+        )}
 
         <DataPanel empty={measureHistory.length === 0} emptyText={t("no_measurements")}>
           {measureHistory.length > 0 && (
@@ -194,6 +287,8 @@ export const MeasurePanel: React.FC<MeasurePanelProps> = ({
                         isHighlighted={highlightedId === item.id}
                         onHighlight={() => onHighlight?.(item.id)}
                         onDelete={() => onDelete(item.id)}
+                        copyLabel={t("measure_copy_value")}
+                        copiedLabel={t("measure_copied")}
                       />
                     ))}
                   </div>

@@ -953,6 +953,69 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 行内操作区：复制 + 删除，默认低对比，hover 行时提亮 */
+.ui-measure-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.ui-measure-item-copy {
+  flex: 0 0 auto;
+  opacity: 0;
+  color: var(--text-muted);
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.ui-measure-item:hover .ui-measure-item-copy,
+.ui-measure-item.selected .ui-measure-item-copy,
+.ui-measure-item-copy:focus-visible {
+  opacity: 1;
+}
+
+.ui-measure-item-copy:hover:not(:disabled) {
+  background: var(--bg-hover-strong);
+  color: var(--text-main);
+}
+
+.ui-measure-item-copy.is-copied {
+  opacity: 1;
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.ui-measure-item-copied-mark {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+/* 清空全部测量前的内联二次确认 */
+.ui-measure-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-lg);
+}
+
+.ui-measure-confirm-text {
+  color: var(--danger);
+  font-size: var(--font-size-secondary);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ui-measure-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 /* 行内删除图标按钮：透明底 + 次要色，hover 转危险色（纯图标按钮契约） */
 .ui-measure-item-delete {
   flex: 0 0 auto;

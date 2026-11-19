@@ -176,26 +176,103 @@ export function applyMeasureLabelScreenSize(
 
     const canvas = context.canvas;
     const heightPx = canvas.clientHeight || canvas.height;
-    const projection = (context.camera as THREE.Camera).projectionMatrix;
+    const widthPx = canvas.clientWidth || canvas.width;
+    const camera = context.camera as THREE.Camera;
+    const projection = camera.projectionMatrix;
     const p11 = projection?.elements?.[5];
-    if (!heightPx || !Number.isFinite(p11) || p11 <= 0) return false;
+    if (!heightPx || !widthPx || !Number.isFinite(p11) || p11 <= 0) return false;
 
     const scaleY = (2 * targetHeightPx) / (p11 * heightPx);
     if (!Number.isFinite(scaleY) || scaleY <= 0) return false;
 
+    // 投影需要最新的相机矩阵：这里在渲染前被调用，renderer 尚未更新
+    camera.updateMatrixWorld();
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+
+    const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
+    const worldPerPxY = 2 / (p11 * heightPx);
+
+    interface LabelEntry {
+        sprite: THREE.Sprite;
+        base: THREE.Vector3;
+        sx: number;
+        sy: number;
+        w: number;
+        h: number;
+        offY: number;
+    }
+
+    const entries: LabelEntry[] = [];
     let changed = false;
+
     context.measureRecords.forEach((record) => {
         record.group.traverse((child) => {
             if (!(child instanceof THREE.Sprite)) return;
             if (child.userData?.type !== "label") return;
+
             const aspect = (child.userData.aspect as number) || 1;
             const nextX = scaleY * aspect;
             if (Math.abs(child.scale.x - nextX) > 1e-6 || Math.abs(child.scale.y - scaleY) > 1e-6) {
                 child.scale.set(nextX, scaleY, 1);
                 changed = true;
             }
+
+            // 标签锚点存在 userData.base，屏幕避让偏移不累积
+            const base: THREE.Vector3 =
+                child.userData.base instanceof THREE.Vector3
+                    ? child.userData.base
+                    : child.position.clone();
+            if (!(child.userData.base instanceof THREE.Vector3)) {
+                child.userData.base = base.clone();
+            }
+
+            const ndc = base.clone().project(camera);
+            entries.push({
+                sprite: child,
+                base,
+                sx: (ndc.x * 0.5 + 0.5) * widthPx,
+                sy: (-ndc.y * 0.5 + 0.5) * heightPx,
+                w: targetHeightPx * aspect,
+                h: targetHeightPx,
+                offY: 0
+            });
         });
     });
+
+    // 简单屏幕空间避让：从上往下摆放，与已放置标签重叠时向下让位
+    entries.sort((a, b) => (a.sy - b.sy) || (a.sx - b.sx));
+    const placed: LabelEntry[] = [];
+    const GAP_X = 4;
+    const GAP_Y = 3;
+    const MAX_SHIFT = 140;
+
+    for (const entry of entries) {
+        for (const other of placed) {
+            const dx = Math.abs(entry.sx - other.sx);
+            if (dx >= (entry.w + other.w) / 2 + GAP_X) continue;
+            const otherCenter = other.sy + other.offY;
+            const minCenterDist = (entry.h + other.h) / 2 + GAP_Y;
+            if (Math.abs(entry.sy + entry.offY - otherCenter) < minCenterDist) {
+                entry.offY = otherCenter + minCenterDist - entry.sy;
+            }
+        }
+        entry.offY = Math.max(0, Math.min(MAX_SHIFT, entry.offY));
+        placed.push(entry);
+    }
+
+    for (const entry of entries) {
+        const target = entry.base.clone();
+        if (entry.offY > 0.01) {
+            // offY 是“屏幕向下”的像素数；cameraUp 指向屏幕上方，因此取负
+            target.addScaledVector(cameraUp, -entry.offY * worldPerPxY);
+        }
+        // 水平方向不偏移：只做纵向让位，避免标注偏离被测线段
+        if (entry.sprite.position.distanceToSquared(target) > 1e-10) {
+            entry.sprite.position.copy(target);
+            changed = true;
+        }
+    }
+
     return changed;
 }
 
