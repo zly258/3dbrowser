@@ -56,65 +56,61 @@ function createLine(points: THREE.Vector3[], parent: THREE.Object3D) {
 }
 
 /** 测量标注在屏幕上的固定高度（CSS px）。与相机 zoom 无关。 */
-export const MEASURE_LABEL_HEIGHT_PX = 22;
+export const MEASURE_LABEL_HEIGHT_PX = 24;
 
-/** 测量线 / 端点 / 标签边框共用色（保持与 3D 线段一致） */
+/** 测量线 / 端点 / 标注文字共用色（保持与 3D 线段一致） */
 const MEASURE_COLOR = 0xff0000;
 const MEASURE_COLOR_HIGHLIGHT = 0x00e676;
-const MEASURE_BORDER = "#ff0000";
-const MEASURE_BORDER_HIGHLIGHT = "#00e676";
+/** 标注文字填充色（比线段略亮，纯文字在灰色模型上更清晰） */
+const MEASURE_TEXT = "#ff4a3d";
+const MEASURE_TEXT_HIGHLIGHT = "#12d67a";
+/** 文字描边：AutoCAD 式“无底框文字”，靠深色描边在任意底色上保持可读 */
+const MEASURE_TEXT_HALO = "rgba(8, 11, 17, 0.82)";
+
+/** 距离标注需要抬到线段上方，避免标注线从文字中间穿过 */
+const DIST_LABEL_LIFT_RATIO = 0.95;
 
 /**
- * 绘制标签贴图。
- * 画布按约 4 倍于最终显示尺寸绘制，再由 sprite 降采样，保证在高 DPI 与缩放下都清晰。
+ * 绘制标注文字贴图。
+ *
+ * 与早期版本不同：这里**不画底色卡片、不画边框**，只输出文字本身，
+ * 再叠一圈深色描边（CAD 标注的常见做法），因此在浅色模型与深色背景上都能读。
+ * 画布按约 3–4 倍于最终显示尺寸绘制，再由 sprite 降采样，保证缩放下依然清晰。
  */
 function buildLabelCanvas(text: string, highlighted: boolean): HTMLCanvasElement | null {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     if (!context) return null;
 
-    const fontSize = 56;
-    const paddingX = 22;
-    const paddingY = 18;
-    const border = 3;
-    const font = `600 ${fontSize}px 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', sans-serif`;
+    const fontSize = 66;
+    const halo = 7;
+    const padX = halo + 5;
+    const padY = halo + 5;
+    const font = `700 ${fontSize}px 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', sans-serif`;
 
     context.font = font;
     const textWidth = Math.ceil(context.measureText(text).width);
 
-    canvas.width = Math.max(1, Math.ceil(textWidth + paddingX * 2));
-    canvas.height = Math.max(1, Math.ceil(fontSize + paddingY));
+    canvas.width = Math.max(1, Math.ceil(textWidth + padX * 2));
+    canvas.height = Math.max(1, Math.ceil(fontSize + padY * 2));
 
     // 重设尺寸会清空上下文状态，需重新设置字体
     context.font = font;
     context.textAlign = "center";
     context.textBaseline = "middle";
+    context.lineJoin = "round";
+    context.miterLimit = 2;
 
-    const w = canvas.width;
-    const h = canvas.height;
-    const inset = border / 2 + 1;
-    const radius = 12;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2 + 1;
 
-    // 底色胶囊
-    context.beginPath();
-    const rounded = context as CanvasRenderingContext2D & {
-        roundRect?: (x: number, y: number, w: number, h: number, r: number) => void;
-    };
-    if (rounded.roundRect) {
-        rounded.roundRect(inset, inset, w - inset * 2, h - inset * 2, radius);
-    } else {
-        context.rect(inset, inset, w - inset * 2, h - inset * 2);
-    }
-    context.fillStyle = "rgba(24, 27, 33, 0.86)";
-    context.fill();
-    context.lineWidth = border;
-    context.strokeStyle = highlighted ? MEASURE_BORDER_HIGHLIGHT : MEASURE_BORDER;
-    context.stroke();
+    // 先描边（深色光晕），再填充文字——顺序反了会被填充盖住描边
+    context.lineWidth = halo;
+    context.strokeStyle = MEASURE_TEXT_HALO;
+    context.strokeText(text, cx, cy);
 
-    // 读数（等宽数字）
-    context.fillStyle = "#ffffff";
-    context.font = font;
-    context.fillText(text, w / 2, h / 2 + 1);
+    context.fillStyle = highlighted ? MEASURE_TEXT_HIGHLIGHT : MEASURE_TEXT;
+    context.fillText(text, cx, cy);
     return canvas;
 }
 
@@ -143,7 +139,9 @@ function applyLabelTexture(sprite: THREE.Sprite, text: string, highlighted: bool
     };
 }
 
-function createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
+export type MeasureLabelKind = "dist" | "angle" | "coord";
+
+function createLabel(text: string, position: THREE.Vector3, kind: MeasureLabelKind): THREE.Sprite {
     const material = new THREE.SpriteMaterial({
         depthTest: false,
         sizeAttenuation: false,
@@ -154,6 +152,7 @@ function createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
     sprite.position.copy(position);
     sprite.renderOrder = 1001;
     applyLabelTexture(sprite, text, false);
+    sprite.userData.kind = kind;
     // 初始 scale 只是占位；每帧由 applyMeasureLabelScreenSize 按视口反算，保证固定像素尺寸
     const aspect = (sprite.userData?.aspect as number) || 1;
     sprite.scale.set(0.1 * aspect, 0.1, 1);
@@ -227,6 +226,9 @@ export function applyMeasureLabelScreenSize(
             }
 
             const ndc = base.clone().project(camera);
+            // 距离标注抬到线段上方（AutoCAD 的标注文字习惯），避免线从文字中穿过
+            const isDistanceLabel = child.userData.kind === "dist";
+            const lift = isDistanceLabel ? targetHeightPx * DIST_LABEL_LIFT_RATIO : 0;
             entries.push({
                 sprite: child,
                 base,
@@ -234,13 +236,13 @@ export function applyMeasureLabelScreenSize(
                 sy: (-ndc.y * 0.5 + 0.5) * heightPx,
                 w: targetHeightPx * aspect,
                 h: targetHeightPx,
-                offY: 0
+                offY: -lift
             });
         });
     });
 
     // 简单屏幕空间避让：从上往下摆放，与已放置标签重叠时向下让位
-    entries.sort((a, b) => (a.sy - b.sy) || (a.sx - b.sx));
+    entries.sort((a, b) => (a.sy + a.offY - (b.sy + b.offY)) || (a.sx - b.sx));
     const placed: LabelEntry[] = [];
     const GAP_X = 4;
     const GAP_Y = 3;
@@ -256,13 +258,14 @@ export function applyMeasureLabelScreenSize(
                 entry.offY = otherCenter + minCenterDist - entry.sy;
             }
         }
-        entry.offY = Math.max(0, Math.min(MAX_SHIFT, entry.offY));
+        // 允许负偏移（抬升），上下都设上限，避免标注飞得太远
+        entry.offY = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, entry.offY));
         placed.push(entry);
     }
 
     for (const entry of entries) {
         const target = entry.base.clone();
-        if (entry.offY > 0.01) {
+        if (Math.abs(entry.offY) > 0.01) {
             // offY 是“屏幕向下”的像素数；cameraUp 指向屏幕上方，因此取负
             target.addScaledVector(cameraUp, -entry.offY * worldPerPxY);
         }
@@ -443,7 +446,7 @@ export function applyFinalizeMeasurement(
         labelPosition.copy(point);
     }
 
-    group.add(createLabel(displayValue, labelPosition));
+    group.add(createLabel(displayValue, labelPosition, type as MeasureLabelKind));
     context.measureGroup.add(group);
     context.measureRecords.set(id, {
         id,
