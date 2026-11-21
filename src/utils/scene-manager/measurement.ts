@@ -114,11 +114,11 @@ function buildLabelCanvas(text: string, highlighted: boolean): HTMLCanvasElement
     return canvas;
 }
 
-/** 为标注平面生成贴图（保留旧贴图的释放） */
-function applyLabelTexture(mesh: THREE.Mesh, text: string, highlighted: boolean) {
+/** 为标签 sprite 生成贴图（保留旧贴图的释放） */
+function applyLabelTexture(sprite: THREE.Sprite, text: string, highlighted: boolean) {
     const canvas = buildLabelCanvas(text, highlighted);
     if (!canvas) return;
-    const material = mesh.material as THREE.MeshBasicMaterial;
+    const material = sprite.material as THREE.SpriteMaterial;
     const previous = material.map;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -130,8 +130,8 @@ function applyLabelTexture(mesh: THREE.Mesh, text: string, highlighted: boolean)
     material.color.set(0xffffff);
     material.needsUpdate = true;
     if (previous) previous.dispose();
-    mesh.userData = {
-        ...(mesh.userData || {}),
+    sprite.userData = {
+        ...(sprite.userData || {}),
         type: "label",
         text,
         highlighted,
@@ -141,40 +141,22 @@ function applyLabelTexture(mesh: THREE.Mesh, text: string, highlighted: boolean)
 
 export type MeasureLabelKind = "dist" | "angle" | "coord";
 
-/**
- * 三维标注平面（不是面向屏幕的 Sprite）。
- *
- * 朝向在创建时冻结为当时的相机姿态：初始正对视线、清晰可读，
- * 之后随模型一起转动，从侧面看会被透视压扁——与 Inventor 的三维标注一致。
- */
-function createLabel(
-    text: string,
-    position: THREE.Vector3,
-    kind: MeasureLabelKind,
-    camera?: THREE.Camera
-): THREE.Mesh {
-    const geometry = new THREE.PlaneGeometry(1, 1);
-    const material = new THREE.MeshBasicMaterial({
-        transparent: true,
+function createLabel(text: string, position: THREE.Vector3, kind: MeasureLabelKind): THREE.Sprite {
+    const material = new THREE.SpriteMaterial({
         depthTest: false,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        toneMapped: false
+        sizeAttenuation: false,
+        transparent: true
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(position);
-    mesh.renderOrder = 1001;
-    applyLabelTexture(mesh, text, false);
-    mesh.userData.kind = kind;
-    if (camera) {
-        // 冻结为创建时的相机朝向：此后不再跟随视角
-        mesh.quaternion.copy(camera.quaternion);
-    }
+    const sprite = new THREE.Sprite(material);
+    sprite.position.copy(position);
+    sprite.renderOrder = 1001;
+    applyLabelTexture(sprite, text, false);
+    sprite.userData.kind = kind;
     // 初始 scale 只是占位；每帧由 applyMeasureLabelScreenSize 按视口反算，保证固定像素尺寸
-    const aspect = (mesh.userData?.aspect as number) || 1;
-    mesh.scale.set(0.1 * aspect, 0.1, 1);
-    return mesh;
+    const aspect = (sprite.userData?.aspect as number) || 1;
+    sprite.scale.set(0.1 * aspect, 0.1, 1);
+    return sprite;
 }
 
 /**
@@ -210,7 +192,7 @@ export function applyMeasureLabelScreenSize(
     const worldPerPxY = 2 / (p11 * heightPx);
 
     interface LabelEntry {
-        object: THREE.Mesh;
+        sprite: THREE.Sprite;
         base: THREE.Vector3;
         sx: number;
         sy: number;
@@ -224,7 +206,7 @@ export function applyMeasureLabelScreenSize(
 
     context.measureRecords.forEach((record) => {
         record.group.traverse((child) => {
-            if (!(child instanceof THREE.Mesh)) return;
+            if (!(child instanceof THREE.Sprite)) return;
             if (child.userData?.type !== "label") return;
 
             const aspect = (child.userData.aspect as number) || 1;
@@ -248,7 +230,7 @@ export function applyMeasureLabelScreenSize(
             const isDistanceLabel = child.userData.kind === "dist";
             const lift = isDistanceLabel ? targetHeightPx * DIST_LABEL_LIFT_RATIO : 0;
             entries.push({
-                object: child,
+                sprite: child,
                 base,
                 sx: (ndc.x * 0.5 + 0.5) * widthPx,
                 sy: (-ndc.y * 0.5 + 0.5) * heightPx,
@@ -288,8 +270,8 @@ export function applyMeasureLabelScreenSize(
             target.addScaledVector(cameraUp, -entry.offY * worldPerPxY);
         }
         // 水平方向不偏移：只做纵向让位，避免标注偏离被测线段
-        if (entry.object.position.distanceToSquared(target) > 1e-10) {
-            entry.object.position.copy(target);
+        if (entry.sprite.position.distanceToSquared(target) > 1e-10) {
+            entry.sprite.position.copy(target);
             changed = true;
         }
     }
@@ -366,28 +348,29 @@ export function applyUpdateMeasurePreview(
     return { state, needsRender: true };
 }
 
-/** 捕捉类型（CAD 式对象捕捉） */
-export type MeasureSnapType = "vertex" | "midpoint" | "center" | "near";
-
-/**
- * 悬停：用调用方已经解析好的捕捉点更新临时标记与预览线。
- * 捕捉判定需要场景几何信息，因此放在 SceneManager 侧完成。
- */
-export function applyUpdateMeasureHoverPoint(
+export function applyUpdateMeasureHover(
     context: SceneManagerMeasurementContext,
-    point: THREE.Vector3 | null
+    clientX: number,
+    clientY: number
 ): MeasurementResult {
     const state: MeasurementState = {
         ...context.state,
         currentMeasurePoints: [...context.state.currentMeasurePoints]
     };
 
-    if (state.measureType === "none" || !point) {
+    if (state.measureType === "none") {
         context.tempMarker.visible = false;
-        if (state.previewLine) state.previewLine.visible = false;
-        return { state, needsRender: state.measureType !== "none" };
+        return { state, needsRender: false };
     }
 
+    const intersect = context.getRayIntersects(clientX, clientY);
+    if (!intersect) {
+        context.tempMarker.visible = false;
+        if (state.previewLine) state.previewLine.visible = false;
+        return { state, needsRender: true };
+    }
+
+    const point = intersect.point;
     const position = context.tempMarker.geometry.attributes.position as THREE.BufferAttribute;
     position.setXYZ(0, point.x, point.y, point.z);
     position.needsUpdate = true;
@@ -463,7 +446,7 @@ export function applyFinalizeMeasurement(
         labelPosition.copy(point);
     }
 
-    group.add(createLabel(displayValue, labelPosition, type as MeasureLabelKind, context.camera));
+    group.add(createLabel(displayValue, labelPosition, type as MeasureLabelKind));
     context.measureGroup.add(group);
     context.measureRecords.set(id, {
         id,
@@ -552,17 +535,19 @@ export function applyHighlightMeasurement(
                 (child.material as THREE.LineBasicMaterial).color.set(color);
             } else if (child instanceof THREE.Points) {
                 (child.material as THREE.PointsMaterial).color.set(color);
-            } else if (child instanceof THREE.Mesh && child.userData?.type === "label") {
-                // 标注文字：只重建贴图改字色，不做整体染色（会把描边一起染绿）
-                const text = String(child.userData.text ?? "");
-                const wasHighlighted = child.userData.highlighted === true;
-                if (text && wasHighlighted !== isHighlighted) {
-                    applyLabelTexture(child, text, isHighlighted);
-                }
             } else if (child instanceof THREE.Sprite) {
-                (child.material as THREE.SpriteMaterial).color.set(
-                    isHighlighted ? MEASURE_COLOR_HIGHLIGHT : 0xffffff
-                );
+                // 标签只换边框颜色，不再把整块贴图乘成绿色（会把底色与文字一起染绿）
+                if (child.userData?.type === "label") {
+                    const text = String(child.userData.text ?? "");
+                    const wasHighlighted = child.userData.highlighted === true;
+                    if (text && wasHighlighted !== isHighlighted) {
+                        applyLabelTexture(child, text, isHighlighted);
+                    }
+                } else {
+                    (child.material as THREE.SpriteMaterial).color.set(
+                        isHighlighted ? MEASURE_COLOR_HIGHLIGHT : 0xffffff
+                    );
+                }
             } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
                 child.material.color.set(color);
             } else if (child instanceof THREE.Box3Helper) {
