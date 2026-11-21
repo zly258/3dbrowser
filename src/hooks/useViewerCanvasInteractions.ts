@@ -74,10 +74,8 @@ export function useViewerCanvasInteractions({
 
             if (activeTool === "measure") {
                 if (measureType !== "none") {
-                    const intersect = manager.getRayIntersects(event.clientX, event.clientY);
-                    if (intersect) {
-                        const modelUuid = (intersect.object as any).uuid;
-                        manager.addMeasurePoint(intersect.point, modelUuid);
+                    // CAD 式捕捉：由 SceneManager 解析端点 / 中点 / 面心后再落点
+                    if (manager.addMeasurePointAt(event.clientX, event.clientY)) {
                         return;
                     }
                 }
@@ -137,6 +135,10 @@ export function useViewerCanvasInteractions({
             });
         };
 
+        const handleMouseLeave = () => {
+            manager.hideMeasureSnapHint();
+        };
+
         const handleKeyDown = (event: KeyboardEvent) => {
             if ((event.key === "z" || event.key === "Z") && (event.ctrlKey || event.metaKey)) {
                 handleUndoVisibility();
@@ -158,6 +160,7 @@ export function useViewerCanvasInteractions({
         canvas.addEventListener("mousedown", handleMouseDown);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
+        canvas.addEventListener("mouseleave", handleMouseLeave);
         canvas.addEventListener("contextmenu", handleContextMenu);
         window.addEventListener("keydown", handleKeyDown);
 
@@ -170,6 +173,7 @@ export function useViewerCanvasInteractions({
             canvas.removeEventListener("mousedown", handleMouseDown);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
+            canvas.removeEventListener("mouseleave", handleMouseLeave);
             canvas.removeEventListener("contextmenu", handleContextMenu);
             window.removeEventListener("keydown", handleKeyDown);
         };

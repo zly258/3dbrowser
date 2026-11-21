@@ -651,6 +651,16 @@ export const ThreeViewer = ({
         }
     }, [mgrInstance]);
 
+    // 测量捕捉提示文案（跟随语言切换）
+    useEffect(() => {
+        mgrInstance?.setMeasureSnapLabels({
+            vertex: t("snap_endpoint"),
+            midpoint: t("snap_midpoint"),
+            center: t("snap_center"),
+            near: t("snap_nearest")
+        });
+    }, [mgrInstance, t]);
+
     // 树结构更新
     // 短提示：默认 2.4s 自动消失
     useEffect(() => {

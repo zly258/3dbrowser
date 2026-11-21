@@ -107,6 +107,25 @@
   overflow-wrap: anywhere;
 }
 
+/* ---------- 测量捕捉提示：跟随光标的轻量浮标（端点 / 中点 / 面心） ---------- */
+.ui-measure-snap-hint {
+  position: absolute;
+  z-index: 25;
+  display: none;
+  padding: 2px 6px;
+  color: var(--text-main);
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* ---------- 视口内轻量提示条：白色胶囊浮签 ---------- */
 .ui-viewport-hint {
   position: absolute;

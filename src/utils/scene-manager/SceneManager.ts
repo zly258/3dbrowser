@@ -116,8 +116,9 @@ import {
     applyHighlightMeasurement,
     applyMeasureLabelScreenSize,
     applyPickMeasurement,
-    applyUpdateMeasureHover,
-    applyUpdateMeasurePreview
+    applyUpdateMeasureHoverPoint,
+    applyUpdateMeasurePreview,
+    type MeasureSnapType
 } from "./measurement";
 import {
     applyGetRayIntersects,
@@ -267,6 +268,19 @@ export class SceneManager {
     previewPolygon: THREE.LineLoop | null = null;
     tempMarker: THREE.Points;
     measureRecords: Map<string, MeasurementRecord> = new Map();
+
+    /** 捕捉提示文案（由上层按当前语言注入） */
+    private measureSnapLabels: Record<MeasureSnapType, string> = {
+        vertex: "Endpoint",
+        midpoint: "Midpoint",
+        center: "Center",
+        near: "Nearest"
+    };
+    /** 捕捉提示浮标（DOM，跟随光标） */
+    private snapHintEl: HTMLDivElement | null = null;
+    private snapHintHost: HTMLElement | null = null;
+    /** 捕捉容差（屏幕像素） */
+    private readonly measureSnapTolerancePx = 12;
 
     // 框选状态
     private boxSelectState = createInitialBoxSelectState();
@@ -5885,6 +5899,199 @@ export class SceneManager {
         this.currentMeasurePoints = [];
         this.currentMeasureModelUuid = null;
         this.clearMeasurementPreview();
+        if (type === 'none') this.hideSnapHint();
+    }
+
+    /** 上层按当前语言注入捕捉提示文案 */
+    setMeasureSnapLabels(labels: Partial<Record<MeasureSnapType, string>>) {
+        this.measureSnapLabels = { ...this.measureSnapLabels, ...labels };
+    }
+
+    /** 鼠标离开视口时收起捕捉浮标 */
+    hideMeasureSnapHint() {
+        this.hideSnapHint();
+    }
+
+    private ensureSnapHint(): HTMLDivElement | null {
+        if (typeof document === "undefined") return null;
+        const host = this.canvas?.parentElement;
+        if (!host) return null;
+        if (this.snapHintEl && this.snapHintHost === host && this.snapHintEl.isConnected) {
+            return this.snapHintEl;
+        }
+        this.snapHintEl?.remove();
+        const el = document.createElement("div");
+        el.className = "ui-measure-snap-hint";
+        el.setAttribute("aria-hidden", "true");
+        host.appendChild(el);
+        this.snapHintEl = el;
+        this.snapHintHost = host;
+        return el;
+    }
+
+    private hideSnapHint() {
+        if (this.snapHintEl) this.snapHintEl.style.display = "none";
+    }
+
+    private showSnapHint(clientX: number, clientY: number, type: MeasureSnapType | null) {
+        const el = this.ensureSnapHint();
+        if (!el) return;
+        if (!type || type === "near") {
+            el.style.display = "none";
+            return;
+        }
+        const host = this.snapHintHost;
+        if (!host) return;
+        const hostRect = host.getBoundingClientRect();
+        el.textContent = this.measureSnapLabels[type] ?? type;
+        el.style.display = "block";
+        // 光标右下方一点，避免压住十字光标本身
+        el.style.left = `${Math.round(clientX - hostRect.left + 14)}px`;
+        el.style.top = `${Math.round(clientY - hostRect.top + 14)}px`;
+    }
+
+    /** 把命中的三角面还原成世界坐标顶点（兼容普通 Mesh / InstancedMesh / BatchedMesh） */
+    private getHitTriangleWorld(hit: THREE.Intersection): [THREE.Vector3, THREE.Vector3, THREE.Vector3] | null {
+        const face = hit.face;
+        if (!face) return null;
+
+        const anyHit = hit as any;
+        let geometry: THREE.BufferGeometry | null = null;
+        const matrix = new THREE.Matrix4();
+
+        if (anyHit.batchedMesh && anyHit.batchId !== undefined) {
+            const batched = anyHit.batchedMesh as THREE.BatchedMesh;
+            geometry = batched.geometry;
+            batched.updateMatrixWorld();
+            batched.getMatrixAt(anyHit.batchId, matrix);
+            matrix.premultiply(batched.matrixWorld);
+        } else {
+            const mesh = hit.object as THREE.Mesh;
+            if (!(mesh as any).isMesh || !mesh.geometry) return null;
+            geometry = mesh.geometry;
+            mesh.updateMatrixWorld();
+            matrix.copy(mesh.matrixWorld);
+            const instanced = mesh as unknown as THREE.InstancedMesh;
+            if ((instanced as any).isInstancedMesh && anyHit.instanceId !== undefined) {
+                const instanceMatrix = new THREE.Matrix4();
+                instanced.getMatrixAt(anyHit.instanceId, instanceMatrix);
+                matrix.multiply(instanceMatrix);
+            }
+        }
+
+        const positionAttr = geometry?.getAttribute("position");
+        if (!positionAttr) return null;
+
+        const indices = [face.a, face.b, face.c];
+        const out: THREE.Vector3[] = [];
+        for (const index of indices) {
+            if (index === undefined || index < 0 || index >= positionAttr.count) return null;
+            out.push(
+                new THREE.Vector3(
+                    positionAttr.getX(index),
+                    positionAttr.getY(index),
+                    positionAttr.getZ(index)
+                ).applyMatrix4(matrix)
+            );
+        }
+        return [out[0], out[1], out[2]];
+    }
+
+    /**
+     * CAD 式捕捉：在命中三角面附近寻找端点 / 边中点 / 面心，取屏幕距离最近且在容差内的一个。
+     * 没有更优候选时退化为“最近点”（原始命中点）。
+     */
+    resolveMeasureSnap(clientX: number, clientY: number): {
+        point: THREE.Vector3;
+        type: MeasureSnapType;
+        modelUuid?: string;
+    } | null {
+        const hit = this.getRayIntersects(clientX, clientY);
+        if (!hit) return null;
+
+        const modelUuid = (hit.object as any)?.uuid as string | undefined;
+        const rect = this.canvas.getBoundingClientRect();
+        const camera = this.camera;
+        camera.updateMatrixWorld();
+        camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+
+        const toScreen = (p: THREE.Vector3) => {
+            const ndc = p.clone().project(camera);
+            return {
+                x: rect.left + (ndc.x * 0.5 + 0.5) * rect.width,
+                y: rect.top + (-ndc.y * 0.5 + 0.5) * rect.height
+            };
+        };
+
+        interface Candidate {
+            point: THREE.Vector3;
+            type: MeasureSnapType;
+            priority: number;
+        }
+        const candidates: Candidate[] = [];
+
+        // 已有测量点（端点捕捉优先）
+        this.measureRecords.forEach((record) => {
+            record.group.traverse((child) => {
+                if ((child as THREE.Points).isPoints) {
+                    const attr = child.geometry.getAttribute("position");
+                    if (attr && attr.count > 0) {
+                        candidates.push({
+                            point: new THREE.Vector3(attr.getX(0), attr.getY(0), attr.getZ(0)),
+                            type: "vertex",
+                            priority: 0
+                        });
+                    }
+                }
+            });
+        });
+
+        const tri = this.getHitTriangleWorld(hit);
+        if (tri) {
+            const [v0, v1, v2] = tri;
+            candidates.push({ point: v0.clone(), type: "vertex", priority: 0 });
+            candidates.push({ point: v1.clone(), type: "vertex", priority: 0 });
+            candidates.push({ point: v2.clone(), type: "vertex", priority: 0 });
+
+            candidates.push({ point: v0.clone().add(v1).multiplyScalar(0.5), type: "midpoint", priority: 1 });
+            candidates.push({ point: v1.clone().add(v2).multiplyScalar(0.5), type: "midpoint", priority: 1 });
+            candidates.push({ point: v2.clone().add(v0).multiplyScalar(0.5), type: "midpoint", priority: 1 });
+
+            candidates.push({
+                point: v0.clone().add(v1).add(v2).multiplyScalar(1 / 3),
+                type: "center",
+                priority: 2
+            });
+        }
+
+        let best: { point: THREE.Vector3; type: MeasureSnapType; priority: number; distance: number } | null = null;
+        const tolerance = this.measureSnapTolerancePx;
+        for (const candidate of candidates) {
+            const screen = toScreen(candidate.point);
+            const dx = screen.x - clientX;
+            const dy = screen.y - clientY;
+            const distance = Math.hypot(dx, dy);
+            if (distance > tolerance) continue;
+            if (
+                !best ||
+                candidate.priority < best.priority ||
+                (candidate.priority === best.priority && distance < best.distance)
+            ) {
+                best = { ...candidate, distance };
+            }
+        }
+
+        if (best) {
+            return { point: best.point, type: best.type, modelUuid };
+        }
+        return { point: hit.point.clone(), type: "near", modelUuid };
+    }
+
+    /** 点击时按捕捉规则确定落点（CAD 式捕捉测量入口） */
+    addMeasurePointAt(clientX: number, clientY: number): { id: string, type: string, val: string } | null {
+        const snap = this.resolveMeasureSnap(clientX, clientY);
+        if (!snap) return null;
+        return this.addMeasurePoint(snap.point, snap.modelUuid);
     }
 
     addMeasurePoint(point: THREE.Vector3, modelUuid?: string): { id: string, type: string, val: string } | null {
@@ -5903,10 +6110,23 @@ export class SceneManager {
     }
 
     updateMeasureHover(clientX: number, clientY: number) {
+        const snap = this.resolveMeasureSnap(clientX, clientY);
         const context = this.getMeasurementContext();
-        const result = applyUpdateMeasureHover(context, clientX, clientY);
+        const result = applyUpdateMeasureHoverPoint(context, snap ? snap.point : null);
         this.syncMeasurementState(result.state);
         if (result.needsRender) this.markSceneDirty();
+
+        // 捕捉到特征点时放大并高亮临时标记，同时给出类型提示
+        const markerMaterial = this.tempMarker.material as THREE.PointsMaterial;
+        if (snap && snap.type !== "near") {
+            markerMaterial.color.set(0xffc400);
+            markerMaterial.size = 12;
+        } else {
+            markerMaterial.color.set(0xff0000);
+            markerMaterial.size = 8;
+        }
+        markerMaterial.needsUpdate = true;
+        this.showSnapHint(clientX, clientY, snap ? snap.type : null);
     }
 
     finalizeMeasurement() {
@@ -6280,6 +6500,9 @@ export class SceneManager {
 
     dispose() {
         this.disposed = true;
+        this.snapHintEl?.remove();
+        this.snapHintEl = null;
+        this.snapHintHost = null;
         this.renderProxy?.dispose();
         this.renderProxy = null;
         this.renderProxyMaterial?.dispose();
