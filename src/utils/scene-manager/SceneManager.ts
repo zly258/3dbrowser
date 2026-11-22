@@ -331,7 +331,6 @@ export class SceneManager {
     private cancelledChunkIds = new Set<string>();
     private frustum = new THREE.Frustum();
     private projScreenMatrix = new THREE.Matrix4();
-    private logicTimer: any = null;
     private nbimFiles: Map<string, File> = new Map(); // 支持多文件引用
     private nbimMeta: Map<string, { version: number; bimIdTable?: string[] }> = new Map();
     /** v10 分离的属性数据库（按需惰性读取） */
@@ -6287,6 +6286,15 @@ export class SceneManager {
         this.animateFramePending = false;
         this.cancelCameraFlight();
         this.cancelBoxSelect();
+        // 停掉所有延迟回调：销毁后它们仍会排队执行，作用在已销毁的实例上
+        this.cancelProgressiveEdgeBuild();
+        if (this.cameraMoveSettleTimer !== null) {
+            window.clearTimeout(this.cameraMoveSettleTimer);
+            this.cameraMoveSettleTimer = null;
+        }
+        // 让仍在等待 generation 的延迟任务（属性索引重建等）失效
+        this.loadGeneration += 1;
+        this.structureLabelCache.clear();
         disposeSceneManagerResources({
             cancelDeferredStructureBuild: () => this.cancelDeferredStructureBuild(),
             clearLocateFocus: () => this.clearLocateFocus(),
@@ -6302,9 +6310,10 @@ export class SceneManager {
             ghostMaterial: this.ghostMaterial,
             renderer: this.renderer,
             ghostGroup: this.ghostGroup,
+            displayEdges: this.displayEdges,
+            extraGroups: [this.measureGroup, this.clipHelpersGroup],
             workers: this.workers,
             workerQueue: this.workerQueue,
-            logicTimer: this.logicTimer,
             animationFrameId: this.animationFrameId,
             onAnimationFrameDisposed: () => {
                 this.animationFrameId = null;

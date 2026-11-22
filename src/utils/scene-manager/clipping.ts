@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { disposeGroupDeep } from "./lifecycle";
 
 type ClipAxisRanges = { x: number[]; y: number[]; z: number[] };
 type ClipAxisActive = { x: boolean; y: boolean; z: boolean };
@@ -59,7 +60,8 @@ export function applySetupClipping(context: SceneManagerClippingContext): Clippi
     ];
 
     context.renderer.clippingPlanes = [];
-    context.clipHelpersGroup.clear();
+    // 先释放上一轮辅助面的几何/材质再重建：clear() 只脱离子对象，重复调用会泄漏 6 组几何与材质
+    disposeGroupDeep(context.clipHelpersGroup);
 
     const clipPlaneHelpers = CLIP_HELPER_COLORS.map((color) => {
         const geometry = new THREE.PlaneGeometry(1, 1);
