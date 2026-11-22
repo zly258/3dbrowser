@@ -45,7 +45,7 @@ function getNodeName(context: RenderTargetContext, uuid: string, fallback: strin
     return node?.name || fallback;
 }
 
-function isWorldVisible(object: THREE.Object3D) {
+export function isWorldVisible(object: THREE.Object3D) {
     let current: THREE.Object3D | null = object;
     while (current) {
         if (!current.visible) return false;

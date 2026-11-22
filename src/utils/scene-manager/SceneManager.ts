@@ -41,7 +41,6 @@ import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
 import { applyIndustrialMaterials, applyIndustrialRendererSettings, createIndustrialSharedMaterial } from "./renderStyle";
 import { applyDisplayMode, normalizeDisplayMode, type DisplayMode } from "./displayMode";
 import { DisplayEdgeBuilder } from "./displayEdges";
-import { ChunkRenderProxy } from "./renderProxy";
 import { processChunkPrefetchQueue } from "./chunkPrefetch";
 import {
     acquireGhostLineResource,
@@ -53,7 +52,6 @@ import {
     registerOptimizedMeshResourceMapping,
     releaseGhostLineResource,
     takeCachedChunkMeshEntry,
-    touchChunkMeshCacheOrder,
     unregisterOptimizedMeshResourceMapping
 } from "./chunkResources";
 import { getBatchedGeometryId, getBatchedGeometryViewStats, getBatchedInstanceGeometry, getBatchedInstanceLocalBox, getBatchedInstanceWorldBox } from "./batchedGeometryView";
@@ -101,12 +99,14 @@ import {
     applyHighlightObjects,
     applyRefreshHighlightColors,
     applySetLocateResultSet,
+    expandLocateTargets,
     type HighlightInstanceRef
 } from "./highlight";
 import {
     collectAllRenderableTargets,
     collectRenderableBoundsForIds,
     collectRenderableTargetsForIds,
+    isWorldVisible,
     type RenderTarget
 } from "./renderTargets";
 import {
@@ -276,8 +276,6 @@ export class SceneManager {
     clipPlaneHelpers: THREE.Mesh[] = [];
     clipHelperVisible = false;
     clipHelperOpacity = 0.12;
-
-    sceneCenter: THREE.Vector3 = new THREE.Vector3();
 
     // 偏移状态 (解决大坐标问题)
     globalOffset: THREE.Vector3 = new THREE.Vector3();
@@ -519,7 +517,6 @@ export class SceneManager {
     private readonly chunkCullingTempCenterNdc = new THREE.Vector3();
     private boundsScanBatchSize = 2400;
     private chunkRegistrationBatchSize = 18;
-    private chunkGhostBatchSize = 24;
     private animationFrameId: number | null = null;
     private cameraFlightFrameId: number | null = null;
     private cameraFlightToken = 0;
@@ -537,10 +534,6 @@ export class SceneManager {
     private ghostEdgesGeometry: THREE.EdgesGeometry;
     private ghostMaterial: THREE.LineBasicMaterial;
     private ghostMeshPool: THREE.LineSegments[] = [];
-    private renderProxy: ChunkRenderProxy | null = null;
-    private renderProxyMaterial: THREE.LineBasicMaterial | null = null;
-    /** 仅用于 getChunkOptions() 回报配置值，不驱动任何渲染逻辑 */
-    private renderBudgetMode: "auto" | "full" = "full";
     /** 连续多次采样到堆高水位后才触发卸载，避免瞬时 GC 抖动误判 */
     private memoryPressureScore = 0;
 
@@ -650,10 +643,6 @@ export class SceneManager {
         this.ghostGroup.name = "Ghost";
         this.ghostGroup.visible = false;
         this.scene.add(this.ghostGroup);
-        // 渲染预算代理单独一份材质：它代表“真实替代绘制”，不能跟占位框一起淡出，
-        // 否则淡出期间被预算挡下的分块会直接看不见。
-        this.renderProxyMaterial = this.ghostMaterial.clone();
-        this.renderProxy = new ChunkRenderProxy(this.scene, this.renderProxyMaterial, 4096);
 
         this.clipHelpersGroup = new THREE.Group();
         this.clipHelpersGroup.name = "ClipHelpers";
@@ -822,8 +811,6 @@ export class SceneManager {
 
         this.mouse = new THREE.Vector2();
 
-        this.animate = this.animate.bind(this);
-
         // 调试钩子：仅在 URL 带 ?dshDebug=1 时挂到 window，便于自动化测试断言
         // （分块数、内存分类、拾取、结构树）。生产环境不加全局污染。
         if (typeof window !== "undefined") {
@@ -904,26 +891,12 @@ export class SceneManager {
      * 禁用线框盒子（boxes）替代，彻底杜绝缩放时画面被空心线框破坏。
      */
     private applyRenderBudget(candidates: Array<{ chunk: any; pixel: number; dist: number }>) {
-        // 确保旧代理（如存在）始终清空；所有已加载分块保持真实网格可见。
-        this.renderProxy?.clear();
+        // 所有已加载分块保持真实网格可见。
         for (const { chunk } of candidates) {
             if (chunk.mesh && !chunk.mesh.visible) {
                 chunk.mesh.visible = true;
             }
         }
-    }
-
-    private getAverageChunkFootprintMB() {
-        let sum = 0;
-        let count = 0;
-        for (const chunk of this.chunks) {
-            const value = Number(chunk?.estimatedDecodedMB);
-            if (Number.isFinite(value) && value > 0) {
-                sum += value;
-                count++;
-            }
-        }
-        return count > 0 ? sum / count : 2.0;
     }
 
     /** 远景粗 LOD 的实例尺寸阈值（米）：只有显式选择“自适应分辨率 LOD”时才启用。
@@ -1516,7 +1489,6 @@ export class SceneManager {
             this.cullingTimeBudgetRecoveryMs = 10.5;
             this.cullingTimeBudgetIdleMs = 14.0;
             this.chunkRegistrationBatchSize = 28;
-            this.chunkGhostBatchSize = 40;
         } else {
             // 按 CPU 核数适度提高并行度，加载更快；上限 8，避免抢主线程与内存峰值
             this.maxWorkers = Math.max(4, Math.min(8, cpuCount - 1));
@@ -1610,10 +1582,6 @@ export class SceneManager {
             mesh,
             sharedMaterial: this.sharedMaterial
         });
-    }
-
-    private touchChunkCache(chunkId: string) {
-        this.chunkCacheOrder = touchChunkMeshCacheOrder(this.chunkCacheOrder, chunkId);
     }
 
     private cacheChunkMesh(chunk: any, mesh: THREE.BatchedMesh) {
@@ -2789,7 +2757,6 @@ export class SceneManager {
         // 仅在显式传入时覆盖：避免默认挂载时把 URL ?coarseLod / ?renderBudget=auto 冲掉。
         if (options.coarseLod !== undefined) this.coarseLodEnabled = resolved.coarseLod;
         if (options.renderBudget !== undefined) {
-            this.renderBudgetMode = resolved.renderBudget === "auto" ? "auto" : "full";
             this.resolvedChunkOptions.renderBudget = resolved.renderBudget;
         }
         this.resolvedChunkOptions.chunkPrefetchWindow = resolved.chunkPrefetchWindow;
@@ -2813,7 +2780,7 @@ export class SceneManager {
             chunkReadCacheSize: this.resolvedChunkOptions.chunkReadCacheSize,
             chunkReadCacheMB: this.resolvedChunkOptions.chunkReadCacheMB,
             coarseLod: this.coarseLodEnabled,
-            renderBudget: this.renderBudgetMode,
+            renderBudget: this.resolvedChunkOptions.renderBudget ?? "full",
             chunkPrefetchWindow: this.resolvedChunkOptions.chunkPrefetchWindow,
             ghostMode: this.resolvedChunkOptions.ghostMode,
             targetMinFps: this.resolvedChunkOptions.targetMinFps,
@@ -4458,15 +4425,6 @@ export class SceneManager {
         }
     }
 
-    private isWorldVisible(object: THREE.Object3D) {
-        let current: THREE.Object3D | null = object;
-        while (current) {
-            if (!current.visible) return false;
-            current = current.parent;
-        }
-        return true;
-    }
-
     private getPickingContext() {
         return {
             canvas: this.canvas,
@@ -5035,8 +4993,8 @@ export class SceneManager {
         this.clearLocateFocus();
         this.clearClashPairHighlight();
 
-        const aTargets = this.expandLocateTargets([normalizedA]);
-        const bTargets = this.expandLocateTargets([normalizedB]);
+        const aTargets = expandLocateTargets(this.nodeMap, [normalizedA]);
+        const bTargets = expandLocateTargets(this.nodeMap, [normalizedB]);
         const colorA = new THREE.Color(colorAHex);
         const colorB = new THREE.Color(colorBHex);
 
@@ -5149,30 +5107,6 @@ export class SceneManager {
             return;
         }
         this.fitView(keepOrientation);
-    }
-
-    private expandLocateTargets(ids: string[]) {
-        const expanded = new Set<string>();
-        const queue = [...ids];
-        const visited = new Set<string>();
-
-        while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (!current || visited.has(current)) continue;
-            visited.add(current);
-            expanded.add(current);
-
-            const nodes = this.nodeMap.get(current);
-            if (!nodes || nodes.length === 0) continue;
-            for (const node of nodes) {
-                if (!node.children || node.children.length === 0) continue;
-                for (const child of node.children) {
-                    if (!visited.has(child.id)) queue.push(child.id);
-                }
-            }
-        }
-
-        return expanded;
     }
 
     setLocateResultSet(uuids: string[], focusUuid: string | null = null) {
@@ -5483,7 +5417,7 @@ export class SceneManager {
     }
 
     private unionObjectBounds(obj: THREE.Object3D, targetBox: THREE.Box3, visibleOnly = false) {
-        if (visibleOnly && !this.isWorldVisible(obj)) return;
+        if (visibleOnly && !isWorldVisible(obj)) return;
         const box = new THREE.Box3();
         if (obj.userData?.boundingBox) {
             box.copy(obj.userData.boundingBox).applyMatrix4(obj.matrixWorld);
@@ -5514,7 +5448,7 @@ export class SceneManager {
         const instanceMatrix = new THREE.Matrix4();
         const tempWorldBox = new THREE.Box3();
         for (const mapping of mappings) {
-            if (visibleOnly && !this.isWorldVisible(mapping.mesh)) continue;
+            if (visibleOnly && !isWorldVisible(mapping.mesh)) continue;
             let worldBox: THREE.Box3 | null;
             if (mapping.geometry) {
                 if (!mapping.geometry.boundingBox) mapping.geometry.computeBoundingBox();
@@ -6279,10 +6213,6 @@ export class SceneManager {
 
     dispose() {
         this.disposed = true;
-        this.renderProxy?.dispose();
-        this.renderProxy = null;
-        this.renderProxyMaterial?.dispose();
-        this.renderProxyMaterial = null;
         this.animateFramePending = false;
         this.cancelCameraFlight();
         this.cancelBoxSelect();

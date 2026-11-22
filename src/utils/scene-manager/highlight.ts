@@ -69,7 +69,7 @@ function getColorForUuid(
     return new THREE.Color(highlightColors?.[uuid] || settings.highlightColor || "#ff9f1c");
 }
 
-function expandLocateTargets(contentMap: Map<string, any[]>, ids: string[]) {
+export function expandLocateTargets(contentMap: Map<string, any[]>, ids: string[]) {
     const expanded = new Set<string>();
     const queue = [...ids];
     const visited = new Set<string>();
