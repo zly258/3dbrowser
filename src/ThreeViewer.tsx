@@ -391,12 +391,15 @@ export const ThreeViewer = ({
     const sceneMgr = useRef<SceneManager | null>(null);
     const ifcPropertyCacheRef = useRef<Map<string, Record<string, PropertyGroupInput>>>(new Map());
     const focusLocateIsolationRef = useRef<(uuids: string[]) => void>(() => {});
+    const handleIsolateLocate = useCallback((uuids: string[]) => {
+        focusLocateIsolationRef.current(uuids);
+    }, []);
     const { focusObjectsInView } = useFocusInView({
         sceneMgrRef: sceneMgr,
         setSelectedUuids,
         setSelectedProps,
         isolateLocate: sceneSettings.locateIsolateMode === true,
-        onIsolateLocate: (uuids) => focusLocateIsolationRef.current(uuids)
+        onIsolateLocate: handleIsolateLocate
     });
     const {
         leftWidth,
@@ -500,14 +503,15 @@ export const ThreeViewer = ({
     const [toast, setToast] = useState<ViewerToast | null>(null);
 
 
+    const handleChunkLoadCompleted = useCallback(() => {
+        setToast({ message: t("all_chunks_loaded"), type: 'success' });
+        setChunkProgress({ loaded: 0, total: 0, pending: 0 });
+    }, [t]);
     const { onManagerChunkProgress } = useChunkProgress({
         fileSetIdRef: currentFileSetIdRef,
         completedFileSetsRef,
         onProgress: setChunkProgress,
-        onCompleted: () => {
-            setToast({ message: t("all_chunks_loaded"), type: 'success' });
-            setChunkProgress({ loaded: 0, total: 0, pending: 0 });
-        }
+        onCompleted: handleChunkLoadCompleted
     });
 
     const handleManagerChunkProgress = useCallback((loaded: number, total: number, pending: number) => {
@@ -854,12 +858,12 @@ export const ThreeViewer = ({
         }
     };
 
-    const handleClearSelection = () => {
+    const handleClearSelection = useCallback(() => {
         clearSelection();
         setSelectedProps(null);
         sceneMgr.current?.highlightObjects([]);
         sceneMgr.current?.invalidateRender?.({ needsCulling: true });
-    };
+    }, [clearSelection, setSelectedProps]);
 
     // --- Scene Initialization ---
     useEffect(() => {
@@ -1144,6 +1148,7 @@ export const ThreeViewer = ({
     useViewerCanvasInteractions({
         sceneMgrRef: sceneMgr,
         canvasRef,
+        managerReady: mgrInstance !== null,
         activeTool,
         setActiveTool: setActiveTool as React.Dispatch<React.SetStateAction<string>>,
         measureType,

@@ -8,6 +8,8 @@ import type { PropertyGroups } from "../viewer/propertyIndex";
 interface UseViewerCanvasInteractionsOptions {
     sceneMgrRef: MutableRefObject<SceneManager | null>;
     canvasRef: RefObject<HTMLCanvasElement | null>;
+    /** 管理器是否已就绪；仅用于让监听器在管理器创建后重新绑定一次。 */
+    managerReady: boolean;
     activeTool: string;
     setActiveTool: Dispatch<SetStateAction<string>>;
     measureType: MeasureType;
@@ -27,6 +29,7 @@ interface UseViewerCanvasInteractionsOptions {
 export function useViewerCanvasInteractions({
     sceneMgrRef,
     canvasRef,
+    managerReady,
     activeTool,
     setActiveTool,
     measureType,
@@ -45,6 +48,42 @@ export function useViewerCanvasInteractions({
     const pointerDownRef = useRef<{ x: number; y: number; moved: boolean; button: number } | null>(null);
     const mouseMoveRafRef = useRef<number | null>(null);
     const pendingMousePointRef = useRef<{ x: number; y: number } | null>(null);
+
+    // 所有易变输入集中到一个 ref：canvas / window 监听器只绑定一次，
+    // 不再随每次渲染或选择变化重新拆卸、绑定（此前 handleSelect、clearSelectionState
+    // 等每次渲染都换新引用，导致监听器以帧率抖动）。
+    const latestRef = useRef({
+        activeTool,
+        measureType,
+        pickEnabled,
+        handleSelect,
+        handleContextMenu,
+        handleUndoVisibility,
+        clearSelectionState,
+        setActiveTool,
+        setHighlightedMeasureId,
+        setMeasureType,
+        setMousePos,
+        selectedUuids,
+        setSelectedProps,
+        setSelectedUuids
+    });
+    latestRef.current = {
+        activeTool,
+        measureType,
+        pickEnabled,
+        handleSelect,
+        handleContextMenu,
+        handleUndoVisibility,
+        clearSelectionState,
+        setActiveTool,
+        setHighlightedMeasureId,
+        setMeasureType,
+        setMousePos,
+        selectedUuids,
+        setSelectedProps,
+        setSelectedUuids
+    };
 
     useEffect(() => {
         const manager = sceneMgrRef.current;
@@ -70,10 +109,11 @@ export function useViewerCanvasInteractions({
             }
             pointerDownRef.current = null;
 
-            if (activeTool === "boxSelect") return;
+            const { activeTool: tool, measureType: currentMeasure, pickEnabled: canPick } = latestRef.current;
+            if (tool === "boxSelect") return;
 
-            if (activeTool === "measure") {
-                if (measureType !== "none") {
+            if (tool === "measure") {
+                if (currentMeasure !== "none") {
                     const intersect = manager.getRayIntersects(event.clientX, event.clientY);
                     if (intersect) {
                         const modelUuid = (intersect.object as any).uuid;
@@ -84,19 +124,19 @@ export function useViewerCanvasInteractions({
 
                 const measurementId = manager.pickMeasurement(event.clientX, event.clientY);
                 if (measurementId) {
-                    setHighlightedMeasureId(measurementId);
+                    latestRef.current.setHighlightedMeasureId(measurementId);
                     manager.highlightMeasurement(measurementId);
                     return;
                 }
 
-                setHighlightedMeasureId(null);
+                latestRef.current.setHighlightedMeasureId(null);
                 manager.highlightMeasurement(null);
                 return;
             }
 
-            if (pickEnabled) {
+            if (canPick) {
                 const result = manager.pick(event.clientX, event.clientY);
-                void handleSelect(result ? result.object : null, result ? result.intersect : null, event.ctrlKey);
+                void latestRef.current.handleSelect(result ? result.object : null, result ? result.intersect : null, event.ctrlKey);
             }
         };
 
@@ -109,9 +149,11 @@ export function useViewerCanvasInteractions({
                 }
             }
 
-            if (activeTool === "measure") {
+            const { setMousePos: setCoords } = latestRef.current;
+
+            if (latestRef.current.activeTool === "measure") {
                 manager.updateMeasureHover(event.clientX, event.clientY);
-                setMousePos(null);
+                setCoords(null);
                 return;
             }
 
@@ -121,7 +163,7 @@ export function useViewerCanvasInteractions({
                     cancelAnimationFrame(mouseMoveRafRef.current);
                     mouseMoveRafRef.current = null;
                 }
-                setMousePos(null);
+                setCoords(null);
                 return;
             }
 
@@ -133,32 +175,37 @@ export function useViewerCanvasInteractions({
                 const pending = pendingMousePointRef.current;
                 if (!pending) return;
                 const intersect = manager.getRayIntersects(pending.x, pending.y);
-                setMousePos(intersect ? intersect.point : null);
+                latestRef.current.setMousePos(intersect ? intersect.point : null);
             });
         };
 
         const handleKeyDown = (event: KeyboardEvent) => {
+            const state = latestRef.current;
             if ((event.key === "z" || event.key === "Z") && (event.ctrlKey || event.metaKey)) {
-                handleUndoVisibility();
+                state.handleUndoVisibility();
                 return;
             }
             if (event.key === "Escape") {
-                if (activeTool === "measure" && measureType !== "none") {
-                    setMeasureType("none");
+                if (state.activeTool === "measure" && state.measureType !== "none") {
+                    state.setMeasureType("none");
                     manager.startMeasurement("none");
                 }
-                if (activeTool === "boxSelect") {
+                if (state.activeTool === "boxSelect") {
                     manager.cancelBoxSelect();
-                    setActiveTool("none");
+                    state.setActiveTool("none");
                 }
-                clearSelectionState();
+                state.clearSelectionState();
             }
+        };
+
+        const handleContextMenuEvent = (event: MouseEvent) => {
+            latestRef.current.handleContextMenu(event);
         };
 
         canvas.addEventListener("mousedown", handleMouseDown);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
-        canvas.addEventListener("contextmenu", handleContextMenu);
+        canvas.addEventListener("contextmenu", handleContextMenuEvent);
         window.addEventListener("keydown", handleKeyDown);
 
         return () => {
@@ -170,24 +217,10 @@ export function useViewerCanvasInteractions({
             canvas.removeEventListener("mousedown", handleMouseDown);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
-            canvas.removeEventListener("contextmenu", handleContextMenu);
+            canvas.removeEventListener("contextmenu", handleContextMenuEvent);
             window.removeEventListener("keydown", handleKeyDown);
         };
-    }, [
-        activeTool,
-        canvasRef,
-        clearSelectionState,
-        handleContextMenu,
-        handleSelect,
-        handleUndoVisibility,
-        measureType,
-        pickEnabled,
-        sceneMgrRef,
-        setActiveTool,
-        setHighlightedMeasureId,
-        setMeasureType,
-        setMousePos
-    ]);
+    }, [canvasRef, managerReady, sceneMgrRef]);
 
     useEffect(() => {
         const manager = sceneMgrRef.current;
@@ -209,11 +242,12 @@ export function useViewerCanvasInteractions({
             if (event.button !== 0) return;
             const uuids = manager.endBoxSelect();
             if (uuids.length > 0) {
+                const state = latestRef.current;
                 const nextUuids = event.shiftKey
-                    ? [...new Set([...selectedUuids, ...uuids])]
+                    ? [...new Set([...state.selectedUuids, ...uuids])]
                     : uuids;
-                setSelectedUuids(nextUuids);
-                setSelectedProps(null);
+                state.setSelectedUuids(nextUuids);
+                state.setSelectedProps(null);
                 manager.highlightObjects(nextUuids);
             }
         };
@@ -231,5 +265,5 @@ export function useViewerCanvasInteractions({
             }
             manager.cancelBoxSelect();
         };
-    }, [activeTool, canvasRef, sceneMgrRef, selectedUuids, setSelectedProps, setSelectedUuids]);
+    }, [activeTool, canvasRef, managerReady, sceneMgrRef]);
 }

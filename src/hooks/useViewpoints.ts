@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { SceneManager } from "../utils/scene-manager/SceneManager";
 import type { ViewpointRecord, ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerToast } from "../viewer/types";
@@ -23,6 +23,13 @@ export function useViewpoints({
     restoreStateSnapshot
 }: UseViewpointsOptions) {
     const [viewpoints, setViewpoints] = useState<ViewpointRecord[]>([]);
+
+    // 快照读写函数依赖当前选择/裁剪/爆炸等状态，每次渲染都是新引用。
+    // 放进 ref 后，下面的 useCallback 不再因这些状态变化而改变身份。
+    const captureStateSnapshotRef = useRef(captureStateSnapshot);
+    const restoreStateSnapshotRef = useRef(restoreStateSnapshot);
+    captureStateSnapshotRef.current = captureStateSnapshot;
+    restoreStateSnapshotRef.current = restoreStateSnapshot;
 
     useEffect(() => {
         if (!currentFileSetId) {
@@ -94,14 +101,14 @@ export function useViewpoints({
         const name = customName || `${t("viewpoint_title")} ${viewpoints.length + 1}`;
         const cameraState = manager.getCameraState();
         const image = captureViewThumbnail();
-        const stateSnapshot = captureStateSnapshot(saveOptions);
+        const stateSnapshot = captureStateSnapshotRef.current(saveOptions);
         const nextViewpoints = replaceId
             ? viewpoints.map((viewpoint) => viewpoint.id === replaceId ? { ...viewpoint, name, cameraState, image, saveOptions, stateSnapshot } : viewpoint)
             : [...viewpoints, { id: Date.now().toString(), name, cameraState, image, saveOptions, stateSnapshot }];
 
         persistViewpoints(nextViewpoints);
         setToast({ message: t("success"), type: "success" });
-    }, [captureStateSnapshot, captureViewThumbnail, currentFileSetId, persistViewpoints, sceneMgrRef, setToast, t, viewpoints]);
+    }, [captureViewThumbnail, currentFileSetId, persistViewpoints, sceneMgrRef, setToast, t, viewpoints]);
 
     const handleUpdateViewpointName = useCallback((id: string, newName: string) => {
         persistViewpoints(viewpoints.map((viewpoint) => viewpoint.id === id ? { ...viewpoint, name: newName } : viewpoint));
@@ -110,9 +117,9 @@ export function useViewpoints({
     const handleLoadViewpoint = useCallback(async (viewpoint: ViewpointRecord) => {
         if (!viewpoint.cameraState) return;
         sceneMgrRef.current?.setCameraState(viewpoint.cameraState);
-        await restoreStateSnapshot(viewpoint.stateSnapshot);
+        await restoreStateSnapshotRef.current(viewpoint.stateSnapshot);
         setToast({ message: `${t("viewpoint_loading")}: ${viewpoint.name}`, type: "info" });
-    }, [restoreStateSnapshot, sceneMgrRef, setToast, t]);
+    }, [sceneMgrRef, setToast, t]);
 
     const handleOverwriteViewpoint = useCallback((id: string) => {
         const viewpoint = viewpoints.find((item) => item.id === id);
