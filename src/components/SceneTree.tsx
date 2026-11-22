@@ -107,7 +107,7 @@ const collectExpandedState = (nodes: TreeNode[]) => {
     return map;
 };
 
-const applyExpandedState = (nodes: TreeNode[], expandedMap: Map<string, boolean>) =>
+const applyExpandedState = (nodes: TreeNode[], expandedMap: Map<string, boolean>): TreeNode[] =>
     nodes.map((node) => ({
         ...node,
         expanded: expandedMap.get(node.uuid) ?? node.expanded,
@@ -152,7 +152,7 @@ const rawTreeContainsUuid = (rawNode: any, targetUuid: string): boolean => {
     if (!rawNode) return false;
     if (rawNode.id === targetUuid || rawNode.uuid === targetUuid) return true;
     const children = Array.isArray(rawNode.children) ? rawNode.children : [];
-    return children.some((child) => rawTreeContainsUuid(child, targetUuid));
+    return children.some((child: any) => rawTreeContainsUuid(child, targetUuid));
 };
 
 const getNodeSearchText = (node: TreeNode | any) => {
@@ -486,7 +486,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 const expandedNode = ensureNodeChildrenLoaded(node);
                 return {
                     ...expandedNode,
-                    expanded: expandedNode.hasChildren,
+                    expanded: Boolean(expandedNode.hasChildren),
                     children: expand(expandedNode.children)
                 };
             });

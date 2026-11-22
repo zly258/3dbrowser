@@ -545,8 +545,8 @@ export const loadIFC = async (
             return getScalarValue(trimValue);
         };
 
-        const startAngle = trim1Values.map(resolveAngle).find((value): value is number => value !== null);
-        const endAngle = trim2Values.map(resolveAngle).find((value): value is number => value !== null);
+        const startAngle = trim1Values.map(resolveAngle).find((value: number | null | undefined): value is number => value != null);
+        const endAngle = trim2Values.map(resolveAngle).find((value: number | null | undefined): value is number => value != null);
         if (startAngle === undefined || endAngle === undefined) return null;
         return buildConicPoints(basisCurve.Position, xRadius, yRadius, startAngle, endAngle);
     };
@@ -988,7 +988,7 @@ export const loadIFC = async (
     // 获取友好的属性名称
     const getFriendlyName = (name: string): string => {
         // 移除常见前缀
-        let cleanName = name.replace(/^(is|has|are)_/i, '');
+        const cleanName = name.replace(/^(is|has|are)_/i, '');
         
         // 驼峰转单词
         const camelToWords = (str: string) => {

@@ -44,7 +44,7 @@ export function cacheChunkMeshEntry(options: {
         }
     }
     chunkMeshCache.set(chunk.id, mesh);
-    let nextChunkCacheOrder = touchChunkMeshCacheOrder(chunkCacheOrder, chunk.id);
+    const nextChunkCacheOrder = touchChunkMeshCacheOrder(chunkCacheOrder, chunk.id);
 
     while (nextChunkCacheOrder.length > maxCachedChunks) {
         const evictId = nextChunkCacheOrder.shift();

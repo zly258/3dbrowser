@@ -804,10 +804,9 @@ export class SceneManager {
         // 射线投射
         this.raycaster = new THREE.Raycaster();
         this.raycaster.params.Points.threshold = 10;
-        // @ts-ignore
-        if (!this.raycaster.params.Line) this.raycaster.params.Line = { threshold: 1 };
-        // @ts-ignore
-        this.raycaster.params.Line.threshold = 2;
+        const raycasterParams = this.raycaster.params as { Line?: { threshold: number } };
+        if (!raycasterParams.Line) raycasterParams.Line = { threshold: 1 };
+        raycasterParams.Line.threshold = 2;
 
         this.mouse = new THREE.Vector2();
 
@@ -2211,7 +2210,7 @@ export class SceneManager {
         // 正交相机按视口高度换算；透视相机再叠加距离项。
         const perspectiveFocalPx = isOrthographicCamera
             ? 0
-            : canvasHeight / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov || 45) * 0.5));
+            : canvasHeight / (2 * Math.tan(THREE.MathUtils.degToRad((this.camera as unknown as { fov?: number }).fov || 45) * 0.5));
 
         const toLoad: any[] = [];
         const loadedChunks: any[] = [];
@@ -2456,8 +2455,7 @@ export class SceneManager {
             workerQueue: this.workerQueue,
             workers: this.workers,
             createWorker: () => {
-                // @ts-ignore
-                return new Worker(new URL('../chunkWorker.ts', import.meta.url), { type: 'module' });
+                return new Worker(new URL("../chunkWorker.ts", import.meta.url), { type: "module" });
             },
             getActiveWorkerCount: () => this.activeWorkerCount,
             onActiveWorkerCountChange: (count) => {
@@ -4048,7 +4046,7 @@ export class SceneManager {
             needsCulling: true
         });
         if (loadFinalize.shouldEstimateStats) {
-            void this.estimateNbimStats(file, manifest.chunks, version).then((stats) => {
+            void this.estimateNbimStats(file, manifest.chunks ?? [], version).then((stats) => {
                 this.unregisterOriginalStats(fileId);
                 this.registerOriginalStats(fileId, stats);
             }).catch((error) => {
@@ -5550,10 +5548,10 @@ export class SceneManager {
         this.camera.far = zBuffer;
 
         let targetZoom = 1;
-        let targetLeft = -fW / 2;
-        let targetRight = fW / 2;
-        let targetTop = fH / 2;
-        let targetBottom = -fH / 2;
+        const targetLeft = -fW / 2;
+        const targetRight = fW / 2;
+        const targetTop = fH / 2;
+        const targetBottom = -fH / 2;
         const flightToken = this.cameraFlightToken;
 
         if (updateCameraPosition) {
@@ -5708,7 +5706,7 @@ export class SceneManager {
         const maxDim = Math.max(size.x, size.y, size.z);
         const dist = Math.max(maxDim * 2, 10);
 
-        let pos = new THREE.Vector3();
+        const pos = new THREE.Vector3();
         switch (view) {
             case 'top': pos.set(0, 0, dist); break;
             case 'bottom': pos.set(0, 0, -dist); break;

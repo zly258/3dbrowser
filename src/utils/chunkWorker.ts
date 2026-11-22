@@ -6,6 +6,15 @@
 import { decodeChunkPayloadV11, chunkCodecFromMagic, type DecodedChunk } from "./scene-core/nbimChunk";
 import { decompressBytes } from "./scene-core/codec";
 
+/**
+ * 在 Worker 作用域里向主线程发送消息。
+ * tsconfig 用 DOM lib（没有 WebWorker lib），全局 `self` 被推断成 Window，
+ * 其 postMessage 重载不接受 transfer 列表，因此这里收窄一次类型。
+ */
+function sendToMain(message: unknown, transfer?: Transferable[]) {
+  (self as unknown as Worker).postMessage(message, transfer as Transferable[]);
+}
+
 async function decodeChunkV11Chunk(buffer: ArrayBuffer): Promise<DecodedChunk> {
   const dv = new DataView(buffer);
   const codec = chunkCodecFromMagic(dv.getUint32(0, true));
@@ -172,8 +181,7 @@ self.onmessage = async function (e: MessageEvent) {
         e.data.maxDepth
       );
       const transferables: Transferable[] = result.map((leaf) => leaf.itemIndices.buffer);
-      // @ts-ignore
-      self.postMessage({ type: "success", result }, transferables);
+      sendToMain({ type: "success", result }, transferables);
       return;
     }
 
@@ -218,11 +226,9 @@ self.onmessage = async function (e: MessageEvent) {
       if (inst.matrix) transferables.push(inst.matrix.buffer);
     });
 
-    // @ts-ignore - self.postMessage in Worker context
-    self.postMessage({ type: 'success', result }, transferables);
+    sendToMain({ type: 'success', result }, transferables);
   } catch (err: any) {
-    // @ts-ignore
-    self.postMessage({ type: 'error', error: err.message || String(err) });
+    sendToMain({ type: 'error', error: err.message || String(err) });
   }
 };
 

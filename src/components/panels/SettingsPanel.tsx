@@ -415,5 +415,5 @@ interface SettingsModalProps {
     residentBudgetMB: number;
     fitsAll: boolean;
     memoryPressure: boolean;
-  };
+  } | undefined;
 }

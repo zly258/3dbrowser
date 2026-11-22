@@ -86,7 +86,7 @@ function ensureParentChainVisible(object: THREE.Object3D | null, scene: THREE.Sc
 function collectHighlightedDescendants(
     highlightedUuids: Set<string>,
     uuid: string,
-    object: THREE.Object3D | null,
+    object: THREE.Object3D | null | undefined,
     nodes: StructureTreeNode[] | undefined
 ) {
     const idsToUnhighlight: string[] = [];

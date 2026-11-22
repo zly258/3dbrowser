@@ -193,7 +193,7 @@ async function loadObjectByExtension(
                     loader.load(
                         url,
                         resolve,
-                        (e) => {
+                        (e: { loaded: number; total?: number }) => {
                             if (e.total && e.total > 0) reportStage("parse", (e.loaded / e.total) * 100);
                             else reportStage("parse", 50);
                         },

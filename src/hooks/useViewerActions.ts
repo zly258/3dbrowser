@@ -20,7 +20,7 @@ interface UseViewerActionsOptions {
     setConfirmState: Dispatch<SetStateAction<ViewerConfirmState>>;
     setSelectedUuids: Dispatch<SetStateAction<string[]>>;
     setSelectedProps: Dispatch<SetStateAction<PropertyGroups | null>>;
-    setChunkProgress: Dispatch<SetStateAction<{ loaded: number; total: number }>>;
+    setChunkProgress: Dispatch<SetStateAction<{ loaded: number; total: number; pending: number }>>;
     resetLocateState: () => void;
     clearSearchResult: () => void;
     resetClashState: () => void;
@@ -155,7 +155,7 @@ export function useViewerActions({
                 exportGroup = new THREE.Group();
                 modelsToExport.forEach((model: THREE.Object3D) => exportGroup!.add(model.clone()));
 
-                let blob: Blob | null = await exportGLB(exportGroup);
+                const blob: Blob | null = await exportGLB(exportGroup);
                 setProgress(90);
 
                 if (blob) {
@@ -206,7 +206,7 @@ export function useViewerActions({
                     resetClashState();
                     ifcPropertyCacheRef.current.clear();
                     resetMeasurementState();
-                    setChunkProgress({ loaded: 0, total: 0 });
+                    setChunkProgress({ loaded: 0, total: 0, pending: 0 });
                     completedFileSetsRef.current.clear();
                     resetExplodeState();
                     updateTree();

@@ -1,5 +1,4 @@
 import React, { Component, useState, useRef, useEffect, useCallback, useMemo } from "react";
-// @ts-ignore
 import * as THREE from "three";
 import "./styles/index.css";
 import { SceneManager, SceneSettings, PerformancePreset, SceneChunkOptions } from "./utils/scene-manager/SceneManager";

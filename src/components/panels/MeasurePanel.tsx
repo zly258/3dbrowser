@@ -59,7 +59,7 @@ interface MeasurePanelProps {
   onClear: () => void;
   onClose?: () => void;
     theme?: any;
-  highlightedId?: string;
+  highlightedId?: string | null;
   onHighlight?: (id: string) => void;
 }
 

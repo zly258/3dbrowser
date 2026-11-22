@@ -18,6 +18,12 @@
     "jsx": "react-jsx",
 
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+
+    /* 类型安全基线：先开 strict，再逐步加入剩余严格项 */
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true
   }
 }

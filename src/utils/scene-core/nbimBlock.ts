@@ -184,6 +184,7 @@ export class BlockCompressedSource implements ByteSourceLike {
     slice(start: number, end: number): ByteRangeLike {
         const from = Math.max(0, Math.min(start, this.meta.uncompressedLength));
         const to = Math.max(from, Math.min(end, this.meta.uncompressedLength));
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- 供返回对象的闭包捕获
         const self = this;
         return {
             async arrayBuffer(): Promise<ArrayBuffer> {

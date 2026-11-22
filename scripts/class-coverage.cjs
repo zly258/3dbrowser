@@ -53,3 +53,5 @@ for (const [token, files] of [...used.entries()].sort()) {
 
 console.log(`TSX 使用类名: ${used.size}  未在样式中定义: ${missing.length}`);
 for (const [token, files] of missing) console.log(`  ${token}  <- ${files}`);
+// 作为 CI 门禁：存在未定义的类名时以非零退出码失败（此前总是 exit 0，无法阻断）
+if (missing.length > 0) process.exitCode = 1;
