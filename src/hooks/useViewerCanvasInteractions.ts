@@ -16,7 +16,7 @@ interface UseViewerCanvasInteractionsOptions {
     selectedUuids: string[];
     setSelectedUuids: Dispatch<SetStateAction<string[]>>;
     setSelectedProps: Dispatch<SetStateAction<PropertyGroups | null>>;
-    setMousePos: Dispatch<SetStateAction<THREE.Vector3 | null>>;
+    setMousePos: (value: THREE.Vector3 | null) => void;
     setHighlightedMeasureId: Dispatch<SetStateAction<string | null>>;
     handleSelect: (obj: any, intersect?: THREE.Intersection | null, isMultiSelect?: boolean) => void | Promise<void>;
     handleContextMenu: (event: MouseEvent) => void;

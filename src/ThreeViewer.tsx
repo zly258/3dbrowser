@@ -39,7 +39,7 @@ import { useUnloadGuard } from "./hooks/useUnloadGuard";
 import type { PropertyGroupInput, PropertyGroups } from "./viewer/propertyIndex";
 import type { ViewpointSaveOptions, ViewpointStateSnapshot, ViewerConfirmState, ViewerErrorState, ViewerToast } from "./viewer/types";
 import { usePropertySearch } from "./hooks/usePropertySearch";
-import { useClashCheck } from "./hooks/useClashCheck";
+import { setMouseCoords, useMouseCoords } from "./hooks/useMouseCoords";import { useClashCheck } from "./hooks/useClashCheck";
 import { useClashSummary } from "./hooks/useClashSummary";
 import { useFocusInView } from "./hooks/useFocusInView";
 import { useViewportMode } from "./hooks/useViewportMode";
@@ -48,6 +48,21 @@ const IS_DEV = typeof window !== "undefined" && (
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1"
 );
+
+/**
+ * 状态栏光标坐标读数。独立成组件并订阅外部 store，
+ * 指针移动时只有它自己重渲染，不会牵动整棵应用树。
+ */
+const StatusBarCoords = React.memo(function StatusBarCoords() {
+    const mousePos = useMouseCoords();
+    if (!mousePos) return null;
+    const text = `${mousePos.x.toFixed(2)}, ${mousePos.y.toFixed(2)}, ${mousePos.z.toFixed(2)}`;
+    return (
+        <div className="ui-statusbar-coords" title={text}>
+            {text}
+        </div>
+    );
+});
 
 // --- 全局样式注入 ---
 
@@ -198,8 +213,10 @@ export const ThreeViewer = ({
     const [chunkProgress, setChunkProgress] = useState({ loaded: 0, total: 0, pending: 0 });
     const [mgrInstance, setMgrInstance] = useState<SceneManager | null>(null);
     
-    // Viewport coords
-    const [mousePos, setMousePos] = useState<THREE.Vector3 | null>(null);
+    // Viewport coords：坐标存在模块级订阅源里，只有状态栏读数会重渲染（见 useMouseCoords）
+    const setMousePos = useCallback((value: THREE.Vector3 | null) => {
+        setMouseCoords(value ? { x: value.x, y: value.y, z: value.z } : null);
+    }, []);
     // 显示样式：realistic-真实（着色 + CAD 棱边）, shaded-着色（仅实体）。
     // 顶栏的样式切换已移除，这里只读取本地偏好并应用（默认 shaded）；
     // 旧存档里的 "wireframe" 由 normalizeDisplayMode 归一化为 realistic。
@@ -1582,11 +1599,7 @@ export const ThreeViewer = ({
                     )}
                 </div>
                 <div className="ui-statusbar-right">
-                    {mousePos && (
-                        <div className="ui-statusbar-coords" title={`${mousePos.x.toFixed(2)}, ${mousePos.y.toFixed(2)}, ${mousePos.z.toFixed(2)}`}>
-                            {mousePos.x.toFixed(2)}, {mousePos.y.toFixed(2)}, {mousePos.z.toFixed(2)}
-                        </div>
-                    )}
+                    <StatusBarCoords />
                     <div className="ui-tips">
                         <span>{t("tips_rotate")}</span>
                         <span className="ui-tips-separator">|</span>
