@@ -41,6 +41,7 @@ import { reconstructBatchedMeshFromWorkerData } from "./chunkMesh";
 import { applyIndustrialMaterials, applyIndustrialRendererSettings, createIndustrialSharedMaterial } from "./renderStyle";
 import { applyDisplayMode, normalizeDisplayMode, type DisplayMode } from "./displayMode";
 import { DisplayEdgeBuilder } from "./displayEdges";
+import { buildInstanceSizeStats, buildMemoryReport } from "./diagnostics";
 import { processChunkPrefetchQueue } from "./chunkPrefetch";
 import {
     acquireGhostLineResource,
@@ -54,7 +55,7 @@ import {
     takeCachedChunkMeshEntry,
     unregisterOptimizedMeshResourceMapping
 } from "./chunkResources";
-import { getBatchedGeometryId, getBatchedGeometryViewStats, getBatchedInstanceGeometry, getBatchedInstanceLocalBox, getBatchedInstanceWorldBox } from "./batchedGeometryView";
+import { getBatchedInstanceGeometry, getBatchedInstanceLocalBox, getBatchedInstanceWorldBox } from "./batchedGeometryView";
 import { processChunkWorkerQueue, queueChunkWorkerTask, type ChunkWorkerTask } from "./chunkWorkerPool";
 import { ensureChunkSpatialState, evaluateChunkVisibility } from "./chunkVisibility";
 import {
@@ -6022,68 +6023,7 @@ export class SceneManager {
 
     /** 调试/评估用：统计实例世界尺寸分布，判断“远景剔除小构件”这类 LOD 的收益。 */
     getInstanceSizeStats(thresholds: number[] = [0.02, 0.05, 0.1, 0.2, 0.5, 1]) {
-        const meshes: THREE.BatchedMesh[] = [];
-        for (const chunk of this.chunks) {
-            if (chunk?.mesh) meshes.push(chunk.mesh as THREE.BatchedMesh);
-        }
-        let totalVerts = 0;
-        let totalInstances = 0;
-        const instanceSizes: number[] = [];
-        const geos: Array<{ diag: number; verts: number; maxWorldDiag: number }> = [];
-        const box = new THREE.Box3();
-        const size = new THREE.Vector3();
-        const matrix = new THREE.Matrix4();
-
-        for (const mesh of meshes) {
-            const count = Number((mesh as any).instanceCount) || 0;
-            const geoMap = new Map<number, { diag: number; verts: number; maxWorldDiag: number }>();
-            for (let i = 0; i < count; i++) {
-                const gid = getBatchedGeometryId(mesh, i);
-                if (gid === null) continue;
-                let geo = geoMap.get(gid);
-                if (!geo) {
-                    const geometryBox = (mesh as any).getBoundingBoxAt?.(gid, box);
-                    const range = (mesh as any).getGeometryRangeAt?.(gid, {});
-                    const diag = geometryBox ? geometryBox.getSize(size).length() : 0;
-                    geo = { diag, verts: Number(range?.vertexCount) || 0, maxWorldDiag: 0 };
-                    geoMap.set(gid, geo);
-                    geos.push(geo);
-                    totalVerts += geo.verts;
-                }
-                mesh.getMatrixAt(i, matrix);
-                const e = matrix.elements;
-                const scale = (Math.abs(e[0]) + Math.abs(e[5]) + Math.abs(e[10])) / 3;
-                const worldDiag = geo.diag * scale;
-                if (worldDiag > geo.maxWorldDiag) geo.maxWorldDiag = worldDiag;
-                instanceSizes.push(worldDiag);
-                totalInstances++;
-            }
-        }
-
-        const sorted = instanceSizes.slice().sort((a, b) => a - b);
-        const percentile = (p: number) => sorted.length
-            ? Number(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))].toFixed(3))
-            : 0;
-        const distribution = thresholds.map((threshold) => {
-            const keptInstances = sorted.filter((value) => value >= threshold).length;
-            let keptVerts = 0;
-            for (const geo of geos) {
-                if (geo.maxWorldDiag >= threshold) keptVerts += geo.verts;
-            }
-            return {
-                threshold,
-                instanceKeepPercent: totalInstances ? Number((keptInstances / totalInstances * 100).toFixed(1)) : 0,
-                vertexKeepPercent: totalVerts ? Number((keptVerts / totalVerts * 100).toFixed(1)) : 0
-            };
-        });
-
-        return {
-            meshes: meshes.length,
-            totalInstances,
-            totalVerts,
-            percentiles: { p10: percentile(0.1), p25: percentile(0.25), p50: percentile(0.5), p75: percentile(0.75), p90: percentile(0.9) },
-            distribution
-        };
+        return buildInstanceSizeStats(this.chunks, thresholds);
     }
 
     getStats(): SceneManagerStats {
@@ -6103,116 +6043,34 @@ export class SceneManager {
      * 只读，不改变状态；用于定位“每块 6.5MB”到底花在哪（合并缓冲 / CPU 源数组 / 边线 / 属性 / 结构树）。
      */
     getMemoryReport() {
-        const perf = (performance as any)?.memory;
-        const bytesOf = (geometry?: THREE.BufferGeometry | null) => {
-            if (!geometry) return 0;
-            let total = 0;
-            const attributes = geometry.attributes || {};
-            for (const name in attributes) {
-                const array = (attributes as any)[name]?.array;
-                if (array?.byteLength) total += array.byteLength;
-            }
-            const index = (geometry as any).index;
-            if (index?.array?.byteLength) total += index.array.byteLength;
-            return total;
-        };
-
-        let batchedBytes = 0;
-        let sourceBytes = 0;
-        let instanceCount = 0;
-        let batchedMeshCount = 0;
-        let sourceGeometryCount = 0;
-        let estimatedResidentMB = 0;
-
-        for (const chunk of this.chunks) {
-            if (chunk?.loaded) estimatedResidentMB += this.getChunkCostMB(chunk);
-            const mesh = chunk?.mesh as THREE.BatchedMesh | undefined;
-            if (!mesh) continue;
-            batchedMeshCount++;
-            batchedBytes += bytesOf(mesh.geometry);
-            instanceCount += Number((mesh as any).instanceCount) || 0;
-            // 逐实例几何视图现在按需创建，只统计真正存在的视图（position/normal 共享合并缓冲，
-            // 仅索引副本占额外内存）。
-            const viewStats = getBatchedGeometryViewStats(mesh);
-            sourceGeometryCount += viewStats.count;
-            sourceBytes += viewStats.bytes;
+        let propertyRows = 0;
+        for (const doc of this.nbimAllSearchDocs) {
+            if (Array.isArray(doc?.rows)) propertyRows += doc.rows.length;
         }
-
         let readCacheBytes = 0;
         for (const buffer of this.chunkReadCache.values()) readCacheBytes += buffer.byteLength;
-
-        const edgeStats = this.displayEdges.getStats();
-        const pendingDocs = this.nbimPendingDocs ? Object.keys(this.nbimPendingDocs).length : 0;
-        let propertyRows = 0;
-        if (this.nbimPendingDocs) {
-            for (const key in this.nbimPendingDocs) {
-                const doc = this.nbimPendingDocs[key];
-                if (Array.isArray(doc?.rows)) propertyRows += doc.rows.length;
-            }
-        } else {
-            for (const doc of this.nbimAllSearchDocs) {
-                if (Array.isArray(doc?.rows)) propertyRows += doc.rows.length;
-            }
-        }
-
-        let structureNodes = 0;
-        if (this.structureRoot) {
-            const stack: any[] = [this.structureRoot];
-            while (stack.length > 0) {
-                const node = stack.pop();
-                structureNodes++;
-                if (Array.isArray(node?.children)) stack.push(...node.children);
-            }
-        }
-
-        const toMB = (bytes: number) => Number((bytes / 1048576).toFixed(2));
-        return {
-            heap: {
-                usedMB: perf ? Number((perf.usedJSHeapSize / 1048576).toFixed(1)) : null,
-                limitMB: perf ? Number((perf.jsHeapSizeLimit / 1048576).toFixed(0)) : null
-            },
-            chunks: {
-                total: this.chunks.length,
-                loaded: this.chunkLoadedCount,
-                processing: this.processingChunks.size,
-                residentBudgetMB: Number(this.chunkResidentBudgetMB.toFixed(1)),
-                estimatedResidentMB: Number(estimatedResidentMB.toFixed(1)),
-                maxLoadedChunks: this.maxLoadedChunks,
-                cachedMeshes: this.chunkMeshCache.size,
-                coarseLod: this.chunks.reduce((sum, chunk) => sum + (chunk?.lodLevel === 1 ? 1 : 0), 0)
-            },
-            geometry: {
-                batchedMeshCount,
-                batchedBytesMB: toMB(batchedBytes),
-                sourceGeometryCount,
-                sourceBytesMB: toMB(sourceBytes),
-                instanceCount,
-                instanceMetaMB: Number(((instanceCount * 88) / 1048576).toFixed(1))
-            },
-            edges: { objects: edgeStats.count, bytesMB: toMB(edgeStats.bytes) },
-            properties: {
-                pendingDocs,
-                indexedDocs: this.nbimAllSearchDocs.length,
-                searchDocsByUuid: this.nbimSearchDocsByUuid.size,
-                searchDocsByBimId: this.nbimSearchDocsByBimId.size,
-                propertyNameIndex: this.nbimPropertyNameIndex.size,
-                rows: propertyRows
-            },
-            structure: {
-                nodes: structureNodes,
-                nodeMap: this.nodeMap.size,
-                bimIdToNodeIds: this.bimIdToNodeIds.size
-            },
-            caches: {
-                readCacheEntries: this.chunkReadCache.size,
-                readCacheMB: toMB(readCacheBytes),
-                readCacheBudgetMB: this.resolvedChunkOptions.chunkReadCacheMB
-            },
-            render: {
-                drawCalls: this.renderer.info.render.calls,
-                triangles: this.renderer.info.render.triangles
-            }
-        };
+        return buildMemoryReport({
+            chunks: this.chunks,
+            getChunkCostMB: (chunk) => this.getChunkCostMB(chunk),
+            chunkLoadedCount: this.chunkLoadedCount,
+            processingChunkCount: this.processingChunks.size,
+            chunkResidentBudgetMB: this.chunkResidentBudgetMB,
+            maxLoadedChunks: this.maxLoadedChunks,
+            chunkMeshCacheSize: this.chunkMeshCache.size,
+            propertyRows,
+            nbimAllSearchDocsLength: this.nbimAllSearchDocs.length,
+            nbimSearchDocsByUuidSize: this.nbimSearchDocsByUuid.size,
+            nbimSearchDocsByBimIdSize: this.nbimSearchDocsByBimId.size,
+            nbimPropertyNameIndexSize: this.nbimPropertyNameIndex.size,
+            structureRoot: this.structureRoot,
+            nodeMapSize: this.nodeMap.size,
+            bimIdToNodeIdsSize: this.bimIdToNodeIds.size,
+            chunkReadCacheBytes: readCacheBytes,
+            chunkReadCacheSize: this.chunkReadCache.size,
+            chunkReadCacheBudgetMB: this.resolvedChunkOptions.chunkReadCacheMB,
+            edgeStats: this.displayEdges.getStats(),
+            renderer: this.renderer
+        });
     }
 
     dispose() {
