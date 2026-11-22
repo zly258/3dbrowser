@@ -158,6 +158,42 @@ import {
 import type { PropertyGroupInput } from "../../viewer/propertyIndex";
 import { sanitizeFileStem, stripFileExtension } from "../../viewer/exportNaming";
 
+/**
+ * SceneManager 拆分路线图（渐进式，按“先低风险只读、后高风险热路径”排序）
+ * -------------------------------------------------------------------------
+ * 现状：纯逻辑已经外置到同级模块（picking / highlight / measurement / clipping /
+ * visibility / chunkIO / chunkScheduling / diagnostics …），本类仍承担「状态所有权 +
+ * 编排 + 定时器 + rAF 调度 + 资源释放」。
+ *
+ * 已完成：
+ *   [x] 只读诊断（getMemoryReport / getInstanceSizeStats）→ ./diagnostics.ts
+ *
+ * 待办（每一步都保持公开方法签名不变、只做一行委托，并在每步后跑
+ * `npm run check` + 一次运行时冒烟：加载→平移→拾取→高亮→测量→剖切→爆炸→导出→dispose）：
+ *   [ ] 1. 相机取景/包围盒（fitView* / setView / get|setCameraState / restoreView）
+ *          → ./cameraController.ts            风险低
+ *   [ ] 2. 爆炸视图（capture/apply/restore/refreshExplodeState + 方向辅助）
+ *          → ./explodeController.ts          风险中
+ *   [ ] 3. 高亮 / 定位 / 碰撞对（highlight* / locate* / setClashPairHighlight）
+ *          → ./highlightController.ts        风险中
+ *   [ ] 4. 测量（start/add/finalize/remove/clear + 拾取测量）
+ *          → ./measurementController.ts      风险中
+ *   [ ] 5. 裁剪（setupClipping / setClipHelperOptions / updateClippingPlanes）
+ *          → ./clippingController.ts         风险低
+ *   [ ] 6. 框选（start/update/end/cancelBoxSelect / selectByScreenRect）
+ *          → ./boxSelectController.ts        风险低
+ *   [ ] 7. 分块调度（checkCullingAndLoad / load|unloadChunk / 预算与缓存）
+ *          → ./chunkScheduler.ts             风险最高，务必最后做
+ *   [ ] 8. NBIM 存储与属性（loadNbim / exportNbim / 属性文档与索引）
+ *          → ./nbimStore.ts                  风险中
+ *   [ ] 9. 模型生命周期（addModel / removeModel / 预算合并）
+ *          → ./modelLifecycle.ts             风险中
+ *
+ * 终点：本文件收敛为 ~200 行的门面，只持有 renderer/scene/camera 并转发。
+ * 注意：多个簇共享 optimizedMapping / nodeMap / highlightedUuids / locateResultSet，
+ * 拆分时这些共享 map 应归属某个 controller 或作为构造参数显式传入，不要各自复制。
+ */
+
 const CHUNK_PROGRESS_REPORT_INTERVAL_MS = 48;
 const NBIM_CHUNK_REGISTRATION_BATCH = 220;
 const GHOST_VISIBLE_FIRST_BATCH = 180;
