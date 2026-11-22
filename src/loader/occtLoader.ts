@@ -271,7 +271,7 @@ export class OCCTLoader {
         angularDeflection: number;
     };
 
-    constructor(wasmUrl: string = "/libs/occt-import-js/occt-import-js.wasm") {
+    constructor(wasmUrl: string = "./libs/occt-import-js/occt-import-js.wasm") {
         this.wasmUrl = wasmUrl;
         this.readParameters = {
             productContext: 1,

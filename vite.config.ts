@@ -9,11 +9,14 @@ const __dirname = resolve(__filename, '..');
 
 // 本机杀软会拦截系统 Temp 下 esbuild 临时目录的删除（Access is denied），
 // 把构建临时目录固定到项目内 .tmpbuild 绕过（.gitignore 已忽略该目录）。
-const buildTempDir = resolve(__dirname, '.tmpbuild', 'esbuild');
-mkdirSync(buildTempDir, { recursive: true });
-process.env.TMPDIR = buildTempDir;
-process.env.TEMP = buildTempDir;
-process.env.TMP = buildTempDir;
+// 仅 Windows 需要；Linux CI 保留系统 Temp 即可。
+if (process.platform === 'win32') {
+  const buildTempDir = resolve(__dirname, '.tmpbuild', 'esbuild');
+  mkdirSync(buildTempDir, { recursive: true });
+  process.env.TMPDIR = buildTempDir;
+  process.env.TEMP = buildTempDir;
+  process.env.TMP = buildTempDir;
+}
 
 const packageJson = JSON.parse(
   readFileSync(resolve(__dirname, 'package.json'), 'utf-8')
@@ -47,6 +50,19 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist-pages',
         emptyOutDir: true,
         chunkSizeWarningLimit: 2000,
+        // 生产报错需要可读堆栈；hidden 生成但不内联引用，上传为 CI artifact 即可
+        sourcemap: 'hidden',
+        rollupOptions: {
+          output: {
+            // 拆出三方依赖：首次绘制只需应用代码，vendor 命中浏览器缓存；
+            // 也让三方的 3.5MB web-ifc 继续留在动态 chunk 里按需加载。
+            manualChunks: (id) => {
+              if (id.includes('node_modules/three')) return 'three';
+              if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react';
+              return undefined;
+            }
+          }
+        }
       } : {
         target: 'esnext',
         minify: 'esbuild' as const,
@@ -70,10 +86,6 @@ export default defineConfig(({ mode }) => {
           output: {
             inlineDynamicImports: false,
             manualChunks: (id) => {
-              if (id.includes('three/examples/jsm/loaders/')) {
-                  const name = id.split('/').pop()?.replace('.js', '').toLowerCase();
-                  return `loaders-${name}`;
-              }
               if (id.includes('src/loader/')) {
                 if (id.includes('ifcLoader')) return 'ifcLoader';
                 if (id.includes('occtLoader')) return 'occtLoader';
@@ -82,11 +94,6 @@ export default defineConfig(({ mode }) => {
                 return 'utils';
               }
               return null;
-            },
-            globals: {
-              react: 'React',
-              'react-dom': 'ReactDOM',
-              three: 'THREE'
             }
           }
         }
