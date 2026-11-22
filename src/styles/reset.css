@@ -84,13 +84,10 @@ textarea {
 .ui-app-shell .ui-panel-resize-nw,
 .ui-app-shell .ui-panel-resize-se { cursor: nwse-resize !important; }
 
-#root .ui-cursor-grabbing,
 .ui-app-shell .ui-cursor-grabbing { cursor: grabbing !important; }
 
-#root .ui-cursor-grab,
 .ui-app-shell .ui-cursor-grab { cursor: grab !important; }
 
-#root .ui-cursor-move,
 .ui-app-shell .ui-cursor-move { cursor: move !important; }
 
 /* 可拖拽浮动面板的标题栏：唯一靠光标表达“可拖动”的地方，必须保留 */
@@ -130,10 +127,8 @@ input[type="number"].ui-input,
 .ui-measure-item-value,
 .ui-clip-axis-value,
 .ui-clip-range-hint-value,
-.ui-data-value,
 .ui-result-item-secondary-value,
-.cad-loading-pct,
-.mono {
+.cad-loading-pct {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -162,15 +157,6 @@ svg { display: block; flex-shrink: 0; }
 * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
 
 /* 横向触控滑动（工具坞等）：隐藏滚动条但保留滑动 */
-.ui-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-}
-
-.ui-scroll-x::-webkit-scrollbar { display: none; }
 
 /* ---------- 数字输入：隐藏原生步进器，等宽数字 ---------- */
 input[type="number"],

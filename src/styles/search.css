@@ -180,8 +180,6 @@
   font-size: var(--font-size-secondary);
 }
 
-.ui-search-result-checkbox { margin-top: 2px; }
-
 .ui-search-remove-btn {
   color: var(--danger);
   border-color: transparent;
@@ -388,9 +386,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.ui-clash-actions-row,
-.ui-clash-filter-row,
-.ui-clash-page-actions {
+.ui-clash-actions-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -639,13 +635,6 @@
   color: var(--accent);
   background: var(--accent-soft);
   border-color: var(--accent-line);
-}
-
-.ui-clash-result-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
 }
 
 /* ---------- 运行中浮层 ---------- */

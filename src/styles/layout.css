@@ -131,7 +131,6 @@
 /* ---------- 图标按钮统一尺寸（全站） ---------- */
 .ui-btn.ui-btn-icon,
 .ui-btn-icon,
-.ui-icon-btn,
 .ui-search-clear,
 .ui-viewpoint-delete,
 .ui-measure-item-delete {
@@ -157,7 +156,6 @@
 
 .ui-btn.ui-btn-icon svg,
 .ui-btn-icon svg,
-.ui-icon-btn svg,
 .ui-search-clear svg,
 .ui-viewpoint-delete svg,
 .ui-measure-item-delete svg {
@@ -171,7 +169,6 @@
 
 .ui-btn.ui-btn-icon:hover:not(:disabled),
 .ui-btn-icon:hover:not(:disabled),
-.ui-icon-btn:hover:not(:disabled),
 .ui-search-clear:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-hover);
@@ -180,7 +177,6 @@
 
 .ui-btn.ui-btn-icon:active:not(:disabled),
 .ui-btn-icon:active:not(:disabled),
-.ui-icon-btn:active:not(:disabled),
 .ui-search-clear:active:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent-line);
@@ -189,7 +185,6 @@
 
 .ui-btn.ui-btn-icon:disabled,
 .ui-btn-icon:disabled,
-.ui-icon-btn:disabled,
 .ui-search-clear:disabled {
   background: var(--bg-band);
   border-color: var(--border-sub);
@@ -199,7 +194,6 @@
 
 /* 面板/弹窗/侧栏/Toast 关闭按钮：24×24、透明底、hover 转危险色（统一口径） */
 .ui-panel-close,
-.ui-modal-close,
 .ui-sidebar-close,
 .ui-toast-close {
   display: inline-flex;
@@ -223,7 +217,6 @@
 }
 
 .ui-panel-close:hover,
-.ui-modal-close:hover,
 .ui-sidebar-close:hover,
 .ui-toast-close:hover {
   background: var(--danger-soft);
@@ -231,7 +224,6 @@
 }
 
 .ui-panel-close:active,
-.ui-modal-close:active,
 .ui-sidebar-close:active,
 .ui-toast-close:active {
   background: var(--danger-soft);
@@ -239,7 +231,6 @@
 }
 
 .ui-panel-close:focus-visible,
-.ui-modal-close:focus-visible,
 .ui-sidebar-close:focus-visible,
 .ui-toast-close:focus-visible {
   outline: 2px solid var(--accent);
@@ -247,7 +238,6 @@
 }
 
 .ui-panel-close svg,
-.ui-modal-close svg,
 .ui-sidebar-close svg,
 .ui-toast-close svg {
   width: 13px;

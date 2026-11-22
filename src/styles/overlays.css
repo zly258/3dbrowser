@@ -6,8 +6,7 @@
 /* ============================================================
  * 模态遮罩
  * ============================================================ */
-.ui-modal-scrim,
-.ui-modal-overlay {
+.ui-modal-scrim {
   position: fixed;
   inset: 0;
   z-index: var(--z-scrim);
@@ -17,47 +16,6 @@
 /* ============================================================
  * 通用对话框（确认 / 关于 使用 ui-panel-modal 承载，这里补充内容面）
  * ============================================================ */
-.ui-modal {
-  display: flex;
-  flex-direction: column;
-  max-height: 80vh;
-  overflow: hidden;
-  color: var(--text-main);
-  background: var(--bg-glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--border-sub);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-overlay);
-}
-
-.ui-modal-header,
-.ui-modal-footer {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 0 10px;
-  background: transparent;
-  border-color: var(--border-sub);
-}
-
-.ui-modal-header {
-  justify-content: space-between;
-  height: var(--modal-head-h);
-  min-height: var(--modal-head-h);
-  border-bottom: 1px solid var(--border-main);
-}
-
-.ui-modal-footer {
-  min-height: 38px;
-  justify-content: flex-end;
-  border-top: 1px solid var(--border-main);
-}
-
-.ui-modal-title {
-  font-size: var(--font-size-title);
-  font-weight: 600;
-}
 
 .ui-modal-body {
   flex: 1 1 auto;
@@ -377,11 +335,6 @@
   border-width: 2px;
 }
 
-.cad-spinner-on-accent {
-  border-color: rgba(255, 255, 255, 0.4);
-  border-top-color: var(--accent-contrast);
-}
-
 .cad-loading-track {
   position: relative;
   height: 6px;
@@ -402,22 +355,6 @@
 .cad-loading-track.indeterminate > i {
   width: 35%;
   animation: loadingIndeterminate 1.2s ease-in-out infinite;
-}
-
-.skeleton {
-  position: relative;
-  overflow: hidden;
-  background: var(--bg-band);
-  border-radius: var(--radius);
-}
-
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-  animation: skeletonSweep 1.2s ease-in-out infinite;
 }
 
 /* 进度浮层：居中毛玻璃卡 + rounded-2xl（16px）+ 细进度条（blue-600） */

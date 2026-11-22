@@ -151,14 +151,6 @@
 
 .ui-toolpanel-row-between > :last-child { flex-shrink: 0; }
 
-.ui-toolpanel-wrap { flex-wrap: wrap; }
-
-.ui-toolpanel-grid { display: grid; gap: var(--space-2); }
-
-.ui-toolpanel-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-.ui-toolpanel-grid-condition { display: flex; align-items: center; gap: 5px; padding: 2px 0; }
-
 /* ---------- 说明文字 ---------- */
 .ui-toolpanel-caption {
   color: var(--text-sec);
@@ -198,8 +190,6 @@
   border: 1px solid var(--border-main);
   border-radius: var(--radius);
 }
-
-.ui-toolpanel-results-box-sm { max-height: 200px; }
 
 /* ---------- 空态 ---------- */
 .ui-toolpanel-results-empty,
@@ -380,8 +370,6 @@
 }
 
 .ui-inline-actions-stretch > * { flex: 1 1 auto; min-width: 0; }
-
-.ui-inline-actions-end { justify-content: flex-end; }
 
 /* ============================================================
  * 设置面板

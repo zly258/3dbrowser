@@ -15,7 +15,6 @@
   /* ---------- 字体（与 dxfviewer 同一套字栈，唯一来源） ---------- */
   --font-sans: 'Nunito', 'Noto Sans SC', -apple-system, BlinkMacSystemFont,
     'PingFang SC', 'Microsoft YaHei UI', sans-serif;
-  --font-mono: var(--font-sans);
 
   /* ---------- 背景四层 ---------- */
   --bg-app: #f8fafc;
@@ -64,7 +63,6 @@
   --warn: #b45309;
   --warn-soft: #fffbeb;
   --warn-line: #fde68a;
-  --info: #2563eb;
   --switch-thumb: #ffffff;
 
   /* ---------- 形 ---------- */
@@ -86,26 +84,19 @@
 
   /* ---------- 字 ---------- */
   --font-size-base: 12px;
-  --font-size-body: 12px;
   --font-size-secondary: 12px;
   --font-size-label: 11px;
   --font-size-title: 13px;
-  --font-size-large: 15px;
-  --font-size-page: 16px;
   --font-size-caption: 11px;
   --line-height: 1.5;
 
   /* ---------- 尺寸阶梯 ---------- */
   --control-h: 26px;
   --control-h-sm: 22px;
-  --control-h-md: 26px;
-  --control-h-lg: 26px;
-  --control-h-xs: 22px;
   --header-h: 44px;
   /* 手机横屏（max-height < 500px）：顶栏压缩到 36px */
   --header-h-mobile: 36px;
   --toolbar-btn-h: 26px;
-  --toolbar-h: 44px;
   --footer-h: 24px;
   /* 移动端底部抽屉 / 浮动面板骨架 */
   --sheet-max-h: 55dvh;
@@ -119,18 +110,15 @@
   --icon-size-sm: 12px;
   --icon-btn-size: 26px;
   --icon-btn-size-sm: 22px;
-  --icon-btn-radius: var(--radius-pill);
   --slider-track-height: 4px;
   --slider-thumb-size: 14px;
   --slider-thumb-border: 2px;
   --scrollbar-size: 6px;
 
   /* ---------- 间距 ---------- */
-  --space-1: 4px;
   --space-2: 6px;
   --space-3: 8px;
   --space-4: 12px;
-  --space-5: 16px;
 
   /* ---------- 侧栏（桌面端骨架：左 224px / 右 288px，可拖拽但默认值固定） ---------- */
   --sidebar-left-w: 224px;
@@ -166,33 +154,12 @@
   /* ============================================================
    * 兼容别名（旧类名仍在使用，映射到标准令牌，勿新增引用）
    * ============================================================ */
-  --font-family: var(--font-sans);
-  --font-family-ui: var(--font-sans);
   --bg-primary: var(--bg-app);
-  --bg-secondary: var(--bg-chrome);
-  --bg-tertiary: var(--bg-band);
-  --bg-elevated: var(--bg-chrome);
   --bg-header: var(--bg-chrome);
   --bg-canvas: var(--bg-viewport);
-  --bg-active: var(--bg-hover);
   --bg-selected: var(--accent-soft);
-  --bg-soft: var(--accent-soft);
-  --bg-soft-strong: var(--accent-soft);
-  --bg-card: var(--bg-chrome);
-  --bg-subtle: var(--bg-band);
-  --bg-sunken-2: var(--bg-sunken);
-  --blur-overlay: 8px;
   --border-color: var(--border-main);
-  --border-light: var(--border-sub);
-  --border-hover-strong: var(--border-hover);
-  --divider: var(--border-sub);
   --text-primary: var(--text-main);
-  --text-secondary: var(--text-sec);
-  --text-disabled: var(--text-muted);
-  --text-bright: var(--text-main);
-  --state-hover: var(--bg-hover);
-  --state-active: var(--bg-hover);
-  --state-focus: var(--accent-focus);
   --accent-blue: var(--accent);
   --accent-blue-hover: var(--accent-hover);
   --accent-blue-soft: var(--accent-soft);
@@ -203,65 +170,15 @@
   --primary-focus: var(--accent-focus);
   --primary-container: var(--accent-soft);
   --error: var(--danger);
-  --error-color: var(--danger);
-  --success-color: var(--success);
   --warning: var(--warn);
-  --warning-color: var(--warn);
-  --surface: var(--bg-app);
-  --surface-dim: var(--bg-band);
-  --surface-bright: var(--bg-chrome);
-  --surface-container: var(--bg-panel);
-  --surface-container-low: var(--bg-app);
-  --surface-container-high: var(--bg-band);
-  --surface-container-highest: var(--bg-hover);
-  --surface-canvas: var(--bg-viewport);
-  --surface-overlay: var(--bg-panel);
-  --surface-glass: var(--bg-glass);
   --surface-hover: var(--bg-hover);
   --surface-active: var(--bg-hover);
   --surface-selected: var(--accent-soft);
   --surface-soft: var(--accent-soft);
   --surface-soft-strong: var(--accent-soft);
-  --outline: var(--border-main);
-  --outline-variant: var(--border-sub);
-  --outline-strong: var(--border-strong);
-  --on-surface: var(--text-main);
-  --on-surface-variant: var(--text-sec);
-  --on-surface-muted: var(--text-muted);
-  --on-surface-disabled: var(--text-muted);
-  --radius-sm: var(--radius-xs);
-  --radius-md: var(--radius);
-  --radius-xl-lg: var(--radius-xl);
-  --radius-small: var(--radius-xs);
-  --radius-medium: var(--radius);
-  --radius-large: var(--radius-lg);
-  --radius-full: var(--radius-pill);
-  --icon-button-radius: var(--radius-pill);
-  --icon-button-size: var(--icon-btn-size);
-  --icon-button-gap: var(--space-1);
-  --icon-btn-border: var(--border-main);
-  --icon-btn-bg: var(--bg-chrome);
-  --icon-btn-hover-bg: var(--bg-hover);
-  --icon-btn-hover-border: var(--border-hover);
-  --icon-btn-active-bg: var(--accent-soft);
-  --icon-btn-danger: var(--danger);
-  --icon-btn-danger-bg: var(--danger-soft);
-  --icon-btn-danger-hover-bg: var(--danger-soft);
-  --icon-btn-danger-hover-border: var(--danger-line);
-  --icon-btn-danger-soft: var(--danger-soft);
-  --icon-btn-danger-soft-hover: var(--danger-soft);
-  --icon-btn-danger-active: var(--danger-hover);
-  --shadow-xs: var(--shadow-card);
-  --shadow-sm: var(--shadow-card);
   --shadow-md: var(--shadow-card);
-  --shadow-lg: var(--shadow-overlay);
-  --shadow-menu: var(--shadow-overlay);
-  --shadow-panel-overlay: var(--shadow-panel);
-  --overlay-scrim: var(--scrim);
   --toolbar-menu-max-height: calc(100vh - 96px);
   --label-width: var(--panel-label-width);
-  --icon-button-radius-outer: var(--radius-lg);
-  --scrollbar-thumb-rest: var(--scrollbar-thumb);
 }
 
 /* ============================================================
@@ -322,7 +239,6 @@
   --warn: #fbbf24;
   --warn-soft: #33270f;
   --warn-line: #5c4a1f;
-  --info: #3b82f6;
   --switch-thumb: #e2e8f0;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5);

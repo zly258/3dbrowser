@@ -79,7 +79,6 @@
   color: var(--text-sec);
 }
 
-.ui-statusbar-item,
 .ui-statusbar-meta,
 .ui-statusbar-coords,
 .ui-statusbar-metric,
@@ -108,11 +107,6 @@
 .ui-statusbar-metric {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.ui-statusbar-value {
-  color: var(--text-main);
-  font-weight: 400;
 }
 
 /* ---------- 统计组 ---------- */
@@ -166,26 +160,6 @@
 }
 
 /* ---------- 底栏按钮 ---------- */
-.ui-statusbar-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 20px;
-  min-height: 20px;
-  padding: 0 6px;
-  color: var(--text-sec);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-}
-
-.ui-statusbar-btn:hover {
-  color: var(--text-main);
-  background: var(--bg-hover);
-  border-color: transparent;
-}
-
-.ui-statusbar-btn-compact { padding: 0 4px; }
 
 .ui-statusbar-tag {
   display: inline-flex;

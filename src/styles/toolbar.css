@@ -288,23 +288,6 @@
 }
 
 /* ---------- 分组 ---------- */
-.ui-toolbar-group {
-  display: inline-flex;
-  align-items: center;
-  /* 允许分组收缩，分组内按钮才能省略文字而不是被父级静默裁掉 */
-  flex: 0 1 auto;
-  min-width: 0;
-  gap: 2px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-}
-
-.ui-toolbar-group + .ui-toolbar-group {
-  margin-left: 4px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border-sub);
-}
 
 /* ---------- 工具按钮：图标 + 文字水平胶囊 ---------- */
 .ui-toolbar-btn {
