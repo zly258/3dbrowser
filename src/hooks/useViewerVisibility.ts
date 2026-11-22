@@ -61,8 +61,13 @@ export function useViewerVisibility({
         const sceneManager = sceneMgrRef.current;
         if (!sceneManager || selectedUuids.length === 0) return;
 
+        // 一次遍历建立索引，避免对每个选中 uuid 都做一次全场景查找
+        const objectByUuid = new Map<string, any>();
+        sceneManager.contentGroup.traverse((child: any) => {
+            if (child?.uuid) objectByUuid.set(child.uuid, child);
+        });
         const stateToRestore = selectedUuids.map((uuid) => {
-            const object = sceneManager.contentGroup.getObjectByProperty("uuid", uuid);
+            const object = objectByUuid.get(uuid);
             return { uuid, visible: object ? object.visible : true };
         });
         visibilityStackRef.current.push(stateToRestore);

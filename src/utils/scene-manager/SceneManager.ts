@@ -248,6 +248,13 @@ export class SceneManager {
     private clashPairInstanceColorCache = new Map<string, { mesh: THREE.BatchedMesh; instanceId: number; originalColor: number }>();
     private clashPairUuids = new Set<string>();
     private highlightPulseColor = new THREE.Color("#ffffff");
+    // 渲染循环与高亮光晕里复用的 scratch 对象，避免每帧 new 造成 GC 抖动
+    private readonly tmpHighlightColor = new THREE.Color();
+    private readonly glowCenter = new THREE.Vector3();
+    private readonly glowLocalScale = new THREE.Matrix4();
+    private readonly glowScaleMatrix = new THREE.Matrix4();
+    private readonly glowTranslateMatrix = new THREE.Matrix4();
+    private readonly glowInstanceMatrix = new THREE.Matrix4();
     private explodeEnabled = false;
     private explodeStrength = 0;
     private explodeCenter = new THREE.Vector3();
@@ -1250,7 +1257,7 @@ export class SceneManager {
         const highlightMaterial = this.highlightMesh.material as THREE.MeshBasicMaterial;
         if (highlightMaterial) {
             if (this.locateFocusUuid && this.highlightMesh.visible) {
-                const focusColor = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
+                const focusColor = this.tmpHighlightColor.set(this.settings.highlightColor || "#ff9f1c");
                 const pulseMix = 0.22 + ((Math.sin(frameNow / 125) + 1) * 0.3);
                 highlightMaterial.color.copy(focusColor).lerp(this.highlightPulseColor, pulseMix);
                 highlightMaterial.opacity = 1;
@@ -1262,7 +1269,7 @@ export class SceneManager {
 
         const selectionLineMat = this.selectionBox.material as THREE.LineBasicMaterial | THREE.LineBasicMaterial[] | undefined;
         if (this.locateFocusUuid && this.selectionBox.visible && selectionLineMat && !Array.isArray(selectionLineMat)) {
-            const baseSel = new THREE.Color(this.settings.highlightColor || "#ff9f1c");
+            const baseSel = this.tmpHighlightColor.set(this.settings.highlightColor || "#ff9f1c");
             const pulseSel = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(frameNow / 125));
             selectionLineMat.color.copy(baseSel).lerp(this.highlightPulseColor, 0.34 * pulseSel);
         } else if (selectionLineMat && !Array.isArray(selectionLineMat)) {
@@ -5238,15 +5245,14 @@ export class SceneManager {
 
         if (!geometry.boundingBox) geometry.computeBoundingBox();
         const center = geometry.boundingBox
-            ? geometry.boundingBox.getCenter(new THREE.Vector3())
-            : new THREE.Vector3();
-        const localScale = new THREE.Matrix4()
+            ? geometry.boundingBox.getCenter(this.glowCenter)
+            : this.glowCenter.set(0, 0, 0);
+        const localScale = this.glowLocalScale
             .makeTranslation(center.x, center.y, center.z)
-            .multiply(new THREE.Matrix4().makeScale(1.02, 1.02, 1.02))
-            .multiply(new THREE.Matrix4().makeTranslation(-center.x, -center.y, -center.z));
-        const instanceMatrix = new THREE.Matrix4();
-        focus.mesh.getMatrixAt(focus.instanceId, instanceMatrix);
-        mesh.matrix.multiplyMatrices(focus.mesh.matrixWorld, instanceMatrix).multiply(localScale);
+            .multiply(this.glowScaleMatrix.makeScale(1.02, 1.02, 1.02))
+            .multiply(this.glowTranslateMatrix.makeTranslation(-center.x, -center.y, -center.z));
+        focus.mesh.getMatrixAt(focus.instanceId, this.glowInstanceMatrix);
+        mesh.matrix.multiplyMatrices(focus.mesh.matrixWorld, this.glowInstanceMatrix).multiply(localScale);
         mesh.matrixWorldNeedsUpdate = true;
         mesh.visible = true;
     }

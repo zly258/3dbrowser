@@ -411,37 +411,31 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         }, []);
     };
 
-    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);    const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
-    const firstSearchMatch = useMemo(() => {
-        if (!searchQuery) return null;
-        const query = searchQuery.toLowerCase();
-        const stack = [...treeRoot];
-        while (stack.length > 0) {
-            const node = stack.shift()!;
-            if (getNodeSearchText(node).includes(query)) return node;
-            getRawChildren(node)
-                .map((child) => createTreeNodeFromRaw(child, (node.depth ?? 0) + 1))
-                .forEach((child) => stack.push(child));
-        }
-        return null;
-    }, [searchQuery, treeRoot]);
+    const filteredTree = useMemo(() => filterTree(treeRoot, searchQuery), [treeRoot, searchQuery]);
+    const flatData = useMemo(() => flattenTree(filteredTree), [filteredTree]);
 
-    const searchMatches = useMemo(() => {
-        if (!searchQuery.trim()) return [] as TreeNode[];
-        const query = searchQuery.trim().toLowerCase();
-        const results: TreeNode[] = [];
-        const stack = [...treeRoot];
-        while (stack.length > 0) {
-            const node = stack.shift()!;
-            if (getNodeSearchText(node).includes(query)) {
-                results.push(node);
-            }
-            getRawChildren(node)
-                .map((child) => createTreeNodeFromRaw(child, (node.depth ?? 0) + 1))
-                .forEach((child) => stack.push(child));
+    // 一次遍历同时得到"第一个命中"和"全部命中"：此前两个 useMemo 各自做一遍
+    // 全树遍历与 createTreeNodeFromRaw 的对象分配。队列用游标而非 shift()，
+    // 避免大树上 O(n^2) 的数组搬移。
+    const searchResult = useMemo(() => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) return { first: null as TreeNode | null, matches: [] as TreeNode[] };
+        const query = trimmed.toLowerCase();
+        const matches: TreeNode[] = [];
+        const queue: TreeNode[] = [...treeRoot];
+        for (let cursor = 0; cursor < queue.length; cursor++) {
+            const node = queue[cursor];
+            if (getNodeSearchText(node).includes(query)) matches.push(node);
+            const children = getRawChildren(node).map((child) => createTreeNodeFromRaw(child, (node.depth ?? 0) + 1));
+            for (const child of children) queue.push(child);
         }
-        return results;
+        return { first: matches[0] ?? null, matches };
     }, [searchQuery, treeRoot]);
+    const firstSearchMatch = searchResult.first;
+    const searchMatches = searchResult.matches;
+
+    // 每个可见行都 includes() 一次是 O(行数 × 命中数)，换成 Set 查询
+    const locateResultSet = useMemo(() => new Set(locateResultUuids), [locateResultUuids]);
 
     // 行高跟随 CSS 令牌 --tree-row-h，避免虚拟化与样式漂移
     const rowHeight = useMemo(() => {
@@ -640,7 +634,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                                 key={node.uuid}
                                 node={node}
                                 isActive={node.uuid === activeTreeUuid}
-                                isMatched={locateResultUuids.includes(node.uuid)}
+                                isMatched={locateResultSet.has(node.uuid)}
                                 isLocated={node.uuid === locatedUuid}
                                 searchQuery={searchQuery}
                                 clashBadge={getClashBadge(node.uuid)}

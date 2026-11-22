@@ -51,8 +51,15 @@ export function useClashSummary(sceneMgrRef: MutableRefObject<SceneManager | nul
     if (!sceneMgrRef.current) return;
     const mgr = sceneMgrRef.current;
     const previouslyAnnotated = annotatedUuidsRef.current;
+    // 一次性建 uuid -> object 索引：此前对每个 uuid 调用 getObjectByProperty，
+    // 每次都全场景 traverse，成本是 O(结果数 × 场景大小)；这里降为 O(场景大小 + 结果数)。
+    const objectByUuid = new Map<string, any>();
+    mgr.contentGroup.traverse((child: any) => {
+      if (child?.uuid) objectByUuid.set(child.uuid, child);
+    });
+
     previouslyAnnotated.forEach((uuid) => {
-      const obj = mgr.contentGroup.getObjectByProperty("uuid", uuid) as any;
+      const obj = objectByUuid.get(uuid) as any;
       if (obj?.userData?.clash) delete obj.userData.clash;
       const nodes = mgr.getStructureNodes(uuid) || [];
       nodes.forEach((node: any) => {
@@ -70,7 +77,7 @@ export function useClashSummary(sceneMgrRef: MutableRefObject<SceneManager | nul
         resolved: stat.resolvedCount,
         status: stat.worstStatus
       };
-      const obj = mgr.contentGroup.getObjectByProperty("uuid", uuid) as any;
+      const obj = objectByUuid.get(uuid) as any;
       if (obj) {
         if (!obj.userData) obj.userData = {};
         obj.userData.clash = payload;

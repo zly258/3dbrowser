@@ -271,12 +271,14 @@ export function applyUpdateClippingPlanes(
     return { state, needsRender: true };
 }
 
+const clipCornerScratch = new THREE.Vector3();
+
 export function isBoxClippedByPlanes(planes: THREE.Plane[], box: THREE.Box3): boolean {
     for (const plane of planes) {
         if (plane.constant === Infinity) continue;
 
         const planeNormal = plane.normal;
-        const maxPoint = new THREE.Vector3(
+        const maxPoint = clipCornerScratch.set(
             planeNormal.x > 0 ? box.max.x : box.min.x,
             planeNormal.y > 0 ? box.max.y : box.min.y,
             planeNormal.z > 0 ? box.max.z : box.min.z

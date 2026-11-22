@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type MutableRefObject } from "r
 import * as THREE from "three";
 import { OBB } from "three/examples/jsm/math/OBB.js";
 import { SceneManager } from "../utils/scene-manager/SceneManager";
-import { getBatchedInstanceGeometry } from "../utils/scene-manager/batchedGeometryView";
+import { getBatchedInstanceGeometry, clearBatchedGeometryViews } from "../utils/scene-manager/batchedGeometryView";
 
 export type ClashResultItem = {
   id: string;
@@ -217,6 +217,9 @@ export function useClashCheck({
   const clashRunTokenRef = useRef(0);
   const clashInFlightRef = useRef(false);
   const clashCandidateCacheRef = useRef<Map<string, ClashCandidate>>(new Map());
+  // 收集阶段为 BatchedMesh 建立的按需几何视图，跑完后统一释放，避免大模型上
+  // 按实例几何缓存一直驻留（每个视图都是一份重排索引的 BufferGeometry）。
+  const clashGeometryViewMeshesRef = useRef<Set<THREE.BatchedMesh>>(new Set());
 
   const clashModelNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -285,13 +288,19 @@ export function useClashCheck({
     targets.forEach((target) => {
       if (!target?.box || target.box.isEmpty()) return;
 
-      const targetGeometry = clashUseNarrowPhase
-        ? (target.geometry
-          || (target.batchedMesh && typeof target.instanceId === "number"
-            ? getBatchedInstanceGeometry(target.batchedMesh, target.instanceId)
-            : (target.object as THREE.Mesh)?.geometry)
-          || null)
-        : (target.geometry || null);
+      let targetGeometry: THREE.BufferGeometry | null;
+      if (clashUseNarrowPhase) {
+        if (target.geometry) {
+          targetGeometry = target.geometry;
+        } else if (target.batchedMesh && typeof target.instanceId === "number") {
+          clashGeometryViewMeshesRef.current.add(target.batchedMesh);
+          targetGeometry = getBatchedInstanceGeometry(target.batchedMesh, target.instanceId);
+        } else {
+          targetGeometry = (target.object as THREE.Mesh)?.geometry ?? null;
+        }
+      } else {
+        targetGeometry = target.geometry || null;
+      }
 
       const nodes = sceneMgr.getStructureNodes(target.uuid) || [];
       if (nodes.length > 0 && nodes.every((node) => node.visible === false)) return;
@@ -413,6 +422,8 @@ export function useClashCheck({
     setClashPairsScanned(0);
 
     try {
+      // 先让一帧渲染，把“正在收集构件”状态画出来，再进入同步的候选收集
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       const rawCandidates = collectClashCandidates();
       setClashScannedCount(rawCandidates.length);
       if (rawCandidates.length < 2) {
@@ -594,6 +605,8 @@ export function useClashCheck({
         sceneMgrRef.current.clearLocateFocus();
       }
     } finally {
+      for (const mesh of clashGeometryViewMeshesRef.current) clearBatchedGeometryViews(mesh);
+      clashGeometryViewMeshesRef.current.clear();
       const elapsed = performance.now() - startedAt;
       const minVisibleMs = 220;
       if (elapsed < minVisibleMs) {
