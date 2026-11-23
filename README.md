@@ -1,5 +1,8 @@
 # 3dbrowser
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Afdian](https://img.shields.io/badge/Afdian-Sponsor-946CE6)](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377)
+
 > **中文文档 → [README.zh-CN.md](README.zh-CN.md)**
 
 A browser-based 3D/BIM model viewer built for models that are too large for ordinary web viewers. One 2.9 GB NBIM file — 231,353 components, 186 million rendered triangles — opens in seconds in a single tab and keeps the JS heap under ~3 GB.
@@ -273,6 +276,15 @@ node scripts/class-coverage.cjs
 
 - **Self-test** — `node scripts/run.mjs nbim11-selftest` runs 28 checks covering NBIP round-trip, the single-file end-to-end path, 5,000-component scale, index delta encoding, and string-pool edge cases (multi-byte, empty, very long, prefix sharing).
 - **Regression checklist** — manual pass over load / tree / select / highlight / box select / properties / browsing / delete / multi-model, in `docs/testing/regression-checklist.md`.
+
+---
+
+## Support & Sponsorship
+
+If this project helps your daily work, 3D inspection, or lightweight BIM workflows, feel free to sponsor the author via Afdian to support continuous development and feature iterations:
+
+* **Direct Sponsor**: [Sponsor on Afdian](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377)
+* **Creator Profile**: [zhangly1403 on Afdian](https://ifdian.net/a/zhangly1403)
 
 ---
 

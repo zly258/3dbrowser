@@ -56,6 +56,17 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
                         </a>
                     </div>
                     <div className="ui-about-meta-row">
+                        <span className="ui-about-meta-label">{t("about_sponsor")}</span>
+                        <a
+                            href="https://ifdian.net/a/zhangly1403"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ui-link"
+                        >
+                            {t("about_sponsor_link")}
+                        </a>
+                    </div>
+                    <div className="ui-about-meta-row">
                         <span className="ui-about-meta-label">{t("about_license")}</span>
                         <span className="ui-about-meta-value ui-about-license-badge">
                             {t("about_license_nc")}

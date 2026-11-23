@@ -1,5 +1,8 @@
 # 3dbrowser
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![爱发电](https://img.shields.io/badge/爱发电-支持作者-946CE6)](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377)
+
 > **English documentation → [README.md](README.md)**
 
 面向超大模型的浏览器端 3D / BIM 查看器。单个 **2.9 GB** 的 NBIM 文件（231,353 个构件、1.86 亿渲染三角面）可在数秒内于单个标签页打开，JS 堆稳定控制在约 3 GB 以内。
@@ -273,6 +276,15 @@ node scripts/class-coverage.cjs
 
 - **自测** —— `node scripts/run.mjs nbim11-selftest`，28 项，覆盖 NBIP 往返、单文件端到端、5,000 构件规模、索引 delta 编码、字符串池边界（多字节 / 空串 / 超长 / 前缀共享）。
 - **回归清单** —— 覆盖加载 / 结构树 / 单选 / 高亮 / 框选 / 属性 / 浏览 / 删除 / 多模型，见 `docs/testing/regression-checklist.md`。
+
+---
+
+## 支持与打赏
+
+如果本项目对你的日常设计、工程协同或轻量化模型查看有所帮助，欢迎通过爱发电请作者喝一杯咖啡，你的支持将持续推动 NBIM 生态、更多格式解析与渲染性能的优化迭代：
+
+* **直达打赏页**：[点击直接打赏（爱发电）](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377)
+* **创作者主页**：[爱发电主页 · zhangly1403](https://ifdian.net/a/zhangly1403)
 
 ---
 
