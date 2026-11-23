@@ -278,8 +278,6 @@ node scripts/class-coverage.cjs
 
 ## License
 
-### Free for non-commercial use — commercial use prohibited
-
-This project is for learning and research. **Commercial use of any kind is strictly prohibited.** For commercial licensing or enterprise support, contact `zhangly1403@qq.com`.
+This project is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0).
 
 Chinese documentation: [README.zh-CN.md](README.zh-CN.md)

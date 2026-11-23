@@ -278,8 +278,6 @@ node scripts/class-coverage.cjs
 
 ## 许可证
 
-### 非商业用途免费 —— 禁止商用
-
-本项目仅供学习和研究使用，**禁止用于任何商业目的**。如需商业授权或企业级支持，请联系 `zhangly1403@qq.com`。
+本项目采用 [GNU 通用公共许可证第 3 版 (GPL-3.0)](LICENSE) 开源。
 
 English documentation: [README.md](README.md)

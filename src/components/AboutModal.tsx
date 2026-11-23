@@ -85,12 +85,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, t, them
                             <div className="ui-about-license-link">
                                 {t("full_license")}{" "}
                                 <a
-                                    href="https://creativecommons.org/licenses/by-nc/4.0/"
+                                    href="https://www.gnu.org/licenses/gpl-3.0.html"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="ui-link"
                                 >
-                                    CC BY-NC 4.0
+                                    GNU GPL v3.0
                                 </a>
                             </div>
                         </div>
