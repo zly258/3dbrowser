@@ -1,153 +1,105 @@
-# 3dbrowser
+<h1 align="center">3dbrowser</h1>
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![爱发电](https://img.shields.io/badge/爱发电-支持作者-946CE6)](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377)
+<p align="center">面向十万级构件超大型模型的浏览器端 3D / BIM 查看器与 React 组件库。</p>
 
-> **English documentation → [README.md](README.md)**
+<p align="center">
+  <a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a>
+</p>
 
-面向超大模型的浏览器端 3D / BIM 查看器。单个 **2.9 GB** 的 NBIM 文件（231,353 个构件、1.86 亿渲染三角面）可在数秒内于单个标签页打开，JS 堆稳定控制在约 3 GB 以内。
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-React%2019%20%2B%20Three.js-3776AB?style=flat-square" alt="TypeScript, React 19, and Three.js"> <img src="https://img.shields.io/badge/Platform-WebGL2%20Browser-4B5563?style=flat-square" alt="Platform: WebGL2 Browser"> <a href="https://zly258.github.io/3dbrowser/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-0891B2?style=flat-square" alt="GitHub Pages 在线演示"></a> <a href="https://github.com/zly258/3dbrowser/actions/workflows/deploy-pages.yml"><img src="https://img.shields.io/github/actions/workflow/status/zly258/3dbrowser/deploy-pages.yml?branch=main&label=CI&style=flat-square" alt="CI 状态"></a> <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-22C55E?style=flat-square" alt="License: GPL-3.0"></a> <a href="https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377"><img src="https://img.shields.io/badge/Afdian-Sponsor-7C3AED?style=flat-square" alt="在爱发电赞助作者"></a>
+</p>
 
-React 19 · Three.js · TypeScript · NBIM v11
+`3dbrowser` 是基于 React 19 与 Three.js 构建的浏览器端 3D / BIM 查看器及组件库，专为超出普通 Web 查看器承载能力的大型工程装配模型设计。它的内存管理、八叉树分块流式加载、实例级拾取、全屏框选和属性懒加载索引，均围绕十万级构件场景从底层设计，而非在通用网格查看器上外挂 BIM 功能。
 
----
+项目读写自定义单文件容器 **NBIM v11**（`.nbim`），将量化几何、分块属性库与场景结构树封装在单一文件中，并按视口优先级流式加载，在全部分块到达之前即可快速呈现可交互首帧。
 
-## 这是什么
+## 核心亮点
 
-`3dbrowser` 是一个用于在浏览器里查看大型 BIM / 3D 模型的 React 组件库与应用。它读取自定义单文件容器 **NBIM v11**（几何、属性、结构树全部打包在一个文件里），按八叉树分块流式加载，因此首帧远早于最后一块到达。
-
-它不是"通用 glTF 查看器 + BIM 功能"：内存模型、点选、框选、属性检索都是围绕十万级构件设计的。
-
----
-
-## 功能
-
-**支持格式**
-
-| 类别 | 格式 |
+| 亮点 | 实际价值 |
 | --- | --- |
-| BIM | IFC（基于 `web-ifc`） |
-| 通用 | GLB / GLTF、FBX、OBJ、STL、PLY、3DS、DAE |
-| CAD | STEP / STP、IGES / IGS（基于 `occt-import-js`） |
-| 原生 | **NBIM v11**（`.nbim`） |
+| 八叉树分块流式加载与 `BatchedMesh` | 将 23 万以上构件合并为数百次 draw call，2.9 GB NBIM v11 单文件数秒可交互，JS 堆稳定在约 3 GB 以内。 |
+| 预算驱动的内存驻留策略 | 依据 JS 堆上限与 manifest 内存统计动态推导 `maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads`，相机移动时自动回收远景分块。 |
+| 多格式 BIM / CAD / 3D 解析与离线转换 | 支持 IFC（`web-ifc`）、STEP/IGES（`occt-import-js`）、GLB/GLTF、FBX、OBJ、STL、PLY、3DS、DAE 与 NBIM v11，并支持纯 CPU 离线合并导出为 NBIM v11。 |
+| 十万级构件交互与按需属性检索 | 基于 `batchId` 映射实现实例级单击高亮，按分块包围盒剔除实现全屏框选（33,588 个构件约 70 ms），属性文档超 2 万条时按需解析与懒建索引。 |
+| 可嵌入 React 组件与 MD3 界面体系 | 提供 `<ThreeViewer />` 与 `SceneManager`，内置明暗主题、中英文运行时切换、测量、剖切、碰撞检测、爆炸视图、视点与截图工具。 |
 
-**查看与检查**
+## 架构概览
 
-- **测量** —— 距离、角度、点位坐标。
-- **剖切** —— 实时裁剪面，打开面板时按当前模型自动重算范围。
-- **场景树** —— 交互式结构视图，支持搜索、显隐切换、定位到视图。
-- **属性** —— 逐构件元数据，选中时按需解析。
-- **显示样式** —— *着色*（仅实体）与 *真实*（着色 + CAD 式棱边：梁柱硬边、圆柱竖棱与端部圆环）。样式取自本地偏好，**顶栏不再提供切换**。
-- **框选** —— 全屏框选，十万级构件下仍保持毫秒级响应。
-- **实例级点选** —— 单击精确命中光标下的那一个实例，仅高亮该实例（带发光），高亮色可配置。
-- **碰撞检测、爆炸视图、视点、截图** —— 从工具菜单进入。
+代码库将 React 界面编排、Three.js 场景与分块流式引擎、二进制容器与格式解码划分为三个清晰层次：
 
-**界面**
+```text
+┌────────────────────────────────────────────────────────────────────────────┐
+│                   React UI & Viewer State (src/ThreeViewer.tsx)            │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐  │
+│  │  Components & Theme  │  │     Viewer Hooks     │  │  Selection &     │  │
+│  │  Toolbar, ToolsDock, │  │  File loading, stats │  │  Lazy Property   │  │
+│  │  SceneTree, Panels   │  │  viewpoints, search  │  │  Index (viewer/) │  │
+│  └──────────────────────┘  └──────────────────────┘  └──────────────────┘  │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ API calls / callbacks
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│              Scene & Chunk Streaming Engine (src/utils/scene-manager/)     │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐  │
+│  │  SceneManager Core   │  │  Chunk Scheduling &  │  │  Tools & Picking │  │
+│  │  On-demand render,   │─▶│  BatchedMesh Pool    │  │  batchId pick,   │  │
+│  │  camera, visibility  │  │  + chunkWorker.ts    │  │  boxSelect, clip │  │
+│  └──────────────────────┘  └──────────────────────┘  └──────────────────┘  │
+└──────────────────┬──────────────────────────────────────┬──────────────────┘
+                   │ NBIM v11 I/O                         │ Format loaders
+                   ▼                                      ▼
+┌─────────────────────────────────────┐  ┌───────────────────────────────────┐
+│   NBIM v11 Core (scene-core/)       │  │   Format Loaders (src/loader/)    │
+│   nbimIO.ts  · nbimChunk.ts         │  │   ifcLoader.ts   (web-ifc)        │
+│   nbip.ts    · codec.ts             │  │   occtLoader.ts  (occt-import-js) │
+│   [Header|Chunks|NBIP|Manifest]     │  │   Three loaders + public/libs/    │
+└─────────────────────────────────────┘  └───────────────────────────────────┘
+```
 
-- Material Design 3 语言：44px 顶栏、三栏骨架、24px 底栏、胶囊按钮、毛玻璃下拉。
-- **工具坞** —— 工具条可放在顶栏，也可作为底部居中胶囊坞，支持「仅图标」与「上图标下文字」两种呈现。
-- 浅色与暗色主题由同一套令牌驱动。
-- 中英文运行时切换。
+### NBIM v11 单文件容器结构
 
-**离线转换**
+`.nbim` v11 文件按顺序组织为：1024 字节小端文件头、量化几何分块数据、NBIP 分块压缩属性区段以及压缩 manifest：
 
-- 原始源文件（IFC / GLB / FBX / OBJ 等）可在纯 CPU 环境合并导出为单个 NBIM v11 文件，不占用显存。
+| 字段 | 说明 |
+| --- | --- |
+| Magic | `NBM1`（`0x314d424e`） |
+| 版本 | `11` |
+| 文件头大小 | `1024` 字节 |
+| Flags | bit 0：manifest gzip；bit 1：属性分块 gzip；bit 2：manifest brotli |
 
----
+几何按分块量化（position 采用 int16 配合分块 scale/offset，法线采用 int8 并在 GPU 侧归一化还原，索引采用 u16/u32）。属性采用去重字符串池与列式记录并切分为独立压缩块，查询单个构件属性时无需加载整个属性区段。
 
-## 实测规模
+## 快速安装
 
-下列数据来自真实生产模型，已做脱敏处理：隐去文件名、路径、客户与项目信息，仅保留汇总的几何量与耗时。所有耗时均在 **headless Chrome + 软件渲染（SwiftShader）** 下测得，属于偏保守的下限；真实 GPU 环境会更快。
-
-### 模型规模
-
-| 指标 | 模型 A（多文件钢结构工程） |
-| --- | ---: |
-| 源文件数 | 140 |
-| 构件节点数 | 231,353 |
-| 唯一三角面 | 52,506,466 |
-| 实例数 | 737,330 |
-| 实际渲染实例 | 968,683 |
-| 实际渲染三角面 | 186,284,229 |
-
-模型 A 合并为单个 NBIM 后是 **2.9 GB** 的单文件，作为一个文档打开。
-
-### 运行表现
-
-| 指标 | 实测结果 | 说明 |
-| --- | --- | --- |
-| 首屏可交互（2.9 GB NBIM） | 3.0 – 4.5 s | 渐进式：分块未全部到齐即可操作 |
-| 全景环绕时的 JS 堆 | 2.0 – 3.1 GB，稳定 | 优化前 3.5 → 7.5 GB，最终 OOM |
-| 全景帧率 | ~26 fps | 软件渲染 |
-| 近景帧率 | ~54 fps | 软件渲染 |
-| 全屏框选 33,588 个构件 | ~70 ms | 框选覆盖整个视口 |
-| 拖动时 / 松手后的像素比 | 0.8 → 1.0 | 自适应画质 |
-
-### 压缩效果（NBIM v11）
-
-| 模型 | 源体积 | v11 体积 | 压缩比 | 分块 | 构件数 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| A | 1162 MB | **22.3 MB** | 49.6× | 464 | 146,407 |
-| B | 912 MB | **17.6 MB** | 49.4× | 319 | 114,909 |
-| C | 633 MB | **9.8 MB** | 61.4× | 108 | 78,822 |
-| F | 34 MB | **0.43 MB** | 78.3× | 8 | 2,424 |
-
-批量 305 个文件（15.28 GB）→ **0.303 GB**，整体 **50.5×**。
-
----
-
-## 性能来源
-
-- **分块 NBIM + `BatchedMesh`**：几何按八叉树切成块，每块一个 `BatchedMesh`，23 万构件只需数百次 draw call，而不是 23 万次。
-- **预算驱动的驻留**：`maxLoadedChunks` / `maxCachedChunks` / `maxConcurrentChunkLoads` 由 JS 堆上限、`manifest.stats.memory` 里的*实际*解码几何量，以及实测约 4× 的 BatchedMesh 占用系数推导。整模型装得下就全量加载；装不下则按屏幕中心度/距离加载到预算为止，远景/陈旧分块随相机移动回收。
-- **量化几何**：position 用 int16（每块独立 scale/offset），法线 int8（由 GPU 归一化还原），索引 u16/u32，分块 payload 用 gzip / brotli 压缩。
-- **按需渲染**：只有相机、加载、选中状态变化时才绘制一帧，空闲时几乎零开销。
-- **优先级加载**：超大模型先加载最中心/最近的分块；点选与框选对每个已加载分块都有效。
-- **实例感知拾取**：`batchId` → uuid/来源的映射让单击能定位到具体实例；框选先用整块包围盒剔除，再落到实例级。
-- **属性索引懒加载**：超过 2 万条属性文档时不常驻内存，选中时按需解析；搜索时一次性单遍构建。
-- **逐实例几何视图按需构建**：拾取只用包围盒；边线/碰撞/面积才构建零拷贝视图，用完立即释放。
-
----
-
-## 已知边界
-
-- **NBIM 才是快路径**：源模型建议先导出为单个 NBIM v11 文件。原始多文件格式的加载时间会花在转换上，而不是流式渲染。
-- **只读 v11**：旧版 NBIM（v8/v9）会被明确拒绝——*「这是旧版 NBIM（v8/v9）文件，当前版本已不再支持旧格式，请改用 v11 单文件（.nbim）」*。
-- **超大模型是流式而非全量驻留**：2.9 GB / 1,271 块的 NBIM 在 4 GB JS 堆下约驻留 400 块（解码几何约 1.9 GB，总堆约 3.4–3.5 GB）。一次加载全部 1,271 块需要约 9 GB，有 OOM 风险；远处未访问分块在进入预算前以 ghost 线框显示。
-- **首次属性搜索可能稍慢**：属性文档超过 2 万条时，索引在首次使用时构建。
-- **软件渲染帧率是下限而非目标**：上述帧率均在没有 GPU 的环境测得，真实 GPU 浏览器会明显更快。
-- **真实样式棱边按深度截断**：超大模型只给最近的分块描边；远处棱边在常规缩放下本来也看不清。
-
----
-
-## 快速开始
-
-环境要求：**Node.js ≥ 20**，支持 WebGL2 的现代浏览器。
+环境要求：**Node.js >= 20**（CI 环境使用 Node.js 22），以及支持 **WebGL2** 的现代浏览器。
 
 ```bash
 git clone https://github.com/zly258/3dbrowser.git
 cd 3dbrowser
-# 用惯用的包管理器按 package-lock.json 安装依赖
-node node_modules/vite/bin/vite.js      # 开发服务器 → http://localhost:5173
+npm ci
 ```
 
-生产构建：
+若将 `ThreeViewer` 嵌入到其他宿主应用中，请将 `public/libs`（包含 `web-ifc`、`occt-import-js`、Draco 与 Basis 的 WASM/worker 解码器）复制到宿主静态资源目录；若访问路径不是 `./libs`，请通过 `libPath` 属性指定。
+
+## 快速开始
+
+### 启动本地查看器
+
+运行 Vite 开发服务器：
 
 ```bash
-node node_modules/vite/bin/vite.js build
-node node_modules/typescript/bin/tsc -p tsconfig.lib.json --skipLibCheck
-node scripts/post-build.js
+npm run dev
 ```
 
-### 静态资源
+在支持 WebGL2 的浏览器中打开 `http://localhost:5173`，将 `.nbim`、`.ifc`、`.glb`、`.step` 或其他支持格式的模型拖入视口即可浏览。
 
-解码 IFC 与 OCC 所需的 WASM / worker 文件位于 `public/libs`（web-ifc、occt-import-js、Draco、Basis）。若要把查看器嵌入其他宿主页面，把该目录复制到宿主的静态目录，并在 `libPath` 指向的位置不是 `./libs` 时传入该属性。
-
-### 使用组件
+### 作为 React 组件嵌入
 
 ```tsx
 import { ThreeViewer } from './src';
 
-function App() {
+export function App() {
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <ThreeViewer
@@ -156,140 +108,103 @@ function App() {
         defaultLang="zh"
         showStats
         initialFiles={['https://example.com/models/building.glb']}
-        onSelect={(uuid, object) => console.log('选中对象:', uuid, object)}
+        onSelect={(uuid, object) => console.log('Selected:', uuid, object)}
       />
     </div>
   );
 }
 ```
 
----
+## 常用命令
 
-## 参数说明
+以下脚本均定义于 `package.json`：
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 启动 Vite 开发服务器（端口 `5173`）。 |
+| `npm run build` | 构建 ES 组件库产物、生成类型声明并执行 `scripts/post-build.js`。 |
+| `npm run build:pages` | 构建 GitHub Pages 独立演示站点至 `dist-pages/`。 |
+| `npm run preview` | 本地预览 Vite 生产构建结果。 |
+| `npm run typecheck` | 执行 TypeScript 类型检查（`tsc -p tsconfig.json --noEmit`）。 |
+| `npm run lint` | 对 `src` 与 `scripts` 执行 ESLint 检查。 |
+| `npm run test:nbim` | 运行 28 项 NBIM v11 / NBIP 往返自测（`scripts/run.mjs nbim11-selftest`）。 |
+| `npm run stats:nbim -- <file.nbim>` | 输出指定 `.nbim` 文件的只读容器统计信息。 |
+| `npm run ui:audit:strict` | 以严格模式审计设计令牌、对比度、圆角、z-index 与字号阶梯。 |
+| `npm run ui:coverage` | 检查 TSX 中使用的每个 `className` 是否均存在对应样式规则。 |
+| `npm run check` | 依次执行 `typecheck`、`lint`、`test:nbim`、`ui:audit:strict` 与 `ui:coverage`。 |
+
+## API 示例
 
 ### `ThreeViewer` 属性
 
-| 参数 | 类型 | 默认值 | 说明 |
+| 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `libPath` | `string` | `'./libs'` | 包含 WASM / worker 文件的目录（相对于 `window.location`） |
-| `allowDragOpen` | `boolean` | `true` | 是否允许拖拽打开文件 |
-| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单 / 工具 ID，见下表 |
-| `defaultTheme` | `'light' \| 'dark'` | `'light'` | 无本地偏好时的默认外观（暗色会同步深色视口底色） |
-| `defaultLang` | `'zh' \| 'en'` | `'en'` | 默认界面语言 |
-| `showStats` | `boolean` | `true` | 显示性能统计面板 |
-| `showOutline` | `boolean` | `true` | 显示场景结构面板 |
-| `showProperties` | `boolean` | `true` | 显示对象属性面板 |
-| `initialSettings` | `Partial<SceneSettings>` | — | 初始场景设置（光照、背景等） |
-| `initialFiles` | `string \| File \| (string \| File)[]` | — | 挂载时自动加载的单个文件或文件列表（URL 或 `File`；不支持整目录） |
-| `onSelect` | `(uuid: string, object: any) => void` | — | 对象选中时的回调 |
-| `onLoad` | `(manager: SceneManager) => void` | — | 场景管理器就绪后的回调 |
-| `hideDeleteModel` | `boolean` | `false` | 隐藏删除模型按钮 |
-| `performancePreset` | `PerformancePreset` | `'quality'` | 渲染 / 内存预设 |
-| `chunkOptions` | `SceneChunkOptions` | — | 分块缓存大小、内存上限、并发数 |
+| `libPath` | `string` | `'./libs'` | WASM / worker 解码器目录路径（相对于 `window.location`）。 |
+| `allowDragOpen` | `boolean` | `true` | 是否允许拖拽打开模型文件。 |
+| `hiddenMenus` | `string[]` | `[]` | 需要隐藏的菜单或工具 ID（见下方列表）。 |
+| `defaultTheme` | `'light' \| 'dark'` | `'light'` | 无本地偏好时的默认主题。 |
+| `defaultLang` | `'zh' \| 'en'` | `'en'` | 无本地偏好时的默认界面语言。 |
+| `showStats` | `boolean` | `true` | 是否显示性能统计面板。 |
+| `showOutline` | `boolean` | `true` | 是否显示场景结构树面板。 |
+| `showProperties` | `boolean` | `true` | 是否显示对象属性面板。 |
+| `initialSettings` | `Partial<SceneSettings>` | — | 初始场景设置（光照、背景与显示参数）。 |
+| `initialFiles` | `string \| File \| (string \| File)[]` | — | 组件挂载时自动加载的文件或 URL（仅支持单文件或列表，不支持整目录）。 |
+| `onSelect` | `(uuid: string, object: any) => void` | — | 选中对象或实例时的回调函数。 |
+| `onLoad` | `(manager: SceneManager) => void` | — | `SceneManager` 初始化完成后的回调。 |
+| `hideDeleteModel` | `boolean` | `false` | 是否隐藏删除模型按钮。 |
+| `performancePreset` | `PerformancePreset` | `'quality'` | 渲染与内存预设模式。 |
+| `chunkOptions` | `SceneChunkOptions` | — | 分块缓存大小、内存上限、并发加载数与 LOD 策略配置。 |
 
-`hiddenMenus` 可用 ID：`file`、`open_file`、`open_url`、`export`、`batch_convert`、`clear`、`view`、`fit_view`、`views`、`interface`、`outline`、`props`、`pick`、`tool`、`measure`、`boxSelect`、`clip`、`viewpoint`、`screenshot`、`search`、`clash`、`explode`、`settings`、`about`、`stats`、`sun`。
+`hiddenMenus` 可选 ID：`file`、`open_file`、`open_url`、`export`、`batch_convert`、`clear`、`view`、`fit_view`、`views`、`interface`、`outline`、`props`、`pick`、`tool`、`measure`、`boxSelect`、`clip`、`viewpoint`、`screenshot`、`search`、`clash`、`explode`、`settings`、`about`、`stats`、`sun`。
 
-### `SceneManager`
-
-需要更细的控制时，可通过 `onLoad` 直接操作场景管理器：
+### 通过 `SceneManager` 进行编程控制
 
 ```ts
 import type { SceneManager } from './src';
 
 const handleLoad = (manager: SceneManager) => {
-  manager.fitView();                  // 按可见内容取景
-  manager.setView('front');           // front / back / top / bottom / left / right / se / sw / ne / nw
+  manager.fitView(); // 按当前可见内容自适应取景
+  manager.setView('front'); // front | back | top | bottom | left | right | se | sw | ne | nw
   manager.loadNbim('path/to/model.nbim');
 };
 ```
 
-其它常用成员：`removeModel`、`clear`、`exportNbim`、`getCameraState`、`getMemoryReport`、`fitViewToObject`、`collectBoundsForUuids`、`applyVisibilityBatch`、`getNbimProperties`、`getNbimIfcPropertyGroups`。
+其他常用 `SceneManager` 方法包括：`removeModel`、`clear`、`exportNbim`、`getCameraState`、`getMemoryReport`、`fitViewToObject`、`collectBoundsForUuids`、`applyVisibilityBatch`、`getNbimProperties` 与 `getNbimIfcPropertyGroups`。
 
----
+## 配置与集成
 
-## NBIM v11 容器
+### 支持的文件格式
 
-单文件结构：1024 字节文件头 → 分块数据 → 属性区段 → manifest。
-
-| 字段 | 值 |
+| 类别 | 格式 |
 | --- | --- |
-| Magic | `NBM1`（`0x314d424e`） |
-| 版本 | `11` |
-| 文件头 | 1024 字节 |
-| Flags | bit 0 manifest gzip · bit 1 属性分块 · bit 2 manifest brotli |
+| BIM | IFC（基于 `web-ifc`） |
+| 通用 3D | GLB / GLTF、FBX、OBJ、STL、PLY、3DS、DAE |
+| CAD | STEP / STP、IGES / IGS（基于 `occt-import-js`） |
+| 原生格式 | NBIM v11（`.nbim`） |
 
-几何按块量化（position int16 + 每块 scale/offset、法线 int8、索引 u16/u32）。属性以去重字符串池 + 列式记录存储，按 64 KB 分块，因此读取单个构件的属性无需载入整个属性区段。
+### 实测规模与已知边界
 
-完整规范见 `docs/nbim11-format.md`，实测统计见 `docs/stats-nbim11.md`。
+以下数据来自脱敏后的真实生产模型，均在 **headless Chrome + 软件渲染（SwiftShader）** 环境下测得，属于保守下限（真实 GPU 环境表现更快）：
 
----
+- **参考模型规模**：140 个钢结构源文件合并为单个 **2.9 GB** NBIM v11 文件（231,353 个构件节点、52,506,466 唯一三角面、737,330 个实例、968,683 个渲染实例、186,284,229 个渲染三角面）。
+- **运行表现**：首屏可交互耗时 **3.0 – 4.5 s**；全景环绕 JS 堆稳定在 **2.0 – 3.1 GB**；软件渲染下全景约 26 fps、近景约 54 fps；全屏框选 33,588 个构件约 **70 ms**；交互拖动时像素比自适应 `0.8 -> 1.0`。
+- **NBIM v11 压缩比**：305 个文件（总计 15.28 GB）批量转换后为 **0.303 GB**（整体 **50.5x**，单个模型区间为 49.4x 至 78.3x）。
+- **已知边界**：
+  - **仅支持 NBIM v11**：旧版 NBIM（v8/v9）文件会被明确拒绝并提示升级为 v11 单文件。
+  - **超大规模按需驻留**：2.9 GB / 1,271 块的模型在 4 GB JS 堆下约常驻 400 块；超出预算的远景分块以 ghost 线框代理显示。
+  - **属性检索懒建索引**：属性文档超过 20,000 条时，搜索索引在首次检索时单遍构建。
+  - **真实棱边深度截断**：超大模型仅对近景分块渲染 CAD 风格棱边。
 
-## 目录结构
+### 界面样式体系
 
-```
-src/
-  components/     React 界面（顶栏、面板、场景树、属性、视图立方、工具坞）
-  hooks/          查看器状态、文件加载、选择、搜索、视点
-  loader/         IFC / OCC 加载器与资源解析
-  utils/
-    scene-core/   NBIM v11 读写、NBIP 属性库、分块编解码
-    scene-manager/ 场景、分块、拾取、框选、棱边、剖切、测量
-  styles/         手写 CSS 模块，令牌集中在 variables.css
-  theme/          图标集、双语字典、主题管理
-scripts/          构建收尾、UI 审计、覆盖率检查、NBIM 自测与统计
-docs/             格式规范、统计数据、回归清单（仅本地保留）
-public/libs/      WASM / worker 解码器（web-ifc、occt-import-js、Draco、Basis）
-```
+设计令牌统一定义在 `src/styles/variables.css`，由 `src/styles/index.css` 按顺序引入各模块样式。界面采用 44px 顶栏、三栏骨架（左侧场景树、弹性视口、右侧属性面板）与 24px 底栏，遵循 Material Design 3 尺寸体系（正文 12px、控件 26px、胶囊按钮），暗色模式通过 `.theme-dark` 令牌切换。修改样式后请运行 `npm run ui:audit:strict` 与 `npm run ui:coverage`。
 
-### 脚本
+## 社区与支持
 
-```bash
-node scripts/run.mjs nbim11-selftest      # NBIM v11 往返自测（28 项）
-node scripts/nbim-stats.mjs <文件.nbim>    # 只读容器统计
-node scripts/ui-audit.mjs --strict        # 设计令牌、对比度、圆角/z-index/字号阶梯
-node scripts/class-coverage.cjs           # TSX 中每个 className 都有样式规则
-```
-
----
-
-## 界面样式规范
-
-全站共用一套浅色 Material Design 3 CAD 查看器语言，字体链 `Nunito` / `Noto Sans SC` + 系统中文回退。令牌唯一来源 `src/styles/variables.css`，组件样式是手写模块文件，由 `src/styles/index.css` 按顺序引入。
-
-- **密度**：正文 12px，控件 26px，说明文字 11px，底栏 24px。
-- **骨架**：顶栏 44px + 三栏（左 `clamp(200px,20vw,264px)`、视口 `flex:1; min-width:0`、右 `clamp(240px,25vw,340px)`）+ 底栏 24px。页面本身不滚动，滚动只发生在面板内部。
-- **配色**：`#F8FAFC` 页面底 + `#FFFFFF` 表面，主文字 `#1E293B` / 次文字 `#475569`，边框 `#E2E8F0` / `#F1F5F9`，单一强调色 `#2563EB` + danger/success/warn 语义色，对比度均 ≥ 4.5:1。
-- **形与图标**：按钮一律胶囊（999px），输入 6px，菜单/浮动面板 12px，模态与加载卡 16px，滚动条 6px 半透明胶囊。
-- **状态**：任何改 `background` 的规则必须同时声明 `color`；禁用态用令牌换色（禁止 `opacity`）；白字只允许压在强调色 / 危险 / 深色提示底上。
-- **暗色主题**：只替换令牌取值（`.theme-dark`），不改组件结构。
-
-交付前执行：
-
-```bash
-node scripts/ui-audit.mjs --strict
-node scripts/class-coverage.cjs
-```
-
----
-
-## 测试
-
-- **自测** —— `node scripts/run.mjs nbim11-selftest`，28 项，覆盖 NBIP 往返、单文件端到端、5,000 构件规模、索引 delta 编码、字符串池边界（多字节 / 空串 / 超长 / 前缀共享）。
-- **回归清单** —— 覆盖加载 / 结构树 / 单选 / 高亮 / 框选 / 属性 / 浏览 / 删除 / 多模型，见 `docs/testing/regression-checklist.md`。
-
----
-
-## 支持与打赏
-
-如果本项目对你的日常设计、工程协同或轻量化模型查看有所帮助，欢迎通过爱发电请作者喝一杯咖啡，你的支持将持续推动 NBIM 生态、更多格式解析与渲染性能的优化迭代：
-
-* **直达打赏页**：[点击直接打赏（爱发电）](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377)
-* **创作者主页**：[爱发电主页 · zhangly1403](https://ifdian.net/a/zhangly1403)
-
----
+- **在线演示**：[zly258.github.io/3dbrowser](https://zly258.github.io/3dbrowser/)
+- **问题反馈与功能建议**：[GitHub Issues](https://github.com/zly258/3dbrowser/issues)
+- **赞助支持**：[直达爱发电打赏页](https://ifdian.net/order/create?user_id=3db8e630e6dc11f1b37452540025c377) | [爱发电创作者主页](https://ifdian.net/a/zhangly1403)
 
 ## 许可证
 
-本项目采用 [GNU 通用公共许可证第 3 版 (GPL-3.0)](LICENSE) 开源。
-
-English documentation: [README.md](README.md)
+本项目基于 [GNU 通用公共许可证第 3 版 (GPL-3.0)](./LICENSE) 开源。
